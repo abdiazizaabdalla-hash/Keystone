@@ -1,0 +1,44 @@
+[
+  {
+    "id": "o1qtt5jms",
+    "transactionId": "mqy289n1v",
+    "name": "Pre-Inspection",
+    "completed": false,
+    "createdAt": "2026-09-16T00:11:51.680Z"
+  },
+  {
+    "id": "fr97gnalt",
+    "transactionId": "mqy289n1v",
+    "name": "Inspection",
+    "completed": false,
+    "createdAt": "2026-09-16T00:11:51.680Z"
+  },
+  {
+    "id": "8uotf0e9w",
+    "transactionId": "mqy289n1v",
+    "name": "Appraisal",
+    "completed": false,
+    "createdAt": "2026-09-16T00:11:51.680Z"
+  },
+  {
+    "id": "yq29e9cpi",
+    "transactionId": "mqy289n1v",
+    "name": "Underwriting",
+    "completed": false,
+    "createdAt": "2026-09-16T00:11:51.680Z"
+  },
+  {
+    "id": "3w3vrjfyz",
+    "transactionId": "mqy289n1v",
+    "name": "Funding",
+    "completed": false,
+    "createdAt": "2026-09-16T00:11:51.681Z"
+  },
+  {
+    "id": "mpx6ftbmf",
+    "transactionId": "mqy289n1v",
+    "name": "Closing",
+    "completed": false,
+    "createdAt": "2026-09-16T00:11:51.681Z"
+  }
+]
