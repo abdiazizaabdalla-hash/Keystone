@@ -1,31 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { loadTasks, saveTasks, createTasks, toggleTask, getTasksByTransaction } from '@/lib/storage';
+import { supabaseServer } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
     const transactionId = request.nextUrl.searchParams.get('transactionId');
-    
+
     if (transactionId) {
-      const tasks = getTasksByTransaction(transactionId);
-      return NextResponse.json(tasks);
+      const { data, error } = await supabaseServer
+        .from('tasks')
+        .select('*')
+        .eq('transaction_id', transactionId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return NextResponse.json(data);
     }
-    
-    const tasks = loadTasks();
-    return NextResponse.json(tasks);
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to load tasks' }, { status: 500 });
-  }
-}
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { transactionId, taskNames } = body;
+    const { data, error } = await supabaseServer
+      .from('tasks')
+      .select('*')
+      .order('created_at', { ascending: true });
 
-    const tasks = createTasks(transactionId, taskNames);
-    return NextResponse.json(tasks, { status: 201 });
+    if (error) throw error;
+    return NextResponse.json(data);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to create tasks' }, { status: 500 });
+    console.error('Error fetching tasks:', error);
+    return NextResponse.json({ error: 'Failed to fetch tasks' }, { status: 500 });
   }
 }
 
@@ -34,9 +34,26 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const { taskId } = body;
 
-    toggleTask(taskId);
+    // Get current task
+    const { data: task, error: getError } = await supabaseServer
+      .from('tasks')
+      .select('completed')
+      .eq('id', taskId)
+      .single();
+
+    if (getError) throw getError;
+
+    // Toggle completed
+    const { error: updateError } = await supabaseServer
+      .from('tasks')
+      .update({ completed: !task.completed })
+      .eq('id', taskId);
+
+    if (updateError) throw updateError;
+
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error('Error toggling task:', error);
     return NextResponse.json({ error: 'Failed to toggle task' }, { status: 500 });
   }
 }
