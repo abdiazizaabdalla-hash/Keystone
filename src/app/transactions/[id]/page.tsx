@@ -25,6 +25,16 @@ interface Agent {
   name: string;
 }
 
+const STATUS_OPTIONS = [
+  'Contract Pending',
+  'Under Contract',
+  'Inspection',
+  'Appraisal',
+  'Underwriting',
+  'Clear to Close',
+  'Closed',
+];
+
 export default function TransactionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
@@ -32,6 +42,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [agentName, setAgentName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -93,6 +104,35 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     } catch (error) {
       console.error('Error toggling task:', error);
       alert('Failed to toggle task. Check console for details.');
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!transaction || newStatus === transaction.status) return;
+
+    try {
+      setIsUpdatingStatus(true);
+      const response = await fetch(`/api/transactions/[id]?id=${transaction.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update transaction status');
+      }
+
+      const updated = await response.json();
+      setTransaction(updated);
+
+      if (newStatus === 'Closed') {
+        alert('Transaction marked as closed. Invoice has been auto-generated.');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Failed to update transaction status. Check console for details.');
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -175,9 +215,16 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         {/* Main Card */}
         <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700 rounded-lg p-8 mb-8">
           <div className="mb-8">
-            <span className="inline-block px-3 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-300 text-sm font-semibold rounded-full mb-4">
-              {transaction.status}
-            </span>
+            <div className="flex items-center justify-between mb-4">
+              <span className="inline-block px-3 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-300 text-sm font-semibold rounded-full">
+                {transaction.status}
+              </span>
+              {transaction.status === 'Closed' && (
+                <span className="inline-block px-3 py-1 bg-green-500/20 border border-green-500/50 text-green-300 text-xs font-semibold rounded-full">
+                  ✓ Invoice Generated
+                </span>
+              )}
+            </div>
             <h1 className="text-4xl font-bold text-slate-100 mb-2">{transaction.file_number}</h1>
             <p className="text-slate-400">{transaction.property_address}</p>
           </div>
@@ -200,10 +247,21 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               <p className="text-2xl font-bold text-amber-400">${transaction.purchase_price.toLocaleString()}</p>
             </div>
 
-            {/* Status */}
+            {/* Status Dropdown */}
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Status</p>
-              <p className="text-lg font-semibold text-slate-100">{transaction.status}</p>
+              <select
+                value={transaction.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                disabled={isUpdatingStatus}
+                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:border-amber-500 focus:outline-none disabled:opacity-50 cursor-pointer"
+              >
+                {STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

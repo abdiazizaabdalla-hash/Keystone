@@ -8,6 +8,8 @@ interface DashboardStats {
   activeTransactions: number;
   completedTransactions: number;
   agentsCount: number;
+  totalInvoiced: number;
+  outstandingAmount: number;
 }
 
 export default function Home() {
@@ -16,6 +18,8 @@ export default function Home() {
     activeTransactions: 0,
     completedTransactions: 0,
     agentsCount: 0,
+    totalInvoiced: 0,
+    outstandingAmount: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -25,15 +29,17 @@ export default function Home() {
 
   const fetchStats = async () => {
     try {
-      const [txRes, agentsRes] = await Promise.all([
+      const [txRes, agentsRes, invoicesRes] = await Promise.all([
         fetch('/api/transactions'),
         fetch('/api/agents'),
+        fetch('/api/invoices'),
       ]);
 
-      if (!txRes.ok || !agentsRes.ok) throw new Error('Failed to fetch');
+      if (!txRes.ok || !agentsRes.ok || !invoicesRes.ok) throw new Error('Failed to fetch');
 
       const transactions = await txRes.json();
       const agents = await agentsRes.json();
+      const invoices = await invoicesRes.json();
 
       const active = Array.isArray(transactions)
         ? transactions.filter((t: any) => t.status !== 'Closed').length
@@ -42,11 +48,20 @@ export default function Home() {
         ? transactions.filter((t: any) => t.status === 'Closed').length
         : 0;
 
+      const totalInvoiced = Array.isArray(invoices)
+        ? invoices.reduce((sum: number, inv: any) => sum + (inv.amount_owed || 0), 0)
+        : 0;
+      const outstanding = Array.isArray(invoices)
+        ? invoices.filter((inv: any) => !inv.paid).reduce((sum: number, inv: any) => sum + (inv.amount_owed || 0), 0)
+        : 0;
+
       setStats({
         totalTransactions: Array.isArray(transactions) ? transactions.length : 0,
         activeTransactions: active,
         completedTransactions: completed,
         agentsCount: Array.isArray(agents) ? agents.length : 0,
+        totalInvoiced,
+        outstandingAmount: outstanding,
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -128,6 +143,20 @@ export default function Home() {
                 <div className="text-3xl font-bold text-purple-400">{stats.agentsCount}</div>
                 <div className="text-xs text-slate-500 mt-2">in network</div>
               </div>
+
+              {/* Outstanding Invoices */}
+              <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 hover:border-slate-600 transition">
+                <div className="text-sm text-slate-400 mb-2">Outstanding</div>
+                <div className="text-3xl font-bold text-red-400">${stats.outstandingAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                <div className="text-xs text-slate-500 mt-2">unpaid invoices</div>
+              </div>
+
+              {/* Total Invoiced */}
+              <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 hover:border-slate-600 transition">
+                <div className="text-sm text-slate-400 mb-2">Total Invoiced</div>
+                <div className="text-3xl font-bold text-green-400">${stats.totalInvoiced.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                <div className="text-xs text-slate-500 mt-2">all commissions</div>
+              </div>
             </div>
           </div>
         </section>
@@ -167,16 +196,19 @@ export default function Home() {
               <p className="text-slate-400 text-sm">Manage and track all your active and completed deals</p>
             </Link>
 
-            {/* Coming Soon: Invoicing */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-lg p-8 opacity-60 cursor-not-allowed">
-              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center mb-4">
+            {/* Invoicing */}
+            <Link
+              href="/invoices"
+              className="group bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 hover:border-green-500 rounded-lg p-8 transition hover:bg-slate-800/50"
+            >
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center mb-4 group-hover:shadow-lg group-hover:shadow-green-500/50 transition">
                 <svg className="w-6 h-6 text-slate-950" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                 </svg>
               </div>
-              <h3 className="font-semibold text-slate-100 mb-2">Invoicing</h3>
-              <p className="text-slate-400 text-sm">Auto-generate invoices and track payments (Coming Soon)</p>
-            </div>
+              <h3 className="font-semibold text-slate-100 mb-2">Manage Invoices</h3>
+              <p className="text-slate-400 text-sm">Track agent commissions and payment status</p>
+            </Link>
           </div>
         </div>
       </section>
@@ -239,8 +271,8 @@ export default function Home() {
                   <span className="text-yellow-400">✓</span>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-slate-100">Coming Soon: Invoicing</h3>
-                  <p className="text-slate-400 text-sm mt-1">Auto-generate invoices directly from closed deals</p>
+                  <h3 className="font-semibold text-slate-100">Auto-Generate Invoices</h3>
+                  <p className="text-slate-400 text-sm mt-1">Instant invoice creation when deals close with commission calculations</p>
                 </div>
               </div>
             </div>

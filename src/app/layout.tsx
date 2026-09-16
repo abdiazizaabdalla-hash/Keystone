@@ -33,6 +33,9 @@ export default function RootLayout({
                 <a href="/transactions" className="text-sm text-slate-300 hover:text-amber-400 transition">
                   Transactions
                 </a>
+                <a href="/invoices" className="text-sm text-slate-300 hover:text-amber-400 transition">
+                  Invoices
+                </a>
                 <div className="w-8 h-8 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center text-xs font-bold">
                   TC
                 </div>
