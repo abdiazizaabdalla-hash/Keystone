@@ -1,43 +1,61 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { use } from 'react';
 import Link from 'next/link';
 
 interface Transaction {
   id: string;
-  agentName: string;
-  fileNumber: string;
-  propertyAddress: string;
-  purchasePrice: number;
+  agent_id: string;
+  file_number: string;
+  property_address: string;
+  purchase_price: number;
   status: string;
 }
 
 interface Task {
   id: string;
-  transactionId: string;
+  transaction_id: string;
   name: string;
   completed: boolean;
 }
 
-export default function TransactionDetailPage({ params }: { params: { id: string } }) {
+interface Agent {
+  id: string;
+  name: string;
+}
+
+export default function TransactionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [agentName, setAgentName] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
-  }, [params.id]);
+  }, [resolvedParams.id]);
 
   const fetchData = async () => {
     try {
-      const txRes = await fetch('/api/transactions');
-      const allTx = await txRes.json();
-      const tx = allTx.find((t: Transaction) => t.id === params.id);
+      const [txRes, tasksRes, agentsRes] = await Promise.all([
+        fetch('/api/transactions'),
+        fetch(`/api/tasks?transactionId=${resolvedParams.id}`),
+        fetch('/api/agents'),
+      ]);
+
+      const txData = await txRes.json();
+      const tx = txData.find((t: Transaction) => t.id === resolvedParams.id);
       setTransaction(tx || null);
 
-      const tasksRes = await fetch(`/api/tasks?transactionId=${params.id}`);
-      const txTasks = await tasksRes.json();
-      setTasks(txTasks);
+      const tasksData = await tasksRes.json();
+      setTasks(tasksData);
+
+      if (tx) {
+        const agentsData = await agentsRes.json();
+        const agent = agentsData.find((a: Agent) => a.id === tx.agent_id);
+        setAgentName(agent?.name || 'Unknown');
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -71,20 +89,20 @@ export default function TransactionDetailPage({ params }: { params: { id: string
         </Link>
 
         <div className="bg-gray-800 rounded-lg p-8 mb-8">
-          <h1 className="text-4xl font-bold mb-6">{transaction.fileNumber}</h1>
+          <h1 className="text-4xl font-bold mb-6">{transaction.file_number}</h1>
 
           <div className="grid grid-cols-2 gap-6">
             <div>
               <p className="text-gray-400 text-sm">Agent</p>
-              <p className="text-xl font-semibold">{transaction.agentName}</p>
+              <p className="text-xl font-semibold">{agentName}</p>
             </div>
             <div>
               <p className="text-gray-400 text-sm">Property</p>
-              <p className="text-xl font-semibold">{transaction.propertyAddress}</p>
+              <p className="text-xl font-semibold">{transaction.property_address}</p>
             </div>
             <div>
               <p className="text-gray-400 text-sm">Purchase Price</p>
-              <p className="text-xl font-semibold">${transaction.purchasePrice.toLocaleString()}</p>
+              <p className="text-xl font-semibold">${transaction.purchase_price.toLocaleString()}</p>
             </div>
             <div>
               <p className="text-gray-400 text-sm">Status</p>
