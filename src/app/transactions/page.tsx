@@ -38,7 +38,6 @@ export default function TransactionsPage() {
       const txData = await txRes.json();
       const agentsData = await agentsRes.json();
 
-      // Check if API returned error
       if (!Array.isArray(txData)) {
         throw new Error(`Transactions API error: ${JSON.stringify(txData)}`);
       }
@@ -48,7 +47,6 @@ export default function TransactionsPage() {
 
       setTransactions(txData);
 
-      // Create agent name map
       const agentMap = new Map<string, string>();
       agentsData.forEach((agent: Agent) => {
         agentMap.set(agent.id, agent.name);
@@ -63,17 +61,43 @@ export default function TransactionsPage() {
     }
   };
 
-  if (loading) return <div className="p-8">Loading...</div>;
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Closed':
+        return 'bg-green-900/30 border-green-700 text-green-400';
+      case 'Contract Pending':
+        return 'bg-yellow-900/30 border-yellow-700 text-yellow-400';
+      case 'Under Contract':
+        return 'bg-blue-900/30 border-blue-700 text-blue-400';
+      default:
+        return 'bg-slate-800/30 border-slate-700 text-slate-400';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen px-6 py-12">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center py-24">
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-full border-4 border-slate-700 border-t-amber-400 animate-spin mx-auto mb-4" />
+              <p className="text-slate-400">Loading transactions...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="bg-red-900 border border-red-700 rounded-lg p-6">
-            <h2 className="text-xl font-bold text-red-200 mb-2">Error Loading Transactions</h2>
-            <p className="text-red-100 mb-4">{error}</p>
-            <p className="text-red-200 text-sm">
-              💡 If you see "permission denied", run the Supabase SQL grant statements first.
+      <div className="min-h-screen px-6 py-12">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-red-900/30 border border-red-700 rounded-lg p-6">
+            <h2 className="text-lg font-bold text-red-300 mb-2">Error Loading Transactions</h2>
+            <p className="text-red-200 mb-4">{error}</p>
+            <p className="text-red-300 text-sm">
+              💡 If you see "permission denied", run the Supabase SQL grant statements in your Supabase dashboard.
             </p>
           </div>
         </div>
@@ -82,60 +106,108 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold">Transactions</h1>
-          <Link
-            href="/transactions/new"
-            className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg font-semibold"
-          >
-            + Create Transaction
-          </Link>
-        </div>
-
-        {transactions.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-400 mb-4">No transactions yet</p>
+    <div className="min-h-screen px-6 py-12">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold text-slate-100 mb-2">Transactions</h1>
+              <p className="text-slate-400">Manage and track all your active and closed deals</p>
+            </div>
             <Link
               href="/transactions/new"
-              className="text-blue-400 hover:underline"
+              className="px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-semibold rounded-lg transition shadow-lg hover:shadow-amber-500/50"
             >
-              Create your first transaction
+              + New Deal
+            </Link>
+          </div>
+        </div>
+
+        {/* Empty State */}
+        {transactions.length === 0 ? (
+          <div className="bg-slate-800/50 border border-dashed border-slate-700 rounded-lg p-16 text-center">
+            <div className="w-16 h-16 bg-slate-700/50 rounded-lg flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-slate-300 mb-2">No transactions yet</h3>
+            <p className="text-slate-400 mb-6">Start by creating your first deal to get organized</p>
+            <Link
+              href="/transactions/new"
+              className="inline-block px-6 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-semibold rounded-lg transition hover:shadow-lg"
+            >
+              Create Your First Deal
             </Link>
           </div>
         ) : (
-          <div className="bg-gray-800 rounded-lg overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-700">
-                  <th className="px-6 py-3 text-left">Agent</th>
-                  <th className="px-6 py-3 text-left">File #</th>
-                  <th className="px-6 py-3 text-left">Property</th>
-                  <th className="px-6 py-3 text-left">Price</th>
-                  <th className="px-6 py-3 text-left">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((tx) => (
-                  <tr
-                    key={tx.id}
-                    className="border-t border-gray-700 hover:bg-gray-700 cursor-pointer"
-                    onClick={() => (window.location.href = `/transactions/${tx.id}`)}
-                  >
-                    <td className="px-6 py-3">{agents.get(tx.agent_id) || 'Unknown'}</td>
-                    <td className="px-6 py-3">{tx.file_number}</td>
-                    <td className="px-6 py-3">{tx.property_address}</td>
-                    <td className="px-6 py-3">${tx.purchase_price.toLocaleString()}</td>
-                    <td className="px-6 py-3">
-                      <span className="bg-green-900 text-green-200 px-3 py-1 rounded-full text-sm">
-                        {tx.status}
-                      </span>
-                    </td>
+          /* Transactions Table */
+          <div className="bg-slate-800/30 border border-slate-700 rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-700 bg-slate-900/50">
+                    <th className="px-6 py-4 text-left">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Agent</span>
+                    </th>
+                    <th className="px-6 py-4 text-left">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">File #</span>
+                    </th>
+                    <th className="px-6 py-4 text-left">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Property</span>
+                    </th>
+                    <th className="px-6 py-4 text-left">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Price</span>
+                    </th>
+                    <th className="px-6 py-4 text-left">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</span>
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {transactions.map((tx, index) => (
+                    <tr
+                      key={tx.id}
+                      className={`border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer transition ${
+                        index % 2 === 0 ? 'bg-slate-800/20' : ''
+                      }`}
+                      onClick={() => (window.location.href = `/transactions/${tx.id}`)}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-amber-600 rounded-full flex items-center justify-center text-xs font-bold text-slate-950">
+                            {(agents.get(tx.agent_id) || 'A')[0]}
+                          </div>
+                          <span className="font-medium text-slate-100">{agents.get(tx.agent_id) || 'Unknown'}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-mono text-sm text-slate-300">{tx.file_number}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-slate-300 max-w-xs truncate block">{tx.property_address}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-semibold text-amber-400">${tx.purchase_price.toLocaleString()}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(tx.status)}`}>
+                          {tx.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Table Footer */}
+            <div className="border-t border-slate-700 bg-slate-900/30 px-6 py-3">
+              <p className="text-sm text-slate-400">
+                Showing <span className="font-semibold text-slate-300">{transactions.length}</span> transaction{transactions.length !== 1 ? 's' : ''}
+              </p>
+            </div>
           </div>
         )}
       </div>
