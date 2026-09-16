@@ -31,6 +31,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [tasks, setTasks] = useState<Task[]>([]);
   const [agentName, setAgentName] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -45,19 +46,32 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       ]);
 
       const txData = await txRes.json();
+      const tasksData = await tasksRes.json();
+      const agentsData = await agentsRes.json();
+
+      // Validate API responses
+      if (!Array.isArray(txData)) {
+        throw new Error(`Transactions API error: ${JSON.stringify(txData)}`);
+      }
+      if (!Array.isArray(tasksData)) {
+        throw new Error(`Tasks API error: ${JSON.stringify(tasksData)}`);
+      }
+      if (!Array.isArray(agentsData)) {
+        throw new Error(`Agents API error: ${JSON.stringify(agentsData)}`);
+      }
+
       const tx = txData.find((t: Transaction) => t.id === resolvedParams.id);
       setTransaction(tx || null);
-
-      const tasksData = await tasksRes.json();
       setTasks(tasksData);
 
       if (tx) {
-        const agentsData = await agentsRes.json();
         const agent = agentsData.find((a: Agent) => a.id === tx.agent_id);
         setAgentName(agent?.name || 'Unknown');
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('Error fetching data:', errorMsg);
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -65,19 +79,57 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
   const handleToggleTask = async (taskId: string) => {
     try {
-      await fetch('/api/tasks', {
+      const response = await fetch('/api/tasks', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskId }),
       });
+      
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(`Failed to toggle task: ${JSON.stringify(result)}`);
+      }
+      
       fetchData();
     } catch (error) {
       console.error('Error toggling task:', error);
+      alert('Failed to toggle task. Check console for details.');
     }
   };
 
   if (loading) return <div className="p-8">Loading...</div>;
-  if (!transaction) return <div className="p-8">Transaction not found</div>;
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white p-8">
+        <div className="max-w-4xl mx-auto">
+          <Link href="/transactions" className="text-blue-400 hover:underline mb-8 inline-block">
+            ← Back to Transactions
+          </Link>
+          <div className="bg-red-900 border border-red-700 rounded-lg p-6">
+            <h2 className="text-xl font-bold text-red-200 mb-2">Error Loading Transaction</h2>
+            <p className="text-red-100 mb-4">{error}</p>
+            <p className="text-red-200 text-sm">
+              💡 If you see "permission denied", run the Supabase SQL grant statements first.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!transaction) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white p-8">
+        <div className="max-w-4xl mx-auto">
+          <Link href="/transactions" className="text-blue-400 hover:underline mb-8 inline-block">
+            ← Back to Transactions
+          </Link>
+          <div className="p-8 text-center">Transaction not found</div>
+        </div>
+      </div>
+    );
+  }
 
   const completedCount = tasks.filter((t) => t.completed).length;
 

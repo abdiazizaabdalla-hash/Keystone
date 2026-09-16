@@ -5,35 +5,81 @@ import Link from 'next/link';
 
 interface Transaction {
   id: string;
-  agentName: string;
-  fileNumber: string;
-  propertyAddress: string;
-  purchasePrice: number;
+  agent_id: string;
+  file_number: string;
+  property_address: string;
+  purchase_price: number;
   status: string;
-  createdAt: string;
+  created_at: string;
+}
+
+interface Agent {
+  id: string;
+  name: string;
 }
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [agents, setAgents] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchTransactions();
+    fetchData();
   }, []);
 
-  const fetchTransactions = async () => {
+  const fetchData = async () => {
     try {
-      const res = await fetch('/api/transactions');
-      const data = await res.json();
-      setTransactions(data);
+      const [txRes, agentsRes] = await Promise.all([
+        fetch('/api/transactions'),
+        fetch('/api/agents'),
+      ]);
+
+      const txData = await txRes.json();
+      const agentsData = await agentsRes.json();
+
+      // Check if API returned error
+      if (!Array.isArray(txData)) {
+        throw new Error(`Transactions API error: ${JSON.stringify(txData)}`);
+      }
+      if (!Array.isArray(agentsData)) {
+        throw new Error(`Agents API error: ${JSON.stringify(agentsData)}`);
+      }
+
+      setTransactions(txData);
+
+      // Create agent name map
+      const agentMap = new Map<string, string>();
+      agentsData.forEach((agent: Agent) => {
+        agentMap.set(agent.id, agent.name);
+      });
+      setAgents(agentMap);
     } catch (error) {
-      console.error('Error fetching transactions:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('Error fetching data:', errorMsg);
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
   if (loading) return <div className="p-8">Loading...</div>;
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white p-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-red-900 border border-red-700 rounded-lg p-6">
+            <h2 className="text-xl font-bold text-red-200 mb-2">Error Loading Transactions</h2>
+            <p className="text-red-100 mb-4">{error}</p>
+            <p className="text-red-200 text-sm">
+              💡 If you see "permission denied", run the Supabase SQL grant statements first.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-8">
@@ -75,35 +121,13 @@ export default function TransactionsPage() {
                   <tr
                     key={tx.id}
                     className="border-t border-gray-700 hover:bg-gray-700 cursor-pointer"
+                    onClick={() => (window.location.href = `/transactions/${tx.id}`)}
                   >
-                    <td
-                      className="px-6 py-3"
-                      onClick={() => (window.location.href = `/transactions/${tx.id}`)}
-                    >
-                      {tx.agentName}
-                    </td>
-                    <td
-                      className="px-6 py-3"
-                      onClick={() => (window.location.href = `/transactions/${tx.id}`)}
-                    >
-                      {tx.fileNumber}
-                    </td>
-                    <td
-                      className="px-6 py-3"
-                      onClick={() => (window.location.href = `/transactions/${tx.id}`)}
-                    >
-                      {tx.propertyAddress}
-                    </td>
-                    <td
-                      className="px-6 py-3"
-                      onClick={() => (window.location.href = `/transactions/${tx.id}`)}
-                    >
-                      ${tx.purchasePrice.toLocaleString()}
-                    </td>
-                    <td
-                      className="px-6 py-3"
-                      onClick={() => (window.location.href = `/transactions/${tx.id}`)}
-                    >
+                    <td className="px-6 py-3">{agents.get(tx.agent_id) || 'Unknown'}</td>
+                    <td className="px-6 py-3">{tx.file_number}</td>
+                    <td className="px-6 py-3">{tx.property_address}</td>
+                    <td className="px-6 py-3">${tx.purchase_price.toLocaleString()}</td>
+                    <td className="px-6 py-3">
                       <span className="bg-green-900 text-green-200 px-3 py-1 rounded-full text-sm">
                         {tx.status}
                       </span>
