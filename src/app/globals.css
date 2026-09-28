@@ -1,8 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400..600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #08080b;
+  --foreground: #f2f2f4;
 }
 
 @theme inline {
@@ -10,17 +12,57 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-brand: 'Poppins', Arial, sans-serif;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Relay TC "ink" palette — a custom near-black ramp (distinct from
+     Tailwind's stock slate) that anchors the whole app's dark theme. */
+  --color-ink-50: #f7f7f8;
+  --color-ink-100: #eaeaed;
+  --color-ink-200: #d2d2d9;
+  --color-ink-300: #a8a8b3;
+  --color-ink-400: #7d7d8a;
+  --color-ink-500: #5a5a68;
+  --color-ink-600: #3d3d4a;
+  --color-ink-700: #26262f;
+  --color-ink-800: #18181f;
+  --color-ink-900: #101014;
+  --color-ink-950: #08080b;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Every button in the app gets an instant, consistent press response --
+   a slight compress on click -- instead of feeling unresponsive while
+   whatever it triggers (a save, a redirect, an API call) is in flight.
+   Living in @layer base means any button's own Tailwind utility classes
+   (a custom duration, a color transition) still win over these defaults;
+   this only fills in what a button doesn't already specify, and adds the
+   :active scale that nothing in this app was setting anywhere. */
+@layer base {
+  button {
+    transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  button:not(:disabled):active {
+    transform: scale(0.97);
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-brand {
+  font-family: var(--font-brand);
 }

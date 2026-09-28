@@ -1,79 +1,169 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
+import { syncTasksToStatus } from '@/lib/closeTransaction';
+import { computeDueDates, normalizeDueDateSpec, dueDaysToSpec } from '@/lib/dueDates';
+import { syncTransactionTasksToCalendar } from '@/lib/calendarSync';
+
+// Looks up which TC owns this transaction's agent (not necessarily the
+// requesting user -- an admin can act on someone else's transaction) and
+// builds the human-readable label calendar events are titled with.
+// Returns null (rather than throwing) if the agent lookup fails, so a
+// calendar-sync hiccup here can never break the actual status/date
+// update it's piggybacking on.
+async function getTransactionCalendarContext(
+  agentId: string,
+  transaction: { file_number: string; property_address: string }
+): Promise<{ tcUserId: string; label: string } | null> {
+  const { data: agent } = await supabaseServer.from('agents').select('tc_user_id').eq('id', agentId).single();
+  if (!agent?.tc_user_id) return null;
+  return {
+    tcUserId: agent.tc_user_id,
+    label: `${transaction.file_number} · ${transaction.property_address}`,
+  };
+}
 
 export async function PATCH(request: NextRequest) {
   try {
+    const { user, isAdmin } = await getUserFromRequest(request);
+    await assertTrialActive(user);
     const { searchParams } = new URL(request.url);
     const transactionId = searchParams.get('id');
     const body = await request.json();
-    const { status } = body;
+    const { status, acceptanceDate, closingDate } = body;
 
-    // Update transaction status
+    if (!transactionId) {
+      return NextResponse.json({ error: 'Transaction ID is required' }, { status: 400 });
+    }
+
+    if (!isAdmin) {
+      const { data: existingTx } = await supabaseServer
+        .from('transactions')
+        .select('agent_id')
+        .eq('id', transactionId)
+        .single();
+
+      if (existingTx) {
+        const { data: agent } = await supabaseServer
+          .from('agents')
+          .select('id')
+          .eq('id', existingTx.agent_id)
+          .eq('tc_user_id', user.id)
+          .single();
+
+        if (!agent) {
+          return NextResponse.json({ error: 'You do not have permission to update this transaction' }, { status: 403 });
+        }
+      }
+    }
+
+    // This route handles two independent kinds of edits, either alone or
+    // together in one request: a status change, and/or an edit to the
+    // acceptance/closing anchor dates (see lib/dueDates.ts). Only the
+    // fields actually present in the body get written.
+    const updateFields: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (status !== undefined) updateFields.status = status;
+    if (acceptanceDate !== undefined) updateFields.acceptance_date = acceptanceDate || null;
+    if (closingDate !== undefined) updateFields.closing_date = closingDate || null;
+
     const { data: transaction, error: updateError } = await supabaseServer
       .from('transactions')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update(updateFields)
       .eq('id', transactionId)
       .select()
       .single();
 
     if (updateError) throw updateError;
 
-    // If status is "Closed", auto-generate invoice
-    if (status === 'Closed') {
-      // Get agent info for commission calculation
-      const { data: agent, error: agentError } = await supabaseServer
-        .from('agents')
-        .select('commission_percent')
-        .eq('id', transaction.agent_id)
-        .single();
+    // Hand back whichever rows changed so the frontend can update state
+    // directly instead of re-fetching everything. Both branches can run
+    // in the same request; the later one wins if both touch a task.
+    let responseTasks: any[] | null = null; // eslint-disable-line @typescript-eslint/no-explicit-any -- rows from two different supabase selects, reshaped identically at each call site
 
-      if (agentError) throw agentError;
+    if (status !== undefined) {
+      // Keep the checklist in sync with the manually-set status: check
+      // off (or reopen) tasks so the two never drift apart.
+      //
+      // Invoices are never generated automatically on close, on any plan
+      // -- the TC always clicks "Create Invoice" themselves from the
+      // transaction page once a deal is Closed (see
+      // dashboard/transactions/[id]/page.tsx).
+      responseTasks = await syncTasksToStatus(transactionId, status);
 
-      // Check if invoice already exists
-      const { data: existingInvoice } = await supabaseServer
-        .from('invoices')
-        .select('id')
-        .eq('transaction_id', transactionId)
-        .single();
-
-      // Only create if invoice doesn't exist
-      if (!existingInvoice) {
-        const commissionAmount = (transaction.purchase_price * agent.commission_percent) / 100;
-
-        // Generate invoice number (KEYSTN-YYYYMMDD-XXXXX)
-        const today = new Date();
-        const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
-        
-        const { data: todayInvoices } = await supabaseServer
-          .from('invoices')
-          .select('id')
-          .gte('invoice_date', today.toISOString().split('T')[0])
-          .lt('invoice_date', new Date(today.getTime() + 86400000).toISOString().split('T')[0]);
-
-        const invoiceNumber = `KEYSTN-${dateStr}-${String((todayInvoices?.length || 0) + 1).padStart(5, '0')}`;
-
-        // Calculate due date (30 days from today)
-        const dueDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-        // Create invoice
-        const { error: invoiceError } = await supabaseServer
-          .from('invoices')
-          .insert({
-            agent_id: transaction.agent_id,
-            transaction_id: transactionId,
-            amount_owed: commissionAmount,
-            invoice_number: invoiceNumber,
-            invoice_date: today.toISOString(),
-            due_date: dueDate.toISOString().split('T')[0],
-            paid: false,
-          });
-
-        if (invoiceError) console.warn('Warning: Invoice creation failed but transaction updated', invoiceError);
+      // A status change can complete/reopen tasks, which changes which
+      // ones should still have a calendar event -- resync (no-op if this
+      // TC hasn't connected a calendar).
+      const ownerLabel = await getTransactionCalendarContext(transaction.agent_id, transaction);
+      if (ownerLabel) {
+        await syncTransactionTasksToCalendar(ownerLabel.tcUserId, ownerLabel.label, responseTasks);
       }
     }
 
-    return NextResponse.json(transaction);
+    if (acceptanceDate !== undefined || closingDate !== undefined) {
+      // Either anchor date changed -- rewrite the computed due_date
+      // snapshot on every task for this transaction. computeDueDates
+      // returns all-null for a custom (non-baseline) checklist template
+      // or when no acceptance date is set, which is a harmless no-op
+      // write in either case.
+      const { data: existingTasks, error: tasksFetchError } = await supabaseServer
+        .from('tasks')
+        .select('id, name, due_date_spec, due_days_after_acceptance')
+        .eq('transaction_id', transactionId)
+        .order('sort_order', { ascending: true });
+
+      if (tasksFetchError) throw tasksFetchError;
+
+      if (existingTasks && existingTasks.length > 0) {
+        // due_date_spec is the current source of truth; a row saved before
+        // it existed only has the legacy due_days_after_acceptance column,
+        // which dueDaysToSpec() converts to the same shape.
+        const dueDates = computeDueDates(
+          existingTasks.map((t) => ({
+            name: t.name as string,
+            dueDate: t.due_date_spec
+              ? normalizeDueDateSpec(t.due_date_spec)
+              : dueDaysToSpec(t.due_days_after_acceptance as number | null),
+          })),
+          transaction.acceptance_date,
+          transaction.closing_date
+        );
+
+        const updatedTasks = await Promise.all(
+          existingTasks.map(async (t, index) => {
+            const { data: updatedTask, error: taskUpdateError } = await supabaseServer
+              .from('tasks')
+              .update({ due_date: dueDates[index] })
+              .eq('id', t.id as string)
+              .select()
+              .single();
+            if (taskUpdateError) throw taskUpdateError;
+            return updatedTask;
+          })
+        );
+
+        responseTasks = updatedTasks;
+
+        // Best-effort Google Calendar sync (see lib/calendarSync.ts) --
+        // a no-op if this TC hasn't connected a calendar.
+        const ownerLabel = await getTransactionCalendarContext(transaction.agent_id, transaction);
+        if (ownerLabel) {
+          await syncTransactionTasksToCalendar(ownerLabel.tcUserId, ownerLabel.label, updatedTasks);
+        }
+      }
+    }
+
+    return NextResponse.json({ ...transaction, tasks: responseTasks ?? undefined });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof TrialExpiredError) {
+      return NextResponse.json(
+        { error: error.message, code: 'trial_expired', trialEndsAt: error.trialEndsAt },
+        { status: error.status }
+      );
+    }
     console.error('Error updating transaction:', error);
     return NextResponse.json({ error: 'Failed to update transaction' }, { status: 500 });
   }
