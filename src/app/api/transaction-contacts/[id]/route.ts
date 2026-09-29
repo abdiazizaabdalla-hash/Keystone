@@ -49,7 +49,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const body = await request.json().catch(() => ({}));
     const update: Record<string, string | null> = {};
-    for (const field of ['role', 'email', 'phone'] as const) {
+    for (const field of ['role', 'name', 'email', 'phone'] as const) {
       if (field in body) {
         const value = body[field];
         update[field] = typeof value === 'string' && value.trim() ? value.trim() : null;

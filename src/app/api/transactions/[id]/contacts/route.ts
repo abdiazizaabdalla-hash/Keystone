@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getVisibleTcUserIds } from '@/lib/team';
 
-// The "people involved" list shown right under the Checklist card on the
+// The "Deal Contacts" list shown right under the Checklist card on the
 // transaction detail page -- buyer, seller, lender, title/escrow, etc.
 // The linked Agent is intentionally NOT part of this table; the frontend
 // renders that row straight from the existing agents record instead (see
@@ -75,13 +75,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const body = await request.json().catch(() => ({}));
     const role = typeof body.role === 'string' ? body.role.trim() : '';
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
 
     // A row with nothing in it isn't worth persisting -- the frontend
     // only calls this once a blank box actually has something typed into
     // it, but this guards the API itself against the same thing.
-    if (!role && !email && !phone) {
+    if (!role && !name && !email && !phone) {
       return NextResponse.json({ error: 'At least one field is required' }, { status: 400 });
     }
 
@@ -95,6 +96,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .insert({
         transaction_id: transactionId,
         role: role || null,
+        name: name || null,
         email: email || null,
         phone: phone || null,
         position: count || 0,

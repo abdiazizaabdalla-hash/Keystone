@@ -40,25 +40,27 @@ interface Agent {
   phone?: string | null;
 }
 
-// A person involved in this specific deal besides the agent (buyer,
-// seller, lender, title/escrow, etc.) -- the agent's own contact info
-// comes from the Agent record above instead, see the People Involved
+// A person or company involved in this specific deal besides the agent
+// (buyer, seller, lender, title/escrow, etc.) -- the agent's own contact
+// info comes from the Agent record above instead, see the Deal Contacts
 // section below.
 interface Contact {
   id: string;
   transaction_id: string;
   role: string | null;
+  name: string | null;
   email: string | null;
   phone: string | null;
   position: number;
 }
 
-// A blank "add another person" box that only becomes a real, saved
+// A blank "add another contact" box that only becomes a real, saved
 // Contact once the user types something into it and blurs -- so the
 // handful of empty boxes we show by default never pollute the database.
 interface DraftContact {
   draftId: string;
   role: string;
+  name: string;
   email: string;
   phone: string;
 }
@@ -115,7 +117,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [agentName, setAgentName] = useState('');
   const [agent, setAgent] = useState<Agent | null>(null);
 
-  // "People Involved" section, directly under the Checklist card: the
+  // "Deal Contacts" section, directly under the Checklist card: the
   // agent (read-only here, sourced from `agent` above) plus any other
   // parties the TC types in by hand. `contacts` are rows already saved to
   // the database; `draftContacts` are blank/in-progress boxes that only
@@ -128,7 +130,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
   const makeDraftContact = (): DraftContact => {
     draftIdCounterRef.current += 1;
-    return { draftId: `draft-${draftIdCounterRef.current}`, role: '', email: '', phone: '' };
+    return { draftId: `draft-${draftIdCounterRef.current}`, role: '', name: '', email: '', phone: '' };
   };
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
@@ -312,9 +314,9 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     }
   };
 
-  // --- People Involved: draft (unsaved) boxes ---
+  // --- Deal Contacts: draft (unsaved) boxes ---
 
-  const handleDraftContactChange = (draftId: string, field: 'role' | 'email' | 'phone', value: string) => {
+  const handleDraftContactChange = (draftId: string, field: 'role' | 'name' | 'email' | 'phone', value: string) => {
     setDraftContacts((prev) => prev.map((d) => (d.draftId === draftId ? { ...d, [field]: value } : d)));
   };
 
@@ -334,14 +336,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const handleDraftContactBlur = async (draftId: string) => {
     const draft = draftContacts.find((d) => d.draftId === draftId);
     if (!draft) return;
-    if (!draft.role.trim() && !draft.email.trim() && !draft.phone.trim()) return;
+    if (!draft.role.trim() && !draft.name.trim() && !draft.email.trim() && !draft.phone.trim()) return;
 
     setSavingContactId(draftId);
     try {
       const response = await authFetch(`/api/transactions/${resolvedParams.id}/contacts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: draft.role, email: draft.email, phone: draft.phone }),
+        body: JSON.stringify({ role: draft.role, name: draft.name, email: draft.email, phone: draft.phone }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -361,13 +363,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     }
   };
 
-  // --- People Involved: saved (persisted) rows ---
+  // --- Deal Contacts: saved (persisted) rows ---
 
-  const handleContactChange = (contactId: string, field: 'role' | 'email' | 'phone', value: string) => {
+  const handleContactChange = (contactId: string, field: 'role' | 'name' | 'email' | 'phone', value: string) => {
     setContacts((prev) => prev.map((c) => (c.id === contactId ? { ...c, [field]: value } : c)));
   };
 
-  const handleContactBlur = async (contactId: string, field: 'role' | 'email' | 'phone', value: string) => {
+  const handleContactBlur = async (contactId: string, field: 'role' | 'name' | 'email' | 'phone', value: string) => {
     setSavingContactId(contactId);
     try {
       const response = await authFetch(`/api/transaction-contacts/${contactId}`, {
@@ -1364,7 +1366,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             order (checklist first, documents below). */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 mt-8">
 
-        {/* Tasks Section + People Involved, stacked together in the
+        {/* Tasks Section + Deal Contacts, stacked together in the
             narrow right column on desktop (this wrapper carries the
             order/self-start that used to live on the Checklist div
             directly, since it's now the thing actually placed in the
@@ -1537,11 +1539,11 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
 
-        {/* People Involved: the agent (read-only, from the agents record)
+        {/* Deal Contacts: the agent (read-only, from the agents record)
             plus any other parties for this deal, typed in by hand. Sits
             directly under the Checklist card via the shared wrapper above. */}
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
-          <h2 className="text-lg font-bold text-slate-100 mb-4">People Involved</h2>
+          <h2 className="text-lg font-bold text-slate-100 mb-4">Deal Contacts</h2>
 
           <div className="space-y-2">
             {/* Agent row -- read-only here; edit via the Agents page. */}
@@ -1583,6 +1585,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     Remove
                   </button>
                 </div>
+                <input
+                  type="text"
+                  value={contact.name || ''}
+                  onChange={(e) => handleContactChange(contact.id, 'name', e.target.value)}
+                  onBlur={(e) => handleContactBlur(contact.id, 'name', e.target.value)}
+                  placeholder="Name or company"
+                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                />
                 <input
                   type="email"
                   value={contact.email || ''}
@@ -1628,6 +1638,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     Remove
                   </button>
                 </div>
+                <input
+                  type="text"
+                  value={draft.name}
+                  onChange={(e) => handleDraftContactChange(draft.draftId, 'name', e.target.value)}
+                  onBlur={() => handleDraftContactBlur(draft.draftId)}
+                  placeholder="Name or company"
+                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                />
                 <input
                   type="email"
                   value={draft.email}
