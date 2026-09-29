@@ -406,7 +406,20 @@ function OnboardingContent() {
     }
   };
 
-  const handleCompleteSetup = () => {
+  const handleCompleteSetup = async () => {
+    // Marks the account so DashboardLayout never routes it back through
+    // onboarding again, regardless of whether they've added an agent yet
+    // -- see lib/onboarding.ts. Best-effort: if this save fails they just
+    // see the wizard once more next time they sign in, which is harmless.
+    try {
+      await authFetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onboardingCompleted: true }),
+      });
+    } catch {
+      // ignore -- see comment above
+    }
     router.push('/dashboard');
   };
 

@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
+import { needsOnboarding } from '@/lib/onboarding';
 import { normalizeDueDateSpec } from '@/lib/dueDates';
 import { BASELINE_CHECKLIST_TEMPLATE, normalizeTemplateSteps } from '@/lib/checklistTemplates';
 import { TASK_TEMPLATE } from '@/lib/transactionStages';
@@ -83,7 +84,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ...shaped, trial });
+    // Whether DashboardLayout should bounce this sign-in to /onboarding
+    // instead of rendering the dashboard -- see lib/onboarding.ts for why
+    // this is safe to check on every account, not just new ones.
+    const needsOnboardingFlow = await needsOnboarding(user.id, user.user_metadata);
+
+    return NextResponse.json({ ...shaped, trial, needsOnboarding: needsOnboardingFlow });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -109,7 +115,16 @@ export async function PATCH(request: NextRequest) {
     const { user } = await getUserFromRequest(request);
 
     const body = await request.json();
-    const { defaultFlatFee, defaultPercentFee, invoiceDueDays, fullName, paymentPreference, dueDateWorkflowEnabled, dueDateWorkflowSteps } = body;
+    const {
+      defaultFlatFee,
+      defaultPercentFee,
+      invoiceDueDays,
+      fullName,
+      paymentPreference,
+      dueDateWorkflowEnabled,
+      dueDateWorkflowSteps,
+      onboardingCompleted,
+    } = body;
 
     const metadataUpdate: Record<string, unknown> = { ...user.user_metadata };
 
@@ -171,6 +186,13 @@ export async function PATCH(request: NextRequest) {
         name,
         dueDate: normalizeDueDateSpec(byName.get(name)),
       }));
+    }
+
+    // Set by onboarding's final "Go to Dashboard" button, so DashboardLayout
+    // never sends this account through the wizard again regardless of how
+    // many agents it happens to have. See lib/onboarding.ts.
+    if (onboardingCompleted !== undefined) {
+      metadataUpdate.onboarding_completed = Boolean(onboardingCompleted);
     }
 
     const { data: updated, error: updateError } = await supabaseServer.auth.admin.updateUserById(user.id, {

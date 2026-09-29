@@ -34,12 +34,21 @@ export default function DashboardLayout({
         router.push('/auth');
         return;
       }
-      setIsLoading(false);
 
+      // isLoading only clears once we know whether this account needs to
+      // be bounced to /onboarding first -- otherwise the dashboard would
+      // flash on screen for a moment before the redirect kicks in (e.g.
+      // someone who confirmed their email, abandoned Stripe Checkout, and
+      // just signed back in directly instead of finishing setup). See
+      // lib/onboarding.ts for what "needs onboarding" means.
       try {
         const res = await authFetch('/api/auth/me');
         if (res.ok) {
           const data = await res.json();
+          if (data.needsOnboarding) {
+            router.replace('/onboarding');
+            return;
+          }
           setPlan(data.plan || 'starter');
           setTrial(data.trial || null);
           setUserName(data.fullName || data.email || '');
@@ -48,6 +57,8 @@ export default function DashboardLayout({
       } catch {
         // Non-critical — the plan badge just won't show.
       }
+
+      setIsLoading(false);
     };
 
     checkAuth();
