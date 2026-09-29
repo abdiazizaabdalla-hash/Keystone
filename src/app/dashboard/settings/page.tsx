@@ -265,7 +265,13 @@ function SettingsContent() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to start Stripe Connect');
-      window.location.href = data.url;
+      // Opens in a new tab -- this is a one-time, single-use link, so
+      // reusing this tab for it would strand the settings page the TC was
+      // already on. Unlike a same-tab redirect, this page stays mounted,
+      // so the button needs to reset itself rather than relying on
+      // navigation to unmount it.
+      window.open(data.url, '_blank', 'noopener,noreferrer');
+      setIsStartingStripeConnect(false);
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
