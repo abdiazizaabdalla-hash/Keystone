@@ -57,6 +57,7 @@ interface DocumentItem {
   content_type: string | null;
   file_size: number | null;
   is_signed: boolean;
+  requires_signature: boolean;
   created_at: string;
   url: string | null;
 }
@@ -114,6 +115,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [uploadDocType, setUploadDocType] = useState(DOCUMENT_CATEGORIES[0].types[0]);
   const [uploadStageTaskId, setUploadStageTaskId] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadRequiresSignature, setUploadRequiresSignature] = useState(true);
   const [docSearch, setDocSearch] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
@@ -513,7 +515,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     }
   };
 
-  const handleUpload = async (file: File, taskId: string | null, category: string, documentType: string) => {
+  const handleUpload = async (
+    file: File,
+    taskId: string | null,
+    category: string,
+    documentType: string,
+    requiresSignature: boolean = true
+  ) => {
     try {
       setUploadingSlot('upload');
       const formData = new FormData();
@@ -521,6 +529,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       formData.append('transactionId', resolvedParams.id);
       formData.append('category', category);
       formData.append('documentType', documentType);
+      formData.append('requiresSignature', requiresSignature ? 'true' : 'false');
       if (taskId) formData.append('taskId', taskId);
 
       const response = await authFetch('/api/documents', {
@@ -537,6 +546,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setShowUploadForm(false);
       setUploadFile(null);
       setUploadStageTaskId('');
+      setUploadRequiresSignature(true);
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
@@ -552,7 +562,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const handleUploadSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!uploadFile) return;
-    handleUpload(uploadFile, uploadStageTaskId || null, uploadCategory, uploadDocType);
+    handleUpload(uploadFile, uploadStageTaskId || null, uploadCategory, uploadDocType, uploadRequiresSignature);
   };
 
   // Lets the TC mark a document Signed/Not Signed after it's already been
@@ -581,6 +591,37 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       alert(error instanceof Error ? error.message : 'Failed to update document');
     } finally {
       setTogglingSignedDocId(null);
+    }
+  };
+
+  // Lets the TC mark a document as not needing a signature at all (a photo,
+  // an MLS printout, internal notes) -- when off, the Signed checkbox and
+  // Request Signature button are hidden entirely for that document.
+  const [togglingRequiresSignatureDocId, setTogglingRequiresSignatureDocId] = useState<string | null>(null);
+  const handleToggleRequiresSignature = async (docId: string, nextRequiresSignature: boolean) => {
+    try {
+      setTogglingRequiresSignatureDocId(docId);
+      const response = await authFetch('/api/documents', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: docId, requiresSignature: nextRequiresSignature }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update document');
+      }
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === docId ? { ...d, requires_signature: nextRequiresSignature } : d))
+      );
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error updating document signature requirement:', error);
+      alert(error instanceof Error ? error.message : 'Failed to update document');
+    } finally {
+      setTogglingRequiresSignatureDocId(null);
     }
   };
 
@@ -797,6 +838,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     // are terminal non-signed states that hand control back to the TC).
     const hasSigningActivity = sigReq?.status === 'pending' || sigReq?.status === 'signed';
     const isToggling = togglingSignedDocId === doc.id;
+    const requiresSignature = doc.requires_signature;
+    const isTogglingRequiresSignature = togglingRequiresSignatureDocId === doc.id;
     return (
       <div key={doc.id}>
         <div className="flex items-center justify-between gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-2.5">
@@ -821,12 +864,17 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           <span className="text-xs text-slate-500 flex-shrink-0">
             {doc.file_size ? `${(doc.file_size / 1024).toFixed(0)} KB` : ''}
           </span>
-          {isSignedOutput && (
+          {!requiresSignature && (
+            <span className="text-xs px-2 py-0.5 bg-slate-700/60 border border-slate-600 rounded-full text-slate-400 flex-shrink-0">
+              No signature needed
+            </span>
+          )}
+          {requiresSignature && isSignedOutput && (
             <span className="text-xs px-2 py-0.5 bg-green-900/30 border border-green-700/50 rounded-full text-green-300 flex-shrink-0">
               ✓ Signed copy
             </span>
           )}
-          {!isSignedOutput && hasSigningActivity && sigReq?.status === 'pending' && (
+          {requiresSignature && !isSignedOutput && hasSigningActivity && sigReq?.status === 'pending' && (
             <>
               <span className="text-xs px-2 py-0.5 bg-blue-900/30 border border-blue-700/50 rounded-full text-blue-300 flex-shrink-0">
                 Awaiting signature
@@ -841,12 +889,12 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               </button>
             </>
           )}
-          {!isSignedOutput && hasSigningActivity && sigReq?.status === 'signed' && (
+          {requiresSignature && !isSignedOutput && hasSigningActivity && sigReq?.status === 'signed' && (
             <span className="text-xs px-2 py-0.5 bg-green-900/30 border border-green-700/50 rounded-full text-green-300 flex-shrink-0">
               ✓ Signed
             </span>
           )}
-          {!isSignedOutput && !hasSigningActivity && sigReq?.status === 'declined' && (
+          {requiresSignature && !isSignedOutput && !hasSigningActivity && sigReq?.status === 'declined' && (
             <span
               className="text-xs px-2 py-0.5 bg-orange-900/30 border border-orange-700/50 rounded-full text-orange-300 flex-shrink-0"
               title={sigReq.decline_reason ? `Reason: ${sigReq.decline_reason}` : undefined}
@@ -854,12 +902,12 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               Signer declined
             </span>
           )}
-          {!isSignedOutput && !hasSigningActivity && sigReq?.status === 'voided' && (
+          {requiresSignature && !isSignedOutput && !hasSigningActivity && sigReq?.status === 'voided' && (
             <span className="text-xs px-2 py-0.5 bg-slate-700 border border-slate-600 rounded-full text-slate-400 flex-shrink-0">
               Request voided
             </span>
           )}
-          {!isSignedOutput && !hasSigningActivity && (
+          {requiresSignature && !isSignedOutput && !hasSigningActivity && (
             <label
               className={`flex items-center gap-1.5 text-xs flex-shrink-0 select-none ${
                 isToggling ? 'opacity-50' : 'cursor-pointer'
@@ -875,7 +923,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               Signed
             </label>
           )}
-          {!isSignedOutput && !hasSigningActivity && !doc.is_signed && isPdf && (
+          {requiresSignature && !isSignedOutput && !hasSigningActivity && !doc.is_signed && isPdf && (
             <button
               onClick={() => {
                 setRequestingSignatureDocId(doc.id);
@@ -886,6 +934,16 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               className="text-xs px-2 py-1 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition flex-shrink-0"
             >
               Request Signature
+            </button>
+          )}
+          {!isSignedOutput && !hasSigningActivity && (
+            <button
+              onClick={() => handleToggleRequiresSignature(doc.id, !requiresSignature)}
+              disabled={isTogglingRequiresSignature}
+              className="text-xs px-2 py-1 border border-slate-600 hover:border-slate-400 text-slate-500 hover:text-slate-300 rounded-lg transition flex-shrink-0 disabled:opacity-50"
+              title={requiresSignature ? 'Mark as not requiring a signature' : 'Mark as requiring a signature'}
+            >
+              {isTogglingRequiresSignature ? '...' : requiresSignature ? 'No sig needed' : 'Needs sig'}
             </button>
           )}
           <button
@@ -1411,6 +1469,21 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                   className="w-full text-sm text-slate-300 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-600 file:text-slate-200 hover:file:bg-slate-600 file:cursor-pointer"
                 />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-2 text-sm text-slate-300 select-none cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={uploadRequiresSignature}
+                    onChange={(e) => setUploadRequiresSignature(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                  />
+                  This document needs a signature
+                  <span className="text-xs text-slate-500">
+                    (uncheck for photos, printouts, or anything that won&apos;t be signed)
+                  </span>
+                </label>
               </div>
 
               <div className="md:col-span-2">

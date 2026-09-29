@@ -137,6 +137,7 @@ export async function POST(request: NextRequest) {
     const taskId = formData.get('taskId'); // optional — associates with a checklist stage
     const categoryRaw = formData.get('category');
     const documentTypeRaw = formData.get('documentType');
+    const requiresSignatureRaw = formData.get('requiresSignature'); // optional — defaults to true
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'file is required' }, { status: 400 });
@@ -150,6 +151,9 @@ export async function POST(request: NextRequest) {
 
     const category = typeof categoryRaw === 'string' && categoryRaw ? categoryRaw : DEFAULT_CATEGORY_KEY;
     const documentType = typeof documentTypeRaw === 'string' && documentTypeRaw ? documentTypeRaw : DEFAULT_DOCUMENT_TYPE;
+    // Most documents in a real-estate file need a signature; only treat it
+    // as "no signature needed" when the caller explicitly said so.
+    const requiresSignature = requiresSignatureRaw !== 'false';
 
     if (!isValidCategory(category)) {
       return NextResponse.json({ error: `Unknown document category: ${category}` }, { status: 400 });
@@ -189,6 +193,7 @@ export async function POST(request: NextRequest) {
         content_type: file.type || null,
         file_size: file.size,
         uploaded_by: user.id,
+        requires_signature: requiresSignature,
       })
       .select()
       .single();
@@ -223,20 +228,27 @@ export async function POST(request: NextRequest) {
 
 // PATCH /api/documents -- lets the TC mark a document Signed/Not Signed
 // after it's already been uploaded (e.g. it was signed outside Relay, on
-// paper or through an existing DocuSign account). Deliberately the only
-// field this route can change; everything else about a document is
-// immutable once uploaded.
+// paper or through an existing DocuSign account), and/or flip whether a
+// document requires a signature at all (some uploads -- photos, MLS
+// printouts, internal notes -- never need one). These two flags plus
+// everything else about a document are otherwise immutable once uploaded.
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
     const body = await request.json();
-    const { id, isSigned } = body;
+    const { id, isSigned, requiresSignature } = body;
 
     if (typeof id !== 'string' || !id) {
       return NextResponse.json({ error: 'Document id is required' }, { status: 400 });
     }
-    if (typeof isSigned !== 'boolean') {
+    if (isSigned === undefined && requiresSignature === undefined) {
+      return NextResponse.json({ error: 'isSigned or requiresSignature is required' }, { status: 400 });
+    }
+    if (isSigned !== undefined && typeof isSigned !== 'boolean') {
       return NextResponse.json({ error: 'isSigned must be a boolean' }, { status: 400 });
+    }
+    if (requiresSignature !== undefined && typeof requiresSignature !== 'boolean') {
+      return NextResponse.json({ error: 'requiresSignature must be a boolean' }, { status: 400 });
     }
 
     const { data: doc, error: fetchError } = await supabaseServer
@@ -251,9 +263,13 @@ export async function PATCH(request: NextRequest) {
 
     await assertTransactionAccess(doc.transaction_id, user.id, isAdmin);
 
+    const updates: Record<string, boolean> = {};
+    if (isSigned !== undefined) updates.is_signed = isSigned;
+    if (requiresSignature !== undefined) updates.requires_signature = requiresSignature;
+
     const { data: updated, error: updateError } = await supabaseServer
       .from('documents')
-      .update({ is_signed: isSigned })
+      .update(updates)
       .eq('id', id)
       .select()
       .single();
