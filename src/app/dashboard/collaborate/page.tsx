@@ -225,32 +225,33 @@ export default function CollaboratePage() {
       {isOwner && (
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6">
           <h2 className="font-display font-semibold text-slate-100 mb-1">Invite a teammate</h2>
+          {/* The backend (see POST /api/team) never hard-caps the team --
+              inviting past the currently-paid seat count just adds one
+              more prorated seat to the subscription automatically. The
+              form below always stays available so that path is reachable;
+              only the messaging changes to set expectations correctly. */}
           <p className="text-sm text-slate-400 mb-4">
-            They&apos;ll get Team-plan access right away — no separate payment needed, it&apos;s covered by your subscription.
+            {seatsUsed < data.seatLimit
+              ? "They'll get Team-plan access right away — no separate payment needed, it's covered by your subscription."
+              : `You're at your current seat count (${seatsUsed}/${data.seatLimit}). Inviting one more adds a prorated seat to your subscription (~$19/mo) right away.`}
           </p>
-          {seatsUsed >= data.seatLimit ? (
-            <p className="text-sm text-blue-400">
-              You&apos;ve used all {data.seatLimit} seats on your Team plan.
-            </p>
-          ) : (
-            <form onSubmit={handleInvite} className="flex gap-3">
-              <input
-                type="email"
-                required
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="teammate@example.com"
-                className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-              />
-              <button
-                type="submit"
-                disabled={inviting}
-                className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
-              >
-                {inviting ? 'Inviting…' : 'Invite'}
-              </button>
-            </form>
-          )}
+          <form onSubmit={handleInvite} className="flex gap-3">
+            <input
+              type="email"
+              required
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="teammate@example.com"
+              className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={inviting}
+              className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+            >
+              {inviting ? 'Inviting…' : 'Invite'}
+            </button>
+          </form>
           {inviteMessage && <p className="text-sm text-slate-300 mt-3">{inviteMessage}</p>}
         </div>
       )}
