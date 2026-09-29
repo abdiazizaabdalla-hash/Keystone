@@ -36,6 +36,31 @@ interface Agent {
   name: string;
   commission_percent: number;
   flat_fee: number;
+  email?: string | null;
+  phone?: string | null;
+}
+
+// A person involved in this specific deal besides the agent (buyer,
+// seller, lender, title/escrow, etc.) -- the agent's own contact info
+// comes from the Agent record above instead, see the People Involved
+// section below.
+interface Contact {
+  id: string;
+  transaction_id: string;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  position: number;
+}
+
+// A blank "add another person" box that only becomes a real, saved
+// Contact once the user types something into it and blurs -- so the
+// handful of empty boxes we show by default never pollute the database.
+interface DraftContact {
+  draftId: string;
+  role: string;
+  email: string;
+  phone: string;
 }
 
 interface Invoice {
@@ -89,6 +114,22 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [signatureRequestError, setSignatureRequestError] = useState<string | null>(null);
   const [agentName, setAgentName] = useState('');
   const [agent, setAgent] = useState<Agent | null>(null);
+
+  // "People Involved" section, directly under the Checklist card: the
+  // agent (read-only here, sourced from `agent` above) plus any other
+  // parties the TC types in by hand. `contacts` are rows already saved to
+  // the database; `draftContacts` are blank/in-progress boxes that only
+  // get POSTed once the user actually puts something in them (see
+  // handleDraftContactBlur below).
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [draftContacts, setDraftContacts] = useState<DraftContact[]>([]);
+  const [savingContactId, setSavingContactId] = useState<string | null>(null);
+  const draftIdCounterRef = useRef(0);
+
+  const makeDraftContact = (): DraftContact => {
+    draftIdCounterRef.current += 1;
+    return { draftId: `draft-${draftIdCounterRef.current}`, role: '', email: '', phone: '' };
+  };
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const [createInvoiceError, setCreateInvoiceError] = useState<string | null>(null);
@@ -213,12 +254,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
   const fetchData = async () => {
     try {
-      const [txRes, tasksRes, agentsRes, docsRes, invoicesRes] = await Promise.all([
+      const [txRes, tasksRes, agentsRes, docsRes, invoicesRes, contactsRes] = await Promise.all([
         authFetch('/api/transactions'),
         authFetch(`/api/tasks?transactionId=${resolvedParams.id}`),
         authFetch('/api/agents'),
         authFetch(`/api/documents?transactionId=${resolvedParams.id}`),
         authFetch(`/api/invoices?transactionId=${resolvedParams.id}`),
+        authFetch(`/api/transactions/${resolvedParams.id}/contacts`),
       ]);
 
       const txData = await txRes.json();
@@ -226,6 +268,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       const agentsData = await agentsRes.json();
       const docsData = await docsRes.json();
       const invoicesData = await invoicesRes.json();
+      const contactsData = await contactsRes.json();
 
       if (!Array.isArray(txData)) {
         throw new Error(`Transactions API error: ${JSON.stringify(txData)}`);
@@ -243,6 +286,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setDocuments(Array.isArray(docsData) ? docsData : []);
       setInvoice(Array.isArray(invoicesData) && invoicesData.length > 0 ? invoicesData[0] : null);
 
+      const savedContacts = Array.isArray(contactsData) ? contactsData : [];
+      setContacts(savedContacts);
+      // Always keep at least 3 blank boxes on hand to fill in, regardless
+      // of how many are already saved -- "keep adding" is handled
+      // separately by the Add button appending more on top of this floor.
+      const blankBoxesNeeded = Math.max(0, 3 - savedContacts.length);
+      setDraftContacts(Array.from({ length: blankBoxesNeeded }, () => makeDraftContact()));
+
       if (tx) {
         const matchedAgent = agentsData.find((a: Agent) => a.id === tx.agent_id);
         setAgentName(matchedAgent?.name || 'Unknown');
@@ -258,6 +309,105 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setError(errorMsg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // --- People Involved: draft (unsaved) boxes ---
+
+  const handleDraftContactChange = (draftId: string, field: 'role' | 'email' | 'phone', value: string) => {
+    setDraftContacts((prev) => prev.map((d) => (d.draftId === draftId ? { ...d, [field]: value } : d)));
+  };
+
+  const handleAddDraftContact = () => {
+    setDraftContacts((prev) => [...prev, makeDraftContact()]);
+  };
+
+  const handleRemoveDraftContact = (draftId: string) => {
+    // Never saved, so this is purely local -- no API call.
+    setDraftContacts((prev) => prev.filter((d) => d.draftId !== draftId));
+  };
+
+  // Fires on blur of any field in a draft box. A still-empty box is left
+  // alone (that's the whole point of drafts); one with something typed
+  // gets POSTed and promoted into `contacts`, then replaced with a fresh
+  // blank draft so there's always a box ready to type into.
+  const handleDraftContactBlur = async (draftId: string) => {
+    const draft = draftContacts.find((d) => d.draftId === draftId);
+    if (!draft) return;
+    if (!draft.role.trim() && !draft.email.trim() && !draft.phone.trim()) return;
+
+    setSavingContactId(draftId);
+    try {
+      const response = await authFetch(`/api/transactions/${resolvedParams.id}/contacts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: draft.role, email: draft.email, phone: draft.phone }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to save contact');
+      }
+      setContacts((prev) => [...prev, result]);
+      setDraftContacts((prev) => prev.filter((d) => d.draftId !== draftId));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error saving contact:', error);
+      alert('Failed to save that person. Check console for details.');
+    } finally {
+      setSavingContactId(null);
+    }
+  };
+
+  // --- People Involved: saved (persisted) rows ---
+
+  const handleContactChange = (contactId: string, field: 'role' | 'email' | 'phone', value: string) => {
+    setContacts((prev) => prev.map((c) => (c.id === contactId ? { ...c, [field]: value } : c)));
+  };
+
+  const handleContactBlur = async (contactId: string, field: 'role' | 'email' | 'phone', value: string) => {
+    setSavingContactId(contactId);
+    try {
+      const response = await authFetch(`/api/transaction-contacts/${contactId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result?.error || 'Failed to update contact');
+      }
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error updating contact:', error);
+      alert('Failed to save that change. Check console for details.');
+    } finally {
+      setSavingContactId(null);
+    }
+  };
+
+  const handleRemoveContact = async (contactId: string) => {
+    const previousContacts = contacts;
+    setContacts((prev) => prev.filter((c) => c.id !== contactId));
+    try {
+      const response = await authFetch(`/api/transaction-contacts/${contactId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result?.error || 'Failed to remove contact');
+      }
+    } catch (error) {
+      setContacts(previousContacts);
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error removing contact:', error);
+      alert('Failed to remove that person. Check console for details.');
     }
   };
 
@@ -1214,8 +1364,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             order (checklist first, documents below). */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 mt-8">
 
-        {/* Tasks Section (compact, right column on desktop) */}
-        <div className="lg:order-2 lg:self-start bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+        {/* Tasks Section + People Involved, stacked together in the
+            narrow right column on desktop (this wrapper carries the
+            order/self-start that used to live on the Checklist div
+            directly, since it's now the thing actually placed in the
+            grid). Both still stack full-width on mobile in source order. */}
+        <div className="lg:order-2 lg:self-start flex flex-col gap-8">
+        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
           <div className="mb-5">
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-lg font-bold text-slate-100">Checklist</h2>
@@ -1380,6 +1535,130 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               </div>
             ))}
           </div>
+        </div>
+
+        {/* People Involved: the agent (read-only, from the agents record)
+            plus any other parties for this deal, typed in by hand. Sits
+            directly under the Checklist card via the shared wrapper above. */}
+        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+          <h2 className="text-lg font-bold text-slate-100 mb-4">People Involved</h2>
+
+          <div className="space-y-2">
+            {/* Agent row -- read-only here; edit via the Agents page. */}
+            <div className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-blue-400">Agent</span>
+                <Link
+                  href="/dashboard/agents"
+                  className="text-xs text-slate-500 hover:text-slate-300 transition"
+                >
+                  Edit
+                </Link>
+              </div>
+              <p className="text-sm font-medium text-slate-200 mt-1">{agentName || 'Unknown'}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{agent?.email || 'No email on file'}</p>
+              <p className="text-xs text-slate-400">{agent?.phone || 'No phone on file'}</p>
+            </div>
+
+            {/* Saved parties */}
+            {contacts.map((contact) => (
+              <div
+                key={contact.id}
+                className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg space-y-1.5"
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={contact.role || ''}
+                    onChange={(e) => handleContactChange(contact.id, 'role', e.target.value)}
+                    onBlur={(e) => handleContactBlur(contact.id, 'role', e.target.value)}
+                    placeholder="Role (e.g. Buyer)"
+                    className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveContact(contact.id)}
+                    className="text-xs text-slate-500 hover:text-red-400 transition flex-shrink-0"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <input
+                  type="email"
+                  value={contact.email || ''}
+                  onChange={(e) => handleContactChange(contact.id, 'email', e.target.value)}
+                  onBlur={(e) => handleContactBlur(contact.id, 'email', e.target.value)}
+                  placeholder="Email"
+                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={contact.phone || ''}
+                  onChange={(e) => handleContactChange(contact.id, 'phone', e.target.value)}
+                  onBlur={(e) => handleContactBlur(contact.id, 'phone', e.target.value)}
+                  placeholder="Phone"
+                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                />
+                {savingContactId === contact.id && (
+                  <p className="text-[11px] text-slate-500">Saving...</p>
+                )}
+              </div>
+            ))}
+
+            {/* Blank boxes -- become real rows once something's typed in. */}
+            {draftContacts.map((draft) => (
+              <div
+                key={draft.draftId}
+                className="px-3 py-2 bg-slate-700/20 border border-dashed border-slate-600 rounded-lg space-y-1.5"
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={draft.role}
+                    onChange={(e) => handleDraftContactChange(draft.draftId, 'role', e.target.value)}
+                    onBlur={() => handleDraftContactBlur(draft.draftId)}
+                    placeholder="Role (e.g. Buyer)"
+                    className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveDraftContact(draft.draftId)}
+                    className="text-xs text-slate-500 hover:text-red-400 transition flex-shrink-0"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <input
+                  type="email"
+                  value={draft.email}
+                  onChange={(e) => handleDraftContactChange(draft.draftId, 'email', e.target.value)}
+                  onBlur={() => handleDraftContactBlur(draft.draftId)}
+                  placeholder="Email"
+                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={draft.phone}
+                  onChange={(e) => handleDraftContactChange(draft.draftId, 'phone', e.target.value)}
+                  onBlur={() => handleDraftContactBlur(draft.draftId)}
+                  placeholder="Phone"
+                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                />
+                {savingContactId === draft.draftId && (
+                  <p className="text-[11px] text-slate-500">Saving...</p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAddDraftContact}
+            className="mt-3 text-xs text-blue-400 hover:text-blue-300 font-medium transition"
+          >
+            + Add another
+          </button>
+        </div>
         </div>
 
         {/* Documents Section (primary view, left column on desktop) */}
