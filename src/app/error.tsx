@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
 
 export default function Error({
   error,
@@ -11,6 +12,10 @@ export default function Error({
 }) {
   useEffect(() => {
     console.error(error);
+    // No-ops if NEXT_PUBLIC_SENTRY_DSN isn't set -- see
+    // instrumentation-client.ts. This is the boundary that catches
+    // errors thrown while rendering any page under the root layout.
+    Sentry.captureException(error);
   }, [error]);
 
   return (
