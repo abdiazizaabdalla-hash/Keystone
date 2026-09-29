@@ -2,16 +2,39 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { stampSignatureCertificate } from '@/lib/signing';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 const BUCKET = 'transaction-documents';
 const PREVIEW_URL_TTL_SECONDS = 60 * 30; // 30 minutes -- plenty for one signing session
+
+// Best-effort real client IP from standard proxy headers (Vercel sets
+// x-forwarded-for). Used for the audit trail on POST and as a rate-limit
+// bucket on both handlers -- a missing/spoofable value just falls back to
+// a shared 'unknown' bucket rather than breaking anything.
+function getClientIp(request: NextRequest): string | null {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return request.headers.get('x-real-ip');
+}
 
 // GET /api/signing-requests/public/[token] -- PUBLIC, no auth. The token
 // itself IS the auth (see lib/signing.ts) -- deliberately returns only
 // what the signer's page needs (file name, a scoped preview link, and
 // status), never anything else about the transaction.
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+
+  // The token's own entropy is what actually prevents guessing it; this
+  // just caps how hard one IP or one link can hammer this endpoint
+  // (scraping, accidental polling loops, etc).
+  const ip = getClientIp(request) || 'unknown';
+  const [ipOk, tokenOk] = await Promise.all([
+    checkRateLimit(`signing-get:ip:${ip}`, 60, 5 * 60),
+    checkRateLimit(`signing-get:token:${token}`, 30, 5 * 60),
+  ]);
+  if (!ipOk || !tokenOk) {
+    return NextResponse.json({ error: 'Too many requests. Please wait a moment and try again.' }, { status: 429 });
+  }
 
   const { data: signingRequest, error } = await supabaseServer
     .from('signing_requests')
@@ -60,15 +83,6 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   });
 }
 
-// Best-effort real client IP from standard proxy headers (Vercel sets
-// x-forwarded-for). Just for the audit trail -- never used for any
-// access-control decision, so a missing/spoofable value is a non-issue.
-function getClientIp(request: NextRequest): string | null {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
-  return request.headers.get('x-real-ip');
-}
-
 // POST /api/signing-requests/public/[token] -- PUBLIC, no auth. Submits
 // the signer's signature: stamps a Signature Certificate page onto the
 // original PDF (lib/signing.ts), stores the result, records the audit
@@ -76,6 +90,16 @@ function getClientIp(request: NextRequest): string | null {
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   try {
     const { token } = await params;
+
+    const ip = getClientIp(request) || 'unknown';
+    const [ipOk, tokenOk] = await Promise.all([
+      checkRateLimit(`signing-post:ip:${ip}`, 20, 10 * 60),
+      checkRateLimit(`signing-post:token:${token}`, 10, 10 * 60),
+    ]);
+    if (!ipOk || !tokenOk) {
+      return NextResponse.json({ error: 'Too many requests. Please wait a moment and try again.' }, { status: 429 });
+    }
+
     const body = await request.json();
     const { signatureType, signatureValue, consent, decline, reason } = body;
 

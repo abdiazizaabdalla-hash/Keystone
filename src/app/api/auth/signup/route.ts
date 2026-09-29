@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase';
 import { getPendingInviteForEmail, addMemberToTeam, markInviteAccepted } from '@/lib/team';
 import { setUserPlan } from '@/lib/stripeCustomers';
+import { checkRateLimit } from '@/lib/rateLimit';
+
+function getClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return request.headers.get('x-real-ip') || 'unknown';
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +18,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
+      );
+    }
+
+    // Looser than signin's limits -- a shared office/coworking IP can
+    // have several legitimate signups in a short window -- but still
+    // enough to stop scripted account-creation spam.
+    const ip = getClientIp(request);
+    const [ipOk, emailOk] = await Promise.all([
+      checkRateLimit(`signup:ip:${ip}`, 10, 10 * 60),
+      checkRateLimit(`signup:email:${email.toLowerCase()}`, 3, 10 * 60),
+    ]);
+    if (!ipOk || !emailOk) {
+      return NextResponse.json(
+        { error: 'Too many signup attempts. Please wait a few minutes and try again.' },
+        { status: 429 }
       );
     }
 
