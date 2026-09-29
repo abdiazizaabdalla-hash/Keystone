@@ -99,6 +99,14 @@ export default function CollaboratePage() {
       const res = await authFetch(`/api/team?userId=${encodeURIComponent(userId)}`, { method: 'DELETE' });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to remove teammate');
+      // The backend already downgraded them off the Team plan and cut off
+      // their access to this team's data before returning -- see DELETE
+      // /api/team. This message just confirms that to the owner.
+      setInviteMessage(
+        json.emailSent === false
+          ? 'Removed from your team and moved to the Starter plan (the notification email failed to send — let them know directly).'
+          : "Removed from your team and moved to the Starter plan — they've been emailed."
+      );
       await load();
     } catch (err) {
       setInviteMessage(err instanceof Error ? err.message : 'Failed to remove teammate');

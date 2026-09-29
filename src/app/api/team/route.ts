@@ -3,7 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { setUserPlan } from '@/lib/stripeCustomers';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
-import { sendTeamAddedEmail, sendTeamInviteEmail } from '@/lib/teamEmails';
+import { sendTeamAddedEmail, sendTeamInviteEmail, sendTeamRemovedEmail } from '@/lib/teamEmails';
 import {
   TEAM_SEAT_LIMIT,
   getTeamForUser,
@@ -258,8 +258,21 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'That person is not on your team' }, { status: 404 });
     }
 
-    await removeMemberFromTeam(membership.team.id, targetUserId);
+    // Downgrade the plan BEFORE removing the membership row, not after.
+    // Every feature gate in this app checks user.user_metadata.plan
+    // live on each request (see getPlanLimits(user.user_metadata?.plan)
+    // in the agents/transactions/checklist-template routes) -- that
+    // field, not the membership row, is what actually grants Team-tier
+    // access. If setUserPlan threw AFTER the membership row was already
+    // deleted, this person would be off the team but permanently stuck
+    // with plan: 'team' in their own metadata -- free, unpaid Team
+    // access forever, since nothing else would ever downgrade them
+    // again. Doing the downgrade first means a failure here aborts
+    // before anything changes, and it's safe for the owner to just
+    // retry the removal (setUserPlan is a plain overwrite, idempotent
+    // either way).
     await setUserPlan(targetUserId, 'starter');
+    await removeMemberFromTeam(membership.team.id, targetUserId);
 
     try {
       await removePaidSeat(user.id);
@@ -270,7 +283,23 @@ export async function DELETE(request: NextRequest) {
       console.error('Error releasing paid seat:', seatError);
     }
 
-    return NextResponse.json({ status: 'removed' });
+    // Let the removed person know -- their account just silently lost
+    // Team access and dropped to Starter, so this is their only signal
+    // unless they happen to notice next time they log in. Non-fatal,
+    // same as the invite/add emails above: the removal itself already
+    // succeeded by this point.
+    let emailSent = true;
+    try {
+      const { email } = await getUserInfo(targetUserId);
+      const ownerLabel = user.user_metadata?.full_name || user.email || 'Your team owner';
+      const appUrl = request.nextUrl.origin;
+      await sendTeamRemovedEmail({ toEmail: email, ownerLabel, appUrl });
+    } catch (emailError) {
+      emailSent = false;
+      console.error('Error sending team-removed email:', emailError);
+    }
+
+    return NextResponse.json({ status: 'removed', emailSent });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

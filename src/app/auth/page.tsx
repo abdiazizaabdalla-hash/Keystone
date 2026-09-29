@@ -174,7 +174,14 @@ function AuthContent() {
                   </div>
 
                   <div>
-                    <label className="text-sm text-slate-400 block mb-2">Password</label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm text-slate-400">Password</label>
+                      {!isSignUp && (
+                        <Link href="/auth/forgot-password" className="text-xs text-blue-400 hover:text-blue-300">
+                          Forgot password?
+                        </Link>
+                      )}
+                    </div>
                     <input
                       type="password"
                       value={password}

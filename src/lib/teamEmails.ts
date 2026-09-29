@@ -36,6 +36,36 @@ export async function sendTeamAddedEmail(params: {
 }
 
 /**
+ * Notifies someone they've been removed from a team (see DELETE
+ * /api/team). They're dropped back to the Starter plan immediately, so
+ * this doubles as the "you're on Starter now" notice -- unlike a normal
+ * Starter signup there's no free-trial framing here, since this account
+ * already existed on paid Team access a moment ago.
+ */
+export async function sendTeamRemovedEmail(params: {
+  toEmail: string;
+  ownerLabel: string;
+  appUrl: string;
+}) {
+  const { toEmail, ownerLabel, appUrl } = params;
+  const html = wrapper(
+    "You've been removed from a team",
+    `<p><strong>${ownerLabel}</strong> removed you from their team on Relay TC. Your account has been
+     moved to the Starter plan, so you'll keep your own data, but any Team-plan features and access to
+     that team's workspace are no longer available.</p>
+     <p><a href="${appUrl}/dashboard/account" style="color: #b45309;">Review your plan</a></p>`
+  );
+
+  const resend = getResendClient();
+  return resend.emails.send({
+    from: INVOICE_FROM_EMAIL,
+    to: toEmail,
+    subject: `${ownerLabel} removed you from their team on Relay TC`,
+    html,
+  });
+}
+
+/**
  * Invites someone with no Relay TC account yet to sign up and join a
  * team (the pending-invite path). The invite is auto-consumed when they
  * sign up with this same email (see /api/auth/signup).
