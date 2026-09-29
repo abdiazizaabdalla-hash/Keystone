@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { statusFromTasks } from '@/lib/transactionStages';
 import { syncTransactionTasksToCalendar } from '@/lib/calendarSync';
+import { getVisibleTcUserIds } from '@/lib/team';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +13,12 @@ export async function GET(request: NextRequest) {
 
     if (transactionId) {
       if (!isAdmin) {
+        // Read access follows the same team-wide rule as
+        // /api/transactions and /api/agents (see getVisibleTcUserIds): a
+        // Team owner can view a teammate's checklist too, not just their
+        // own. Fixed 2026-09 -- this previously only checked the
+        // caller's own tc_user_id, which 403'd a team owner opening a
+        // teammate's transaction.
         const { data: transaction } = await supabaseServer
           .from('transactions')
           .select('agent_id')
@@ -19,11 +26,12 @@ export async function GET(request: NextRequest) {
           .single();
 
         if (transaction) {
+          const visibleIds = await getVisibleTcUserIds(user.id);
           const { data: agent } = await supabaseServer
             .from('agents')
             .select('id')
             .eq('id', transaction.agent_id)
-            .eq('tc_user_id', user.id)
+            .in('tc_user_id', visibleIds)
             .single();
 
           if (!agent) {
@@ -48,10 +56,13 @@ export async function GET(request: NextRequest) {
       .order('sort_order', { ascending: true });
 
     if (!isAdmin) {
+      // Same team-wide read rule as above -- an owner's "all tasks"
+      // view should include their whole team's, not just their own.
+      const visibleIds = await getVisibleTcUserIds(user.id);
       const { data: userAgents } = await supabaseServer
         .from('agents')
         .select('id')
-        .eq('tc_user_id', user.id);
+        .in('tc_user_id', visibleIds);
 
       const agentIds = userAgents?.map((a) => a.id) || [];
       if (agentIds.length === 0) {

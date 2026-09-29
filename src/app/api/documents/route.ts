@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isValidCategory, isValidDocumentType, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE } from '@/lib/documentTaxonomy';
+import { getVisibleTcUserIds } from '@/lib/team';
 
 const BUCKET = 'transaction-documents';
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
@@ -39,7 +40,22 @@ async function ensureBucket() {
 
 // Verifies the requesting user may act on this transaction's documents.
 // Returns the transaction row (with agent_id) once ownership is confirmed.
-async function assertTransactionAccess(transactionId: string, userId: string, isAdmin: boolean) {
+//
+// `readOnly` widens the check to the caller's whole visible team (same
+// rule as /api/transactions, /api/agents, /api/tasks -- see
+// getVisibleTcUserIds): a Team owner can VIEW a teammate's documents,
+// not just their own. Uploading, marking signed, and deleting stay
+// scoped to the direct owner only, matching how every other mutation in
+// this codebase (creating/deleting a transaction, an agent, an invoice)
+// is deliberately kept owner-only even though team owners can see more
+// than they can edit. Fixed 2026-09 -- this previously 403'd a team
+// owner just opening a teammate's transaction's document list.
+async function assertTransactionAccess(
+  transactionId: string,
+  userId: string,
+  isAdmin: boolean,
+  { readOnly = false }: { readOnly?: boolean } = {}
+) {
   const { data: transaction, error } = await supabaseServer
     .from('transactions')
     .select('id, agent_id')
@@ -51,11 +67,12 @@ async function assertTransactionAccess(transactionId: string, userId: string, is
   }
 
   if (!isAdmin) {
+    const ownerIds = readOnly ? await getVisibleTcUserIds(userId) : [userId];
     const { data: agent } = await supabaseServer
       .from('agents')
       .select('id')
       .eq('id', transaction.agent_id)
-      .eq('tc_user_id', userId)
+      .in('tc_user_id', ownerIds)
       .single();
 
     if (!agent) {
@@ -75,7 +92,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
     }
 
-    await assertTransactionAccess(transactionId, user.id, isAdmin);
+    await assertTransactionAccess(transactionId, user.id, isAdmin, { readOnly: true });
     await ensureBucket();
 
     const { data: docs, error } = await supabaseServer

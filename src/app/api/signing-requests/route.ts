@@ -4,8 +4,15 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { generateSigningToken, hashDocumentBytes } from '@/lib/signing';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { getVisibleTcUserIds } from '@/lib/team';
 
 const BUCKET = 'transaction-documents';
+// Signing links used to never expire at all -- found during the 2026-09
+// e-signature reliability review. 14 days is generous for a real estate
+// closing timeline (most signature turnarounds happen in days, not
+// weeks) while still bounding how long an unguessable-but-permanent link
+// stays live if a deal falls through and nobody remembers to void it.
+const SIGNING_LINK_EXPIRY_DAYS = 14;
 
 // GET /api/signing-requests?transactionId=... -- every signature request
 // (pending or completed) for one transaction, for the TC's Documents view.
@@ -29,11 +36,16 @@ export async function GET(request: NextRequest) {
     }
 
     if (!isAdmin) {
+      // Read-only: a Team owner can view a teammate's signing requests
+      // too, same team-wide rule as /api/transactions, /api/tasks, and
+      // /api/documents (see getVisibleTcUserIds). Sending a NEW signing
+      // request (the POST handler below) stays owner-only.
+      const visibleIds = await getVisibleTcUserIds(user.id);
       const { data: agent } = await supabaseServer
         .from('agents')
         .select('id')
         .eq('id', transaction.agent_id)
-        .eq('tc_user_id', user.id)
+        .in('tc_user_id', visibleIds)
         .single();
       if (!agent) {
         return NextResponse.json({ error: 'You do not have permission to view this' }, { status: 403 });
@@ -42,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabaseServer
       .from('signing_requests')
-      .select('id, document_id, signer_name, signer_email, source_file_name, status, signed_at, signed_document_id, created_at')
+      .select('id, document_id, signer_name, signer_email, source_file_name, status, signed_at, signed_document_id, created_at, expires_at, voided_at, declined_at, decline_reason')
       .eq('transaction_id', transactionId)
       .order('created_at', { ascending: false });
 
@@ -134,6 +146,8 @@ export async function POST(request: NextRequest) {
     const documentHash = hashDocumentBytes(sourceBytes);
     const token = generateSigningToken();
 
+    const expiresAt = new Date(Date.now() + SIGNING_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
     const { data: signingRequest, error: insertError } = await supabaseServer
       .from('signing_requests')
       .insert({
@@ -147,6 +161,7 @@ export async function POST(request: NextRequest) {
         document_hash: documentHash,
         token,
         status: 'pending',
+        expires_at: expiresAt,
       })
       .select()
       .single();

@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
+import { getTrialStatus } from '@/lib/trial';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -44,9 +45,21 @@ export async function GET(request: NextRequest) {
 
     const { data: invoices, error: invoicesError } = await supabaseServer
       .from('invoices')
-      .select('agent_id, amount_owed, paid');
+      .select('agent_id, amount_owed, paid, refunded_amount');
 
     if (invoicesError) throw invoicesError;
+
+    // Subscription status per user, in one query rather than N -- same
+    // batch-then-group pattern as agents/transactions/invoices above.
+    const { data: stripeCustomers, error: stripeError } = await supabaseServer
+      .from('stripe_customers')
+      .select('user_id, subscription_status, stripe_customer_id, stripe_subscription_id, current_period_end');
+    if (stripeError) throw stripeError;
+
+    const stripeByUser = new Map<string, { subscription_status: string | null; stripe_customer_id: string; stripe_subscription_id: string | null; current_period_end: string | null }>();
+    (stripeCustomers || []).forEach((row) => {
+      stripeByUser.set(row.user_id, row);
+    });
 
     const statsByTcUser = new Map<
       string,
@@ -69,21 +82,54 @@ export async function GET(request: NextRequest) {
       else stats.activeTransactions += 1;
     });
 
-    (invoices || []).forEach((inv: { agent_id: string; amount_owed: number; paid: boolean }) => {
+    (invoices || []).forEach((inv: { agent_id: string; amount_owed: number; paid: boolean; refunded_amount: number | null }) => {
       if (!inv.paid) return;
       const tcUserId = tcUserByAgentId.get(inv.agent_id);
       if (!tcUserId) return;
-      ensureStats(tcUserId).revenueCollected += inv.amount_owed || 0;
+      // Net of any refund -- a refunded payment isn't actually "revenue
+      // collected" anymore, even though the invoice itself stays marked
+      // paid (see charge.refunded handling in the Connect webhook).
+      ensureStats(tcUserId).revenueCollected += (inv.amount_owed || 0) - (inv.refunded_amount || 0);
     });
+
+    // getTrialStatus is async (it may check invoices for the
+    // first-paid-deal condition), so resolve every Starter user's trial
+    // state up front with Promise.all rather than awaiting inside a
+    // non-async .map() callback, which would silently return unresolved
+    // Promises instead of the actual status.
+    const trialEntries = await Promise.all(
+      usersData.users
+        .filter((u) => ((u.user_metadata?.plan as string | undefined) || DEFAULT_PLAN) === 'starter')
+        .map(async (u) => [u.id, await getTrialStatus(u.id, u.created_at)] as const)
+    );
+    const trialByUser = new Map(trialEntries);
 
     const users = usersData.users.map((u) => {
       const stats = statsByTcUser.get(u.id);
+      const plan = (u.user_metadata?.plan as string | undefined) || DEFAULT_PLAN;
+      const stripeRow = stripeByUser.get(u.id) || null;
+      const trial = trialByUser.get(u.id) || null;
+      // banned_until in the far future (we set it to ~100 years) means
+      // "suspended indefinitely"; a real expiring ban is rare here since
+      // nothing else sets one, but check the date rather than assuming.
+      const bannedUntil = (u as unknown as { banned_until?: string | null }).banned_until || null;
+      const suspended = !!bannedUntil && new Date(bannedUntil) > new Date();
+
       return {
         id: u.id,
         email: u.email,
         is_admin: u.user_metadata?.is_admin === true,
-        plan: (u.user_metadata?.plan as string | undefined) || DEFAULT_PLAN,
+        plan,
         created_at: u.created_at,
+        last_sign_in_at: u.last_sign_in_at || null,
+        suspended,
+        trial: trial
+          ? { applies: trial.applies, expired: trial.expired, trialEndsAt: trial.trialEndsAt }
+          : null,
+        subscription_status: stripeRow?.subscription_status || null,
+        stripe_customer_id: stripeRow?.stripe_customer_id || null,
+        stripe_subscription_id: stripeRow?.stripe_subscription_id || null,
+        current_period_end: stripeRow?.current_period_end || null,
         agents_count: (agentIdsByTcUser.get(u.id) || []).length,
         active_transactions: stats?.activeTransactions || 0,
         closed_transactions: stats?.closedTransactions || 0,

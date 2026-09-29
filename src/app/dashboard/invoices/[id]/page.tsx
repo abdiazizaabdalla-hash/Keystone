@@ -33,6 +33,9 @@ interface Invoice {
   paid: boolean;
   paid_at?: string;
   paid_amount?: number;
+  refunded?: boolean;
+  refunded_at?: string | null;
+  refunded_amount?: number | null;
   sent_at?: string | null;
   sent_to?: string | null;
   agent: Agent | null;
@@ -377,13 +380,15 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             </div>
             <div className="text-right">
               <span className={`inline-block px-4 py-2 rounded-lg text-sm font-semibold ${
-                invoice.paid
+                invoice.refunded
+                  ? 'bg-orange-500/20 text-orange-300'
+                  : invoice.paid
                   ? 'bg-green-500/20 text-green-300'
                   : isOverdue
                   ? 'bg-red-500/20 text-red-300'
                   : 'bg-yellow-500/20 text-yellow-300'
               }`}>
-                {invoice.paid ? '✓ Paid' : isOverdue ? '⚠ Overdue' : 'Unpaid'}
+                {invoice.refunded ? '↩ Refunded' : invoice.paid ? '✓ Paid' : isOverdue ? '⚠ Overdue' : 'Unpaid'}
               </span>
             </div>
           </div>
@@ -645,7 +650,24 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
           <h3 className="text-xl font-bold text-slate-100 mb-6">Payment Status</h3>
           
-          {invoice.paid ? (
+          {invoice.refunded ? (
+            <div className="space-y-4">
+              <div className="bg-orange-500/10 border border-orange-500/50 rounded-lg p-4">
+                <p className="text-orange-400 font-semibold mb-2">↩ Payment Refunded</p>
+                {invoice.refunded_at && (
+                  <p className="text-orange-300 text-sm">Refunded on {new Date(invoice.refunded_at).toLocaleDateString()}</p>
+                )}
+                {invoice.refunded_amount != null && (
+                  <p className="text-orange-300 text-sm">
+                    Amount Refunded: ${invoice.refunded_amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </p>
+                )}
+                <p className="text-orange-300/80 text-xs mt-2">
+                  Issued from your Stripe account -- this is a read-only record, not something to undo here.
+                </p>
+              </div>
+            </div>
+          ) : invoice.paid ? (
             <div className="space-y-4">
               <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-4">
                 <p className="text-green-400 font-semibold mb-2">✓ Invoice Paid</p>

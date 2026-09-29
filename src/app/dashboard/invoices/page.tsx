@@ -29,6 +29,9 @@ interface Invoice {
   paid: boolean;
   paid_at?: string;
   paid_amount?: number;
+  refunded?: boolean;
+  refunded_at?: string | null;
+  refunded_amount?: number | null;
   agent: Agent | null;
   transaction: Transaction | null;
 }
@@ -335,11 +338,13 @@ export default function InvoicesPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                          invoice.paid
+                          invoice.refunded
+                            ? 'bg-orange-500/20 text-orange-300'
+                            : invoice.paid
                             ? 'bg-green-500/20 text-green-300'
                             : 'bg-yellow-500/20 text-yellow-300'
                         }`}>
-                          {invoice.paid ? 'Paid' : 'Unpaid'}
+                          {invoice.refunded ? 'Refunded' : invoice.paid ? 'Paid' : 'Unpaid'}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">

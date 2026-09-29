@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { stampSignatureCertificate } from '@/lib/signing';
+import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 
 const BUCKET = 'transaction-documents';
 const PREVIEW_URL_TTL_SECONDS = 60 * 30; // 30 minutes -- plenty for one signing session
@@ -14,11 +15,26 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   const { data: signingRequest, error } = await supabaseServer
     .from('signing_requests')
-    .select('status, signer_name, source_file_name, source_storage_path, signed_at')
+    .select('status, signer_name, source_file_name, source_storage_path, signed_at, expires_at, decline_reason')
     .eq('token', token)
     .single();
 
   if (error || !signingRequest) {
+    return NextResponse.json({ error: 'This signing link is invalid or has expired' }, { status: 404 });
+  }
+
+  // A pending request past its expires_at reads as expired even though
+  // its DB status is still 'pending' -- there's no cron flipping it, this
+  // is checked live on every access. Kept separate from 'voided' so a TC
+  // can tell "nobody ever opened it" apart from "I cancelled it myself"
+  // if they go looking. Added 2026-09 -- signing links previously never
+  // expired at all.
+  const isExpired =
+    signingRequest.status === 'pending' &&
+    !!signingRequest.expires_at &&
+    new Date(signingRequest.expires_at) < new Date();
+
+  if (isExpired) {
     return NextResponse.json({ error: 'This signing link is invalid or has expired' }, { status: 404 });
   }
 
@@ -28,6 +44,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       fileName: signingRequest.source_file_name,
       signerName: signingRequest.signer_name,
       signedAt: signingRequest.signed_at,
+      declineReason: signingRequest.status === 'declined' ? signingRequest.decline_reason : undefined,
     });
   }
 
@@ -60,17 +77,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { token } = await params;
     const body = await request.json();
-    const { signatureType, signatureValue, consent } = body;
-
-    if (consent !== true) {
-      return NextResponse.json({ error: 'You must confirm consent to sign electronically' }, { status: 400 });
-    }
-    if (signatureType !== 'typed' && signatureType !== 'drawn') {
-      return NextResponse.json({ error: 'Invalid signature type' }, { status: 400 });
-    }
-    if (typeof signatureValue !== 'string' || !signatureValue.trim()) {
-      return NextResponse.json({ error: 'A signature is required' }, { status: 400 });
-    }
+    const { signatureType, signatureValue, consent, decline, reason } = body;
 
     const { data: signingRequest, error: fetchError } = await supabaseServer
       .from('signing_requests')
@@ -82,8 +89,76 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'This signing link is invalid or has expired' }, { status: 404 });
     }
 
+    const isExpired =
+      signingRequest.status === 'pending' &&
+      !!signingRequest.expires_at &&
+      new Date(signingRequest.expires_at) < new Date();
+
+    if (isExpired) {
+      return NextResponse.json({ error: 'This signing link is invalid or has expired' }, { status: 404 });
+    }
+
     if (signingRequest.status !== 'pending') {
       return NextResponse.json({ error: 'This document has already been signed' }, { status: 409 });
+    }
+
+    // Decline branch -- the signer chose not to sign. No PDF stamping,
+    // just a status change plus a best-effort email letting the TC know
+    // (rather than leaving them staring at a silently-stuck "Awaiting
+    // signature" badge with no idea why). Added 2026-09 -- previously a
+    // signer's only option was to abandon the tab.
+    if (decline === true) {
+      const declinedAtIso = new Date().toISOString();
+      const declineReason = typeof reason === 'string' ? reason.trim().slice(0, 1000) : null;
+
+      const { error: declineError } = await supabaseServer
+        .from('signing_requests')
+        .update({
+          status: 'declined',
+          declined_at: declinedAtIso,
+          decline_reason: declineReason || null,
+          updated_at: declinedAtIso,
+        })
+        .eq('id', signingRequest.id);
+
+      if (declineError) throw declineError;
+
+      try {
+        const { data: tcUserData } = await supabaseServer.auth.admin.getUserById(signingRequest.requested_by);
+        const tcEmail = tcUserData?.user?.email;
+        if (tcEmail) {
+          const resend = getResendClient();
+          await resend.emails.send({
+            from: INVOICE_FROM_EMAIL,
+            to: tcEmail,
+            subject: `Signature declined: ${signingRequest.source_file_name}`,
+            html: `
+              <div style="font-family: Georgia, serif; color: #1a1a1a; max-width: 560px; margin: 0 auto;">
+                <p><strong>${signingRequest.signer_name}</strong> (${signingRequest.signer_email}) declined to sign
+                <strong>${signingRequest.source_file_name}</strong>.</p>
+                ${declineReason ? `<p>Their note: "${declineReason}"</p>` : ''}
+                <p style="font-size: 13px; color: #666;">You can send a corrected request or reach out to them directly from Relay TC.</p>
+              </div>
+            `,
+          });
+        }
+      } catch (emailError) {
+        // The decline itself was recorded successfully -- a failed
+        // notification email shouldn't fail the signer's request.
+        console.error('Failed to email TC about declined signature (non-fatal):', emailError);
+      }
+
+      return NextResponse.json({ success: true, status: 'declined' });
+    }
+
+    if (consent !== true) {
+      return NextResponse.json({ error: 'You must confirm consent to sign electronically' }, { status: 400 });
+    }
+    if (signatureType !== 'typed' && signatureType !== 'drawn') {
+      return NextResponse.json({ error: 'Invalid signature type' }, { status: 400 });
+    }
+    if (typeof signatureValue !== 'string' || !signatureValue.trim()) {
+      return NextResponse.json({ error: 'A signature is required' }, { status: 400 });
     }
 
     const { data: fileBlob, error: downloadError } = await supabaseServer.storage

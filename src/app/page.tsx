@@ -284,6 +284,8 @@ export default function Home() {
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
+            <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
+            <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
           </div>
         </div>

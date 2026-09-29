@@ -67,9 +67,10 @@ interface SigningRequestItem {
   signer_name: string;
   signer_email: string;
   source_file_name: string;
-  status: 'pending' | 'signed' | 'voided';
+  status: 'pending' | 'signed' | 'voided' | 'declined';
   signed_at: string | null;
   signed_document_id: string | null;
+  decline_reason?: string | null;
   created_at: string;
 }
 
@@ -179,6 +180,32 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setSignatureRequestError(error instanceof Error ? error.message : 'Failed to send signature request');
     } finally {
       setIsSendingSignatureRequest(false);
+    }
+  };
+
+  const [voidingSigningRequestId, setVoidingSigningRequestId] = useState<string | null>(null);
+  const handleVoidSigningRequest = async (signingRequestId: string) => {
+    if (!confirm('Void this signature request? The link will stop working and you can send a new one.')) return;
+    try {
+      setVoidingSigningRequestId(signingRequestId);
+      const response = await authFetch(`/api/signing-requests/${signingRequestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'void' }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to void signing request');
+      setSigningRequests((prev) =>
+        prev.map((r) => (r.id === signingRequestId ? { ...r, status: 'voided' } : r))
+      );
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      alert(error instanceof Error ? error.message : 'Failed to void signing request');
+    } finally {
+      setVoidingSigningRequestId(null);
     }
   };
 
@@ -766,8 +793,9 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     // Once an in-house signing request exists for this document (pending
     // or completed), that flow is the source of truth for its signed
     // status -- the manual Signed/Not Signed toggle only applies before
-    // any request has been sent, or after a voided one.
-    const hasSigningActivity = !!sigReq && sigReq.status !== 'voided';
+    // any request has been sent, or after a voided or declined one (both
+    // are terminal non-signed states that hand control back to the TC).
+    const hasSigningActivity = sigReq?.status === 'pending' || sigReq?.status === 'signed';
     const isToggling = togglingSignedDocId === doc.id;
     return (
       <div key={doc.id}>
@@ -799,13 +827,36 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </span>
           )}
           {!isSignedOutput && hasSigningActivity && sigReq?.status === 'pending' && (
-            <span className="text-xs px-2 py-0.5 bg-blue-900/30 border border-blue-700/50 rounded-full text-blue-300 flex-shrink-0">
-              Awaiting signature
-            </span>
+            <>
+              <span className="text-xs px-2 py-0.5 bg-blue-900/30 border border-blue-700/50 rounded-full text-blue-300 flex-shrink-0">
+                Awaiting signature
+              </span>
+              <button
+                onClick={() => handleVoidSigningRequest(sigReq.id)}
+                disabled={voidingSigningRequestId === sigReq.id}
+                className="text-xs px-2 py-1 border border-slate-600 hover:border-red-500 text-slate-400 hover:text-red-300 rounded-lg transition flex-shrink-0 disabled:opacity-50"
+                title="Cancel this signature request"
+              >
+                {voidingSigningRequestId === sigReq.id ? 'Voiding…' : 'Void'}
+              </button>
+            </>
           )}
           {!isSignedOutput && hasSigningActivity && sigReq?.status === 'signed' && (
             <span className="text-xs px-2 py-0.5 bg-green-900/30 border border-green-700/50 rounded-full text-green-300 flex-shrink-0">
               ✓ Signed
+            </span>
+          )}
+          {!isSignedOutput && !hasSigningActivity && sigReq?.status === 'declined' && (
+            <span
+              className="text-xs px-2 py-0.5 bg-orange-900/30 border border-orange-700/50 rounded-full text-orange-300 flex-shrink-0"
+              title={sigReq.decline_reason ? `Reason: ${sigReq.decline_reason}` : undefined}
+            >
+              Signer declined
+            </span>
+          )}
+          {!isSignedOutput && !hasSigningActivity && sigReq?.status === 'voided' && (
+            <span className="text-xs px-2 py-0.5 bg-slate-700 border border-slate-600 rounded-full text-slate-400 flex-shrink-0">
+              Request voided
             </span>
           )}
           {!isSignedOutput && !hasSigningActivity && (

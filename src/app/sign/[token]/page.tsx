@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState, use } from 'react';
 
 interface SigningStatus {
-  status: 'pending' | 'signed' | 'voided';
+  status: 'pending' | 'signed' | 'voided' | 'declined';
   fileName: string;
   signerName: string;
   previewUrl?: string | null;
   signedAt?: string | null;
+  declineReason?: string | null;
 }
 
 // Public, unauthenticated page -- the token in the URL is the only
@@ -25,6 +26,12 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+
+  const [showDeclineForm, setShowDeclineForm] = useState(false);
+  const [declineReason, setDeclineReason] = useState('');
+  const [declining, setDeclining] = useState(false);
+  const [declineError, setDeclineError] = useState<string | null>(null);
+  const [declined, setDeclined] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
@@ -131,6 +138,26 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
     }
   };
 
+  const handleDecline = async () => {
+    setDeclineError(null);
+    try {
+      setDeclining(true);
+      const response = await fetch(`/api/signing-requests/public/${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decline: true, reason: declineReason.trim() || undefined }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to decline');
+      setDeclined(true);
+      setInfo((prev) => (prev ? { ...prev, status: 'declined' } : prev));
+    } catch (error) {
+      setDeclineError(error instanceof Error ? error.message : 'Failed to decline');
+    } finally {
+      setDeclining(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
@@ -150,7 +177,48 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
     );
   }
 
-  if (info.status !== 'pending' || downloadUrl) {
+  // Bug fixed 2026-09: this used to treat ANY non-pending status as a
+  // success screen ("has been signed") -- including 'voided' and now
+  // 'declined', which are not success states and need their own
+  // messaging so a signer (or a TC checking the link later) isn't told
+  // something was signed when it wasn't.
+  if (info.status !== 'pending' || downloadUrl || declined) {
+    if (info.status === 'voided') {
+      return (
+        <div className="min-h-screen flex items-center justify-center px-6">
+          <div className="max-w-md text-center bg-slate-800/50 border border-slate-600 rounded-lg p-8">
+            <div className="w-12 h-12 rounded-full bg-slate-600/30 border border-slate-500/50 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-slate-100 mb-2">This request was cancelled</h1>
+            <p className="text-slate-400 text-sm">
+              The sender cancelled this signature request. If you still need to sign {info.fileName}, contact them for a new link.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (info.status === 'declined' || declined) {
+      return (
+        <div className="min-h-screen flex items-center justify-center px-6">
+          <div className="max-w-md text-center bg-slate-800/50 border border-slate-600 rounded-lg p-8">
+            <div className="w-12 h-12 rounded-full bg-orange-500/20 border border-orange-500/50 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-bold text-slate-100 mb-2">You declined to sign</h1>
+            <p className="text-slate-400 text-sm">
+              We let the sender know you declined to sign {info.fileName}. They may follow up with you directly.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
         <div className="max-w-md text-center bg-slate-800/50 border border-slate-600 rounded-lg p-8">
@@ -262,11 +330,54 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || declining}
             className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 disabled:opacity-50 text-white font-semibold rounded-lg transition"
           >
             {submitting ? 'Submitting…' : 'Sign & Submit'}
           </button>
+
+          {!showDeclineForm ? (
+            <button
+              type="button"
+              onClick={() => setShowDeclineForm(true)}
+              disabled={submitting}
+              className="w-full text-center text-sm text-slate-500 hover:text-red-400 transition"
+            >
+              I don&apos;t want to sign this
+            </button>
+          ) : (
+            <div className="border-t border-slate-600 pt-4 space-y-3">
+              <p className="text-sm text-slate-300">
+                Let the sender know why (optional) &mdash; they&apos;ll be notified either way.
+              </p>
+              <textarea
+                value={declineReason}
+                onChange={(e) => setDeclineReason(e.target.value)}
+                placeholder="Optional note to the sender"
+                rows={2}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              />
+              {declineError && <p className="text-sm text-red-400">{declineError}</p>}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleDecline}
+                  disabled={declining}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition"
+                >
+                  {declining ? 'Submitting…' : 'Confirm decline'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeclineForm(false)}
+                  disabled={declining}
+                  className="px-4 py-2 border border-slate-600 text-slate-300 hover:text-slate-100 text-sm rounded-lg transition disabled:opacity-50"
+                >
+                  Never mind
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

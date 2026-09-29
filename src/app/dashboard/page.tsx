@@ -16,6 +16,7 @@ interface InvoiceSummary {
   paid: boolean;
   paid_at: string | null;
   amount_owed: number;
+  refunded_amount: number | null;
 }
 
 interface DashboardStats {
@@ -92,10 +93,12 @@ export default function Dashboard() {
             ).length
           : 0;
 
+        // Net of any refund -- a refunded payment isn't actually revenue
+        // anymore, even though the invoice itself stays marked paid.
         const revenueThisMonth = Array.isArray(invoices)
           ? invoices
               .filter((inv) => inv.paid && isThisMonth(inv.paid_at))
-              .reduce((sum, inv) => sum + (inv.amount_owed || 0), 0)
+              .reduce((sum, inv) => sum + (inv.amount_owed || 0) - (inv.refunded_amount || 0), 0)
           : 0;
 
         // Average days from acceptance to closing, across every closed deal

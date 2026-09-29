@@ -25,6 +25,14 @@ export async function GET(request: NextRequest) {
       .order('invoice_date', { ascending: false });
 
     if (agentId) {
+      // A caller-supplied agentId must still be one of THIS caller's own
+      // agents -- without this check, any authenticated user could read
+      // another TC's invoices (amounts, commission %, property address)
+      // just by guessing/passing a different agentId. Found during the
+      // 2026-09 security audit.
+      if (!isAdmin && !userAgentIds.includes(agentId)) {
+        return NextResponse.json({ error: 'Agent not found or does not belong to you' }, { status: 403 });
+      }
       query = query.eq('agent_id', agentId);
     } else if (!isAdmin) {
       if (userAgentIds.length === 0) {

@@ -246,6 +246,18 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "You can't remove yourself as the team owner." }, { status: 400 });
     }
 
+    // Confirm targetUserId is actually a member of THIS owner's team
+    // before touching their plan. Without this check, removeMemberFromTeam
+    // below silently no-ops for a non-member (its delete is scoped to
+    // this team_id, so it just matches no rows) but setUserPlan would
+    // still run unconditionally -- letting any team owner downgrade an
+    // arbitrary, unrelated paying customer to Starter just by passing
+    // their user id. Found during the 2026-09 security audit.
+    const currentMemberIds = await getTeamMemberUserIds(membership.team.id);
+    if (!currentMemberIds.includes(targetUserId)) {
+      return NextResponse.json({ error: 'That person is not on your team' }, { status: 404 });
+    }
+
     await removeMemberFromTeam(membership.team.id, targetUserId);
     await setUserPlan(targetUserId, 'starter');
 
