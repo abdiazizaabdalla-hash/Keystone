@@ -186,10 +186,13 @@ function OnboardingContent() {
     }
   };
 
-  const fetchProfile = async () => {
+  // Returns the account's current plan (or null if the fetch failed) so
+  // the mount effect below can decide whether plan selection is even
+  // still needed -- see its use there.
+  const fetchProfile = async (): Promise<PlanId | null> => {
     try {
       const res = await authFetch('/api/auth/me');
-      if (!res.ok) return;
+      if (!res.ok) return null;
       const data = await res.json();
       setFullName(data.fullName ?? '');
       setDefaultFlatFee(String(data.defaultFlatFee ?? 400));
@@ -204,8 +207,10 @@ function OnboardingContent() {
           }))
         );
       }
+      return PLANS.some((p) => p.id === data.plan) ? (data.plan as PlanId) : null;
     } catch {
       // Non-fatal — steps just start from their defaults.
+      return null;
     }
   };
 
@@ -232,50 +237,71 @@ function OnboardingContent() {
       return;
     }
 
-    fetchProfile();
     fetchTemplates();
 
-    // Returning from a completed Stripe Checkout — the webhook has already
-    // (or is about to) grant the plan, so move on to the rest of the
-    // walkthrough rather than sending them back through checkout again.
-    if (checkoutStatus === 'success' && validPreselect) {
-      setSelectedPlan(validPreselect);
-      setCurrentStep(2);
-      return;
-    }
+    (async () => {
+      // Awaited before any of the branches below run, so they can tell
+      // whether this account already has a paid plan.
+      const existingPlan = await fetchProfile();
 
-    // Checkout was cancelled — land back on plan selection, don't re-fire
-    // another checkout redirect automatically.
-    if (checkoutStatus === 'cancelled') {
-      setCurrentStep(1);
-      return;
-    }
-
-    // Landing back here from Stripe Connect's hosted onboarding (see
-    // /api/stripe/connect/return) — jump straight back to the payment
-    // step so it shows whatever actually happened (connected, needs a
-    // fresh link, or errored) instead of restarting the whole walkthrough.
-    if (stripeReturnStatus) {
-      setCurrentStep(6);
-      fetchPaymentStatus();
-      if (stripeReturnStatus === 'refresh') {
-        setPaymentStepError("That link expired before you finished — click Connect Stripe to get a new one.");
-      } else if (stripeReturnStatus === 'error') {
-        setPaymentStepError('Something went wrong connecting Stripe. Please try again.');
+      // Returning from a completed Stripe Checkout — the webhook has already
+      // (or is about to) grant the plan, so move on to the rest of the
+      // walkthrough rather than sending them back through checkout again.
+      if (checkoutStatus === 'success' && validPreselect) {
+        setSelectedPlan(validPreselect);
+        setCurrentStep(2);
+        return;
       }
-      return;
-    }
 
-    // Arrived fresh with a plan already chosen on the pricing page. Starter
-    // starts a free trial with no payment collected upfront (see
-    // lib/trial.ts) -- nothing to do here, it's the default until someone
-    // upgrades or their trial ends. Pro/Team need actual payment, so send
-    // them straight to Stripe Checkout rather than granting the plan for
-    // free.
-    if (validPreselect === 'pro' || validPreselect === 'team') {
-      startCheckout(validPreselect);
-      return;
-    }
+      // Checkout was cancelled — land back on plan selection, don't re-fire
+      // another checkout redirect automatically.
+      if (checkoutStatus === 'cancelled') {
+        setCurrentStep(1);
+        return;
+      }
+
+      // Landing back here from Stripe Connect's hosted onboarding (see
+      // /api/stripe/connect/return) — jump straight back to the payment
+      // step so it shows whatever actually happened (connected, needs a
+      // fresh link, or errored) instead of restarting the whole walkthrough.
+      if (stripeReturnStatus) {
+        setCurrentStep(6);
+        fetchPaymentStatus();
+        if (stripeReturnStatus === 'refresh') {
+          setPaymentStepError("That link expired before you finished — click Connect Stripe to get a new one.");
+        } else if (stripeReturnStatus === 'error') {
+          setPaymentStepError('Something went wrong connecting Stripe. Please try again.');
+        }
+        return;
+      }
+
+      // This account already has a paid plan by the time onboarding loads
+      // -- most commonly a teammate who just signed up off a Team invite
+      // (see POST /api/auth/signup and POST /api/team), which grants Team
+      // access immediately since seats are pre-paid by the team owner.
+      // Sending them through "choose a plan" here would let them pick
+      // Pro/Team again and get bounced into a real Stripe Checkout for a
+      // plan they're already on. Skip straight past plan selection.
+      if (existingPlan === 'pro' || existingPlan === 'team') {
+        setSelectedPlan(existingPlan);
+        setCurrentStep(2);
+        return;
+      }
+
+      // Arrived fresh with a plan already chosen on the pricing page. Starter
+      // starts a free trial with no payment collected upfront (see
+      // lib/trial.ts) -- nothing to do here, it's the default until someone
+      // upgrades or their trial ends. Pro/Team need actual payment, so send
+      // them straight to Stripe Checkout rather than granting the plan for
+      // free.
+      if (validPreselect === 'pro' || validPreselect === 'team') {
+        startCheckout(validPreselect);
+        return;
+      }
+      // validPreselect === 'starter', or nothing at all -- the initial
+      // state (currentStep/selectedPlan set from the URL above) already
+      // handles both, no further action needed.
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
