@@ -187,11 +187,108 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [docSearch, setDocSearch] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
+  // Agent portal access: who's been invited/accepted onto this
+  // transaction, plus the per-transaction message thread with them.
+  const [agentInvites, setAgentInvites] = useState<
+    { id: string; email: string; status: string; created_at: string }[]
+  >([]);
+  const [acceptedAgentUsers, setAcceptedAgentUsers] = useState<
+    { userId: string; email: string; addedAt: string }[]
+  >([]);
+  const [inviteEmailDraft, setInviteEmailDraft] = useState('');
+  const [isInvitingAgent, setIsInvitingAgent] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState('');
+  const [messages, setMessages] = useState<
+    { id: string; sender_id: string; sender_role: 'tc' | 'agent'; body: string; created_at: string }[]
+  >([]);
+  const [messageDraft, setMessageDraft] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+
   useEffect(() => {
     fetchData();
     fetchTemplates();
     fetchSigningRequests();
+    fetchAgentAccess();
+    fetchMessages();
   }, [resolvedParams.id]);
+
+  // Who currently has (or has been invited to have) agent-portal access
+  // to this transaction -- non-fatal if this fails, the section just
+  // shows as empty.
+  const fetchAgentAccess = async () => {
+    try {
+      const res = await authFetch(`/api/agent-invites?transactionId=${resolvedParams.id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.invites)) setAgentInvites(data.invites);
+      if (Array.isArray(data.agents)) setAcceptedAgentUsers(data.agents);
+    } catch {
+      // ignore
+    }
+  };
+
+  const fetchMessages = async () => {
+    try {
+      const res = await authFetch(`/api/messages?transactionId=${resolvedParams.id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setMessages(data);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleInviteAgent = async () => {
+    const email = inviteEmailDraft.trim();
+    if (!email || !transaction) return;
+    try {
+      setIsInvitingAgent(true);
+      setInviteMessage('');
+      const res = await authFetch('/api/agent-invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId: transaction.id, email }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to send invite');
+      setInviteEmailDraft('');
+      setInviteMessage(`Invite sent to ${email}.`);
+      await fetchAgentAccess();
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setInviteMessage(error instanceof Error ? error.message : 'Failed to send invite');
+    } finally {
+      setIsInvitingAgent(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    const text = messageDraft.trim();
+    if (!text || !transaction) return;
+    try {
+      setSendingMessage(true);
+      const res = await authFetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId: transaction.id, body: text }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to send message');
+      setMessages((prev) => [...prev, result]);
+      setMessageDraft('');
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error sending message:', error);
+    } finally {
+      setSendingMessage(false);
+    }
+  };
 
   // Available checklist templates for the switcher below — non-fatal if
   // this fails, the switcher just won't offer any options.
@@ -1469,6 +1566,57 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               </div>
             )}
           </div>
+
+          {/* Agent portal access: invite the agent (or anyone else who
+              needs it) onto this deal's read-only portal -- checklist
+              status, documents, and the message thread below. Free for
+              them, scoped to just this transaction. */}
+          <div className="pt-6 mt-6 border-t border-slate-600">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent Portal Access</p>
+            <p className="text-xs text-slate-500 mb-3">
+              Give someone a free, view-only login scoped to this deal -- checklist status, documents, and
+              messaging. No password for them to set; they just click the emailed link.
+            </p>
+
+            {(acceptedAgentUsers.length > 0 || agentInvites.length > 0) && (
+              <div className="space-y-1.5 mb-3">
+                {acceptedAgentUsers.map((a) => (
+                  <div key={a.userId} className="flex items-center gap-2 text-sm">
+                    <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                    <span className="text-slate-200">{a.email}</span>
+                    <span className="text-slate-500 text-xs">has access</span>
+                  </div>
+                ))}
+                {agentInvites
+                  .filter((inv) => inv.status !== 'accepted')
+                  .map((inv) => (
+                    <div key={inv.id} className="flex items-center gap-2 text-sm">
+                      <span className="w-2 h-2 rounded-full bg-slate-500 shrink-0" />
+                      <span className="text-slate-300">{inv.email}</span>
+                      <span className="text-slate-500 text-xs">invited, not yet accepted</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <input
+                type="email"
+                value={inviteEmailDraft}
+                onChange={(e) => setInviteEmailDraft(e.target.value)}
+                placeholder="agent@example.com"
+                className="flex-1 min-w-[12rem] bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
+              />
+              <button
+                onClick={handleInviteAgent}
+                disabled={isInvitingAgent || !inviteEmailDraft.trim()}
+                className="px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-100 text-sm font-semibold rounded-lg transition disabled:opacity-50"
+              >
+                {isInvitingAgent ? 'Sending…' : 'Invite'}
+              </button>
+            </div>
+            {inviteMessage && <p className="text-xs text-slate-400 mt-2">{inviteMessage}</p>}
+          </div>
         </div>
 
         {/* Checklist + Documents, side by side on desktop: documents are
@@ -1974,6 +2122,59 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
 
+        </div>
+
+        {/* Messages: the in-app thread with whoever has agent-portal
+            access to this deal (see the Agent Portal Access section
+            above) -- the alternative to texting/emailing back and forth,
+            so the history lives on the deal itself. */}
+        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 mt-8">
+          <h2 className="text-lg font-bold text-slate-100 mb-4">Messages</h2>
+          {acceptedAgentUsers.length === 0 ? (
+            <p className="text-slate-500 text-sm">
+              Invite an agent above to start a conversation here -- it stays on this deal instead of your
+              regular inbox.
+            </p>
+          ) : (
+            <>
+              <div className="max-h-96 overflow-y-auto space-y-3 mb-4 pr-1">
+                {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet.</p>}
+                {messages.map((m) => (
+                  <div key={m.id} className={`flex ${m.sender_role === 'tc' ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                        m.sender_role === 'tc' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
+                      }`}
+                    >
+                      {m.body}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={messageDraft}
+                  onChange={(e) => setMessageDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Message the agent…"
+                  className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={sendingMessage || !messageDraft.trim()}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                >
+                  Send
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Danger Zone */}

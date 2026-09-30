@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isValidCategory, isValidDocumentType, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE } from '@/lib/documentTaxonomy';
 import { getVisibleTcUserIds } from '@/lib/team';
+import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
 
 const BUCKET = 'transaction-documents';
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
@@ -54,8 +55,24 @@ async function assertTransactionAccess(
   transactionId: string,
   userId: string,
   isAdmin: boolean,
-  { readOnly = false }: { readOnly?: boolean } = {}
+  { readOnly = false, allowAgent = false, isAgent = false }: { readOnly?: boolean; allowAgent?: boolean; isAgent?: boolean } = {}
 ) {
+  // An invited agent is scoped to exactly this one transaction, via
+  // transaction_agents -- never the TC ownership check below, which an
+  // agent (no `agents` row of their own) would always fail anyway.
+  if (allowAgent && isAgent) {
+    await assertAgentOnTransaction(transactionId, userId);
+    const { data: transaction, error } = await supabaseServer
+      .from('transactions')
+      .select('id, agent_id')
+      .eq('id', transactionId)
+      .single();
+    if (error || !transaction) {
+      throw new AuthError('Transaction not found', 404);
+    }
+    return transaction;
+  }
+
   const { data: transaction, error } = await supabaseServer
     .from('transactions')
     .select('id, agent_id')
@@ -92,7 +109,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
     }
 
-    await assertTransactionAccess(transactionId, user.id, isAdmin, { readOnly: true });
+    await assertTransactionAccess(transactionId, user.id, isAdmin, {
+      readOnly: true,
+      allowAgent: true,
+      isAgent: isAgentUser(user),
+    });
     await ensureBucket();
 
     const { data: docs, error } = await supabaseServer
@@ -129,7 +150,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
-    await assertTrialActive(user);
+    const callerIsAgent = isAgentUser(user);
+    // Agents aren't TCs and have no plan/trial of their own -- the trial
+    // gate is about whether the TC's account can keep creating/editing,
+    // not whether an agent they've invited can upload a document.
+    if (!callerIsAgent) {
+      await assertTrialActive(user);
+    }
 
     const formData = await request.formData();
     const file = formData.get('file');
@@ -165,7 +192,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await assertTransactionAccess(transactionId, user.id, isAdmin);
+    await assertTransactionAccess(transactionId, user.id, isAdmin, {
+      allowAgent: true,
+      isAgent: callerIsAgent,
+    });
     await ensureBucket();
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -235,7 +265,9 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
-    await assertTrialActive(user);
+    if (!isAgentUser(user)) {
+      await assertTrialActive(user);
+    }
     const body = await request.json();
     const { id, isSigned, requiresSignature } = body;
 

@@ -1,0 +1,170 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseServer, createAuthClient } from '@/lib/supabase';
+import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { sendAgentInviteHeadsUpEmail } from '@/lib/agentPortalEmails';
+
+// Confirms the caller (a TC) owns `transactionId`, the same ownership
+// check src/app/api/documents/route.ts uses -- direct-owner only, not the
+// wider "Team can view" rule, since inviting someone onto a deal is a
+// mutation, not a read.
+async function assertOwnsTransaction(transactionId: string, userId: string, isAdmin: boolean) {
+  const { data: transaction, error } = await supabaseServer
+    .from('transactions')
+    .select('id, agent_id, property_address')
+    .eq('id', transactionId)
+    .single();
+
+  if (error || !transaction) {
+    throw new AuthError('Transaction not found', 404);
+  }
+
+  if (!isAdmin) {
+    const { data: agent } = await supabaseServer
+      .from('agents')
+      .select('id')
+      .eq('id', transaction.agent_id)
+      .eq('tc_user_id', userId)
+      .single();
+    if (!agent) {
+      throw new AuthError('You do not have permission to invite anyone to this transaction', 403);
+    }
+  }
+
+  return transaction;
+}
+
+// GET: invited/accepted agents for one transaction -- TC-only, used to
+// render the "who's on this deal" list on the transaction detail page.
+export async function GET(request: NextRequest) {
+  try {
+    const { user, isAdmin } = await getUserFromRequest(request);
+    const transactionId = request.nextUrl.searchParams.get('transactionId');
+    if (!transactionId) {
+      return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
+    }
+
+    await assertOwnsTransaction(transactionId, user.id, isAdmin);
+
+    const [{ data: invites, error: invitesError }, { data: accepted, error: acceptedError }] = await Promise.all([
+      supabaseServer
+        .from('agent_invites')
+        .select('id, email, status, created_at, accepted_at')
+        .eq('transaction_id', transactionId)
+        .order('created_at', { ascending: false }),
+      supabaseServer
+        .from('transaction_agents')
+        .select('agent_user_id, created_at')
+        .eq('transaction_id', transactionId),
+    ]);
+
+    if (invitesError) throw invitesError;
+    if (acceptedError) throw acceptedError;
+
+    // Attach each accepted agent's email (invites already store it, but
+    // an agent added a long time ago should still show correctly even if
+    // their invite row was ever cleaned up).
+    const acceptedWithEmail = await Promise.all(
+      (accepted || []).map(async (row) => {
+        const { data } = await supabaseServer.auth.admin.getUserById(row.agent_user_id);
+        return {
+          userId: row.agent_user_id,
+          email: data.user?.email || 'unknown',
+          addedAt: row.created_at,
+        };
+      })
+    );
+
+    return NextResponse.json({ invites: invites || [], agents: acceptedWithEmail });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error('Error fetching agent invites:', error);
+    return NextResponse.json({ error: 'Failed to fetch invites' }, { status: 500 });
+  }
+}
+
+// POST: invite an agent (by email) onto a transaction. Works the same
+// whether or not this email already has an agent account elsewhere --
+// Supabase's signInWithOtp creates the account on first use and just
+// sends a login link on every later use, so there's no branching needed
+// here the way /api/team's invite-vs-add split needs. The actual
+// transaction_agents grant isn't created until the agent clicks that
+// link and lands on /agent/accept -- see POST /api/agent-invites/accept.
+export async function POST(request: NextRequest) {
+  try {
+    const { user, isAdmin } = await getUserFromRequest(request);
+    const body = await request.json();
+    const transactionId = typeof body.transactionId === 'string' ? body.transactionId : '';
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+
+    if (!transactionId) {
+      return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
+    }
+    if (!email || !email.includes('@')) {
+      return NextResponse.json({ error: 'A valid email is required' }, { status: 400 });
+    }
+
+    const transaction = await assertOwnsTransaction(transactionId, user.id, isAdmin);
+
+    // Re-inviting (e.g. they lost the email) just refreshes the existing
+    // row instead of erroring -- the unique (transaction_id, email)
+    // constraint means this is the only way to send a second link anyway.
+    const { error: upsertError } = await supabaseServer
+      .from('agent_invites')
+      .upsert(
+        {
+          transaction_id: transactionId,
+          email,
+          invited_by: user.id,
+          status: 'pending',
+          accepted_at: null,
+        },
+        { onConflict: 'transaction_id,email' }
+      );
+    if (upsertError) throw upsertError;
+
+    const appUrl = request.nextUrl.origin;
+    const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
+
+    // Never call this on supabase/supabaseServer (the shared singletons)
+    // -- signInWithOtp sets session state, and a throwaway client is the
+    // established way to avoid poisoning them for every other concurrent
+    // request (see the comment on createAuthClient in lib/supabase.ts).
+    const { error: otpError } = await createAuthClient().auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: `${appUrl}/agent/accept?transactionId=${transactionId}`,
+        data: { role: 'agent' },
+      },
+    });
+
+    let loginEmailSent = true;
+    if (otpError) {
+      loginEmailSent = false;
+      console.error('Error sending agent login link:', otpError);
+    }
+
+    let headsUpEmailSent = true;
+    try {
+      await sendAgentInviteHeadsUpEmail({
+        toEmail: email,
+        tcLabel,
+        propertyAddress: transaction.property_address || null,
+        appUrl,
+      });
+    } catch (emailError) {
+      headsUpEmailSent = false;
+      console.error('Error sending agent invite heads-up email:', emailError);
+    }
+
+    return NextResponse.json({ status: 'invited', email, loginEmailSent, headsUpEmailSent });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error('Error inviting agent:', error);
+    return NextResponse.json({ error: 'Failed to send invite' }, { status: 500 });
+  }
+}
