@@ -294,7 +294,15 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    await assertTransactionAccess(doc.transaction_id, user.id, isAdmin);
+    // Agents may toggle a document's signed / requires-signature state on
+    // their own transactions -- the same as any other document mutation
+    // they're allowed (upload, view). Actually *sending* a signature
+    // request (and voiding one) is a separate endpoint
+    // (/api/signing-requests) that deliberately stays TC-only.
+    await assertTransactionAccess(doc.transaction_id, user.id, isAdmin, {
+      allowAgent: true,
+      isAgent: isAgentUser(user),
+    });
 
     const updates: Record<string, boolean> = {};
     if (isSigned !== undefined) updates.is_signed = isSigned;

@@ -195,6 +195,58 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
     setCollapsedCategories((prev) => ({ ...prev, [categoryKey]: !prev[categoryKey] }));
   };
 
+  // Agents can mark a document Signed/Not Signed and flip whether it needs
+  // a signature at all -- same two PATCH-able flags the TC has. Actually
+  // *sending* a signature request (and voiding one) stays TC-only, so
+  // there's no Request Signature button here, just these two toggles.
+  const [togglingSignedDocId, setTogglingSignedDocId] = useState<string | null>(null);
+  const handleToggleSigned = async (docId: string, nextIsSigned: boolean) => {
+    try {
+      setTogglingSignedDocId(docId);
+      const res = await authFetch('/api/documents', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: docId, isSigned: nextIsSigned }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to update document');
+      setDocuments((prev) => prev.map((d) => (d.id === docId ? { ...d, is_signed: nextIsSigned } : d)));
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/agent/login');
+        return;
+      }
+      alert(err instanceof Error ? err.message : 'Failed to update document');
+    } finally {
+      setTogglingSignedDocId(null);
+    }
+  };
+
+  const [togglingRequiresSignatureDocId, setTogglingRequiresSignatureDocId] = useState<string | null>(null);
+  const handleToggleRequiresSignature = async (docId: string, nextRequiresSignature: boolean) => {
+    try {
+      setTogglingRequiresSignatureDocId(docId);
+      const res = await authFetch('/api/documents', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: docId, requiresSignature: nextRequiresSignature }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to update document');
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === docId ? { ...d, requires_signature: nextRequiresSignature } : d))
+      );
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/agent/login');
+        return;
+      }
+      alert(err instanceof Error ? err.message : 'Failed to update document');
+    } finally {
+      setTogglingRequiresSignatureDocId(null);
+    }
+  };
+
   const handleAttachFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -729,19 +781,34 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                               <span className="text-xs text-slate-500 flex-shrink-0">
                                 {doc.file_size ? `${(doc.file_size / 1024).toFixed(0)} KB` : ''}
                               </span>
-                              {!doc.requires_signature ? (
-                                <span className="text-xs px-2 py-0.5 bg-slate-700/60 border border-slate-600 rounded-full text-slate-400 flex-shrink-0">
-                                  No signature needed
-                                </span>
-                              ) : doc.is_signed ? (
-                                <span className="text-xs px-2 py-0.5 bg-green-900/30 border border-green-700/50 rounded-full text-green-300 flex-shrink-0">
-                                  ✓ Signed
-                                </span>
-                              ) : (
-                                <span className="text-xs px-2 py-0.5 bg-slate-700 border border-slate-600 rounded-full text-slate-400 flex-shrink-0">
-                                  Unsigned
-                                </span>
+                              {doc.requires_signature && (
+                                <label
+                                  className={`flex items-center gap-1.5 text-xs flex-shrink-0 select-none ${
+                                    togglingSignedDocId === doc.id ? 'opacity-50' : 'cursor-pointer'
+                                  } ${doc.is_signed ? 'text-green-300 font-medium' : 'text-slate-400'}`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={doc.is_signed}
+                                    disabled={togglingSignedDocId === doc.id}
+                                    onChange={(e) => handleToggleSigned(doc.id, e.target.checked)}
+                                    className="w-3.5 h-3.5 rounded border-slate-500 bg-slate-700 text-green-500 focus:ring-0 focus:ring-offset-0 cursor-pointer disabled:cursor-not-allowed"
+                                  />
+                                  {doc.is_signed ? '✓ Signed' : 'Unsigned'}
+                                </label>
                               )}
+                              <button
+                                onClick={() => handleToggleRequiresSignature(doc.id, !doc.requires_signature)}
+                                disabled={togglingRequiresSignatureDocId === doc.id}
+                                className="text-xs px-2 py-1 border border-slate-600 hover:border-slate-400 text-slate-500 hover:text-slate-300 rounded-lg transition flex-shrink-0 disabled:opacity-50"
+                                title={doc.requires_signature ? 'Mark as not requiring a signature' : 'Mark as requiring a signature'}
+                              >
+                                {togglingRequiresSignatureDocId === doc.id
+                                  ? '...'
+                                  : doc.requires_signature
+                                    ? 'No sig needed'
+                                    : 'Needs sig'}
+                              </button>
                             </div>
                           ))
                         )}
