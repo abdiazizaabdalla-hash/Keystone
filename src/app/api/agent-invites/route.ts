@@ -107,22 +107,32 @@ export async function POST(request: NextRequest) {
 
     const transaction = await assertOwnsTransaction(transactionId, user.id, isAdmin);
 
-    // Re-inviting (e.g. they lost the email) just refreshes the existing
-    // row instead of erroring -- the unique (transaction_id, email)
-    // constraint means this is the only way to send a second link anyway.
-    const { error: upsertError } = await supabaseServer
+    // Block re-inviting the same email to the same transaction outright,
+    // rather than silently refreshing the existing row -- an accepted
+    // invite means they're already on the deal, and a still-pending one
+    // means a link is already on its way to them.
+    const { data: existingInvite, error: existingInviteError } = await supabaseServer
       .from('agent_invites')
-      .upsert(
-        {
-          transaction_id: transactionId,
-          email,
-          invited_by: user.id,
-          status: 'pending',
-          accepted_at: null,
-        },
-        { onConflict: 'transaction_id,email' }
-      );
-    if (upsertError) throw upsertError;
+      .select('status')
+      .eq('transaction_id', transactionId)
+      .eq('email', email)
+      .maybeSingle();
+    if (existingInviteError) throw existingInviteError;
+    if (existingInvite) {
+      const message =
+        existingInvite.status === 'accepted'
+          ? 'This agent already has access to this transaction.'
+          : 'This agent has already been invited to this transaction and hasn\'t accepted yet.';
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    const { error: insertError } = await supabaseServer.from('agent_invites').insert({
+      transaction_id: transactionId,
+      email,
+      invited_by: user.id,
+      status: 'pending',
+    });
+    if (insertError) throw insertError;
 
     const appUrl = request.nextUrl.origin;
     const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';

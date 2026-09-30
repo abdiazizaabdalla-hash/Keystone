@@ -20,9 +20,11 @@ function parseHashParams(hash: string): Record<string, string> {
 // Landing page for both links Supabase's signInWithOtp sends: a brand
 // new agent's first-ever login, and a returning agent's (see
 // /agent/login) plain re-login. Same "read tokens from the URL hash,
-// establish a session" shape as /auth/confirm -- the only agent-specific
-// step is telling /api/agent-invites/accept which transaction this was
-// for, when there is one (a plain re-login has no transactionId at all).
+// establish a session" shape as /auth/confirm. Two agent-specific steps
+// on top of that: telling /api/agent-invites/accept which transaction
+// this was for, when there is one (a plain re-login has no transactionId
+// at all), and routing a brand-new agent to /agent/welcome to set a
+// password before they ever see a dashboard.
 function AcceptContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -55,12 +57,19 @@ function AcceptContent() {
       }
 
       try {
-        const { data, error } = await supabase.auth.getUser(accessToken);
-        if (error || !data.user) {
+        // setSession (not just getUser) puts this session on the shared
+        // browser client itself, the same thing /auth/reset-password does
+        // -- needed so /agent/welcome can call updateUser() to set a
+        // password on it right after this.
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (error || !data.session) {
           throw error || new Error('Could not verify account');
         }
 
-        saveSession(accessToken, refreshToken, data.user.id);
+        saveSession(data.session.access_token, data.session.refresh_token, data.session.user.id);
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
 
         if (transactionId) {
@@ -73,6 +82,16 @@ function AcceptContent() {
             const result = await res.json().catch(() => ({}));
             throw new Error(result.error || 'Could not confirm your access to this transaction');
           }
+        }
+
+        // First time this agent has ever accepted an invite: no password
+        // on the account yet (it exists purely from signInWithOtp), so
+        // send them to set one up before landing on their dashboard --
+        // every later login/invite skips straight past this.
+        const needsPassword = data.session.user.user_metadata?.has_password !== true;
+        if (needsPassword) {
+          router.replace(transactionId ? `/agent/welcome?transactionId=${transactionId}` : '/agent/welcome');
+        } else if (transactionId) {
           router.replace(`/agent/transactions/${transactionId}`);
         } else {
           router.replace('/agent');

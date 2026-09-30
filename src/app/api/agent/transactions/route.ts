@@ -44,13 +44,47 @@ export async function GET(request: NextRequest) {
     );
     const agentToTc = new Map((agentRecords || []).map((a) => [a.id, a.tc_user_id]));
 
-    const result = (transactions || []).map((t) => ({
-      id: t.id,
-      fileNumber: t.file_number,
-      propertyAddress: t.property_address,
-      status: t.status,
-      tcLabel: tcLabels.get(agentToTc.get(t.agent_id) || '') || 'Transaction coordinator',
-    }));
+    // Same lightweight due-date summary src/app/api/transactions/route.ts
+    // attaches for the TC's own list -- lets the agent dashboard show the
+    // same "Next Due" flag per deal instead of a bare status.
+    const todayStr = new Date().toISOString().split('T')[0];
+    const { data: openTasks } = transactionIds.length
+      ? await supabaseServer
+          .from('tasks')
+          .select('transaction_id, due_date')
+          .in('transaction_id', transactionIds)
+          .eq('completed', false)
+          .not('due_date', 'is', null)
+      : { data: [] as { transaction_id: string; due_date: string }[] };
+
+    const summaryByTx = new Map<string, { nextDueDate: string; overdueCount: number }>();
+    (openTasks || []).forEach((t) => {
+      const txId = t.transaction_id as string;
+      const dueDate = t.due_date as string;
+      const isOverdue = dueDate < todayStr;
+      const existing = summaryByTx.get(txId);
+      if (!existing) {
+        summaryByTx.set(txId, { nextDueDate: dueDate, overdueCount: isOverdue ? 1 : 0 });
+      } else {
+        if (dueDate < existing.nextDueDate) existing.nextDueDate = dueDate;
+        if (isOverdue) existing.overdueCount += 1;
+      }
+    });
+
+    const result = (transactions || []).map((t) => {
+      const tcUserId = agentToTc.get(t.agent_id) || '';
+      const summary = summaryByTx.get(t.id as string);
+      return {
+        id: t.id,
+        fileNumber: t.file_number,
+        propertyAddress: t.property_address,
+        status: t.status,
+        tcUserId,
+        tcLabel: tcLabels.get(tcUserId) || 'Transaction coordinator',
+        nextDueDate: summary?.nextDueDate ?? null,
+        overdueCount: summary?.overdueCount ?? 0,
+      };
+    });
 
     return NextResponse.json(result);
   } catch (error) {
