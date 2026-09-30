@@ -6,6 +6,8 @@ import { generateInvoicePdf } from '@/lib/invoicePdf';
 import { loadInvoiceBundle, loadTcInfo } from '@/lib/invoiceData';
 import { getInvoicePayUrlForDocument } from '@/lib/stripeConnect';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { formatDisplayDate } from '@/lib/dueDates';
+import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 
 const BUCKET = 'transaction-documents';
 // Keep the direct email attachment well under typical provider limits
@@ -26,6 +28,7 @@ function uniqueFileName(name: string, seen: Map<string, number>) {
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
+    await assertTrialActive(user);
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const message = typeof body?.message === 'string' ? body.message.trim() : '';
@@ -141,7 +144,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           <tr><td style="padding: 6px 0; color: #666;">Invoice</td><td style="padding: 6px 0; text-align: right;">${invoice.invoice_number}</td></tr>
           <tr><td style="padding: 6px 0; color: #666;">Property</td><td style="padding: 6px 0; text-align: right;">${transaction.property_address}</td></tr>
           <tr><td style="padding: 6px 0; color: #666;">File #</td><td style="padding: 6px 0; text-align: right;">${transaction.file_number}</td></tr>
-          <tr><td style="padding: 6px 0; color: #666;">Due Date</td><td style="padding: 6px 0; text-align: right;">${new Date(invoice.due_date).toLocaleDateString()}</td></tr>
+          <tr><td style="padding: 6px 0; color: #666;">Due Date</td><td style="padding: 6px 0; text-align: right;">${formatDisplayDate(invoice.due_date)}</td></tr>
           <tr><td style="padding: 10px 0; color: #1a1a1a; font-weight: bold; border-top: 1px solid #ddd;">Total Due</td><td style="padding: 10px 0; text-align: right; font-weight: bold; border-top: 1px solid #ddd;">${money(invoice.amount_owed)}</td></tr>
         </table>
         <p>The invoice PDF is attached${zipBuffer && !zipDownloadUrl ? ', along with a zip of every document uploaded for this transaction.' : '.'}</p>
@@ -163,7 +166,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (sendError) {
       console.error('Resend error:', sendError);
-      return NextResponse.json({ error: sendError.message || 'Failed to send email' }, { status: 502 });
+      // Resend's send errors are almost always something the caller can
+      // fix (bad/placeholder recipient domain, missing field, rate
+      // limit) rather than an actual upstream outage, so this is a 400,
+      // not a 502 -- the frontend already surfaces sendError.message
+      // directly to the TC, and a 502 misleadingly reads as "try again
+      // later" for what's really a validation problem.
+      return NextResponse.json({ error: sendError.message || 'Failed to send email' }, { status: 400 });
     }
 
     const sentAt = new Date().toISOString();
@@ -186,6 +195,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof TrialExpiredError) {
+      return NextResponse.json(
+        { error: error.message, code: 'trial_expired', trialEndsAt: error.trialEndsAt },
+        { status: error.status }
+      );
     }
     if (error instanceof Error && error.message.includes('RESEND_API_KEY')) {
       return NextResponse.json(

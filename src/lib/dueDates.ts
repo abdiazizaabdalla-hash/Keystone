@@ -150,3 +150,29 @@ export function computeDueDates(
     return null;
   });
 }
+
+// Formats a date or timestamp value for display so the calendar date
+// shown never depends on the viewer's (or the server's) local timezone.
+// Guards against two independent gotchas seen across this codebase:
+//
+// 1. A DATE-only string ("2026-10-30", e.g. tasks.due_date,
+//    invoices.due_date) is UTC midnight once parsed by `new Date(...)`,
+//    but `.toLocaleDateString()` without an explicit timeZone renders in
+//    the browser's local zone -- shifting the displayed date back a day
+//    for anyone west of UTC (i.e. almost all of the US).
+// 2. A TIMESTAMP WITHOUT TIME ZONE column (invoices.invoice_date,
+//    paid_at, refunded_at, ...) comes back from Postgres/PostgREST with
+//    no offset (e.g. "2026-09-30T05:06:43.285"), which `new Date(...)`
+//    then parses as *local* time instead of the UTC wall-clock reading
+//    it actually is -- see the identical parseUtc() in lib/trial.ts.
+//
+// Fixing both: treat any offset-less string as UTC when parsing (append
+// 'Z' if nothing's already there), then format with timeZone: 'UTC'.
+export function formatDisplayDate(
+  value: string,
+  options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' }
+): string {
+  const hasOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(value);
+  const date = new Date(hasOffset ? value : `${value}Z`);
+  return date.toLocaleDateString('en-US', { ...options, timeZone: 'UTC' });
+}

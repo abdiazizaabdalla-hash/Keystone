@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
 import { DueDateSpec, normalizeDueDateSpec } from '@/lib/dueDates';
 import DueDateControl from '@/components/DueDateControl';
@@ -406,11 +405,17 @@ function OnboardingContent() {
     }
   };
 
-  const handleCompleteSetup = async () => {
+  const handleCompleteSetup = async (destination: string = '/dashboard') => {
     // Marks the account so DashboardLayout never routes it back through
     // onboarding again, regardless of whether they've added an agent yet
     // -- see lib/onboarding.ts. Best-effort: if this save fails they just
     // see the wizard once more next time they sign in, which is harmless.
+    //
+    // Every exit from this final step -- not just "Go to Dashboard" but
+    // also the three shortcut links above it -- must go through here, or
+    // onboarding_completed never gets set and DashboardLayout bounces the
+    // user straight back to onboarding the moment they land on whichever
+    // page the shortcut sent them to.
     try {
       await authFetch('/api/auth/me', {
         method: 'PATCH',
@@ -420,7 +425,7 @@ function OnboardingContent() {
     } catch {
       // ignore -- see comment above
     }
-    router.push('/dashboard');
+    router.push(destination);
   };
 
   const handleNumberChange =
@@ -809,12 +814,12 @@ function OnboardingContent() {
                     <p className="text-slate-400 mb-4">
                       Start by adding the real estate agents you work with. Set their flat fees per transaction, and an optional percentage-based fee for agents who use one.
                     </p>
-                    <Link
-                      href="/dashboard/agents"
+                    <button
+                      onClick={() => handleCompleteSetup('/dashboard/agents')}
                       className="inline-block px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition"
                     >
                       Go to Agents →
-                    </Link>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -830,12 +835,12 @@ function OnboardingContent() {
                     <p className="text-slate-400 mb-4">
                       Add deals as you take them on. Track the property address, purchase price, and agent. Relay will automatically calculate fees and generate a checklist.
                     </p>
-                    <Link
-                      href="/dashboard/transactions/new"
+                    <button
+                      onClick={() => handleCompleteSetup('/dashboard/transactions/new')}
                       className="inline-block px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition"
                     >
                       Create First Deal →
-                    </Link>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -851,12 +856,12 @@ function OnboardingContent() {
                     <p className="text-slate-400 mb-4">
                       When deals close, Relay generates invoices based on your flat fees and percentages. Track payments and mark them paid as they come in.
                     </p>
-                    <Link
-                      href="/dashboard/invoices"
+                    <button
+                      onClick={() => handleCompleteSetup('/dashboard/invoices')}
                       className="inline-block px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition"
                     >
                       View Invoices →
-                    </Link>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -870,7 +875,7 @@ function OnboardingContent() {
                   ← Back
                 </button>
                 <button
-                  onClick={handleCompleteSetup}
+                  onClick={() => handleCompleteSetup()}
                   className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
                 >
                   Go to Dashboard →

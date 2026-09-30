@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { formatDisplayDate } from '@/lib/dueDates';
 
 interface Agent {
   name: string;
@@ -268,7 +269,7 @@ export default function InvoicesPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <h3 className="text-lg font-semibold text-slate-300 mb-2">No invoices found</h3>
-            <p className="text-slate-400">Create a deal and close it to auto-generate an invoice</p>
+            <p className="text-slate-400">Close a deal, then create its invoice from the transaction page</p>
           </div>
         ) : (
           <div className="bg-slate-700/50 border border-slate-600 rounded-lg overflow-hidden">
@@ -329,7 +330,7 @@ export default function InvoicesPage() {
                             className="hover:text-blue-300 transition inline-flex items-center gap-1.5 group"
                             title="Edit due date"
                           >
-                            {new Date(invoice.due_date).toLocaleDateString()}
+                            {formatDisplayDate(invoice.due_date)}
                             <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>

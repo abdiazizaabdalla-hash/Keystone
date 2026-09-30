@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { stagesForTaskNames } from '@/lib/transactionStages';
 import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categoryLabel, typesForCategory } from '@/lib/documentTaxonomy';
-import { DueDateSpec } from '@/lib/dueDates';
+import { DueDateSpec, formatDisplayDate } from '@/lib/dueDates';
 import DueDateControl from '@/components/DueDateControl';
 
 interface Transaction {
@@ -361,6 +361,12 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     const draft = draftContacts.find((d) => d.draftId === draftId);
     if (!draft) return;
     if (!draft.role.trim() && !draft.name.trim() && !draft.email.trim() && !draft.phone.trim()) return;
+    // Defense in depth alongside the container-level onBlur guard: never
+    // let a second save for the same draft start while the first is
+    // still in flight (the draft isn't removed from state until the
+    // POST resolves, so without this a fast double-blur could still
+    // slip two requests through).
+    if (savingContactId === draftId) return;
 
     setSavingContactId(draftId);
     try {
@@ -1512,10 +1518,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                           }`}
                         >
                           {task.due_date < todayIso ? 'Overdue ' : 'Due '}
-                          {new Date(`${task.due_date}T00:00:00Z`).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
+                          {formatDisplayDate(task.due_date, { month: 'short', day: 'numeric' })}
                         </span>
                       ) : (
                         <span className="text-xs text-slate-600 flex-shrink-0">No due date</span>
@@ -1687,13 +1690,24 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               <div
                 key={draft.draftId}
                 className="px-3 py-2 bg-slate-700/20 border border-dashed border-slate-600 rounded-lg space-y-1.5"
+                onBlur={(e) => {
+                  // Commit once, when focus leaves the whole draft box --
+                  // not on every individual field's blur. relatedTarget is
+                  // the element about to gain focus; if it's still inside
+                  // this box (the user just tabbed to the next field in
+                  // the same draft), there's nothing to save yet. Firing
+                  // per-field used to POST a separate, incomplete contact
+                  // for every tab stop and silently drop whichever field
+                  // was typed last (see handleDraftContactBlur).
+                  if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return;
+                  handleDraftContactBlur(draft.draftId);
+                }}
               >
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={draft.role}
                     onChange={(e) => handleDraftContactChange(draft.draftId, 'role', e.target.value)}
-                    onBlur={() => handleDraftContactBlur(draft.draftId)}
                     placeholder="Role (e.g. Buyer)"
                     className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
                   />
@@ -1709,7 +1723,6 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   type="text"
                   value={draft.name}
                   onChange={(e) => handleDraftContactChange(draft.draftId, 'name', e.target.value)}
-                  onBlur={() => handleDraftContactBlur(draft.draftId)}
                   placeholder="Name or company"
                   className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                 />
@@ -1717,7 +1730,6 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   type="email"
                   value={draft.email}
                   onChange={(e) => handleDraftContactChange(draft.draftId, 'email', formatEmailInput(e.target.value))}
-                  onBlur={() => handleDraftContactBlur(draft.draftId)}
                   placeholder="Email"
                   className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                 />
@@ -1726,7 +1738,6 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   inputMode="tel"
                   value={draft.phone}
                   onChange={(e) => handleDraftContactChange(draft.draftId, 'phone', formatPhoneInput(e.target.value))}
-                  onBlur={() => handleDraftContactBlur(draft.draftId)}
                   placeholder="Phone"
                   className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                 />

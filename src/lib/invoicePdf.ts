@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { formatPhoneNumber } from './formatPhone';
+import { formatDisplayDate } from './dueDates';
 
 interface AgentInfo {
   name: string;
@@ -46,8 +47,7 @@ export function generateInvoicePdf(
 
       const money = (n: number) =>
         `$${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      const dateStr = (d: string) =>
-        new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const dateStr = (d: string) => formatDisplayDate(d, { year: 'numeric', month: 'long', day: 'numeric' });
 
       // Header -- the TC themselves is the primary identity on their own
       // invoice (this used to be hardcoded to "Relay TC", the product's

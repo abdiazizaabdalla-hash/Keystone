@@ -5,6 +5,7 @@ import { use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { formatDisplayDate } from '@/lib/dueDates';
 
 interface Agent {
   id: string;
@@ -404,7 +405,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Invoice Date</p>
-                  <p className="text-slate-200">{new Date(invoice.invoice_date).toLocaleDateString()}</p>
+                  <p className="text-slate-200">{formatDisplayDate(invoice.invoice_date)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Due Date</p>
@@ -435,7 +436,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   ) : (
                     <div className="flex items-center gap-2">
                       <p className={`text-slate-200 ${isOverdue ? 'text-red-400' : ''}`}>
-                        {new Date(invoice.due_date).toLocaleDateString()}
+                        {formatDisplayDate(invoice.due_date)}
                         {isOverdue && ' (Overdue)'}
                       </p>
                       <button
@@ -655,7 +656,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               <div className="bg-orange-500/10 border border-orange-500/50 rounded-lg p-4">
                 <p className="text-orange-400 font-semibold mb-2">↩ Payment Refunded</p>
                 {invoice.refunded_at && (
-                  <p className="text-orange-300 text-sm">Refunded on {new Date(invoice.refunded_at).toLocaleDateString()}</p>
+                  <p className="text-orange-300 text-sm">Refunded on {formatDisplayDate(invoice.refunded_at)}</p>
                 )}
                 {invoice.refunded_amount != null && (
                   <p className="text-orange-300 text-sm">
@@ -671,7 +672,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             <div className="space-y-4">
               <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-4">
                 <p className="text-green-400 font-semibold mb-2">✓ Invoice Paid</p>
-                <p className="text-green-300 text-sm">Paid on {new Date(invoice.paid_at!).toLocaleDateString()}</p>
+                <p className="text-green-300 text-sm">Paid on {formatDisplayDate(invoice.paid_at!)}</p>
                 {invoice.paid_amount && (
                   <p className="text-green-300 text-sm">
                     Amount Received: ${invoice.paid_amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
