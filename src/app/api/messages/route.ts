@@ -157,8 +157,10 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
 
     // Notify whichever side didn't send this -- non-fatal, same as every
-    // other notification email in this codebase.
-    notifyOtherParty(transactionId, user, callerIsAgent, text || 'Sent a file', request.nextUrl.origin).catch(
+    // other notification email in this codebase. Throttled inside
+    // notifyOtherParty so a fast back-and-forth doesn't send one email
+    // per message.
+    notifyOtherParty(transactionId, user, callerIsAgent, text || 'Sent a file', request.nextUrl.origin, message.id).catch(
       (emailError) => {
         console.error('Error sending new-message email:', emailError);
       }
@@ -198,12 +200,20 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// How long to stay quiet after this same sender's last message in this
+// thread before sending another notification email -- a fast
+// back-and-forth ("hows it going" / "great!" / ...) shouldn't fire one
+// email per line; it rides on whichever email already went out (or is
+// about to) for an earlier message in that burst.
+const NOTIFICATION_THROTTLE_MS = 10 * 60 * 1000;
+
 async function notifyOtherParty(
   transactionId: string,
   sender: { id: string; email?: string; user_metadata?: { full_name?: string } | null },
   senderIsAgent: boolean,
   text: string,
-  appUrl: string
+  appUrl: string,
+  newMessageId: string
 ) {
   const { data: transaction } = await supabaseServer
     .from('transactions')
@@ -211,6 +221,19 @@ async function notifyOtherParty(
     .eq('id', transactionId)
     .single();
   if (!transaction) return;
+
+  const { data: priorMessage } = await supabaseServer
+    .from('messages')
+    .select('created_at')
+    .eq('transaction_id', transactionId)
+    .eq('sender_role', senderIsAgent ? 'agent' : 'tc')
+    .neq('id', newMessageId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (priorMessage && Date.now() - new Date(priorMessage.created_at).getTime() < NOTIFICATION_THROTTLE_MS) {
+    return;
+  }
 
   const senderLabel = sender.user_metadata?.full_name || sender.email || (senderIsAgent ? 'The agent' : 'Your TC');
   const portalUrl = senderIsAgent
