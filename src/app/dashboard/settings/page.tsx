@@ -56,6 +56,7 @@ function SettingsContent() {
     { id: string; name: string; steps: { name: string; dueDate?: DueDateSpec | null }[]; isBaseline: boolean }[]
   >([]);
   const [canUseCustomTemplates, setCanUseCustomTemplates] = useState(false);
+  const [showBaselineSteps, setShowBaselineSteps] = useState(false);
   const [templateMessage, setTemplateMessage] = useState('');
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null); // 'new' or a template id
   const [templateNameDraft, setTemplateNameDraft] = useState('');
@@ -649,11 +650,25 @@ function SettingsContent() {
           )}
 
           <div className="space-y-3 mb-6">
-            <div className="flex items-center justify-between gap-4 bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-3">
-              <div>
-                <p className="text-slate-100 font-medium text-sm">Baseline (default)</p>
-                <p className="text-slate-500 text-xs">6 steps &middot; always available</p>
-              </div>
+            <div className="bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-3">
+              <p className="text-slate-100 font-medium text-sm">Baseline (default)</p>
+              <p className="text-slate-500 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setShowBaselineSteps((prev) => !prev)}
+                  className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+                >
+                  6 steps
+                </button>
+                {' '}&middot; always available
+              </p>
+              {showBaselineSteps && (
+                <ol className="mt-3 pt-3 border-t border-slate-700 text-sm text-slate-300 space-y-1 list-decimal list-inside">
+                  {TASK_TEMPLATE.map((name) => (
+                    <li key={name}>{name}</li>
+                  ))}
+                </ol>
+              )}
             </div>
 
             {templates
@@ -708,19 +723,6 @@ function SettingsContent() {
                   className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
               </div>
-
-              {editingTemplateId === 'new' && (
-                <div className="mb-4 bg-slate-900/40 border border-slate-700 rounded-lg p-4">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                    Baseline steps, for reference
-                  </p>
-                  <ol className="text-sm text-slate-300 space-y-1 list-decimal list-inside">
-                    {TASK_TEMPLATE.map((name) => (
-                      <li key={name}>{name}</li>
-                    ))}
-                  </ol>
-                </div>
-              )}
 
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm text-slate-400">Steps</label>
