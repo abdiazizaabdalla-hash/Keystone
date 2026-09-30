@@ -159,6 +159,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const [createInvoiceError, setCreateInvoiceError] = useState<string | null>(null);
+  const [isClosingAndInvoicing, setIsClosingAndInvoicing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -694,6 +695,69 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setCreateInvoiceError(error instanceof Error ? error.message : 'Failed to create invoice');
     } finally {
       setIsCreatingInvoice(false);
+    }
+  };
+
+  // Combined shortcut for TCs who don't want to check off every checklist
+  // item by hand: closes the transaction (server auto-checks every task to
+  // match, exactly like picking "Closed" from the Status dropdown) and then
+  // creates the invoice in the same click. If closing succeeds but invoice
+  // creation fails, the transaction is left Closed and the standalone
+  // "Create Invoice" button (rendered once status is Closed) picks up from
+  // there -- nothing is double-run or lost.
+  const handleCloseAndCreateInvoice = async () => {
+    if (!transaction) return;
+    const confirmed = confirm(
+      "Mark this transaction as Closed? This checks off every checklist item and lets you invoice the agent right away."
+    );
+    if (!confirmed) return;
+
+    try {
+      setIsClosingAndInvoicing(true);
+      setCreateInvoiceError(null);
+
+      const statusResponse = await authFetch(`/api/transactions/[id]?id=${transaction.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Closed' }),
+      });
+      if (!statusResponse.ok) {
+        throw new Error('Failed to mark the transaction as closed');
+      }
+      const updatedTransaction = await statusResponse.json();
+      const { tasks: syncedTasks, ...transactionFields } = updatedTransaction;
+      setTransaction(transactionFields);
+      if (Array.isArray(syncedTasks)) {
+        setTasks(syncedTasks);
+      }
+
+      const invoiceResponse = await authFetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: transactionFields.agent_id,
+          transactionId: transactionFields.id,
+          purchasePrice: transactionFields.purchase_price,
+        }),
+      });
+      const invoiceResult = await invoiceResponse.json();
+      if (!invoiceResponse.ok) {
+        throw new Error(
+          invoiceResult.error ||
+            'Transaction was closed, but creating the invoice failed. Use Create Invoice below to try again.'
+        );
+      }
+      setInvoice(invoiceResult);
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setCreateInvoiceError(
+        error instanceof Error ? error.message : 'Failed to close the transaction and create the invoice'
+      );
+    } finally {
+      setIsClosingAndInvoicing(false);
     }
   };
 
@@ -1326,54 +1390,64 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </div>
           </div>
 
-          {/* Invoice: only relevant once the deal is Closed. Never
-              auto-generated on any plan -- the TC always clicks "Create
-              Invoice" below themselves, once the deal is actually Closed. */}
-          {transaction.status === 'Closed' && (
-            <div className="pt-6 mt-6 border-t border-slate-600">
-              {invoice ? (
+          {/* Invoice: no longer gated on the deal being manually walked to
+              Closed via the checklist -- some TCs don't want to check off
+              every item by hand. Once Closed (by either path), the plain
+              "Create Invoice" button applies the agent's fee. Before that,
+              "Mark as Closed & Create Invoice" does both in one click: it
+              closes the transaction (auto-checking the checklist to match,
+              same as the Status dropdown) and invoices it right after.
+              Never auto-generated on any plan -- always a deliberate
+              click either way. */}
+          <div className="pt-6 mt-6 border-t border-slate-600">
+            {invoice ? (
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Invoice</p>
+                  <p className="text-slate-100 font-semibold">
+                    {invoice.invoice_number} · ${invoice.amount_owed.toLocaleString()} ·{' '}
+                    <span className={invoice.paid ? 'text-green-400' : 'text-blue-400'}>
+                      {invoice.paid ? 'Paid' : 'Unpaid'}
+                    </span>
+                  </p>
+                </div>
+                <Link
+                  href={`/dashboard/invoices/${invoice.id}`}
+                  className="text-sm font-medium text-blue-400 hover:text-blue-300"
+                >
+                  View invoice →
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Invoice</p>
-                    <p className="text-slate-100 font-semibold">
-                      {invoice.invoice_number} · ${invoice.amount_owed.toLocaleString()} ·{' '}
-                      <span className={invoice.paid ? 'text-green-400' : 'text-blue-400'}>
-                        {invoice.paid ? 'Paid' : 'Unpaid'}
+                    <p className="text-sm text-slate-400">
+                      {transaction.status === 'Closed'
+                        ? 'No invoice yet for this closed deal.'
+                        : "Not using the checklist to track this deal? Close it and invoice the agent in one step."}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Flat fee ${(agent?.flat_fee ?? 0).toLocaleString()}
+                      {agent?.commission_percent ? (
+                        <> + {agent.commission_percent}% of ${transaction.purchase_price.toLocaleString()}</>
+                      ) : null}{' '}
+                      ={' '}
+                      <span className="text-slate-300 font-semibold">
+                        $
+                        {(
+                          (agent?.flat_fee ?? 0) +
+                          (transaction.purchase_price * (agent?.commission_percent ?? 0)) / 100
+                        ).toLocaleString()}
                       </span>
+                      {' — set per-agent in '}
+                      <Link href="/dashboard/agents" className="text-blue-400 hover:text-blue-300">
+                        Agents
+                      </Link>
+                      .
                     </p>
                   </div>
-                  <Link
-                    href={`/dashboard/invoices/${invoice.id}`}
-                    className="text-sm font-medium text-blue-400 hover:text-blue-300"
-                  >
-                    View invoice →
-                  </Link>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm text-slate-400">No invoice yet for this closed deal.</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Flat fee ${(agent?.flat_fee ?? 0).toLocaleString()}
-                        {agent?.commission_percent ? (
-                          <> + {agent.commission_percent}% of ${transaction.purchase_price.toLocaleString()}</>
-                        ) : null}{' '}
-                        ={' '}
-                        <span className="text-slate-300 font-semibold">
-                          $
-                          {(
-                            (agent?.flat_fee ?? 0) +
-                            (transaction.purchase_price * (agent?.commission_percent ?? 0)) / 100
-                          ).toLocaleString()}
-                        </span>
-                        {' — set per-agent in '}
-                        <Link href="/dashboard/agents" className="text-blue-400 hover:text-blue-300">
-                          Agents
-                        </Link>
-                        .
-                      </p>
-                    </div>
+                  {transaction.status === 'Closed' ? (
                     <button
                       onClick={handleCreateInvoice}
                       disabled={isCreatingInvoice}
@@ -1381,12 +1455,20 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     >
                       {isCreatingInvoice ? 'Creating…' : 'Create Invoice'}
                     </button>
-                  </div>
-                  {createInvoiceError && <p className="text-sm text-red-400">{createInvoiceError}</p>}
+                  ) : (
+                    <button
+                      onClick={handleCloseAndCreateInvoice}
+                      disabled={isClosingAndInvoicing}
+                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {isClosingAndInvoicing ? 'Closing…' : 'Mark as Closed & Create Invoice'}
+                    </button>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+                {createInvoiceError && <p className="text-sm text-red-400">{createInvoiceError}</p>}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Checklist + Documents, side by side on desktop: documents are
