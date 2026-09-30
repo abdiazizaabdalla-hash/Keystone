@@ -73,9 +73,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id: transactionId } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
-    await assertTrialActive(user);
+    const callerIsAgent = isAgentUser(user);
+    // Agents aren't TCs and have no plan/trial of their own -- same
+    // reasoning as the document-upload trial-gate skip in
+    // /api/documents.
+    if (!callerIsAgent) {
+      await assertTrialActive(user);
+    }
 
-    if (!(await assertCanAccessTransaction(transactionId, user.id, isAdmin))) {
+    // An invited agent may add a contact to this deal (a lender, title
+    // company, etc. they know about that the TC hasn't entered yet) --
+    // scoped via transaction_agents, same as the GET above. They can't
+    // edit or remove any contact, including ones they added themselves;
+    // that stays TC-only (see transaction-contacts/[id]/route.ts, which
+    // has no agent path at all).
+    if (callerIsAgent) {
+      await assertAgentOnTransaction(transactionId, user.id);
+    } else if (!(await assertCanAccessTransaction(transactionId, user.id, isAdmin))) {
       return NextResponse.json({ error: 'You do not have permission to edit this transaction' }, { status: 403 });
     }
 

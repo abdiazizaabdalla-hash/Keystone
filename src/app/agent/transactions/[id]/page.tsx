@@ -98,6 +98,14 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
   const [attachError, setAttachError] = useState('');
   const messageFileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const [isAddingContact, setIsAddingContact] = useState(false);
+  const [newContactRole, setNewContactRole] = useState('');
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [savingContact, setSavingContact] = useState(false);
+  const [addContactError, setAddContactError] = useState('');
+
   const fetchMessages = async () => {
     try {
       const res = await authFetch(`/api/messages?transactionId=${id}`);
@@ -242,6 +250,46 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
       console.error('Error sending message:', err);
     } finally {
       setSendingMessage(false);
+    }
+  };
+
+  // Agents can add a contact the TC hasn't entered yet (a lender, title
+  // company, etc.) but can't edit or remove any contact -- that stays
+  // TC-only, see POST /api/transactions/[id]/contacts.
+  const handleAddContact = async () => {
+    if (!newContactRole.trim() && !newContactName.trim() && !newContactEmail.trim() && !newContactPhone.trim()) {
+      setAddContactError('Enter at least one field.');
+      return;
+    }
+    try {
+      setSavingContact(true);
+      setAddContactError('');
+      const res = await authFetch(`/api/transactions/${id}/contacts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: newContactRole.trim(),
+          name: newContactName.trim(),
+          email: newContactEmail.trim(),
+          phone: newContactPhone.trim(),
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to add contact');
+      setContacts((prev) => [...prev, result]);
+      setNewContactRole('');
+      setNewContactName('');
+      setNewContactEmail('');
+      setNewContactPhone('');
+      setIsAddingContact(false);
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/agent/login');
+        return;
+      }
+      setAddContactError(err instanceof Error ? err.message : 'Failed to add contact');
+    } finally {
+      setSavingContact(false);
     }
   };
 
@@ -512,8 +560,77 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                     <p className="text-xs text-slate-400">{contact.phone || 'No phone on file'}</p>
                   </div>
                 ))}
+
+                {isAddingContact && (
+                  <div className="px-3 py-2 bg-slate-700/20 border border-dashed border-slate-600 rounded-lg space-y-1.5">
+                    <input
+                      type="text"
+                      value={newContactRole}
+                      onChange={(e) => setNewContactRole(e.target.value)}
+                      placeholder="Role (e.g. Lender)"
+                      className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={newContactName}
+                      onChange={(e) => setNewContactName(e.target.value)}
+                      placeholder="Name or company"
+                      className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    <input
+                      type="email"
+                      value={newContactEmail}
+                      onChange={(e) => setNewContactEmail(e.target.value)}
+                      placeholder="Email"
+                      className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      value={newContactPhone}
+                      onChange={(e) => setNewContactPhone(e.target.value)}
+                      placeholder="Phone"
+                      className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    {addContactError && <p className="text-[11px] text-red-400">{addContactError}</p>}
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleAddContact}
+                        disabled={savingContact}
+                        className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition disabled:opacity-50"
+                      >
+                        {savingContact ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingContact(false);
+                          setAddContactError('');
+                        }}
+                        disabled={savingContact}
+                        className="text-xs text-slate-500 hover:text-slate-300 transition disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              <p className="text-slate-500 text-xs mt-4">View-only -- your TC manages contacts.</p>
+
+              {!isAddingContact && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingContact(true)}
+                  className="mt-3 text-xs text-blue-400 hover:text-blue-300 font-medium transition"
+                >
+                  + Add contact
+                </button>
+              )}
+
+              <p className="text-slate-500 text-xs mt-4">
+                You can add a contact -- editing or removing one stays with your TC.
+              </p>
             </section>
           </div>
 
