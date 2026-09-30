@@ -1619,6 +1619,59 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
 
+        {/* Messages: the in-app thread with whoever has agent-portal
+            access to this deal (see the Agent Portal Access section
+            above) -- the alternative to texting/emailing back and forth,
+            so the history lives on the deal itself. */}
+        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 mt-8">
+          <h2 className="text-lg font-bold text-slate-100 mb-4">Messages</h2>
+          {acceptedAgentUsers.length === 0 ? (
+            <p className="text-slate-500 text-sm">
+              Invite an agent above to start a conversation here -- it stays on this deal instead of your
+              regular inbox.
+            </p>
+          ) : (
+            <>
+              <div className="max-h-96 overflow-y-auto space-y-3 mb-4 pr-1">
+                {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet.</p>}
+                {messages.map((m) => (
+                  <div key={m.id} className={`flex ${m.sender_role === 'tc' ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                        m.sender_role === 'tc' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
+                      }`}
+                    >
+                      {m.body}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={messageDraft}
+                  onChange={(e) => setMessageDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Message the agent…"
+                  className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={sendingMessage || !messageDraft.trim()}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                >
+                  Send
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Checklist + Documents, side by side on desktop: documents are
             the primary view (wide, left), the checklist is compact
             (narrow, right) so both are usable without scrolling past one
@@ -2122,59 +2175,6 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
 
-        </div>
-
-        {/* Messages: the in-app thread with whoever has agent-portal
-            access to this deal (see the Agent Portal Access section
-            above) -- the alternative to texting/emailing back and forth,
-            so the history lives on the deal itself. */}
-        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 mt-8">
-          <h2 className="text-lg font-bold text-slate-100 mb-4">Messages</h2>
-          {acceptedAgentUsers.length === 0 ? (
-            <p className="text-slate-500 text-sm">
-              Invite an agent above to start a conversation here -- it stays on this deal instead of your
-              regular inbox.
-            </p>
-          ) : (
-            <>
-              <div className="max-h-96 overflow-y-auto space-y-3 mb-4 pr-1">
-                {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet.</p>}
-                {messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.sender_role === 'tc' ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                        m.sender_role === 'tc' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
-                      }`}
-                    >
-                      {m.body}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={messageDraft}
-                  onChange={(e) => setMessageDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  placeholder="Message the agent…"
-                  className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={sendingMessage || !messageDraft.trim()}
-                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
-                >
-                  Send
-                </button>
-              </div>
-            </>
-          )}
         </div>
 
         {/* Danger Zone */}

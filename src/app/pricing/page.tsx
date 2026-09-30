@@ -32,6 +32,7 @@ export default function PricingPage() {
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
           </nav>
           <div className="flex items-center gap-4">
+            <Link href="/agent/login" className="hidden sm:inline text-sm text-slate-500 hover:text-slate-300 transition">Agent Login</Link>
             <Link href="/auth" className="text-sm text-slate-300 hover:text-slate-100 transition">Sign In</Link>
             <Link
               href="/auth?mode=signup&plan=starter"

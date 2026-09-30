@@ -16,6 +16,10 @@ interface AgentTransactionDetail {
   fileNumber: string;
   propertyAddress: string | null;
   status: string;
+  purchasePrice: number | null;
+  acceptanceDate: string | null;
+  closingDate: string | null;
+  agentName: string;
   tcLabel: string;
   tasks: { id: string; name: string; completed: boolean; sort_order: number }[];
 }
@@ -206,8 +210,12 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
           ← Your deals
         </Link>
 
+        {/* Same core deal info the TC's own page shows -- agent, price,
+            status, dates -- just plain text instead of editable
+            dropdowns/inputs. Nothing about invoices or commission here,
+            that stays TC-only (see lib/agentPortal.ts). */}
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 mb-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
               <h1 className="text-xl font-display font-semibold text-slate-100">
                 {transaction.propertyAddress || transaction.fileNumber}
@@ -218,8 +226,81 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               {transaction.status}
             </span>
           </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-slate-600">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent</p>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0">
+                  {transaction.agentName[0]}
+                </div>
+                <p className="text-base font-semibold text-slate-100">{transaction.agentName}</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Purchase Price</p>
+              <p className="text-xl font-bold text-blue-400">
+                {transaction.purchasePrice != null ? `$${transaction.purchasePrice.toLocaleString()}` : '—'}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Status</p>
+              <p className="text-slate-100 font-medium">{transaction.status}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Acceptance Date</p>
+              <p className="text-slate-100">{transaction.acceptanceDate || '—'}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Target Closing Date</p>
+              <p className="text-slate-100">{transaction.closingDate || '—'}</p>
+            </div>
+          </div>
         </div>
 
+        <section className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 mb-8 flex flex-col h-[28rem]">
+          <h2 className="text-lg font-bold text-slate-100 mb-4">Messages</h2>
+          <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
+            {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet -- say hello.</p>}
+            {messages.map((m) => (
+              <div key={m.id} className={`flex ${m.sender_role === 'agent' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                    m.sender_role === 'agent' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
+                  }`}
+                >
+                  {m.body}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={messageDraft}
+              onChange={(e) => setMessageDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              placeholder={`Message ${transaction.tcLabel}…`}
+              className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={sendingMessage || !messageDraft.trim()}
+              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+            >
+              Send
+            </button>
+          </div>
+        </section>
         <section className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 mb-8">
           <h2 className="text-lg font-bold text-slate-100 mb-4">Checklist</h2>
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
@@ -359,45 +440,6 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
           </div>
         </section>
 
-        <section className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 flex flex-col h-[28rem]">
-          <h2 className="text-lg font-bold text-slate-100 mb-4">Messages</h2>
-          <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
-            {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet -- say hello.</p>}
-            {messages.map((m) => (
-              <div key={m.id} className={`flex ${m.sender_role === 'agent' ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                    m.sender_role === 'agent' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
-                  }`}
-                >
-                  {m.body}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={messageDraft}
-              onChange={(e) => setMessageDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder={`Message ${transaction.tcLabel}…`}
-              className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={sendingMessage || !messageDraft.trim()}
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
-            >
-              Send
-            </button>
-          </div>
-        </section>
       </div>
     </div>
   );

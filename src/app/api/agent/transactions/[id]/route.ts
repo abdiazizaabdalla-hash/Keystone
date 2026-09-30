@@ -3,12 +3,13 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
 
-// GET: one transaction's read-only view for an agent -- status and
-// checklist, plus who the TC is so the portal can label the message
-// thread. No purchase price breakdown, no invoice/commission fields --
-// those stay TC-only (see the design notes in lib/agentPortal.ts).
-// Documents are fetched separately from the existing /api/documents
-// route (now agent-aware, see that file).
+// GET: one transaction's read-only view for an agent -- the same core
+// deal info the TC sees (price, dates, status, the agent on file) plus
+// the checklist and who the TC is, so the portal reads as a mirror of
+// the TC's own page. No invoice/commission fields, though -- those stay
+// TC-only (see the design notes in lib/agentPortal.ts). Documents are
+// fetched separately from the existing /api/documents route (now
+// agent-aware, see that file).
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await getUserFromRequest(request);
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data: transaction, error } = await supabaseServer
       .from('transactions')
-      .select('id, file_number, property_address, status, agent_id')
+      .select('id, file_number, property_address, status, agent_id, purchase_price, acceptance_date, closing_date')
       .eq('id', transactionId)
       .single();
     if (error || !transaction) {
@@ -36,11 +37,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (tasksError) throw tasksError;
 
     let tcLabel = 'Transaction coordinator';
+    let agentName = 'Unknown';
     const { data: agentRecord } = await supabaseServer
       .from('agents')
-      .select('tc_user_id')
+      .select('name, tc_user_id')
       .eq('id', transaction.agent_id)
       .maybeSingle();
+    if (agentRecord?.name) {
+      agentName = agentRecord.name;
+    }
     if (agentRecord?.tc_user_id) {
       const { data } = await supabaseServer.auth.admin.getUserById(agentRecord.tc_user_id);
       tcLabel = (data.user?.user_metadata?.full_name as string | undefined) || data.user?.email || tcLabel;
@@ -51,6 +56,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       fileNumber: transaction.file_number,
       propertyAddress: transaction.property_address,
       status: transaction.status,
+      purchasePrice: transaction.purchase_price,
+      acceptanceDate: transaction.acceptance_date,
+      closingDate: transaction.closing_date,
+      agentName,
       tcLabel,
       tasks: tasks || [],
     });

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabaseBrowser as supabase } from '@/lib/supabaseClient';
 import { saveSession } from '@/lib/authClient';
 
@@ -178,6 +179,13 @@ export default function AgentLoginPage() {
             </form>
           )}
         </div>
+
+        <p className="text-center text-xs text-slate-600 mt-6">
+          Not an agent?{' '}
+          <Link href="/auth" className="text-slate-400 hover:text-slate-300">
+            Sign in to your TC account
+          </Link>
+        </p>
       </div>
     </div>
   );
