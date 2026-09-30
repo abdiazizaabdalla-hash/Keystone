@@ -1,10 +1,15 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
-import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categoryLabel } from '@/lib/documentTaxonomy';
+import {
+  DOCUMENT_CATEGORIES,
+  DEFAULT_CATEGORY_KEY,
+  DEFAULT_DOCUMENT_TYPE,
+  typesForCategory,
+} from '@/lib/documentTaxonomy';
 
 interface AgentTransactionDetail {
   id: string;
@@ -18,7 +23,12 @@ interface AgentTransactionDetail {
 interface DocumentRow {
   id: string;
   file_name: string;
-  category: string;
+  document_type: string | null;
+  category: string | null;
+  task_id: string | null;
+  file_size: number | null;
+  requires_signature: boolean;
+  is_signed: boolean;
   url: string | null;
   created_at: string;
 }
@@ -31,11 +41,12 @@ interface MessageRow {
   created_at: string;
 }
 
-// Read-only status/checklist, view+download+upload documents, and a
-// message thread with the TC -- everything an invited agent can do (see
-// the design notes in lib/agentPortal.ts for what they deliberately
-// can't: other transactions, other agents, invoices/commission,
-// account/billing).
+// Read-only status/checklist, the same category-organized document
+// browser the TC uses (view/download/upload -- no delete or
+// signature-workflow controls, those stay TC-only), and a message thread
+// with the TC. See the design notes in lib/agentPortal.ts for what an
+// agent deliberately can't see: other transactions, other agents,
+// invoices/commission, account/billing.
 export default function AgentTransactionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -46,9 +57,12 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [uploadCategory, setUploadCategory] = useState(DEFAULT_CATEGORY_KEY);
-  const [uploading, setUploading] = useState(false);
+  const [docSearch, setDocSearch] = useState('');
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState('');
+  const categoryFileInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingUploadCategory = useRef<string | null>(null);
 
   const [messageDraft, setMessageDraft] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -81,15 +95,27 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const handleUpload = async (file: File) => {
+  const triggerCategoryUpload = (categoryKey: string) => {
+    pendingUploadCategory.current = categoryKey;
+    if (categoryFileInputRef.current) categoryFileInputRef.current.value = '';
+    categoryFileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const category = pendingUploadCategory.current;
+    pendingUploadCategory.current = null;
+    if (!file || !category) return;
+
     try {
-      setUploading(true);
+      setUploadingCategory(category);
       setUploadError('');
+      const documentType = typesForCategory(category)[0] || DEFAULT_DOCUMENT_TYPE;
       const formData = new FormData();
       formData.append('file', file);
       formData.append('transactionId', id);
-      formData.append('category', uploadCategory);
-      formData.append('documentType', DEFAULT_DOCUMENT_TYPE);
+      formData.append('category', category);
+      formData.append('documentType', documentType);
       const res = await authFetch('/api/documents', { method: 'POST', body: formData });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Failed to upload document');
@@ -101,13 +127,17 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
       }
       setUploadError(err instanceof Error ? err.message : 'Failed to upload document');
     } finally {
-      setUploading(false);
+      setUploadingCategory(null);
     }
+  };
+
+  const toggleCategoryCollapsed = (categoryKey: string) => {
+    setCollapsedCategories((prev) => ({ ...prev, [categoryKey]: !prev[categoryKey] }));
   };
 
   const handleSendMessage = async () => {
     const text = messageDraft.trim();
-    if (!text) return;
+    if (!text || !transaction) return;
     try {
       setSendingMessage(true);
       const res = await authFetch('/api/messages', {
@@ -151,9 +181,27 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
     );
   }
 
+  const taskNameById = transaction.tasks.reduce<Record<string, string>>((acc, t) => {
+    acc[t.id] = t.name;
+    return acc;
+  }, {});
+
+  const searchLower = docSearch.trim().toLowerCase();
+  const filteredDocuments = searchLower
+    ? documents.filter((d) => {
+        const stageName = d.task_id ? taskNameById[d.task_id] || '' : '';
+        return (
+          d.file_name.toLowerCase().includes(searchLower) ||
+          (d.document_type || '').toLowerCase().includes(searchLower) ||
+          (d.category || '').toLowerCase().includes(searchLower) ||
+          stageName.toLowerCase().includes(searchLower)
+        );
+      })
+    : documents;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 px-6 py-12">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <Link href="/agent" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-6 text-sm font-medium">
           ← Your deals
         </Link>
@@ -172,115 +220,184 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="space-y-8">
-            <section className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6">
-              <h2 className="text-lg font-bold text-slate-100 mb-4">Checklist</h2>
-              <ul className="space-y-2">
-                {transaction.tasks.map((task) => (
-                  <li key={task.id} className="flex items-center gap-3 text-sm">
-                    <span
-                      className={`w-4 h-4 rounded-full shrink-0 border ${
-                        task.completed ? 'bg-green-500 border-green-500' : 'border-slate-500'
-                      }`}
-                    />
-                    <span className={task.completed ? 'text-slate-400 line-through' : 'text-slate-200'}>{task.name}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-slate-500 text-xs mt-4">View-only -- your TC updates this checklist.</p>
-            </section>
+        <section className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 mb-8">
+          <h2 className="text-lg font-bold text-slate-100 mb-4">Checklist</h2>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+            {transaction.tasks.map((task) => (
+              <li key={task.id} className="flex items-center gap-3 text-sm">
+                <span
+                  className={`w-4 h-4 rounded-full shrink-0 border ${
+                    task.completed ? 'bg-green-500 border-green-500' : 'border-slate-500'
+                  }`}
+                />
+                <span className={task.completed ? 'text-slate-400 line-through' : 'text-slate-200'}>{task.name}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-slate-500 text-xs mt-4">View-only -- your TC updates this checklist.</p>
+        </section>
 
-            <section className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6">
-              <h2 className="text-lg font-bold text-slate-100 mb-4">Documents</h2>
+        <section className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 mb-8">
+          <h2 className="text-lg font-bold text-slate-100 mb-1">Documents</h2>
+          <p className="text-sm text-slate-400 mb-6">
+            Organized by category, same as your TC sees it. Upload straight into a category, or view/download
+            anything already there -- editing or deleting a document stays with your TC.
+          </p>
 
-              <div className="space-y-2 mb-4">
-                {documents.length === 0 && <p className="text-slate-500 text-sm">No documents yet.</p>}
-                {documents.map((doc) => (
-                  <a
-                    key={doc.id}
-                    href={doc.url || '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-3 py-2 text-sm hover:border-blue-500 transition"
-                  >
-                    <span className="text-slate-200 truncate">{doc.file_name}</span>
-                    <span className="text-slate-500 text-xs shrink-0">{categoryLabel(doc.category)}</span>
-                  </a>
-                ))}
-              </div>
+          <input
+            ref={categoryFileInputRef}
+            type="file"
+            accept="application/pdf,image/*,.doc,.docx"
+            className="hidden"
+            onChange={handleFileSelected}
+          />
 
-              <div className="border-t border-slate-600 pt-4">
-                <label className="text-sm text-slate-400 block mb-2">Upload a document</label>
-                <div className="flex flex-wrap gap-2">
-                  <select
-                    value={uploadCategory}
-                    onChange={(e) => setUploadCategory(e.target.value)}
-                    className="bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:border-blue-500 focus:outline-none"
-                  >
-                    {DOCUMENT_CATEGORIES.map((cat) => (
-                      <option key={cat.key} value={cat.key}>
-                        {cat.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="file"
-                    disabled={uploading}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleUpload(file);
-                      e.target.value = '';
-                    }}
-                    className="text-sm text-slate-300 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white file:text-sm file:font-semibold hover:file:bg-blue-500 disabled:opacity-50"
-                  />
-                </div>
-                {uploading && <p className="text-slate-500 text-xs mt-2">Uploading…</p>}
-                {uploadError && <p className="text-red-400 text-xs mt-2">{uploadError}</p>}
-              </div>
-            </section>
+          {uploadError && <p className="text-sm text-red-400 mb-4">{uploadError}</p>}
+
+          <div className="mb-6">
+            <input
+              type="text"
+              value={docSearch}
+              onChange={(e) => setDocSearch(e.target.value)}
+              placeholder="Search documents by name, type, category, or checklist stage..."
+              className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+            />
           </div>
 
-          <section className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 flex flex-col h-[32rem]">
-            <h2 className="text-lg font-bold text-slate-100 mb-4">Messages</h2>
-            <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
-              {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet -- say hello.</p>}
-              {messages.map((m) => (
-                <div key={m.id} className={`flex ${m.sender_role === 'agent' ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                      m.sender_role === 'agent' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
-                    }`}
-                  >
-                    {m.body}
+          <div className="space-y-3">
+            {DOCUMENT_CATEGORIES.map((cat) => {
+              const catDocs = filteredDocuments.filter((d) => (d.category || DEFAULT_CATEGORY_KEY) === cat.key);
+              if (docSearch && catDocs.length === 0) return null;
+              const isCollapsed = collapsedCategories[cat.key];
+
+              return (
+                <div key={cat.key} className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden">
+                  <div className="w-full flex items-center gap-2 px-4 py-3 hover:bg-slate-700/50 transition">
+                    <button
+                      onClick={() => toggleCategoryCollapsed(cat.key)}
+                      className="flex-1 flex items-center justify-between text-left min-w-0"
+                    >
+                      <span className="font-semibold text-slate-200">{cat.label}</span>
+                      <span className="flex items-center gap-2 text-xs text-slate-400 ml-3">
+                        {catDocs.length} document{catDocs.length === 1 ? '' : 's'}
+                        <svg
+                          className={`w-4 h-4 transition-transform ${isCollapsed ? '' : 'rotate-180'}`}
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => triggerCategoryUpload(cat.key)}
+                      disabled={uploadingCategory !== null}
+                      className="flex-shrink-0 text-xs px-2.5 py-1 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition disabled:opacity-50"
+                    >
+                      {uploadingCategory === cat.key ? 'Uploading…' : '+ Upload'}
+                    </button>
                   </div>
+                  {!isCollapsed && (
+                    <div className="px-4 pb-4 space-y-2">
+                      {catDocs.length === 0 ? (
+                        <p className="text-sm text-slate-500 italic">No documents in this category yet.</p>
+                      ) : (
+                        catDocs.map((doc) => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-2.5"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <a
+                                href={doc.url || '#'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-400 hover:text-blue-300 truncate block"
+                              >
+                                📄 {doc.file_name}
+                              </a>
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                                <span className="text-xs text-slate-500">{doc.document_type || 'General'}</span>
+                                {doc.task_id && taskNameById[doc.task_id] && (
+                                  <span className="text-xs px-2 py-0.5 bg-slate-600 border border-slate-600 rounded-full text-slate-300">
+                                    {taskNameById[doc.task_id]}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-xs text-slate-500 flex-shrink-0">
+                              {doc.file_size ? `${(doc.file_size / 1024).toFixed(0)} KB` : ''}
+                            </span>
+                            {!doc.requires_signature ? (
+                              <span className="text-xs px-2 py-0.5 bg-slate-700/60 border border-slate-600 rounded-full text-slate-400 flex-shrink-0">
+                                No signature needed
+                              </span>
+                            ) : doc.is_signed ? (
+                              <span className="text-xs px-2 py-0.5 bg-green-900/30 border border-green-700/50 rounded-full text-green-300 flex-shrink-0">
+                                ✓ Signed
+                              </span>
+                            ) : (
+                              <span className="text-xs px-2 py-0.5 bg-slate-700 border border-slate-600 rounded-full text-slate-400 flex-shrink-0">
+                                Unsigned
+                              </span>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={messageDraft}
-                onChange={(e) => setMessageDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                placeholder={`Message ${transaction.tcLabel}…`}
-                className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={sendingMessage || !messageDraft.trim()}
-                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
-              >
-                Send
-              </button>
-            </div>
-          </section>
-        </div>
+              );
+            })}
+            {docSearch && filteredDocuments.length === 0 && (
+              <p className="text-sm text-slate-500 italic">No documents match &quot;{docSearch}&quot;.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 flex flex-col h-[28rem]">
+          <h2 className="text-lg font-bold text-slate-100 mb-4">Messages</h2>
+          <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
+            {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet -- say hello.</p>}
+            {messages.map((m) => (
+              <div key={m.id} className={`flex ${m.sender_role === 'agent' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                    m.sender_role === 'agent' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
+                  }`}
+                >
+                  {m.body}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={messageDraft}
+              onChange={(e) => setMessageDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              placeholder={`Message ${transaction.tcLabel}…`}
+              className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={sendingMessage || !messageDraft.trim()}
+              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+            >
+              Send
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );
