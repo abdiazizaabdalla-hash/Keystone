@@ -22,7 +22,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data: transaction, error } = await supabaseServer
       .from('transactions')
-      .select('id, file_number, property_address, status, agent_id, purchase_price, acceptance_date, closing_date')
+      .select(
+        'id, file_number, property_address, status, agent_id, purchase_price, acceptance_date, closing_date, checklist_template_name'
+      )
       .eq('id', transactionId)
       .single();
     if (error || !transaction) {
@@ -31,7 +33,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data: tasks, error: tasksError } = await supabaseServer
       .from('tasks')
-      .select('id, name, completed, sort_order')
+      .select('id, name, completed, sort_order, due_date')
       .eq('transaction_id', transactionId)
       .order('sort_order', { ascending: true });
     if (tasksError) throw tasksError;
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     let agentName = 'Unknown';
     const { data: agentRecord } = await supabaseServer
       .from('agents')
-      .select('name, tc_user_id')
+      .select('name, email, phone, tc_user_id')
       .eq('id', transaction.agent_id)
       .maybeSingle();
     if (agentRecord?.name) {
@@ -59,7 +61,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       purchasePrice: transaction.purchase_price,
       acceptanceDate: transaction.acceptance_date,
       closingDate: transaction.closing_date,
+      checklistTemplateName: transaction.checklist_template_name,
       agentName,
+      agentEmail: agentRecord?.email || null,
+      agentPhone: agentRecord?.phone || null,
       tcLabel,
       tasks: tasks || [],
     });

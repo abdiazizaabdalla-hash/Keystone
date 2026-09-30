@@ -199,10 +199,22 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [isInvitingAgent, setIsInvitingAgent] = useState(false);
   const [inviteMessage, setInviteMessage] = useState('');
   const [messages, setMessages] = useState<
-    { id: string; sender_id: string; sender_role: 'tc' | 'agent'; body: string; created_at: string }[]
+    {
+      id: string;
+      sender_id: string;
+      sender_role: 'tc' | 'agent';
+      body: string;
+      created_at: string;
+      attachment_document_id?: string | null;
+      attachment?: { id: string; fileName: string; url: string | null; contentType: string | null; fileSize: number | null } | null;
+    }[]
   >([]);
   const [messageDraft, setMessageDraft] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<{ id: string; fileName: string } | null>(null);
+  const [isAttachingFile, setIsAttachingFile] = useState(false);
+  const [attachError, setAttachError] = useState('');
+  const messageFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -210,6 +222,19 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     fetchSigningRequests();
     fetchAgentAccess();
     fetchMessages();
+  }, [resolvedParams.id]);
+
+  // Poll for new messages so the thread updates without a manual reload
+  // -- this app doesn't use Supabase Realtime anywhere else, so a plain
+  // interval (paused while the tab isn't visible) is the lowest-risk way
+  // to get "live enough" messaging here. Mirrors the same effect on the
+  // agent side, agent/transactions/[id]/page.tsx.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchMessages();
+    }, 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedParams.id]);
 
   // Who currently has (or has been invited to have) agent-portal access
@@ -265,20 +290,53 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     }
   };
 
+  const handleAttachFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !transaction) return;
+    try {
+      setIsAttachingFile(true);
+      setAttachError('');
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('transactionId', transaction.id);
+      formData.append('category', DEFAULT_CATEGORY_KEY);
+      formData.append('documentType', DEFAULT_DOCUMENT_TYPE);
+      formData.append('requiresSignature', 'false');
+      const res = await authFetch('/api/documents', { method: 'POST', body: formData });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to attach file');
+      setPendingAttachment({ id: result.id, fileName: result.file_name });
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setAttachError(error instanceof Error ? error.message : 'Failed to attach file');
+    } finally {
+      setIsAttachingFile(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     const text = messageDraft.trim();
-    if (!text || !transaction) return;
+    if ((!text && !pendingAttachment) || !transaction) return;
     try {
       setSendingMessage(true);
       const res = await authFetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactionId: transaction.id, body: text }),
+        body: JSON.stringify({
+          transactionId: transaction.id,
+          body: text,
+          ...(pendingAttachment ? { attachmentDocumentId: pendingAttachment.id } : {}),
+        }),
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Failed to send message');
       setMessages((prev) => [...prev, result]);
       setMessageDraft('');
+      setPendingAttachment(null);
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
@@ -1619,11 +1677,26 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
 
+        {/* Checklist + Documents, side by side on desktop: documents are
+            the primary view (wide, left), the checklist is compact
+            (narrow, right) so both are usable without scrolling past one
+            to reach the other. Both stack full-width on mobile, in source
+            order (checklist first, documents below). */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 mt-8">
+
+        {/* Tasks Section + Contacts, stacked together in the
+            narrow right column on desktop (this wrapper carries the
+            order/self-start that used to live on the Checklist div
+            directly, since it's now the thing actually placed in the
+            grid). Both still stack full-width on mobile in source order. */}
+        <div className="lg:order-2 lg:self-start flex flex-col gap-8">
         {/* Messages: the in-app thread with whoever has agent-portal
             access to this deal (see the Agent Portal Access section
             above) -- the alternative to texting/emailing back and forth,
-            so the history lives on the deal itself. */}
-        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 mt-8">
+            so the history lives on the deal itself. Sized and styled to
+            match the Checklist/Contacts cards it sits above in this same
+            narrow column, not a full-width section of its own. */}
+        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6 flex flex-col h-[28rem]">
           <h2 className="text-lg font-bold text-slate-100 mb-4">Messages</h2>
           {acceptedAgentUsers.length === 0 ? (
             <p className="text-slate-500 text-sm">
@@ -1632,7 +1705,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </p>
           ) : (
             <>
-              <div className="max-h-96 overflow-y-auto space-y-3 mb-4 pr-1">
+              <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
                 {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet.</p>}
                 {messages.map((m) => (
                   <div key={m.id} className={`flex ${m.sender_role === 'tc' ? 'justify-end' : 'justify-start'}`}>
@@ -1641,12 +1714,53 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                         m.sender_role === 'tc' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
                       }`}
                     >
-                      {m.body}
+                      {m.body && <p>{m.body}</p>}
+                      {m.attachment && (
+                        <a
+                          href={m.attachment.url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`flex items-center gap-1.5 text-xs underline underline-offset-2 ${
+                            m.sender_role === 'tc' ? 'text-blue-100' : 'text-blue-300'
+                          } ${m.body ? 'mt-1.5' : ''}`}
+                        >
+                          📎 {m.attachment.fileName}
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
+              <input
+                ref={messageFileInputRef}
+                type="file"
+                accept="application/pdf,image/*,.doc,.docx"
+                className="hidden"
+                onChange={handleAttachFileSelected}
+              />
+              {attachError && <p className="text-xs text-red-400 mb-2">{attachError}</p>}
+              {pendingAttachment && (
+                <div className="flex items-center gap-2 mb-2 text-xs text-slate-300 bg-slate-700/50 border border-slate-600 rounded-lg px-2.5 py-1.5">
+                  <span className="truncate flex-1">📎 {pendingAttachment.fileName}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPendingAttachment(null)}
+                    className="text-slate-500 hover:text-red-400 transition flex-shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
               <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => messageFileInputRef.current?.click()}
+                  disabled={isAttachingFile}
+                  title="Attach a file"
+                  className="px-3 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-200 rounded-lg transition disabled:opacity-50 flex-shrink-0"
+                >
+                  {isAttachingFile ? '…' : '📎'}
+                </button>
                 <input
                   type="text"
                   value={messageDraft}
@@ -1662,7 +1776,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 />
                 <button
                   onClick={handleSendMessage}
-                  disabled={sendingMessage || !messageDraft.trim()}
+                  disabled={sendingMessage || (!messageDraft.trim() && !pendingAttachment)}
                   className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
                 >
                   Send
@@ -1671,20 +1785,6 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </>
           )}
         </div>
-
-        {/* Checklist + Documents, side by side on desktop: documents are
-            the primary view (wide, left), the checklist is compact
-            (narrow, right) so both are usable without scrolling past one
-            to reach the other. Both stack full-width on mobile, in source
-            order (checklist first, documents below). */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 mt-8">
-
-        {/* Tasks Section + Contacts, stacked together in the
-            narrow right column on desktop (this wrapper carries the
-            order/self-start that used to live on the Checklist div
-            directly, since it's now the thing actually placed in the
-            grid). Both still stack full-width on mobile in source order. */}
-        <div className="lg:order-2 lg:self-start flex flex-col gap-8">
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
           <div className="mb-5">
             <div className="flex items-start justify-between gap-3">

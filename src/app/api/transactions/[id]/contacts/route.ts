@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getVisibleTcUserIds } from '@/lib/team';
+import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
 
 // The "Deal Contacts" list shown right under the Checklist card on the
 // transaction detail page -- buyer, seller, lender, title/escrow, etc.
@@ -42,7 +43,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id: transactionId } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
 
-    if (!(await assertCanAccessTransaction(transactionId, user.id, isAdmin))) {
+    // An invited agent reads the same contact list the TC sees (view-only
+    // -- see /agent/transactions/[id]), scoped via transaction_agents
+    // rather than the TC-ownership check below.
+    if (isAgentUser(user)) {
+      await assertAgentOnTransaction(transactionId, user.id);
+    } else if (!(await assertCanAccessTransaction(transactionId, user.id, isAdmin))) {
       return NextResponse.json({ error: 'You do not have permission to view this transaction' }, { status: 403 });
     }
 

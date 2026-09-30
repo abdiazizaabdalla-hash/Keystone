@@ -36,6 +36,9 @@ async function assertCanMessage(transactionId: string, userId: string, isAdmin: 
   }
 }
 
+const ATTACHMENT_BUCKET = 'transaction-documents';
+const ATTACHMENT_URL_TTL_SECONDS = 60 * 60; // 1 hour, same as /api/documents
+
 export async function GET(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
@@ -49,12 +52,47 @@ export async function GET(request: NextRequest) {
 
     const { data: messages, error } = await supabaseServer
       .from('messages')
-      .select('id, sender_id, sender_role, body, created_at')
+      .select('id, sender_id, sender_role, body, created_at, attachment_document_id')
       .eq('transaction_id', transactionId)
       .order('created_at', { ascending: true });
     if (error) throw error;
 
-    return NextResponse.json(messages || []);
+    // Attach a short-lived signed URL for any message that carries a
+    // file, same as /api/documents does for the Documents tab -- keeps
+    // the private storage bucket usable straight from a chat bubble
+    // without a second round-trip per message.
+    const attachmentIds = [...new Set((messages || []).map((m) => m.attachment_document_id).filter(Boolean))];
+    const attachmentsById = new Map<
+      string,
+      { id: string; fileName: string; url: string | null; contentType: string | null; fileSize: number | null }
+    >();
+    if (attachmentIds.length > 0) {
+      const { data: docs } = await supabaseServer
+        .from('documents')
+        .select('id, file_name, storage_path, content_type, file_size')
+        .in('id', attachmentIds as string[]);
+      await Promise.all(
+        (docs || []).map(async (doc) => {
+          const { data: signed } = await supabaseServer.storage
+            .from(ATTACHMENT_BUCKET)
+            .createSignedUrl(doc.storage_path, ATTACHMENT_URL_TTL_SECONDS);
+          attachmentsById.set(doc.id, {
+            id: doc.id,
+            fileName: doc.file_name,
+            url: signed?.signedUrl || null,
+            contentType: doc.content_type,
+            fileSize: doc.file_size,
+          });
+        })
+      );
+    }
+
+    const withAttachments = (messages || []).map((m) => ({
+      ...m,
+      attachment: m.attachment_document_id ? attachmentsById.get(m.attachment_document_id) || null : null,
+    }));
+
+    return NextResponse.json(withAttachments);
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -70,11 +108,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const transactionId = typeof body.transactionId === 'string' ? body.transactionId : '';
     const text = typeof body.body === 'string' ? body.body.trim() : '';
+    const attachmentDocumentId =
+      typeof body.attachmentDocumentId === 'string' && body.attachmentDocumentId ? body.attachmentDocumentId : null;
 
     if (!transactionId) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
     }
-    if (!text) {
+    // A message needs text, an attachment, or both -- not neither.
+    if (!text && !attachmentDocumentId) {
       return NextResponse.json({ error: 'Message body is required' }, { status: 400 });
     }
     if (text.length > 4000) {
@@ -84,6 +125,24 @@ export async function POST(request: NextRequest) {
     const callerIsAgent = isAgentUser(user);
     await assertCanMessage(transactionId, user.id, isAdmin, callerIsAgent);
 
+    // Confirm the attached document is actually already on this same
+    // transaction -- it was uploaded through POST /api/documents first
+    // (see the composer), so this just guards against someone pointing a
+    // message at a document from a transaction they have no business
+    // referencing.
+    if (attachmentDocumentId) {
+      const { data: doc, error: docError } = await supabaseServer
+        .from('documents')
+        .select('id')
+        .eq('id', attachmentDocumentId)
+        .eq('transaction_id', transactionId)
+        .maybeSingle();
+      if (docError) throw docError;
+      if (!doc) {
+        return NextResponse.json({ error: 'Attachment not found on this transaction' }, { status: 400 });
+      }
+    }
+
     const { data: message, error } = await supabaseServer
       .from('messages')
       .insert({
@@ -91,6 +150,7 @@ export async function POST(request: NextRequest) {
         sender_id: user.id,
         sender_role: callerIsAgent ? 'agent' : 'tc',
         body: text,
+        attachment_document_id: attachmentDocumentId,
       })
       .select()
       .single();
@@ -98,11 +158,37 @@ export async function POST(request: NextRequest) {
 
     // Notify whichever side didn't send this -- non-fatal, same as every
     // other notification email in this codebase.
-    notifyOtherParty(transactionId, user, callerIsAgent, text, request.nextUrl.origin).catch((emailError) => {
-      console.error('Error sending new-message email:', emailError);
-    });
+    notifyOtherParty(transactionId, user, callerIsAgent, text || 'Sent a file', request.nextUrl.origin).catch(
+      (emailError) => {
+        console.error('Error sending new-message email:', emailError);
+      }
+    );
 
-    return NextResponse.json(message, { status: 201 });
+    // Enrich with the same signed-URL attachment shape GET returns, so
+    // the sender's own optimistic UI update has a working link
+    // immediately instead of waiting on the next poll.
+    let attachment = null;
+    if (attachmentDocumentId) {
+      const { data: doc } = await supabaseServer
+        .from('documents')
+        .select('id, file_name, storage_path, content_type, file_size')
+        .eq('id', attachmentDocumentId)
+        .maybeSingle();
+      if (doc) {
+        const { data: signed } = await supabaseServer.storage
+          .from(ATTACHMENT_BUCKET)
+          .createSignedUrl(doc.storage_path, ATTACHMENT_URL_TTL_SECONDS);
+        attachment = {
+          id: doc.id,
+          fileName: doc.file_name,
+          url: signed?.signedUrl || null,
+          contentType: doc.content_type,
+          fileSize: doc.file_size,
+        };
+      }
+    }
+
+    return NextResponse.json({ ...message, attachment }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
