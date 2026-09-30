@@ -235,6 +235,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
+    await assertTrialActive(user);
     const body = await request.json();
     const { id, isSigned, requiresSignature } = body;
 
@@ -280,6 +281,12 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof TrialExpiredError) {
+      return NextResponse.json(
+        { error: error.message, code: 'trial_expired', trialEndsAt: error.trialEndsAt },
+        { status: error.status }
+      );
     }
     console.error('Error updating document:', error);
     return NextResponse.json({ error: 'Failed to update document' }, { status: 500 });

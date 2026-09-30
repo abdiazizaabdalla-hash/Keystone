@@ -1,4 +1,5 @@
 import { supabaseServer } from './supabase';
+import { mergeUserMetadata } from './userMetadata';
 import type { PlanId } from './plans';
 import { DEFAULT_PLAN } from './plans';
 
@@ -39,19 +40,16 @@ export async function upsertStripeCustomer(row: Partial<StripeCustomerRow> & { u
 }
 
 /**
- * Merge-updates a Supabase Auth user's metadata `plan` field. Always reads
- * the user first and spreads their existing metadata before writing, the
- * same pattern /api/auth/me PATCH uses — Supabase's updateUserById replaces
- * user_metadata wholesale, so a naive `{ user_metadata: { plan } }` call
- * would silently wipe out default_flat_fee/default_percent_fee/is_admin.
+ * Sets a Supabase Auth user's metadata `plan` field. Goes through
+ * mergeUserMetadata (see lib/userMetadata.ts) rather than spreading a
+ * metadata object this function already has in hand, since this is the
+ * plan grant the Stripe webhook calls immediately on
+ * checkout.session.completed -- exactly the kind of write that's most
+ * likely to race against something else touching user_metadata at the
+ * same moment (e.g. the onboarding wizard's own PATCH /api/auth/me
+ * calls), and the one where losing the race is most costly (a customer
+ * who just paid silently not getting what they paid for).
  */
 export async function setUserPlan(userId: string, plan: PlanId | typeof DEFAULT_PLAN) {
-  const { data: existing, error: getError } = await supabaseServer.auth.admin.getUserById(userId);
-  if (getError) throw getError;
-  if (!existing.user) throw new Error(`No auth user found for id ${userId}`);
-
-  const { error: updateError } = await supabaseServer.auth.admin.updateUserById(userId, {
-    user_metadata: { ...existing.user.user_metadata, plan },
-  });
-  if (updateError) throw updateError;
+  await mergeUserMetadata(userId, { plan });
 }

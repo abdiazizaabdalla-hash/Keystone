@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { mergeUserMetadata } from '@/lib/userMetadata';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
@@ -110,6 +110,19 @@ export async function GET(request: NextRequest) {
 // paid plan for free by calling the API directly. Downgrading happens by
 // cancelling in the Stripe billing portal (/api/stripe/portal), which
 // drops them back to Starter via the same webhook.
+//
+// Just as important: this route only ever builds the *changes* the caller
+// actually asked for, never a full metadata object built by spreading
+// `user.user_metadata` from earlier in the request. That snapshot can
+// already be stale by the time this handler runs -- most notably right
+// after a Stripe Checkout, when the webhook is racing to write
+// `plan: 'pro'` at the same moment the onboarding wizard is calling this
+// route repeatedly for unrelated fields (full name, fee defaults, etc.).
+// Building only the changed fields and merging them via
+// mergeUserMetadata's fresh, right-before-the-write read (see
+// lib/userMetadata.ts) is what stops one of those onboarding PATCHes from
+// silently reverting a plan the customer just paid for. See that file for
+// the full story -- this is the bug that caused exactly that.
 export async function PATCH(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
@@ -126,14 +139,14 @@ export async function PATCH(request: NextRequest) {
       onboardingCompleted,
     } = body;
 
-    const metadataUpdate: Record<string, unknown> = { ...user.user_metadata };
+    const changes: Record<string, unknown> = {};
 
     if (defaultFlatFee !== undefined) {
       const n = Number(defaultFlatFee);
       if (Number.isNaN(n) || n < 0) {
         return NextResponse.json({ error: 'defaultFlatFee must be a non-negative number' }, { status: 400 });
       }
-      metadataUpdate.default_flat_fee = n;
+      changes.default_flat_fee = n;
     }
 
     if (defaultPercentFee !== undefined) {
@@ -141,7 +154,7 @@ export async function PATCH(request: NextRequest) {
       if (Number.isNaN(n) || n < 0 || n > 100) {
         return NextResponse.json({ error: 'defaultPercentFee must be a number between 0 and 100' }, { status: 400 });
       }
-      metadataUpdate.default_percent_fee = n;
+      changes.default_percent_fee = n;
     }
 
     if (invoiceDueDays !== undefined) {
@@ -149,25 +162,25 @@ export async function PATCH(request: NextRequest) {
       if (!Number.isInteger(n) || n < 1 || n > 365) {
         return NextResponse.json({ error: 'invoiceDueDays must be a whole number of days between 1 and 365' }, { status: 400 });
       }
-      metadataUpdate.invoice_due_days = n;
+      changes.invoice_due_days = n;
     }
 
     if (fullName !== undefined) {
       if (typeof fullName !== 'string') {
         return NextResponse.json({ error: 'fullName must be a string' }, { status: 400 });
       }
-      metadataUpdate.full_name = fullName.trim();
+      changes.full_name = fullName.trim();
     }
 
     if (paymentPreference !== undefined) {
       if (paymentPreference !== 'stripe' && paymentPreference !== 'manual') {
         return NextResponse.json({ error: "paymentPreference must be 'stripe' or 'manual'" }, { status: 400 });
       }
-      metadataUpdate.payment_preference = paymentPreference;
+      changes.payment_preference = paymentPreference;
     }
 
     if (dueDateWorkflowEnabled !== undefined) {
-      metadataUpdate.due_date_workflow_enabled = Boolean(dueDateWorkflowEnabled);
+      changes.due_date_workflow_enabled = Boolean(dueDateWorkflowEnabled);
     }
 
     if (dueDateWorkflowSteps !== undefined) {
@@ -182,7 +195,7 @@ export async function PATCH(request: NextRequest) {
           .filter((s): s is { name?: unknown; dueDate?: unknown } => !!s && typeof s === 'object')
           .map((s) => [String((s as { name?: unknown }).name), (s as { dueDate?: unknown }).dueDate])
       );
-      metadataUpdate.due_date_workflow_steps = TASK_TEMPLATE.map((name) => ({
+      changes.due_date_workflow_steps = TASK_TEMPLATE.map((name) => ({
         name,
         dueDate: normalizeDueDateSpec(byName.get(name)),
       }));
@@ -192,16 +205,12 @@ export async function PATCH(request: NextRequest) {
     // never sends this account through the wizard again regardless of how
     // many agents it happens to have. See lib/onboarding.ts.
     if (onboardingCompleted !== undefined) {
-      metadataUpdate.onboarding_completed = Boolean(onboardingCompleted);
+      changes.onboarding_completed = Boolean(onboardingCompleted);
     }
 
-    const { data: updated, error: updateError } = await supabaseServer.auth.admin.updateUserById(user.id, {
-      user_metadata: metadataUpdate,
-    });
+    const updatedMetadata = await mergeUserMetadata(user.id, changes);
 
-    if (updateError) throw updateError;
-
-    return NextResponse.json(shapeUser(updated.user));
+    return NextResponse.json(shapeUser({ id: user.id, email: user.email, user_metadata: updatedMetadata }));
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

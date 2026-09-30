@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { mergeUserMetadata } from '@/lib/userMetadata';
 import { createStandardConnectedAccount, createOnboardingLink } from '@/lib/stripeConnect';
 
 // Starts (or resumes) Stripe Connect onboarding for the signed-in TC.
@@ -44,10 +45,11 @@ export async function POST(request: NextRequest) {
 
     // Recording the TC's choice as soon as they start connecting, not only
     // once it's fully approved -- Settings/onboarding show a "pending"
-    // state in between rather than looking like nothing happened.
-    await supabaseServer.auth.admin.updateUserById(user.id, {
-      user_metadata: { ...user.user_metadata, payment_preference: 'stripe' },
-    });
+    // state in between rather than looking like nothing happened. Goes
+    // through mergeUserMetadata (a fresh read right before the write)
+    // rather than spreading `user.user_metadata` from earlier in this
+    // request -- see lib/userMetadata.ts for why that distinction matters.
+    await mergeUserMetadata(user.id, { payment_preference: 'stripe' });
 
     const origin = new URL(request.url).origin;
     const finalPage = from === 'onboarding' ? `${origin}/onboarding` : `${origin}/dashboard/settings`;
