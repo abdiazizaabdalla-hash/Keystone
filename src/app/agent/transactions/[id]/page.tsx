@@ -794,7 +794,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                                     onChange={(e) => handleToggleSigned(doc.id, e.target.checked)}
                                     className="w-3.5 h-3.5 rounded border-slate-500 bg-slate-700 text-green-500 focus:ring-0 focus:ring-offset-0 cursor-pointer disabled:cursor-not-allowed"
                                   />
-                                  {doc.is_signed ? '✓ Signed' : 'Unsigned'}
+                                  Signed
                                 </label>
                               )}
                               <button
