@@ -102,6 +102,26 @@ interface SigningRequestItem {
   created_at: string;
 }
 
+// Live-formats a Contacts phone field into "(555) 123-4567" as the user
+// types, regardless of how they type it (with dashes, spaces, pasted in
+// all at once, etc.) -- keeps only digits, then re-inserts the
+// punctuation. Caps at 10 digits (US/Canada numbers); anything typed
+// past that is simply ignored rather than overflowing the format.
+function formatPhoneInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 10);
+  if (digits.length === 0) return '';
+  if (digits.length < 4) return `(${digits}`;
+  if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+// Same idea for the email field -- email addresses never contain
+// whitespace, so strip it live instead of waiting until blur to catch a
+// stray space from typing or a pasted value.
+function formatEmailInput(value: string): string {
+  return value.replace(/\s+/g, '');
+}
+
 export default function TransactionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const resolvedParams = use(params);
@@ -1602,15 +1622,16 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   <input
                     type="email"
                     value={contact.email || ''}
-                    onChange={(e) => handleContactChange(contact.id, 'email', e.target.value)}
+                    onChange={(e) => handleContactChange(contact.id, 'email', formatEmailInput(e.target.value))}
                     onBlur={(e) => handleContactBlur(contact.id, 'email', e.target.value)}
                     placeholder="Email"
                     className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                   />
                   <input
-                    type="text"
+                    type="tel"
+                    inputMode="tel"
                     value={contact.phone || ''}
-                    onChange={(e) => handleContactChange(contact.id, 'phone', e.target.value)}
+                    onChange={(e) => handleContactChange(contact.id, 'phone', formatPhoneInput(e.target.value))}
                     onBlur={(e) => handleContactBlur(contact.id, 'phone', e.target.value)}
                     placeholder="Phone"
                     className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
@@ -1695,15 +1716,16 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 <input
                   type="email"
                   value={draft.email}
-                  onChange={(e) => handleDraftContactChange(draft.draftId, 'email', e.target.value)}
+                  onChange={(e) => handleDraftContactChange(draft.draftId, 'email', formatEmailInput(e.target.value))}
                   onBlur={() => handleDraftContactBlur(draft.draftId)}
                   placeholder="Email"
                   className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="tel"
                   value={draft.phone}
-                  onChange={(e) => handleDraftContactChange(draft.draftId, 'phone', e.target.value)}
+                  onChange={(e) => handleDraftContactChange(draft.draftId, 'phone', formatPhoneInput(e.target.value))}
                   onBlur={() => handleDraftContactBlur(draft.draftId)}
                   placeholder="Phone"
                   className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
