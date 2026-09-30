@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { DueDateSpec, normalizeDueDateSpec } from '@/lib/dueDates';
+import { TASK_TEMPLATE } from '@/lib/transactionStages';
 import DueDateControl from '@/components/DueDateControl';
 
 function SettingsContent() {
@@ -707,6 +708,19 @@ function SettingsContent() {
                   className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
               </div>
+
+              {editingTemplateId === 'new' && (
+                <div className="mb-4 bg-slate-900/40 border border-slate-700 rounded-lg p-4">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                    Baseline steps, for reference
+                  </p>
+                  <ol className="text-sm text-slate-300 space-y-1 list-decimal list-inside">
+                    {TASK_TEMPLATE.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
 
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm text-slate-400">Steps</label>
