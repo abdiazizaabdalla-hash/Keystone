@@ -42,7 +42,7 @@ interface Agent {
 
 // A person or company involved in this specific deal besides the agent
 // (buyer, seller, lender, title/escrow, etc.) -- the agent's own contact
-// info comes from the Agent record above instead, see the Deal Contacts
+// info comes from the Agent record above instead, see the Contacts
 // section below.
 interface Contact {
   id: string;
@@ -117,15 +117,19 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [agentName, setAgentName] = useState('');
   const [agent, setAgent] = useState<Agent | null>(null);
 
-  // "Deal Contacts" section, directly under the Checklist card: the
-  // agent (read-only here, sourced from `agent` above) plus any other
-  // parties the TC types in by hand. `contacts` are rows already saved to
-  // the database; `draftContacts` are blank/in-progress boxes that only
-  // get POSTed once the user actually puts something in them (see
-  // handleDraftContactBlur below).
+  // "Contacts" section, directly under the Checklist card: the agent
+  // (read-only here, sourced from `agent` above) plus any other parties
+  // the TC types in by hand. `contacts` are rows already saved to the
+  // database; `draftContacts` are blank/in-progress boxes that only get
+  // POSTed once the user actually puts something in them (see
+  // handleDraftContactBlur below). A saved contact displays as a compact
+  // read-only card (matching the Agent row above) until its `id` is in
+  // `editingContactId`, so the section stays readable once it's filled in
+  // instead of showing a wall of input boxes.
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [draftContacts, setDraftContacts] = useState<DraftContact[]>([]);
   const [savingContactId, setSavingContactId] = useState<string | null>(null);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const draftIdCounterRef = useRef(0);
 
   const makeDraftContact = (): DraftContact => {
@@ -314,7 +318,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     }
   };
 
-  // --- Deal Contacts: draft (unsaved) boxes ---
+  // --- Contacts: draft (unsaved) boxes ---
 
   const handleDraftContactChange = (draftId: string, field: 'role' | 'name' | 'email' | 'phone', value: string) => {
     setDraftContacts((prev) => prev.map((d) => (d.draftId === draftId ? { ...d, [field]: value } : d)));
@@ -363,7 +367,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     }
   };
 
-  // --- Deal Contacts: saved (persisted) rows ---
+  // --- Contacts: saved (persisted) rows ---
 
   const handleContactChange = (contactId: string, field: 'role' | 'name' | 'email' | 'phone', value: string) => {
     setContacts((prev) => prev.map((c) => (c.id === contactId ? { ...c, [field]: value } : c)));
@@ -1366,7 +1370,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             order (checklist first, documents below). */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 mt-8">
 
-        {/* Tasks Section + Deal Contacts, stacked together in the
+        {/* Tasks Section + Contacts, stacked together in the
             narrow right column on desktop (this wrapper carries the
             order/self-start that used to live on the Checklist div
             directly, since it's now the thing actually placed in the
@@ -1539,13 +1543,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
 
-        {/* Deal Contacts: the agent (read-only, from the agents record)
+        {/* Contacts: the agent (read-only, from the agents record)
             plus any other parties for this deal, typed in by hand. Sits
             directly under the Checklist card via the shared wrapper above. */}
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
-          <h2 className="text-lg font-bold text-slate-100 mb-4">Deal Contacts</h2>
+          <h2 className="text-lg font-bold text-slate-100 mb-4">Contacts</h2>
 
-          <div className="space-y-2">
+          <div className="space-y-4">
             {/* Agent row -- read-only here; edit via the Agents page. */}
             <div className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
               <div className="flex items-center justify-between gap-2">
@@ -1562,58 +1566,100 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               <p className="text-xs text-slate-400">{agent?.phone || 'No phone on file'}</p>
             </div>
 
-            {/* Saved parties */}
-            {contacts.map((contact) => (
-              <div
-                key={contact.id}
-                className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg space-y-1.5"
-              >
-                <div className="flex items-center gap-2">
+            {/* Saved parties -- a compact read-only card (matching the
+                Agent row above) until "Edit" is clicked. */}
+            {contacts.map((contact) =>
+              editingContactId === contact.id ? (
+                <div
+                  key={contact.id}
+                  className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg space-y-1.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={contact.role || ''}
+                      onChange={(e) => handleContactChange(contact.id, 'role', e.target.value)}
+                      onBlur={(e) => handleContactBlur(contact.id, 'role', e.target.value)}
+                      placeholder="Role (e.g. Buyer)"
+                      className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditingContactId(null)}
+                      className="text-xs text-blue-400 hover:text-blue-300 font-medium flex-shrink-0"
+                    >
+                      Done
+                    </button>
+                  </div>
                   <input
                     type="text"
-                    value={contact.role || ''}
-                    onChange={(e) => handleContactChange(contact.id, 'role', e.target.value)}
-                    onBlur={(e) => handleContactBlur(contact.id, 'role', e.target.value)}
-                    placeholder="Role (e.g. Buyer)"
-                    className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
+                    value={contact.name || ''}
+                    onChange={(e) => handleContactChange(contact.id, 'name', e.target.value)}
+                    onBlur={(e) => handleContactBlur(contact.id, 'name', e.target.value)}
+                    placeholder="Name or company"
+                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                   />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveContact(contact.id)}
-                    className="text-xs text-slate-500 hover:text-red-400 transition flex-shrink-0"
-                  >
-                    Remove
-                  </button>
+                  <input
+                    type="email"
+                    value={contact.email || ''}
+                    onChange={(e) => handleContactChange(contact.id, 'email', e.target.value)}
+                    onBlur={(e) => handleContactBlur(contact.id, 'email', e.target.value)}
+                    placeholder="Email"
+                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={contact.phone || ''}
+                    onChange={(e) => handleContactChange(contact.id, 'phone', e.target.value)}
+                    onBlur={(e) => handleContactBlur(contact.id, 'phone', e.target.value)}
+                    placeholder="Phone"
+                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                  />
+                  <div className="flex items-center justify-between">
+                    {savingContactId === contact.id ? (
+                      <p className="text-[11px] text-slate-500">Saving...</p>
+                    ) : (
+                      <span />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveContact(contact.id)}
+                      className="text-xs text-slate-500 hover:text-red-400 transition flex-shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  value={contact.name || ''}
-                  onChange={(e) => handleContactChange(contact.id, 'name', e.target.value)}
-                  onBlur={(e) => handleContactBlur(contact.id, 'name', e.target.value)}
-                  placeholder="Name or company"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-                />
-                <input
-                  type="email"
-                  value={contact.email || ''}
-                  onChange={(e) => handleContactChange(contact.id, 'email', e.target.value)}
-                  onBlur={(e) => handleContactBlur(contact.id, 'email', e.target.value)}
-                  placeholder="Email"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-                />
-                <input
-                  type="text"
-                  value={contact.phone || ''}
-                  onChange={(e) => handleContactChange(contact.id, 'phone', e.target.value)}
-                  onBlur={(e) => handleContactBlur(contact.id, 'phone', e.target.value)}
-                  placeholder="Phone"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-                />
-                {savingContactId === contact.id && (
-                  <p className="text-[11px] text-slate-500">Saving...</p>
-                )}
-              </div>
-            ))}
+              ) : (
+                <div
+                  key={contact.id}
+                  className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-blue-400">{contact.role || 'Contact'}</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setEditingContactId(contact.id)}
+                        className="text-xs text-slate-500 hover:text-slate-300 transition"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveContact(contact.id)}
+                        className="text-xs text-slate-500 hover:text-red-400 transition"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-slate-200 mt-1">{contact.name || 'Unnamed'}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{contact.email || 'No email on file'}</p>
+                  <p className="text-xs text-slate-400">{contact.phone || 'No phone on file'}</p>
+                </div>
+              )
+            )}
 
             {/* Blank boxes -- become real rows once something's typed in. */}
             {draftContacts.map((draft) => (
