@@ -90,6 +90,7 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
   // an effect, so there's no extra render pass just to populate this.
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => loadHiddenIds(id));
   const [showHidden, setShowHidden] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
 
   const hideMessage = (messageId: string) => {
     setHiddenIds((prev) => {
@@ -310,7 +311,7 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
             return (
               <div
                 key={m.id}
-                className={`group flex items-end gap-3 ${spacingClass} ${isSelf ? 'justify-end' : 'justify-start'}`}
+                className={`flex items-end gap-3 ${spacingClass} ${isSelf ? 'justify-end' : 'justify-start'}`}
               >
                 {!isSelf && (
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
@@ -328,7 +329,11 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
                     </div>
                   )}
                   <div
-                    className={`relative rounded-2xl px-4 py-3 text-base whitespace-pre-wrap ${
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenu({ id: m.id, x: e.clientX, y: e.clientY });
+                    }}
+                    className={`relative rounded-2xl px-4 py-3 text-base whitespace-pre-wrap cursor-context-menu ${
                       isHidden ? 'opacity-40' : ''
                     } ${isSelf ? 'bg-emerald-600 text-white' : 'bg-slate-700/80 text-slate-100'}`}
                   >
@@ -344,26 +349,6 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
                       >
                         📎 {m.attachment.fileName}
                       </a>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 px-1">
-                    {isHidden ? (
-                      <button
-                        type="button"
-                        onClick={() => unhideMessage(m.id)}
-                        className="text-[11px] text-blue-400 hover:text-blue-300 font-medium"
-                      >
-                        Unhide
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => hideMessage(m.id)}
-                        title="Hide from your view (does not unsend)"
-                        className="text-[11px] text-slate-600 hover:text-red-400 font-medium opacity-0 group-hover:opacity-100 transition"
-                      >
-                        Hide
-                      </button>
                     )}
                   </div>
                 </div>
@@ -434,6 +419,38 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
           </div>
         </div>
       </div>
+
+      {contextMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setContextMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setContextMenu(null);
+            }}
+          />
+          <div
+            className="fixed z-50 min-w-[160px] rounded-lg border border-slate-600 bg-slate-800 py-1 shadow-xl"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                if (hiddenIds.has(contextMenu.id)) {
+                  unhideMessage(contextMenu.id);
+                } else {
+                  hideMessage(contextMenu.id);
+                }
+                setContextMenu(null);
+              }}
+              className="block w-full whitespace-nowrap px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700"
+            >
+              {hiddenIds.has(contextMenu.id) ? 'Restore message' : 'Delete for me'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
