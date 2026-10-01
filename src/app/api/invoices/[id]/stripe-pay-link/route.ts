@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { loadInvoiceBundle } from '@/lib/invoiceData';
 import { createInvoiceCheckoutSession } from '@/lib/stripeConnect';
+import { isAgentUser } from '@/lib/agentPortal';
 
 // Creates a fresh Stripe Checkout payment link for an invoice. Unlike the
 // Helcim pay-link route, this does NOT persist the URL on the invoice --
@@ -11,12 +12,22 @@ import { createInvoiceCheckoutSession } from '@/lib/stripeConnect';
 // would go stale. The TC just generates a new one whenever they need to
 // send/re-send it; the invoice's own `paid` status (set by the Connect
 // webhook via metadata.relay_invoice_id) is what actually matters.
+//
+// Also reachable by the invited agent on this invoice's own transaction
+// (see loadInvoiceBundle's allowAgent option) -- lets them pay straight
+// from their own portal instead of only through a link the TC sends.
+// The webhook that marks the invoice paid is keyed off the Checkout
+// Session's metadata, not who generated the link, so this needs no
+// changes on that end.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
     const { id } = await params;
 
-    const { invoice, agent } = await loadInvoiceBundle(id, user.id, isAdmin);
+    const { invoice, agent } = await loadInvoiceBundle(id, user.id, isAdmin, {
+      allowAgent: true,
+      isAgent: isAgentUser(user),
+    });
     if (!agent) {
       return NextResponse.json({ error: 'Invoice is missing agent data' }, { status: 500 });
     }

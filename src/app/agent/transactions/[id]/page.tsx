@@ -59,6 +59,19 @@ interface MessageRow {
   attachment?: { id: string; fileName: string; url: string | null; contentType: string | null; fileSize: number | null } | null;
 }
 
+interface AgentInvoice {
+  id: string;
+  invoice_number: string;
+  amount_owed: number;
+  due_date: string;
+  invoice_date: string;
+  paid: boolean;
+  paid_at: string | null;
+  paid_amount: number | null;
+  refunded: boolean;
+  refunded_at: string | null;
+}
+
 // How often the message thread re-fetches while this page is open. This
 // codebase doesn't use Supabase Realtime anywhere, so a plain interval
 // (paused while the tab isn't visible) is the lowest-risk way to get a
@@ -69,10 +82,11 @@ const MESSAGE_POLL_MS = 5000;
 // A near-exact mirror of the TC's own transaction page (info card,
 // Messages + Checklist + Contacts in the narrow column, the same
 // categorized Documents browser in the wide column) -- just read-only
-// throughout, and with nothing about invoices or commission. See the
-// design notes in lib/agentPortal.ts for what an agent deliberately
-// can't see: other transactions, other agents, invoices/commission,
-// account/billing.
+// throughout, with one exception: the agent's own invoice (amount,
+// due date, paid/unpaid, and a Stripe pay link -- see the Invoice
+// section below) is visible and payable here, same as the TC's own
+// invoice page. Still nothing about commission math, other agents,
+// other transactions, or account/billing -- see lib/agentPortal.ts.
 export default function AgentTransactionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -89,8 +103,13 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [invoice, setInvoice] = useState<AgentInvoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const [isGeneratingPayLink, setIsGeneratingPayLink] = useState(false);
+  const [stripePayUrl, setStripePayUrl] = useState<string | null>(null);
+  const [payLinkError, setPayLinkError] = useState('');
 
   const [docSearch, setDocSearch] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
@@ -127,17 +146,22 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
 
   const loadAll = async () => {
     try {
-      const [txRes, contactsRes, docsRes, messagesRes] = await Promise.all([
+      const [txRes, contactsRes, docsRes, messagesRes, invoicesRes] = await Promise.all([
         authFetch(`/api/agent/transactions/${id}`),
         authFetch(`/api/transactions/${id}/contacts`),
         authFetch(`/api/documents?transactionId=${id}`),
         authFetch(`/api/messages?transactionId=${id}`),
+        authFetch(`/api/agent/invoices?transactionId=${id}`),
       ]);
       if (!txRes.ok) throw new Error('Failed to load this transaction');
       setTransaction(await txRes.json());
       setContacts(contactsRes.ok ? await contactsRes.json() : []);
       setDocuments(docsRes.ok ? await docsRes.json() : []);
       setMessages(messagesRes.ok ? await messagesRes.json() : []);
+      if (invoicesRes.ok) {
+        const invoicesData = await invoicesRes.json();
+        setInvoice(Array.isArray(invoicesData) && invoicesData.length > 0 ? invoicesData[0] : null);
+      }
     } catch (err) {
       if (err instanceof AuthRequiredError) {
         router.push('/agent/login');
@@ -313,6 +337,32 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
     }
   };
 
+  // Same two-step shape as the TC's own invoice page (handleGeneratePayLink
+  // there): a Checkout Session URL is only valid 24h, so it's kept in
+  // local state and regenerated on demand rather than persisted. Whoever
+  // completes the Checkout -- the webhook doesn't care that it was the
+  // agent this time -- is what flips invoice.paid, via
+  // POST /api/stripe/connect/webhook's metadata.relay_invoice_id lookup.
+  const handleGeneratePayLink = async () => {
+    if (!invoice) return;
+    try {
+      setIsGeneratingPayLink(true);
+      setPayLinkError('');
+      const res = await authFetch(`/api/invoices/${invoice.id}/stripe-pay-link`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create pay link');
+      setStripePayUrl(data.payUrl);
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/agent/login');
+        return;
+      }
+      setPayLinkError(err instanceof Error ? err.message : 'Error creating pay link');
+    } finally {
+      setIsGeneratingPayLink(false);
+    }
+  };
+
   // Agents can add a contact the TC hasn't entered yet (a lender, title
   // company, etc.) but can't edit or remove any contact -- that stays
   // TC-only, see POST /api/transactions/[id]/contacts.
@@ -413,8 +463,8 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
 
         {/* Same core deal info the TC's own page shows -- agent, price,
             status, dates -- just plain text instead of editable
-            dropdowns/inputs. Nothing about invoices or commission here,
-            that stays TC-only (see lib/agentPortal.ts). */}
+            dropdowns/inputs. The Invoice section below is the one part
+            of this card that isn't purely read-only. */}
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
           <div className="mb-4">
             <h1 className="text-xl font-display font-semibold text-slate-100">
@@ -456,6 +506,53 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               <p className="text-slate-100">{transaction.closingDate ? formatDisplayDate(transaction.closingDate) : '—'}</p>
             </div>
           </div>
+
+          {/* Invoice: only shows once the TC has actually generated one
+              (same "no invoice yet" silence as the TC's own page shows
+              before that point -- an agent never sees fee math, just the
+              finished invoice once it exists). Paid/unpaid as plain
+              colored text, no pill, matching the rest of this page. */}
+          {invoice && (
+            <div className="pt-6 mt-6 border-t border-slate-600">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Invoice</p>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-slate-100 font-semibold">
+                    {invoice.invoice_number} · ${invoice.amount_owed.toLocaleString()} ·{' '}
+                    <span className={invoice.paid ? 'text-green-400' : 'text-blue-400'}>
+                      {invoice.paid ? 'Paid' : 'Unpaid'}
+                    </span>
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {invoice.paid && invoice.paid_at
+                      ? `Paid on ${formatDisplayDate(invoice.paid_at)}`
+                      : `Due ${formatDisplayDate(invoice.due_date)}`}
+                  </p>
+                </div>
+                {!invoice.paid &&
+                  (stripePayUrl ? (
+                    <a
+                      href={stripePayUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 border border-blue-500/50 text-blue-300 hover:text-blue-200 hover:border-blue-400 rounded-lg transition font-medium text-sm shrink-0"
+                    >
+                      Open Pay Online Link ↗
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleGeneratePayLink}
+                      disabled={isGeneratingPayLink}
+                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 shrink-0"
+                    >
+                      {isGeneratingPayLink ? 'Creating link…' : 'Pay Now'}
+                    </button>
+                  ))}
+              </div>
+              {payLinkError && <p className="text-red-400 text-xs mt-2">{payLinkError}</p>}
+            </div>
+          )}
         </div>
 
         {/* Same grid the TC page uses: Documents wide on the left,

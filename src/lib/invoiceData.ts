@@ -1,8 +1,24 @@
 import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
+import { assertAgentOnTransaction } from '@/lib/agentPortal';
 import type { TcInfo } from '@/lib/invoicePdf';
 
-export async function loadInvoiceBundle(invoiceId: string, userId: string, isAdmin: boolean) {
+/**
+ * `opts.allowAgent` + `opts.isAgent` lets the invited agent on this
+ * invoice's own transaction through too -- gated via
+ * assertAgentOnTransaction (transaction_agents), completely separate
+ * from the `agent` row looked up below, which is the TC's own
+ * commission/contact record (see lib/agentPortal.ts) and has no
+ * relationship to the logged-in agent's auth.users id. Every existing
+ * caller omits `opts`, so the TC-owner-or-admin check below is
+ * unchanged for them.
+ */
+export async function loadInvoiceBundle(
+  invoiceId: string,
+  userId: string,
+  isAdmin: boolean,
+  opts: { allowAgent?: boolean; isAgent?: boolean } = {}
+) {
   const { data: invoice, error } = await supabaseServer
     .from('invoices')
     .select('*')
@@ -19,7 +35,9 @@ export async function loadInvoiceBundle(invoiceId: string, userId: string, isAdm
     .eq('id', invoice.agent_id)
     .single();
 
-  if (!isAdmin) {
+  if (opts.allowAgent && opts.isAgent) {
+    await assertAgentOnTransaction(invoice.transaction_id, userId);
+  } else if (!isAdmin) {
     if (!agent || agent.tc_user_id !== userId) {
       throw new AuthError('You do not have permission to access this invoice', 403);
     }
