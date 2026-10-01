@@ -113,6 +113,15 @@ export default function DashboardLayout({
         const res = await authFetch('/api/auth/me');
         if (res.ok) {
           const data = await res.json();
+          // An agent-portal session has no business in the TC dashboard at
+          // all -- send it to its own hub instead of falling through to
+          // the onboarding check below, which would always say "yes" for
+          // an account that will never have agents-table rows of its own.
+          // See /api/auth/me's isAgentUser branch for why this can happen.
+          if (data.isAgent) {
+            router.replace('/agent');
+            return;
+          }
           if (data.needsOnboarding) {
             router.replace('/onboarding');
             return;
@@ -188,7 +197,6 @@ export default function DashboardLayout({
             {!collapsed && (
               <div className="min-w-0">
                 <h1 className="text-white font-display font-semibold text-lg truncate">Relay TC</h1>
-                <p className="text-xs text-slate-400 truncate">Transaction Coordinator</p>
               </div>
             )}
           </Link>

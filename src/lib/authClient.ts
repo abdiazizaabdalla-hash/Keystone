@@ -23,6 +23,28 @@ function decodeExp(token: string): number | null {
   }
 }
 
+/**
+ * Reads `user_metadata.role` straight out of the currently-stored access
+ * token (if any), with no network round-trip -- used only for client-side
+ * routing decisions (e.g. "should a reload send this session to /agent or
+ * /dashboard?"). This is unverified, exactly like decodeExp above: it's
+ * purely a UX shortcut, never a security boundary -- every real API route
+ * independently re-validates the token and checks role server-side via
+ * isAgentUser(). Returns null if there's no token or it can't be decoded.
+ */
+export function decodeStoredRole(): string | null {
+  try {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (!token) return null;
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(base64));
+    const role = payload?.user_metadata?.role;
+    return typeof role === 'string' ? role : null;
+  } catch {
+    return null;
+  }
+}
+
 export function saveSession(accessToken: string, refreshToken: string, userId: string) {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);

@@ -92,10 +92,18 @@ function AuthContent() {
               <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
             </span>
           </Link>
-          <div className="flex items-center gap-6 text-sm text-slate-400">
+          <div className="flex items-center gap-3 sm:gap-6 text-sm text-slate-400">
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
-            <Link href="/agent/login" className="hover:text-slate-100 transition">Agent Login</Link>
+            <Link
+              href="/agent/login"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+              </svg>
+              Agent Login
+            </Link>
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { isAgentUser } from '@/lib/agentPortal';
 import { mergeUserMetadata } from '@/lib/userMetadata';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
@@ -55,6 +56,21 @@ function shapeUser(user: { id: string; email?: string; user_metadata?: Record<st
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+
+    // An agent-portal account is just a Supabase Auth user tagged
+    // role: 'agent' (see lib/agentPortal.ts) -- it has no agents-table
+    // rows, no plan, and should never be shaped as a TC or run through
+    // needsOnboarding below (which would always say "yes, onboard them"
+    // for an account that will never have agents of its own). This route
+    // is only ever called from the TC DashboardLayout, but an agent's
+    // session token can end up calling it anyway (e.g. a stale/Shared
+    // auth_token) -- returning this early and distinctly lets the caller
+    // redirect to /agent instead of silently routing them into the TC
+    // onboarding wizard.
+    if (isAgentUser(user)) {
+      return NextResponse.json({ isAgent: true, email: user.email });
+    }
+
     const shaped = shapeUser(user);
 
     // Lightweight trial info for the dashboard-wide banner (see

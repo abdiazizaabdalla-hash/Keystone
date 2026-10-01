@@ -177,7 +177,15 @@ export default function FAQPage() {
             <Link href="/faq" className="text-slate-100">FAQ</Link>
           </nav>
           <div className="flex items-center gap-4">
-            <Link href="/agent/login" className="hidden sm:inline text-sm text-slate-500 hover:text-slate-300 transition">Agent Login</Link>
+            <Link
+              href="/agent/login"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition"
+            >
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+              </svg>
+              Agent Login
+            </Link>
             <Link href="/auth" className="text-sm text-slate-300 hover:text-slate-100 transition">Sign In</Link>
             <Link
               href="/auth?mode=signup&plan=starter"
