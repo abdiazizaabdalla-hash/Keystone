@@ -47,7 +47,7 @@ export function generateInvoicePdf(
 
       const money = (n: number) =>
         `$${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      const dateStr = (d: string) => formatDisplayDate(d, { year: 'numeric', month: 'long', day: 'numeric' });
+      const dateStr = (d: string) => formatDisplayDate(d);
 
       // Header -- the TC themselves is the primary identity on their own
       // invoice (this used to be hardcoded to "Relay TC", the product's

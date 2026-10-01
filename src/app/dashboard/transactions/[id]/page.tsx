@@ -1898,7 +1898,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                           }`}
                         >
                           {task.due_date < todayIso ? 'Overdue ' : 'Due '}
-                          {formatDisplayDate(task.due_date, { month: 'short', day: 'numeric' })}
+                          {formatDisplayDate(task.due_date, { month: '2-digit', day: '2-digit' })}
                         </span>
                       ) : (
                         <span className="text-xs text-slate-600 flex-shrink-0">No due date</span>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { formatDisplayDate } from '@/lib/dueDates';
 
 interface Transaction {
   id: string;
@@ -108,7 +109,7 @@ export default function TransactionsPage() {
         </span>
       );
     }
-    return <span className="text-xs text-slate-500 whitespace-nowrap">Due {tx.next_due_date}</span>;
+    return <span className="text-xs text-slate-500 whitespace-nowrap">Due {formatDisplayDate(tx.next_due_date)}</span>;
   };
 
   const getStatusTextColor = (status: string) => {

@@ -170,7 +170,7 @@ export function computeDueDates(
 // 'Z' if nothing's already there), then format with timeZone: 'UTC'.
 export function formatDisplayDate(
   value: string,
-  options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' }
+  options: Intl.DateTimeFormatOptions = { month: '2-digit', day: '2-digit', year: 'numeric' }
 ): string {
   const hasOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(value);
   const date = new Date(hasOffset ? value : `${value}Z`);

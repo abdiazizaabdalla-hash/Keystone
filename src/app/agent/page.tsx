@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
+import { formatDisplayDate } from '@/lib/dueDates';
 
 interface AgentTransaction {
   id: string;
@@ -81,7 +82,7 @@ const getDueBadge = (tx: AgentTransaction) => {
       </span>
     );
   }
-  return <span className="text-xs text-slate-500 whitespace-nowrap">Due {tx.nextDueDate}</span>;
+  return <span className="text-xs text-slate-500 whitespace-nowrap">Due {formatDisplayDate(tx.nextDueDate)}</span>;
 };
 
 // The whole point of one login across every TC that's added this agent:
