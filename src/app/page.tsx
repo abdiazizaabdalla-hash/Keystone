@@ -239,20 +239,12 @@ export default function Home() {
           <div className="order-2 lg:order-1">
             <div className="rounded-xl border border-slate-700 overflow-hidden shadow-2xl bg-slate-800">
               <img
-                src="/screenshots/agent-full-viewport.jpg"
-                alt="An agent's full view of a transaction in Relay -- the deal header, agent, price and status, and a conversation with their TC about an inspection report and a requested repair credit"
+                src="/screenshots/agent-conversation.jpg"
+                alt="An agent's view of a transaction in Relay, mid-conversation with their TC about an inspection report and a requested repair credit"
                 className="w-full h-auto block"
               />
             </div>
             <p className="text-xs text-slate-500 mt-3 text-center lg:text-left">What the agent sees</p>
-            <div className="mt-6 rounded-xl border border-slate-700 overflow-hidden shadow-2xl bg-slate-800">
-              <img
-                src="/screenshots/agent-conversation.jpg"
-                alt="A close-up of the same conversation, zoomed in on the inspection report and the requested repair credit"
-                className="w-full h-auto block"
-              />
-            </div>
-            <p className="text-xs text-slate-500 mt-3 text-center lg:text-left">The conversation, up close</p>
           </div>
           <div className="order-1 lg:order-2">
             <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Agent Portal</p>
@@ -287,66 +279,28 @@ export default function Home() {
             </p>
           </div>
         </div>
-
-        <div className="mt-16 pt-16 border-t border-slate-800 grid lg:grid-cols-2 gap-12 items-center">
-          <div>
-            <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">TC POV</p>
-            <h3 className="font-display text-2xl font-semibold text-slate-100 mb-4">
-              You see the exact same thread — plus everything else on the deal
-            </h3>
-            <p className="text-slate-400 mb-4">
-              Every message an agent sends lands right on the transaction you&apos;re already
-              working in, next to the checklist and the documents — not in a separate inbox
-              you have to remember to check.
-            </p>
-            <p className="text-slate-400">
-              Reply with a file attached — an inspection report, an updated contract — and it&apos;s
-              saved to the deal&apos;s documents automatically, available to the agent the moment you send it.
-            </p>
-          </div>
-          <div>
-            <div className="rounded-xl border border-slate-700 overflow-hidden shadow-2xl bg-slate-800">
-              <img
-                src="/screenshots/tc-conversation.jpg"
-                alt="A TC's view of the same conversation, replying to the agent with an attached inspection report"
-                className="w-full h-auto block"
-              />
-            </div>
-            <p className="text-xs text-slate-500 mt-3 text-center">What the TC sees</p>
-          </div>
-        </div>
       </section>
 
-      {/* Full dashboard + transaction, for TCs */}
+      {/* Documents */}
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
-        <div className="max-w-2xl mb-12">
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">For TCs</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Your whole business, and every deal, in full</h2>
-          <p className="text-slate-400">
-            One dashboard for every active deal, and one page per transaction with the checklist,
-            documents, and messages all in the same place -- nothing split across tabs or tools.
-          </p>
-        </div>
-        <div className="grid lg:grid-cols-2 gap-8 items-start">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div>
-            <div className="rounded-xl border border-slate-700 overflow-hidden shadow-2xl bg-slate-800">
-              <img
-                src="/screenshots/dashboard-full.jpg"
-                alt="A TC's full dashboard in Relay, showing active deals, revenue, and a list of active transactions"
-                className="w-full h-auto block"
-              />
-            </div>
-            <p className="text-xs text-slate-500 mt-3 text-center">Your dashboard</p>
+            <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Documents</p>
+            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Every file, sorted into the right category automatically</h2>
+            <p className="text-slate-400">
+              Contracts, disclosures, inspection reports — upload into the category it belongs to,
+              and track whether it still needs a signature, right next to the checklist step it
+              supports.
+            </p>
           </div>
           <div>
             <div className="rounded-xl border border-slate-700 overflow-hidden shadow-2xl bg-slate-800">
               <img
-                src="/screenshots/transaction-full.jpg"
-                alt="A full transaction page in Relay, showing the deal header, agent portal access, documents by category, messages, checklist, and contacts"
+                src="/screenshots/document-setup.jpg"
+                alt="Documents organized by category on a transaction in Relay, including an uploaded inspection report with its signature status"
                 className="w-full h-auto block"
               />
             </div>
-            <p className="text-xs text-slate-500 mt-3 text-center">Inside a transaction</p>
           </div>
         </div>
       </section>
