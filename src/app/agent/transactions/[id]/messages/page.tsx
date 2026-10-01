@@ -310,12 +310,15 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
                   </div>
                 )}
                 <div className={`flex flex-col max-w-[75%] ${isSelf ? 'items-end' : 'items-start'}`}>
-                  <div className="flex items-center gap-2 mb-1 px-1">
-                    <p className="text-xs font-semibold text-slate-400">{label}</p>
-                    {isHidden ? (
-                      <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wide">Hidden</span>
-                    ) : null}
-                  </div>
+                  {showTimestamp && (
+                    <div className="flex items-center gap-2 mb-1 px-1">
+                      <p className="text-xs font-semibold text-slate-400">{label}</p>
+                      <p className="text-[11px] text-slate-600">{formatTime(m.created_at)}</p>
+                      {isHidden ? (
+                        <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wide">Hidden</span>
+                      ) : null}
+                    </div>
+                  )}
                   <div
                     className={`relative rounded-2xl px-4 py-3 text-base whitespace-pre-wrap ${
                       isHidden ? 'opacity-40' : ''
@@ -336,9 +339,6 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-1 px-1">
-                    {showTimestamp && (
-                      <p className="text-[11px] text-slate-600">{formatTime(m.created_at)}</p>
-                    )}
                     {isHidden ? (
                       <button
                         type="button"
