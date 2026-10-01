@@ -192,7 +192,7 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col">
+    <div className="h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="border-b border-slate-700 bg-slate-900/60 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center gap-4">
@@ -213,7 +213,7 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
       </div>
 
       {/* Thread */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
         <div className="max-w-3xl mx-auto space-y-5">
           {messages.length === 0 && (
             <p className="text-slate-500 text-sm text-center mt-10">No messages yet -- say hello.</p>
