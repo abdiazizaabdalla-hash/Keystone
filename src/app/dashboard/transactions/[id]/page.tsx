@@ -209,12 +209,6 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       attachment?: { id: string; fileName: string; url: string | null; contentType: string | null; fileSize: number | null } | null;
     }[]
   >([]);
-  const [messageDraft, setMessageDraft] = useState('');
-  const [sendingMessage, setSendingMessage] = useState(false);
-  const [pendingAttachment, setPendingAttachment] = useState<{ id: string; fileName: string } | null>(null);
-  const [isAttachingFile, setIsAttachingFile] = useState(false);
-  const [attachError, setAttachError] = useState('');
-  const messageFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -287,64 +281,6 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setInviteMessage(error instanceof Error ? error.message : 'Failed to send invite');
     } finally {
       setIsInvitingAgent(false);
-    }
-  };
-
-  const handleAttachFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !transaction) return;
-    try {
-      setIsAttachingFile(true);
-      setAttachError('');
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('transactionId', transaction.id);
-      formData.append('category', DEFAULT_CATEGORY_KEY);
-      formData.append('documentType', DEFAULT_DOCUMENT_TYPE);
-      formData.append('requiresSignature', 'false');
-      const res = await authFetch('/api/documents', { method: 'POST', body: formData });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Failed to attach file');
-      setPendingAttachment({ id: result.id, fileName: result.file_name });
-    } catch (error) {
-      if (error instanceof AuthRequiredError) {
-        router.push('/auth');
-        return;
-      }
-      setAttachError(error instanceof Error ? error.message : 'Failed to attach file');
-    } finally {
-      setIsAttachingFile(false);
-    }
-  };
-
-  const handleSendMessage = async () => {
-    const text = messageDraft.trim();
-    if ((!text && !pendingAttachment) || !transaction) return;
-    try {
-      setSendingMessage(true);
-      const res = await authFetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transactionId: transaction.id,
-          body: text,
-          ...(pendingAttachment ? { attachmentDocumentId: pendingAttachment.id } : {}),
-        }),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Failed to send message');
-      setMessages((prev) => [...prev, result]);
-      setMessageDraft('');
-      setPendingAttachment(null);
-    } catch (error) {
-      if (error instanceof AuthRequiredError) {
-        router.push('/auth');
-        return;
-      }
-      console.error('Error sending message:', error);
-    } finally {
-      setSendingMessage(false);
     }
   };
 
@@ -1687,99 +1623,51 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             directly, since it's now the thing actually placed in the
             grid). Both still stack full-width on mobile in source order. */}
         <div className="lg:order-2 lg:self-start flex flex-col gap-8">
-        {/* Messages: the in-app thread with whoever has agent-portal
-            access to this deal (see the Agent Portal Access section
-            above) -- the alternative to texting/emailing back and forth,
-            so the history lives on the deal itself. Sized and styled to
-            match the Checklist/Contacts cards it sits above in this same
-            narrow column, not a full-width section of its own. */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6 flex flex-col h-[28rem]">
-          <h2 className="text-lg font-bold text-slate-100 mb-4">Messages</h2>
+        {/* Messages: compact preview of the latest message plus a link to
+            the full-page DM-style portal (dashboard/transactions/[id]/
+            messages/page.tsx) -- larger bubbles, an avatar + name on every
+            message, read/reply in a dedicated view instead of this narrow
+            column. See fetchMessages/messages state above, still used here
+            to drive the preview and the unread-feeling "latest line". */}
+        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-slate-100">Messages</h2>
+            {acceptedAgentUsers.length > 0 && (
+              <Link
+                href={`/dashboard/transactions/${resolvedParams.id}/messages`}
+                className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
+              >
+                Open Messages →
+              </Link>
+            )}
+          </div>
           {acceptedAgentUsers.length === 0 ? (
             <p className="text-slate-500 text-sm">
               Invite an agent above to start a conversation here -- it stays on this deal instead of your
               regular inbox.
             </p>
+          ) : messages.length === 0 ? (
+            <Link
+              href={`/dashboard/transactions/${resolvedParams.id}/messages`}
+              className="block text-slate-500 text-sm hover:text-slate-400 transition"
+            >
+              No messages yet -- say hello.
+            </Link>
           ) : (
-            <>
-              <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
-                {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet.</p>}
-                {messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.sender_role === 'tc' ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                        m.sender_role === 'tc' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
-                      }`}
-                    >
-                      {m.body && <p>{m.body}</p>}
-                      {m.attachment && (
-                        <a
-                          href={m.attachment.url || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`flex items-center gap-1.5 text-xs underline underline-offset-2 ${
-                            m.sender_role === 'tc' ? 'text-blue-100' : 'text-blue-300'
-                          } ${m.body ? 'mt-1.5' : ''}`}
-                        >
-                          📎 {m.attachment.fileName}
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <input
-                ref={messageFileInputRef}
-                type="file"
-                accept="application/pdf,image/*,.doc,.docx"
-                className="hidden"
-                onChange={handleAttachFileSelected}
-              />
-              {attachError && <p className="text-xs text-red-400 mb-2">{attachError}</p>}
-              {pendingAttachment && (
-                <div className="flex items-center gap-2 mb-2 text-xs text-slate-300 bg-slate-700/50 border border-slate-600 rounded-lg px-2.5 py-1.5">
-                  <span className="truncate flex-1">📎 {pendingAttachment.fileName}</span>
-                  <button
-                    type="button"
-                    onClick={() => setPendingAttachment(null)}
-                    className="text-slate-500 hover:text-red-400 transition flex-shrink-0"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => messageFileInputRef.current?.click()}
-                  disabled={isAttachingFile}
-                  title="Attach a file"
-                  className="px-3 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-200 rounded-lg transition disabled:opacity-50 flex-shrink-0"
+            (() => {
+              const last = messages[messages.length - 1];
+              return (
+                <Link
+                  href={`/dashboard/transactions/${resolvedParams.id}/messages`}
+                  className="block hover:bg-slate-700/40 -mx-2 px-2 py-1.5 rounded-lg transition"
                 >
-                  {isAttachingFile ? '…' : '📎'}
-                </button>
-                <input
-                  type="text"
-                  value={messageDraft}
-                  onChange={(e) => setMessageDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  placeholder="Message the agent…"
-                  className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={sendingMessage || (!messageDraft.trim() && !pendingAttachment)}
-                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
-                >
-                  Send
-                </button>
-              </div>
-            </>
+                  <p className="text-xs text-slate-500 mb-1">{last.sender_role === 'tc' ? 'You' : 'Agent'}</p>
+                  <p className="text-sm text-slate-300 truncate">
+                    {last.body || (last.attachment ? `📎 ${last.attachment.fileName}` : '')}
+                  </p>
+                </Link>
+              );
+            })()
           )}
         </div>
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
