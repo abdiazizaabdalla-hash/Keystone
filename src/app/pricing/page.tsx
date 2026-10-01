@@ -11,10 +11,41 @@ const CTA_LABELS: Record<string, string> = {
 
 const UPGRADE_REASONS = [
   'You want every deal to run through Relay instead of only your biggest closings.',
-  'You want document uploads on every checklist step, not just a handful of test files.',
-  'You need invoices generated automatically instead of building them by hand at closing.',
+  'You’re working with more than three agents at once and need more profiles.',
+  'You want to build your own checklist templates instead of using the baseline one.',
   'You’re bringing on other coordinators or assistants who need to see the same deals.',
 ];
+
+type ComparisonValue = boolean | string;
+
+const COMPARISON_ROWS: { feature: string; starter: ComparisonValue; pro: ComparisonValue; team: ComparisonValue }[] = [
+  { feature: 'Transaction management', starter: true, pro: true, team: true },
+  { feature: 'Baseline checklist', starter: true, pro: true, team: true },
+  { feature: 'Custom checklist templates', starter: false, pro: true, team: true },
+  { feature: 'Agent profiles (for invoicing)', starter: 'Up to 3', pro: 'Unlimited', team: 'Unlimited' },
+  { feature: 'Agent portal invitations', starter: true, pro: true, team: true },
+  { feature: 'Document storage & organization', starter: true, pro: true, team: true },
+  { feature: 'E-signature requests', starter: true, pro: true, team: true },
+  { feature: 'Invoicing & payment tracking', starter: true, pro: true, team: true },
+  { feature: 'Google Calendar sync', starter: true, pro: true, team: true },
+  { feature: 'Daily deadline digest', starter: true, pro: true, team: true },
+  { feature: 'Admin dashboard', starter: false, pro: true, team: true },
+  { feature: 'Team roster & shared oversight', starter: false, pro: false, team: true },
+];
+
+function ComparisonCell({ value }: { value: ComparisonValue }) {
+  if (typeof value === 'string') {
+    return <span className="text-slate-200">{value}</span>;
+  }
+  if (value) {
+    return (
+      <svg className="w-5 h-5 text-blue-400 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+      </svg>
+    );
+  }
+  return <span className="text-slate-600">—</span>;
+}
 
 export default function PricingPage() {
   return (
@@ -48,15 +79,15 @@ export default function PricingPage() {
       <section className="max-w-4xl mx-auto px-6 pt-20 pb-16 text-center">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Pricing</p>
         <h1 className="font-display text-4xl sm:text-5xl font-semibold text-slate-100 mb-5">
-          Start small. Make it part of every closing.
+          Simple pricing for every stage of your TC business.
         </h1>
         <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-          Try Relay free. Choose Pro for your own workflow, or bring your team together on Team.
+          Start with the tools you need today. Upgrade for custom workflows or team collaboration as your business grows.
         </p>
       </section>
 
       {/* Plans */}
-      <section className="max-w-6xl mx-auto px-6 pb-20">
+      <section className="max-w-6xl mx-auto px-6 pb-16">
         <div className="grid md:grid-cols-3 gap-6">
           {PLANS.map((plan) => (
             <div
@@ -98,12 +129,62 @@ export default function PricingPage() {
           ))}
         </div>
         <p className="text-center text-sm text-slate-500 mt-8">
-          Team starts at $57/month for 3 seats. All plans include a checklist, document uploads, and invoicing.
+          Team is billed at $19 per TC seat per month, with a three-seat minimum ($57/month to start). Agents invited to collaborate on transactions do not require paid TC seats — the agent portal is free on every plan.
+        </p>
+      </section>
+
+      {/* Comparison table */}
+      <section className="max-w-5xl mx-auto px-6 py-16 border-t border-slate-700">
+        <h2 className="font-display text-2xl font-semibold text-slate-100 mb-8 text-center">Compare plans</h2>
+        <div className="overflow-x-auto rounded-xl border border-slate-700">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-800/80 border-b border-slate-700">
+                <th className="text-left font-medium text-slate-300 px-5 py-4">Feature</th>
+                <th className="font-medium text-slate-300 px-5 py-4">Starter</th>
+                <th className="font-medium text-slate-300 px-5 py-4">Pro</th>
+                <th className="font-medium text-slate-300 px-5 py-4">Team</th>
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARISON_ROWS.map((row, i) => (
+                <tr key={row.feature} className={i % 2 === 0 ? 'bg-slate-800/30' : 'bg-transparent'}>
+                  <td className="text-left text-slate-300 px-5 py-3.5 border-t border-slate-700/60">{row.feature}</td>
+                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><ComparisonCell value={row.starter} /></td>
+                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><ComparisonCell value={row.pro} /></td>
+                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><ComparisonCell value={row.team} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Payments clarification */}
+      <section className="max-w-4xl mx-auto px-6 py-16 border-t border-slate-700">
+        <h2 className="font-display text-2xl font-semibold text-slate-100 mb-4">How getting paid works</h2>
+        <p className="text-slate-400 mb-3">
+          There are two separate money flows in Relay, and it&apos;s worth being clear about both:
+        </p>
+        <ul className="space-y-3 text-sm text-slate-300 mb-4">
+          <li className="flex items-start gap-2.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />
+            You pay Relay for your subscription — that&apos;s the plan you pick above.
+          </li>
+          <li className="flex items-start gap-2.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />
+            Your agents pay you for your invoices — Relay never touches that money.
+          </li>
+        </ul>
+        <p className="text-slate-400">
+          Accept invoice payments through your connected Stripe account, or record payments
+          received through your preferred payment method. Relay charges no platform fee on
+          invoice payments.
         </p>
       </section>
 
       {/* Why upgrade */}
-      <section className="max-w-4xl mx-auto px-6 py-20 border-t border-slate-700">
+      <section className="max-w-4xl mx-auto px-6 py-16 border-t border-slate-700">
         <h2 className="font-display text-2xl font-semibold text-slate-100 mb-2">Common reasons TCs upgrade</h2>
         <p className="text-slate-400 mb-10">Most upgrades happen once Relay becomes part of the regular closing process.</p>
         <ul className="space-y-5">
@@ -121,7 +202,7 @@ export default function PricingPage() {
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">
           Start on Starter, upgrade when it sticks
         </h2>
-        <p className="text-slate-400 mb-8">The easiest way to see if Relay saves your team the back-and-forth it's meant to save.</p>
+        <p className="text-slate-400 mb-8">The easiest way to see if Relay saves your team the back-and-forth it&apos;s meant to save.</p>
         <div className="flex items-center justify-center gap-4 flex-wrap">
           <Link
             href="/auth?mode=signup&plan=starter"

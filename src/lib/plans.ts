@@ -15,9 +15,9 @@
 // src/lib/trial.ts for the exact cutoff) get a 30-day-or-first-paid-deal
 // trial, then have to add payment to keep using it at $10/month, through
 // the same Stripe Checkout flow as Pro/Team (see src/lib/stripe.ts). The
-// `limits` below (unlimited transactions, 1 agent, no custom checklists)
-// apply the whole time — trialing or paid, Starter's feature set doesn't
-// change. The only real cap left on Starter is a single agent profile;
+// `limits` below (unlimited transactions, up to 3 agents, no custom
+// checklists) apply the whole time — trialing or paid, Starter's feature set doesn't
+// change. The only real cap left on Starter is its 3-agent-profile ceiling;
 // transactions are unlimited on every plan. Accounts created before that
 // cutoff are grandfathered onto the old free-forever Starter and never
 // see the trial/paywall at all.
@@ -77,14 +77,14 @@ export const PLANS: Plan[] = [
       'Free for 30 days or your first paid deal',
       'Then $10/month',
       'Unlimited transactions',
-      '1 agent profile',
+      'Up to 3 agent profiles',
       'Auto-built checklist per deal',
       'Document uploads per checklist step',
       'Manual invoicing',
     ],
     limits: {
       maxActiveTransactions: null,
-      maxAgents: 1,
+      maxAgents: 3,
       adminDashboard: false,
       customChecklists: false,
     },

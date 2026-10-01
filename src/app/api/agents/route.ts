@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, brokerage, email, phone, flatFee, percentFee } = body;
 
-    // Plan-gated: Starter is capped at 1 agent profile. Admins creating
+    // Plan-gated: Starter is capped at 3 agent profiles. Admins creating
     // agents for themselves are still subject to their own plan's limit —
     // is_admin only affects cross-tenant visibility, not billing tier.
     const { maxAgents } = getPlanLimits(user.user_metadata?.plan);

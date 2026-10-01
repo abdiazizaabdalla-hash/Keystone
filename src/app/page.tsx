@@ -64,13 +64,13 @@ export default function Home() {
             From contract to closing
           </div>
           <h1 className="font-display text-5xl sm:text-6xl font-semibold text-slate-100 leading-[1.05] mb-6">
-            Every deal, on track.<br />
-            <span className="italic text-blue-400">Ready for close.</span>
+            Every transaction.<br />
+            <span className="italic text-blue-400">One workspace.</span>
           </h1>
           <p className="text-lg text-slate-400 mb-8 max-w-lg">
-            Relay is full transaction coordinator (TC) management software — keeping your
-            checklist, documents, agents, and invoices in one place so nothing falls through
-            the cracks between contract and closing day.
+            Relay keeps your transactions organized, your deadlines on track, and your agents
+            connected — from an accepted contract to a closed deal. One place for the checklist,
+            the paperwork, the payout, and everyone who needs to stay in the loop.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <Link
@@ -86,7 +86,7 @@ export default function Home() {
               See pricing
             </Link>
           </div>
-          <p className="text-xs text-slate-500 mt-4">Free for 30 days. No credit card required.</p>
+          <p className="text-xs text-slate-500 mt-4">Free for 30 days, or until your first paid deal closes. No credit card required.</p>
         </div>
 
         {/* Mock product preview */}
@@ -145,26 +145,27 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Get paid without chasing payments */}
+      {/* The problem */}
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div>
-            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Get paid without chasing payments</h2>
+            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Stop managing transactions across scattered tools</h2>
             <p className="text-slate-400 mb-4">
-              Every invoice Relay sends comes with a real way to pay it. Agents can check out
-              online with Stripe right from the invoice, so you get paid without leaving the
-              platform for a separate payment tool.
+              A checklist in one app, documents in email, deadlines in a calendar you forget to
+              check, and an agent texting you for a status update. Relay keeps the checklist, the
+              paperwork, the deadlines, the messages, and the invoice all attached to the one
+              transaction they belong to.
             </p>
             <p className="text-slate-400">
-              Prefer another way? Zelle, PayPal, or anything else works too — mark the invoice
-              paid manually and it stays on the record right alongside everything else.
+              You open one page and see exactly where a deal stands — what&apos;s done, what&apos;s
+              overdue, and what&apos;s waiting on someone else.
             </p>
           </div>
           <div className="grid gap-3">
             {[
-              'Pay online through Stripe — agents check out right from the invoice',
-              'Or pay your way — Zelle, PayPal, or anything else, marked paid manually and tracked the same',
-              'Invoices that build and send themselves — Pro and Team auto-generate the invoice at closing, ready to customize and email to the agent in one click',
+              'Every deal gets a standard closing checklist the moment you create it',
+              'Documents live on the checklist step they belong to, not buried in an inbox',
+              'A daily digest flags what’s overdue or due today — before an agent has to ask',
             ].map((line) => (
               <div key={line} className="flex items-start gap-3 p-4 bg-slate-800/60 border border-slate-700 rounded-xl">
                 <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -177,31 +178,31 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features */}
+      {/* Core workflow / features */}
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Built for how TCs actually work</h2>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Everything for the deal, organized together</h2>
         <p className="text-slate-400 mb-12 max-w-2xl">One place for the checklist, the paperwork, and the payout — instead of three.</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {[
             {
               title: 'Auto-built checklists',
-              body: 'Every new deal gets a standard closing checklist the moment you create it.',
+              body: 'Every new deal gets a standard closing checklist the moment you create it, with deadlines you control.',
             },
             {
-              title: 'Documents per step',
-              body: 'Upload contracts, disclosures, and inspection reports directly onto the task they belong to.',
+              title: 'Documents by category',
+              body: 'Upload contracts, disclosures, and inspection reports into the right category, linked to the checklist step they belong to.',
             },
             {
-              title: 'Invoices that generate themselves',
-              body: 'On Pro and Team, closing a deal calculates the fee and generates the invoice automatically — customize it and email it straight to the agent in one click.',
+              title: 'Built-in e-signatures',
+              body: 'Send a document out for signature with a secure link — no separate DocuSign account needed — or mark something signed outside Relay.',
             },
             {
-              title: 'Get paid your way',
-              body: 'Agents pay online through Stripe, or however you prefer \u2014 Zelle, PayPal, and more. Mark it paid manually and it\'s tracked right on the invoice.',
+              title: 'Invoicing, your way',
+              body: 'Generate the invoice when a deal closes, send it by email, and let agents pay through your connected Stripe account — or mark it paid however they actually paid you.',
             },
             {
               title: 'Every deal, organized',
-              body: 'Every transaction — open or closed — plus every agent\'s fee and payment history, always on record and a click away.',
+              body: 'Every transaction — open or closed — plus every agent’s fee and payment history, always on record and a click away.',
             },
             {
               title: 'Custom checklist templates',
@@ -216,21 +217,66 @@ export default function Home() {
         </div>
       </section>
 
-      {/* How it works */}
+      {/* Agent Portal */}
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-12">From listing to payout</h2>
-        <div className="grid sm:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="order-2 lg:order-1">
+            <div className="rounded-xl border border-slate-700 overflow-hidden shadow-2xl bg-slate-800">
+              <img
+                src="/screenshots/agent-portal.jpg"
+                alt="A transaction inside Relay showing the Agent Portal Access panel, where a TC invites an agent to a free, scoped-down login for that one deal"
+                className="w-full h-auto block"
+              />
+            </div>
+          </div>
+          <div className="order-1 lg:order-2">
+            <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Agent Portal</p>
+            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Your agents get their own place to collaborate</h2>
+            <p className="text-slate-400 mb-4">
+              Invite an agent onto a deal and they get a free, scoped-down login — no credit
+              card, no separate subscription. They can message you, upload documents, check
+              deadlines, and see exactly where their deal stands, all without ever seeing your
+              other clients, your invoices, or your billing.
+            </p>
+            <p className="text-slate-400 mb-6">
+              One invited login works across every TC an agent works with — so an agent who
+              closes deals with three different coordinators sees all three in one place.
+            </p>
+            <ul className="space-y-2.5 text-sm text-slate-300">
+              {[
+                'View checklist progress, dates, and the transaction status',
+                'Upload documents, and mark whether one is signed',
+                'Message you directly, with file attachments, right on the deal',
+                'Add a contact they know about — a lender, an inspector',
+              ].map((line) => (
+                <li key={line} className="flex items-start gap-2.5">
+                  <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  {line}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-slate-500 mt-6">
+              Agents can&apos;t check off your checklist, send a signature request, or see anything about your other deals — you stay in control of the transaction.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Who it's for */}
+      <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-12">Built for independent TCs and growing teams</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
-            { n: '1', title: 'Add your agents', body: 'Set each agent’s flat fee, and an optional percentage fee if they use one.' },
-            { n: '2', title: 'Create the deal', body: 'Property, price, agent — Relay builds the checklist for you.' },
-            { n: '3', title: 'Close & get paid', body: 'Mark it closed and the invoice is ready to send.' },
-          ].map((step) => (
-            <div key={step.n}>
-              <div className="w-10 h-10 rounded-full bg-blue-500/15 border border-blue-500/40 text-blue-400 font-semibold flex items-center justify-center mb-4">
-                {step.n}
-              </div>
-              <h3 className="font-semibold text-slate-100 mb-2">{step.title}</h3>
-              <p className="text-sm text-slate-400">{step.body}</p>
+            { title: 'Independent TC', body: 'Run your transaction coordination business in one place — checklist, documents, invoicing, all of it.' },
+            { title: 'TC team', body: 'Manage transactions, coordinate work, and share oversight across your team on the Team plan.' },
+            { title: 'Real estate agent', body: 'Work with your TC, send documents, and track your deal in one workspace — free, by invitation.' },
+            { title: 'Brokerage', body: 'Give your agents a consistent place to manage transactions with the TCs they already work with.' },
+          ].map((card) => (
+            <div key={card.title} className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl">
+              <h3 className="font-semibold text-slate-100 mb-2">{card.title}</h3>
+              <p className="text-sm text-slate-400">{card.body}</p>
             </div>
           ))}
         </div>
@@ -240,7 +286,7 @@ export default function Home() {
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
         <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
           <div>
-            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple, honest pricing</h2>
+            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple plans that grow with your business</h2>
             <p className="text-slate-400">Start free. Upgrade when Relay becomes part of every closing.</p>
           </div>
           <Link href="/pricing" className="text-blue-400 hover:text-blue-300 font-medium text-sm">
@@ -260,11 +306,12 @@ export default function Home() {
             </div>
           ))}
         </div>
+        <p className="text-center text-xs text-slate-500 mt-6">The agent portal is free on every plan — agents you invite never need a Relay subscription of their own.</p>
       </section>
 
       {/* CTA */}
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700 text-center">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Ready to get every deal organized?</h2>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Make your next closing easier to manage</h2>
         <Link
           href="/auth?mode=signup&plan=starter"
           className="inline-block px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
