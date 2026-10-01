@@ -288,7 +288,7 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
 
       {/* Thread */}
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
-        <div className="max-w-3xl mx-auto space-y-5">
+        <div className="max-w-3xl mx-auto">
           {visibleMessages.length === 0 && (
             <p className="text-slate-500 text-sm text-center mt-10">No messages yet -- say hello.</p>
           )}
@@ -302,8 +302,16 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
               !prevMessage ||
               parseMessageDate(m.created_at).getTime() - parseMessageDate(prevMessage.created_at).getTime() >=
                 TIMESTAMP_GROUP_GAP_MS;
+            // iMessage-style grouping: bubbles from the same sender sit close
+            // together: the visual gap only opens up when the thread switches
+            // speakers, not on every message.
+            const isNewSender = !prevMessage || prevMessage.sender_role !== m.sender_role;
+            const spacingClass = index === 0 ? '' : isNewSender ? 'mt-5' : 'mt-1';
             return (
-              <div key={m.id} className={`group flex items-end gap-3 ${isSelf ? 'justify-end' : 'justify-start'}`}>
+              <div
+                key={m.id}
+                className={`group flex items-end gap-3 ${spacingClass} ${isSelf ? 'justify-end' : 'justify-start'}`}
+              >
                 {!isSelf && (
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
                     {initial}
