@@ -29,6 +29,33 @@ interface MessageRow {
 // MESSAGE_POLL_MS in dashboard/transactions/[id]/messages/page.tsx.
 const MESSAGE_POLL_MS = 5000;
 
+// Which message ids this browser has hidden from its own view of this
+// thread -- "delete from view", not an unsend: the message is untouched
+// server-side and the other side still sees it normally. Scoped to one
+// transaction and stored per-browser (localStorage), same key shape as the
+// TC-side mirror so either side can independently tidy up their own view.
+function hiddenStorageKey(transactionId: string) {
+  return `relay_hidden_messages_${transactionId}`;
+}
+
+function loadHiddenIds(transactionId: string): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(hiddenStorageKey(transactionId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveHiddenIds(transactionId: string, ids: Set<string>) {
+  try {
+    window.localStorage.setItem(hiddenStorageKey(transactionId), JSON.stringify([...ids]));
+  } catch {
+    // Non-critical -- the hide just won't persist across reloads.
+  }
+}
+
 // Agent-side mirror of the TC's full-page Messages portal (same layout,
 // same send/attach flow) -- just pointed at the agent's own data route
 // (/api/agent/transactions/[id], which already gates on
@@ -51,6 +78,30 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
   const [isAttachingFile, setIsAttachingFile] = useState(false);
   const [attachError, setAttachError] = useState('');
   const messageFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Lazy-initialized from localStorage on first render (client-only; the
+  // loader itself is guarded for the server/no-window case) rather than in
+  // an effect, so there's no extra render pass just to populate this.
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => loadHiddenIds(id));
+  const [showHidden, setShowHidden] = useState(false);
+
+  const hideMessage = (messageId: string) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      next.add(messageId);
+      saveHiddenIds(id, next);
+      return next;
+    });
+  };
+
+  const unhideMessage = (messageId: string) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      next.delete(messageId);
+      saveHiddenIds(id, next);
+      return next;
+    });
+  };
 
   const fetchMessages = async () => {
     try {
@@ -191,6 +242,8 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
     );
   }
 
+  const visibleMessages = messages.filter((m) => showHidden || !hiddenIds.has(m.id));
+
   return (
     <div className="h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col overflow-hidden">
       {/* Header */}
@@ -205,36 +258,51 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-sm font-bold text-white shrink-0">
             {tcLabel[0]?.toUpperCase() || 'T'}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="text-slate-100 font-display font-semibold truncate">{tcLabel}</h1>
             <p className="text-slate-500 text-xs truncate">{transaction.propertyAddress || transaction.fileNumber}</p>
           </div>
+          {hiddenIds.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowHidden((prev) => !prev)}
+              className="text-xs text-slate-400 hover:text-slate-200 font-medium shrink-0 whitespace-nowrap"
+            >
+              {showHidden ? 'Hide hidden again' : `${hiddenIds.size} hidden -- Show`}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Thread */}
       <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
         <div className="max-w-3xl mx-auto space-y-5">
-          {messages.length === 0 && (
+          {visibleMessages.length === 0 && (
             <p className="text-slate-500 text-sm text-center mt-10">No messages yet -- say hello.</p>
           )}
-          {messages.map((m) => {
+          {visibleMessages.map((m) => {
             const isSelf = m.sender_role === 'agent';
             const label = isSelf ? selfLabel : tcLabel;
             const initial = label[0]?.toUpperCase() || (isSelf ? 'A' : 'T');
+            const isHidden = hiddenIds.has(m.id);
             return (
-              <div key={m.id} className={`flex items-end gap-3 ${isSelf ? 'justify-end' : 'justify-start'}`}>
+              <div key={m.id} className={`group flex items-end gap-3 ${isSelf ? 'justify-end' : 'justify-start'}`}>
                 {!isSelf && (
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
                     {initial}
                   </div>
                 )}
                 <div className={`flex flex-col max-w-[75%] ${isSelf ? 'items-end' : 'items-start'}`}>
-                  <p className="text-xs font-semibold text-slate-400 mb-1 px-1">{label}</p>
+                  <div className="flex items-center gap-2 mb-1 px-1">
+                    <p className="text-xs font-semibold text-slate-400">{label}</p>
+                    {isHidden ? (
+                      <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wide">Hidden</span>
+                    ) : null}
+                  </div>
                   <div
-                    className={`rounded-2xl px-4 py-3 text-base whitespace-pre-wrap ${
-                      isSelf ? 'bg-emerald-600 text-white' : 'bg-slate-700/80 text-slate-100'
-                    }`}
+                    className={`relative rounded-2xl px-4 py-3 text-base whitespace-pre-wrap ${
+                      isHidden ? 'opacity-40' : ''
+                    } ${isSelf ? 'bg-emerald-600 text-white' : 'bg-slate-700/80 text-slate-100'}`}
                   >
                     {m.body && <p>{m.body}</p>}
                     {m.attachment && (
@@ -250,7 +318,27 @@ export default function AgentTransactionMessagesPage({ params }: { params: Promi
                       </a>
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-600 mt-1 px-1">{formatTime(m.created_at)}</p>
+                  <div className="flex items-center gap-2 mt-1 px-1">
+                    <p className="text-[11px] text-slate-600">{formatTime(m.created_at)}</p>
+                    {isHidden ? (
+                      <button
+                        type="button"
+                        onClick={() => unhideMessage(m.id)}
+                        className="text-[11px] text-blue-400 hover:text-blue-300 font-medium"
+                      >
+                        Unhide
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => hideMessage(m.id)}
+                        title="Hide from your view (does not unsend)"
+                        className="text-[11px] text-slate-600 hover:text-red-400 font-medium opacity-0 group-hover:opacity-100 transition"
+                      >
+                        Hide
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {isSelf && (
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
