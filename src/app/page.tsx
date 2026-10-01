@@ -47,6 +47,7 @@ export default function Home() {
           <nav className="hidden sm:flex items-center gap-8 text-sm text-slate-300">
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
+            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
           </nav>
           <div className="flex items-center gap-4">
             <Link
@@ -277,6 +278,12 @@ export default function Home() {
             <p className="text-xs text-slate-500 mt-6">
               Agents can&apos;t check off your checklist, send a signature request, or see anything about your other deals — you stay in control of the transaction.
             </p>
+            <Link
+              href="/for-agents"
+              className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-medium transition mt-6"
+            >
+              Are you an agent? See what you can do →
+            </Link>
           </div>
         </div>
       </section>
@@ -373,6 +380,7 @@ export default function Home() {
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
+            <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
