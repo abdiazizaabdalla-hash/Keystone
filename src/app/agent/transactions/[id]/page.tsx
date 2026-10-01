@@ -3,7 +3,7 @@
 import { use, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import {
   DOCUMENT_CATEGORIES,
@@ -76,6 +76,14 @@ const MESSAGE_POLL_MS = 5000;
 export default function AgentTransactionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+
+  // Same clearSession-then-redirect shape as the agent hub's logout
+  // (src/app/agent/page.tsx) -- available here too since an agent can be
+  // deep in a transaction without having gone through the hub first.
+  const handleLogout = () => {
+    clearSession();
+    router.push('/agent/login');
+  };
 
   const [transaction, setTransaction] = useState<AgentTransactionDetail | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -391,9 +399,17 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 px-6 py-12">
       <div className="max-w-6xl mx-auto">
-        <Link href="/agent" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-6 text-sm font-medium">
-          ← Your deals
-        </Link>
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <Link href="/agent" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium">
+            ← Your deals
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="shrink-0 text-sm text-slate-400 hover:text-red-300 font-medium px-3 py-1.5 rounded-lg hover:bg-red-900/20 transition"
+          >
+            Log out
+          </button>
+        </div>
 
         {/* Same core deal info the TC's own page shows -- agent, price,
             status, dates -- just plain text instead of editable
