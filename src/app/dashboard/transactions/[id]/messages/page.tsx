@@ -33,6 +33,12 @@ interface MessageRow {
 // (and its agent-side mirror), see MESSAGE_POLL_MS there.
 const MESSAGE_POLL_MS = 5000;
 
+// Bubbles only repeat their timestamp once this much time has passed
+// since the previous (visible) message -- a quick back-and-forth reads
+// as one continuous exchange instead of a timestamp on every line, and
+// a new one appears whenever there's a real gap.
+const TIMESTAMP_GROUP_GAP_MS = 10 * 60 * 1000;
+
 // Which message ids this browser has hidden from its own view of this
 // thread -- "delete from view", not an unsend: the message is untouched
 // server-side and the other side still sees it normally. Scoped to one
@@ -232,10 +238,16 @@ export default function TransactionMessagesPage({ params }: { params: Promise<{ 
   const agentLabel = agent?.name || 'the agent';
   const tcLabel = tcName || 'You';
 
-  const formatTime = (value: string) => {
+  // created_at comes back from Postgres without a timezone suffix, so we
+  // treat it as UTC explicitly -- shared by formatTime and the timestamp
+  // grouping below so both agree on the same instant.
+  const parseMessageDate = (value: string) => {
     const hasOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(value);
-    const date = new Date(hasOffset ? value : `${value}Z`);
-    return date.toLocaleString('en-US', {
+    return new Date(hasOffset ? value : `${value}Z`);
+  };
+
+  const formatTime = (value: string) => {
+    return parseMessageDate(value).toLocaleString('en-US', {
       month: '2-digit',
       day: '2-digit',
       year: 'numeric',
@@ -304,11 +316,16 @@ export default function TransactionMessagesPage({ params }: { params: Promise<{ 
           {visibleMessages.length === 0 && (
             <p className="text-slate-500 text-sm text-center mt-10">No messages yet -- say hello.</p>
           )}
-          {visibleMessages.map((m) => {
+          {visibleMessages.map((m, index) => {
             const isSelf = m.sender_role === 'tc';
             const label = isSelf ? tcLabel : agentLabel;
             const initial = label[0]?.toUpperCase() || (isSelf ? 'Y' : 'A');
             const isHidden = hiddenIds.has(m.id);
+            const prevMessage = index > 0 ? visibleMessages[index - 1] : null;
+            const showTimestamp =
+              !prevMessage ||
+              parseMessageDate(m.created_at).getTime() - parseMessageDate(prevMessage.created_at).getTime() >=
+                TIMESTAMP_GROUP_GAP_MS;
             return (
               <div key={m.id} className={`group flex items-end gap-3 ${isSelf ? 'justify-end' : 'justify-start'}`}>
                 {!isSelf && (
@@ -343,7 +360,9 @@ export default function TransactionMessagesPage({ params }: { params: Promise<{ 
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-1 px-1">
-                    <p className="text-[11px] text-slate-600">{formatTime(m.created_at)}</p>
+                    {showTimestamp && (
+                      <p className="text-[11px] text-slate-600">{formatTime(m.created_at)}</p>
+                    )}
                     {isHidden ? (
                       <button
                         type="button"
