@@ -200,6 +200,58 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Internal, TC/admin-only fix-up for a message that was seeded or sent
+// with the wrong sender_role (e.g. during demo data setup). This is NOT
+// a general "edit message" feature -- there's no UI control that calls
+// it, and it's deliberately off-limits to agents. Hiding a message from
+// view (see hideMessage/unhideMessage client-side) is the normal,
+// per-browser "not unsend" tool; this endpoint is for correcting the
+// underlying data once, server-side, so the fix shows up everywhere.
+export async function PATCH(request: NextRequest) {
+  try {
+    const { user, isAdmin } = await getUserFromRequest(request);
+    if (isAgentUser(user)) {
+      return NextResponse.json({ error: 'Not permitted' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const messageId = typeof body.id === 'string' ? body.id : '';
+    const senderRole = body.senderRole;
+    if (!messageId || (senderRole !== 'tc' && senderRole !== 'agent')) {
+      return NextResponse.json({ error: 'id and senderRole ("tc" | "agent") are required' }, { status: 400 });
+    }
+
+    const { data: existing, error: fetchError } = await supabaseServer
+      .from('messages')
+      .select('id, transaction_id')
+      .eq('id', messageId)
+      .single();
+    if (fetchError || !existing) {
+      return NextResponse.json({ error: 'Message not found' }, { status: 404 });
+    }
+
+    // Same ownership check as assertCanMessage's TC branch -- the caller
+    // must own the transaction (or be an admin), never just any TC.
+    await assertCanMessage(existing.transaction_id, user.id, isAdmin, false);
+
+    const { data: updated, error: updateError } = await supabaseServer
+      .from('messages')
+      .update({ sender_role: senderRole })
+      .eq('id', messageId)
+      .select()
+      .single();
+    if (updateError) throw updateError;
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error('Error patching message:', error);
+    return NextResponse.json({ error: 'Failed to update message' }, { status: 500 });
+  }
+}
+
 // How long to stay quiet after this same sender's last message in this
 // thread before sending another notification email -- a fast
 // back-and-forth ("hows it going" / "great!" / ...) shouldn't fire one
