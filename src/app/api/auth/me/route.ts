@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isAgentUser } from '@/lib/agentPortal';
 import { mergeUserMetadata } from '@/lib/userMetadata';
@@ -68,7 +69,12 @@ export async function GET(request: NextRequest) {
     // redirect to /agent instead of silently routing them into the TC
     // onboarding wizard.
     if (isAgentUser(user)) {
-      return NextResponse.json({ isAgent: true, email: user.email });
+      const meta = user.user_metadata || {};
+      return NextResponse.json({
+        isAgent: true,
+        email: user.email,
+        fullName: typeof meta.full_name === 'string' ? meta.full_name : '',
+      });
     }
 
     const shaped = shapeUser(user);
@@ -153,7 +159,22 @@ export async function PATCH(request: NextRequest) {
       dueDateWorkflowEnabled,
       dueDateWorkflowSteps,
       onboardingCompleted,
+      password,
     } = body;
+
+    // Password changes go straight through the admin API on this same
+    // user id -- not mergeUserMetadata below, which only ever touches
+    // user_metadata, never auth credentials. Applied first and
+    // independently of the metadata changes so a bad password doesn't
+    // also block an otherwise-valid name/preference update in the same
+    // request (and vice versa).
+    if (password !== undefined) {
+      if (typeof password !== 'string' || password.length < 8) {
+        return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+      }
+      const { error: passwordError } = await supabaseServer.auth.admin.updateUserById(user.id, { password });
+      if (passwordError) throw passwordError;
+    }
 
     const changes: Record<string, unknown> = {};
 
