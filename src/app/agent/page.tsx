@@ -21,18 +21,28 @@ interface TcGroup {
   transactions: AgentTransaction[];
 }
 
-// Same status colors as src/app/dashboard/transactions/page.tsx, so a
-// deal reads the same way here as it does on the TC's own list.
-const getStatusColor = (status: string) => {
+interface PendingInvite {
+  inviteId: string;
+  transactionId: string;
+  fileNumber: string;
+  propertyAddress: string | null;
+  tcLabel: string;
+  createdAt: string;
+}
+
+// Same status colors as src/app/dashboard/transactions/page.tsx (text
+// only now, no pill), so a deal reads the same way here as it does on
+// the TC's own list.
+const getStatusTextColor = (status: string) => {
   switch (status) {
     case 'Closed':
-      return 'bg-green-900/30 border-green-700 text-green-400';
+      return 'text-green-400';
     case 'Contract Pending':
-      return 'bg-yellow-900/30 border-yellow-700 text-yellow-400';
+      return 'text-yellow-400';
     case 'Under Contract':
-      return 'bg-blue-900/30 border-blue-700 text-blue-400';
+      return 'text-blue-400';
     default:
-      return 'bg-slate-700/30 border-slate-600 text-slate-400';
+      return 'text-slate-400';
   }
 };
 
@@ -82,16 +92,36 @@ const getDueBadge = (tx: AgentTransaction) => {
 export default function AgentHubPage() {
   const router = useRouter();
   const [transactions, setTransactions] = useState<AgentTransaction[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [accepting, setAccepting] = useState<string | null>(null);
+  const [acceptError, setAcceptError] = useState('');
+  // Bumped after a successful accept to re-run the effect below and pull
+  // the just-accepted transaction into the list -- same
+  // define-load-inside-the-effect shape every other page in this app
+  // uses, just re-triggerable without needing setState calls routed
+  // through a useCallback dependency.
+  const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await authFetch('/api/agent/transactions');
-        if (!res.ok) throw new Error('Failed to load your transactions');
-        const data = await res.json();
-        setTransactions(Array.isArray(data) ? data : []);
+        const [txRes, invitesRes] = await Promise.all([
+          authFetch('/api/agent/transactions'),
+          authFetch('/api/agent/invites'),
+        ]);
+        if (!txRes.ok) throw new Error('Failed to load your transactions');
+        const txData = await txRes.json();
+        setTransactions(Array.isArray(txData) ? txData : []);
+
+        // Non-fatal if this one fails -- the transactions list is the
+        // part that matters most, and an agent can still open a deal
+        // they've already accepted even if pending invites fail to load.
+        if (invitesRes.ok) {
+          const inviteData = await invitesRes.json();
+          setPendingInvites(Array.isArray(inviteData) ? inviteData : []);
+        }
       } catch (err) {
         if (err instanceof AuthRequiredError) {
           router.push('/agent/login');
@@ -104,7 +134,36 @@ export default function AgentHubPage() {
       }
     };
     load();
-  }, [router]);
+  }, [router, reloadCount]);
+
+  // Explicit accept from the dashboard -- the only way access is granted
+  // now that signing in (via an invite's link or a plain /agent/login)
+  // no longer auto-accepts anything (see src/app/agent/accept/page.tsx).
+  const handleAccept = async (transactionId: string) => {
+    setAcceptError('');
+    setAccepting(transactionId);
+    try {
+      const res = await authFetch('/api/agent-invites/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not accept this invite');
+      }
+      setReloadCount((c) => c + 1);
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/agent/login');
+        return;
+      }
+      console.error('Error accepting invite:', err);
+      setAcceptError(err instanceof Error ? err.message : 'Could not accept this invite. Please try again.');
+    } finally {
+      setAccepting(null);
+    }
+  };
 
   const tcGroups = useMemo<TcGroup[]>(() => {
     const byTc = new Map<string, TcGroup>();
@@ -131,6 +190,38 @@ export default function AgentHubPage() {
           </div>
         </div>
 
+        {pendingInvites.length > 0 && (
+          <div className="mb-8">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+              Pending invite{pendingInvites.length !== 1 ? 's' : ''}
+            </p>
+            <div className="space-y-3">
+              {pendingInvites.map((invite) => (
+                <div
+                  key={invite.inviteId}
+                  className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-br from-amber-900/20 to-slate-800 border border-amber-700/50 rounded-lg px-5 py-4"
+                >
+                  <div>
+                    <p className="text-slate-100 text-sm font-semibold">
+                      {invite.propertyAddress || invite.fileNumber}
+                    </p>
+                    <p className="text-slate-400 text-xs mt-0.5">{invite.tcLabel} added you to this deal</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAccept(invite.transactionId)}
+                    disabled={accepting === invite.transactionId}
+                    className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 shrink-0"
+                  >
+                    {accepting === invite.transactionId ? 'Accepting…' : 'Accept'}
+                  </button>
+                </div>
+              ))}
+            </div>
+            {acceptError && <p className="text-red-400 text-sm mt-2">{acceptError}</p>}
+          </div>
+        )}
+
         {loading ? (
           <p className="text-slate-400 text-sm">Loading…</p>
         ) : error ? (
@@ -139,7 +230,9 @@ export default function AgentHubPage() {
           <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 text-center">
             <p className="text-slate-300">You don&apos;t have access to any deals yet.</p>
             <p className="text-slate-500 text-sm mt-1">
-              Once a transaction coordinator adds you to one, it&apos;ll show up here.
+              {pendingInvites.length > 0
+                ? 'Accept the invite above to get started.'
+                : "Once a transaction coordinator adds you to one, it'll show up here."}
             </p>
           </div>
         ) : (
@@ -211,9 +304,7 @@ export default function AgentHubPage() {
                                 </span>
                               </td>
                               <td className="px-6 py-4">
-                                <span
-                                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(tx.status)}`}
-                                >
+                                <span className={`text-sm font-medium ${getStatusTextColor(tx.status)}`}>
                                   {tx.status}
                                 </span>
                               </td>

@@ -1,15 +1,17 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { supabaseBrowser as supabase } from '@/lib/supabaseClient';
 import { saveSession, clearSession } from '@/lib/authClient';
 
-// One-time stop between an agent's first-ever invite link and their
-// dashboard: signInWithOtp creates their account with no password at
-// all, so /agent/accept sends them here (via user_metadata.has_password)
-// before they ever land on a transaction or the hub. Every later
-// invite/login skips straight past this -- see /agent/accept.
+// One-time stop between an agent's first-ever sign-in and their
+// dashboard: the account is created with no password at all (whether
+// from an invite's generated link or a plain /agent/login), so
+// /agent/accept sends them here (via user_metadata.has_password) before
+// they ever land on the hub. Every later login skips straight past this
+// -- see /agent/accept. Always lands on /agent afterward, where any
+// pending invite is waiting for an explicit accept.
 //
 // Reuses the exact session already set on the shared browser client by
 // /agent/accept's setSession() call (same approach as
@@ -17,8 +19,6 @@ import { saveSession, clearSession } from '@/lib/authClient';
 // it), so this never needs its own token or API route.
 function WelcomeContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const transactionId = searchParams.get('transactionId');
 
   const [checkingSession, setCheckingSession] = useState(true);
   const [fullName, setFullName] = useState('');
@@ -80,7 +80,7 @@ function WelcomeContent() {
         saveSession(sessionData.session.access_token, sessionData.session.refresh_token, sessionData.session.user.id);
       }
 
-      router.replace(transactionId ? `/agent/transactions/${transactionId}` : '/agent');
+      router.replace('/agent');
     } catch (err) {
       console.error('Error setting agent password:', err);
       setError(err instanceof Error ? err.message : 'Could not set your password. Please try again.');

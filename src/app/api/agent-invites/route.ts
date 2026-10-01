@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer, createAuthClient } from '@/lib/supabase';
+import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { sendAgentInviteHeadsUpEmail } from '@/lib/agentPortalEmails';
+import { sendAgentInviteEmail } from '@/lib/agentPortalEmails';
 
 // Confirms the caller (a TC) owns `transactionId`, the same ownership
 // check src/app/api/documents/route.ts uses -- direct-owner only, not the
@@ -86,11 +86,13 @@ export async function GET(request: NextRequest) {
 
 // POST: invite an agent (by email) onto a transaction. Works the same
 // whether or not this email already has an agent account elsewhere --
-// Supabase's signInWithOtp creates the account on first use and just
-// sends a login link on every later use, so there's no branching needed
-// here the way /api/team's invite-vs-add split needs. The actual
-// transaction_agents grant isn't created until the agent clicks that
-// link and lands on /agent/accept -- see POST /api/agent-invites/accept.
+// generateLink creates the account on first use the same way
+// signInWithOtp used to, so there's no branching needed here the way
+// /api/team's invite-vs-add split needs. The actual transaction_agents
+// grant isn't created at send time -- the agent signs in generically
+// (this link, or a later plain /agent/login) and then explicitly accepts
+// the invite from their dashboard -- see POST /api/agent-invites/accept
+// and src/app/agent/page.tsx.
 export async function POST(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
@@ -137,39 +139,42 @@ export async function POST(request: NextRequest) {
     const appUrl = request.nextUrl.origin;
     const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
 
-    // Never call this on supabase/supabaseServer (the shared singletons)
-    // -- signInWithOtp sets session state, and a throwaway client is the
-    // established way to avoid poisoning them for every other concurrent
-    // request (see the comment on createAuthClient in lib/supabase.ts).
-    const { error: otpError } = await createAuthClient().auth.signInWithOtp({
+    // One email, one link: generateLink creates the account (same as
+    // shouldCreateUser did on signInWithOtp) and hands back the real
+    // action_link WITHOUT sending anything itself -- the custom email
+    // below is the only one that goes out. Safe to call straight on
+    // supabaseServer (unlike signInWithOtp, this doesn't set session
+    // state on the caller, so it doesn't need the throwaway client from
+    // createAuthClient -- see lib/supabase.ts).
+    const { data: linkData, error: linkError } = await supabaseServer.auth.admin.generateLink({
+      type: 'magiclink',
       email,
       options: {
-        shouldCreateUser: true,
-        emailRedirectTo: `${appUrl}/agent/accept?transactionId=${transactionId}`,
+        redirectTo: `${appUrl}/agent/accept`,
         data: { role: 'agent' },
       },
     });
 
-    let loginEmailSent = true;
-    if (otpError) {
-      loginEmailSent = false;
-      console.error('Error sending agent login link:', otpError);
+    const actionLink = linkData?.properties?.action_link;
+    let inviteEmailSent = true;
+    if (linkError || !actionLink) {
+      inviteEmailSent = false;
+      console.error('Error generating agent invite link:', linkError);
+    } else {
+      try {
+        await sendAgentInviteEmail({
+          toEmail: email,
+          tcLabel,
+          propertyAddress: transaction.property_address || null,
+          actionLink,
+        });
+      } catch (emailError) {
+        inviteEmailSent = false;
+        console.error('Error sending agent invite email:', emailError);
+      }
     }
 
-    let headsUpEmailSent = true;
-    try {
-      await sendAgentInviteHeadsUpEmail({
-        toEmail: email,
-        tcLabel,
-        propertyAddress: transaction.property_address || null,
-        appUrl,
-      });
-    } catch (emailError) {
-      headsUpEmailSent = false;
-      console.error('Error sending agent invite heads-up email:', emailError);
-    }
-
-    return NextResponse.json({ status: 'invited', email, loginEmailSent, headsUpEmailSent });
+    return NextResponse.json({ status: 'invited', email, inviteEmailSent });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

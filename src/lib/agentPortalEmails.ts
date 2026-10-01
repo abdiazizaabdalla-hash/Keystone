@@ -8,29 +8,26 @@ const wrapper = (title: string, bodyHtml: string) => `
   </div>
 `;
 
-// The actual invite/login link itself comes from Supabase's own
-// signInWithOtp email (see POST /api/agent-invites) -- that's what an
-// agent with no password can actually click to get in. This is a second,
-// plain-language heads-up sent right after, from an address that says
-// what it's about instead of a generic "magic link" subject line. Purely
-// cosmetic -- if it fails to send, the real login email already went out
-// and the invite still works.
-export async function sendAgentInviteHeadsUpEmail(params: {
+// One email, one link -- the login link is generated server-side (see
+// POST /api/agent-invites, which calls supabaseServer.auth.admin.generateLink
+// instead of signInWithOtp) and embedded directly below as the primary
+// call to action, so this is the only email an invited agent gets. No
+// password needed; clicking it signs them straight in.
+export async function sendAgentInviteEmail(params: {
   toEmail: string;
   tcLabel: string;
   propertyAddress: string | null;
-  appUrl: string;
+  actionLink: string;
 }) {
-  const { toEmail, tcLabel, propertyAddress, appUrl } = params;
+  const { toEmail, tcLabel, propertyAddress, actionLink } = params;
   const dealLabel = propertyAddress ? `for ${propertyAddress}` : 'on Relay TC';
   const html = wrapper(
     "You've been added to a deal",
     `<p><strong>${tcLabel}</strong> added you ${dealLabel} on Relay TC, a transaction coordination
-     workspace. Check your inbox for a separate "Log in" email from Supabase Auth -- that link signs
-     you in directly, no password needed.</p>
+     workspace.</p>
+     <p><a href="${actionLink}" style="color: #b45309;">Log in to Relay TC</a></p>
      <p>Once in, you'll be able to see the deal's checklist, upload and download documents, and
-     message ${tcLabel} right from the page.</p>
-     <p><a href="${appUrl}/agent/login" style="color: #b45309;">Already have access? Log in</a></p>`
+     message ${tcLabel} right from the page.</p>`
   );
 
   const resend = getResendClient();

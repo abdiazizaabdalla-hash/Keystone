@@ -1,10 +1,10 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabaseBrowser as supabase } from '@/lib/supabaseClient';
-import { saveSession, authFetch, AuthRequiredError } from '@/lib/authClient';
+import { saveSession } from '@/lib/authClient';
 
 type Status = 'working' | 'error';
 
@@ -17,18 +17,18 @@ function parseHashParams(hash: string): Record<string, string> {
   return out;
 }
 
-// Landing page for both links Supabase's signInWithOtp sends: a brand
-// new agent's first-ever login, and a returning agent's (see
-// /agent/login) plain re-login. Same "read tokens from the URL hash,
-// establish a session" shape as /auth/confirm. Two agent-specific steps
-// on top of that: telling /api/agent-invites/accept which transaction
-// this was for, when there is one (a plain re-login has no transactionId
-// at all), and routing a brand-new agent to /agent/welcome to set a
-// password before they ever see a dashboard.
+// Landing page for every link that signs an agent in -- an invite's
+// generated magic link (see POST /api/agent-invites) and a returning
+// agent's plain re-login link (see /agent/login) both land here and are
+// handled identically now. Same "read tokens from the URL hash, establish
+// a session" shape as /auth/confirm. One agent-specific step on top of
+// that: routing a brand-new agent to /agent/welcome to set a password
+// before they ever see a dashboard. Acceptance of any pending invite is
+// no longer automatic here -- it happens explicitly from /agent, which
+// lists whatever's pending for this account the moment they're signed in
+// (see POST /api/agent-invites/accept and src/app/agent/page.tsx).
 function AcceptContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const transactionId = searchParams.get('transactionId');
 
   const [status, setStatus] = useState<Status>('working');
   const [errorMessage, setErrorMessage] = useState('');
@@ -72,36 +72,15 @@ function AcceptContent() {
         saveSession(data.session.access_token, data.session.refresh_token, data.session.user.id);
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
 
-        if (transactionId) {
-          const res = await authFetch('/api/agent-invites/accept', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ transactionId }),
-          });
-          if (!res.ok) {
-            const result = await res.json().catch(() => ({}));
-            throw new Error(result.error || 'Could not confirm your access to this transaction');
-          }
-        }
-
-        // First time this agent has ever accepted an invite: no password
-        // on the account yet (it exists purely from signInWithOtp), so
-        // send them to set one up before landing on their dashboard --
-        // every later login/invite skips straight past this.
+        // First time this agent has ever signed in: no password on the
+        // account yet (it exists purely from the generated magic link),
+        // so send them to set one up before landing on their dashboard --
+        // every later login skips straight past this. Either way they
+        // land on /agent, where any pending invite is waiting for an
+        // explicit accept.
         const needsPassword = data.session.user.user_metadata?.has_password !== true;
-        if (needsPassword) {
-          router.replace(transactionId ? `/agent/welcome?transactionId=${transactionId}` : '/agent/welcome');
-        } else if (transactionId) {
-          router.replace(`/agent/transactions/${transactionId}`);
-        } else {
-          router.replace('/agent');
-        }
+        router.replace(needsPassword ? '/agent/welcome' : '/agent');
       } catch (err) {
-        if (err instanceof AuthRequiredError) {
-          setStatus('error');
-          setErrorMessage('Your session could not be confirmed. Please request a new login link.');
-          return;
-        }
         console.error('Error finishing agent login:', err);
         setStatus('error');
         setErrorMessage(err instanceof Error ? err.message : 'We could not log you in. Please request a new link.');
