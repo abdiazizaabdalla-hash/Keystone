@@ -70,6 +70,7 @@ interface AgentInvoice {
   paid_amount: number | null;
   refunded: boolean;
   refunded_at: string | null;
+  payOnline: boolean;
 }
 
 // How often the message thread re-fetches while this page is open. This
@@ -110,6 +111,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
   const [isGeneratingPayLink, setIsGeneratingPayLink] = useState(false);
   const [stripePayUrl, setStripePayUrl] = useState<string | null>(null);
   const [payLinkError, setPayLinkError] = useState('');
+  const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
 
   const [docSearch, setDocSearch] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
@@ -363,6 +365,32 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
     }
   };
 
+  const handleDownloadInvoicePdf = async () => {
+    if (!invoice) return;
+    try {
+      setIsDownloadingInvoice(true);
+      const res = await authFetch(`/api/invoices/${invoice.id}/pdf`);
+      if (!res.ok) throw new Error('Failed to generate PDF');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${invoice.invoice_number}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/agent/login');
+        return;
+      }
+      console.error('Error downloading invoice PDF:', err);
+    } finally {
+      setIsDownloadingInvoice(false);
+    }
+  };
+
   // Agents can add a contact the TC hasn't entered yet (a lender, title
   // company, etc.) but can't edit or remove any contact -- that stays
   // TC-only, see POST /api/transactions/[id]/contacts.
@@ -530,26 +558,47 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                   </p>
                 </div>
                 {!invoice.paid &&
-                  (stripePayUrl ? (
-                    <a
-                      href={stripePayUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 border border-blue-500/50 text-blue-300 hover:text-blue-200 hover:border-blue-400 rounded-lg transition font-medium text-sm shrink-0"
-                    >
-                      Open Pay Online Link ↗
-                    </a>
+                  (invoice.payOnline ? (
+                    stripePayUrl ? (
+                      <a
+                        href={stripePayUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 border border-blue-500/50 text-blue-300 hover:text-blue-200 hover:border-blue-400 rounded-lg transition font-medium text-sm shrink-0"
+                      >
+                        Open Pay Online Link ↗
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleGeneratePayLink}
+                        disabled={isGeneratingPayLink}
+                        className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 shrink-0"
+                      >
+                        {isGeneratingPayLink ? 'Creating link…' : 'Pay Now'}
+                      </button>
+                    )
                   ) : (
                     <button
                       type="button"
-                      onClick={handleGeneratePayLink}
-                      disabled={isGeneratingPayLink}
-                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 shrink-0"
+                      onClick={handleDownloadInvoicePdf}
+                      disabled={isDownloadingInvoice}
+                      className="px-4 py-2 border border-slate-500/50 text-slate-300 hover:text-slate-100 hover:border-slate-400 rounded-lg transition font-medium text-sm shrink-0"
                     >
-                      {isGeneratingPayLink ? 'Creating link…' : 'Pay Now'}
+                      {isDownloadingInvoice ? 'Preparing…' : 'Download PDF'}
                     </button>
                   ))}
               </div>
+              {/* No online payment set up on the TC's side yet -- this is
+                  their own Settings step to finish, not something the
+                  agent can do anything about, so the agent just sees that
+                  the invoice has gone out and can grab a PDF of it, same
+                  as if the TC had emailed it. */}
+              {!invoice.paid && !invoice.payOnline && (
+                <p className="text-xs text-slate-500 mt-2">
+                  Invoice sent -- {transaction.tcLabel} will let you know how to pay.
+                </p>
+              )}
               {payLinkError && <p className="text-red-400 text-xs mt-2">{payLinkError}</p>}
             </div>
           )}

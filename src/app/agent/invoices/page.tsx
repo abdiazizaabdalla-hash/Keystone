@@ -18,6 +18,7 @@ interface AgentInvoice {
   refunded: boolean;
   refunded_at: string | null;
   transaction_id: string;
+  payOnline: boolean;
   transaction: { id: string; fileNumber: string; propertyAddress: string | null; tcLabel: string } | null;
 }
 
@@ -36,6 +37,7 @@ export default function AgentInvoicesPage() {
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [payUrls, setPayUrls] = useState<Record<string, string>>({});
   const [payErrors, setPayErrors] = useState<Record<string, string>>({});
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -88,6 +90,31 @@ export default function AgentInvoicesPage() {
     }
   };
 
+  const handleDownloadInvoicePdf = async (invoice: AgentInvoice) => {
+    try {
+      setDownloadingId(invoice.id);
+      const res = await authFetch(`/api/invoices/${invoice.id}/pdf`);
+      if (!res.ok) throw new Error('Failed to generate PDF');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${invoice.invoice_number}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/agent/login');
+        return;
+      }
+      console.error('Error downloading invoice PDF:', err);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const unpaid = invoices.filter((i) => !i.paid);
   const paid = invoices.filter((i) => i.paid);
 
@@ -127,26 +154,47 @@ export default function AgentInvoicesPage() {
             : `Due ${formatDisplayDate(invoice.due_date)}`}
         </p>
         {!invoice.paid &&
-          (payUrls[invoice.id] ? (
-            <a
-              href={payUrls[invoice.id]}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 border border-blue-500/50 text-blue-300 hover:text-blue-200 hover:border-blue-400 rounded-lg transition font-medium text-sm shrink-0"
-            >
-              Open Pay Online Link ↗
-            </a>
+          (invoice.payOnline ? (
+            payUrls[invoice.id] ? (
+              <a
+                href={payUrls[invoice.id]}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 border border-blue-500/50 text-blue-300 hover:text-blue-200 hover:border-blue-400 rounded-lg transition font-medium text-sm shrink-0"
+              >
+                Open Pay Online Link ↗
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleGeneratePayLink(invoice.id)}
+                disabled={generatingId === invoice.id}
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 shrink-0"
+              >
+                {generatingId === invoice.id ? 'Creating link…' : 'Pay Now'}
+              </button>
+            )
           ) : (
             <button
               type="button"
-              onClick={() => handleGeneratePayLink(invoice.id)}
-              disabled={generatingId === invoice.id}
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 shrink-0"
+              onClick={() => handleDownloadInvoicePdf(invoice)}
+              disabled={downloadingId === invoice.id}
+              className="px-4 py-2 border border-slate-500/50 text-slate-300 hover:text-slate-100 hover:border-slate-400 rounded-lg transition font-medium text-sm shrink-0"
             >
-              {generatingId === invoice.id ? 'Creating link…' : 'Pay Now'}
+              {downloadingId === invoice.id ? 'Preparing…' : 'Download PDF'}
             </button>
           ))}
       </div>
+      {/* No online payment set up on the TC's side yet -- this is their
+          own Settings step to finish, not something the agent can do
+          anything about, so the agent just sees that the invoice has
+          gone out and can grab a PDF of it, same as if the TC had
+          emailed it. Mirrors the per-transaction agent page. */}
+      {!invoice.paid && !invoice.payOnline && (
+        <p className="text-xs text-slate-500 mt-2">
+          Invoice sent -- {invoice.transaction ? invoice.transaction.tcLabel : 'Your TC'} will let you know how to pay.
+        </p>
+      )}
       {payErrors[invoice.id] && <p className="text-red-400 text-xs mt-2">{payErrors[invoice.id]}</p>}
     </div>
   );

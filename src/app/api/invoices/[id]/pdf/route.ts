@@ -3,13 +3,22 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { generateInvoicePdf } from '@/lib/invoicePdf';
 import { loadInvoiceBundle, loadTcInfo } from '@/lib/invoiceData';
 import { getInvoicePayUrlForDocument } from '@/lib/stripeConnect';
+import { isAgentUser } from '@/lib/agentPortal';
 
+// Also reachable by the invited agent on this invoice's own transaction
+// (see loadInvoiceBundle's allowAgent option, same as the Stripe pay-link
+// route) -- lets them download the PDF straight from their own portal,
+// which matters most when payOnline is false and that download is the
+// only thing the agent-facing invoice view offers besides "ask your TC".
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
     const { id } = await params;
 
-    const { invoice, agent, transaction } = await loadInvoiceBundle(id, user.id, isAdmin);
+    const { invoice, agent, transaction } = await loadInvoiceBundle(id, user.id, isAdmin, {
+      allowAgent: true,
+      isAgent: isAgentUser(user),
+    });
 
     if (!agent || !transaction) {
       return NextResponse.json({ error: 'Invoice is missing agent or transaction data' }, { status: 500 });

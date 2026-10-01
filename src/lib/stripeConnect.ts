@@ -168,6 +168,26 @@ export async function createInvoiceCheckoutSession(
 }
 
 /**
+ * Whether this TC can currently be paid online through Relay -- the same
+ * "approved payment_accounts row" check getInvoicePayUrlForDocument and
+ * the Stripe pay-link route both already do, pulled out so agent-facing
+ * surfaces (the invoices list, the per-transaction invoice card) can
+ * decide up front whether to offer "Pay Now" at all, instead of letting
+ * an agent click it and hit a 400 explaining the TC hasn't finished
+ * Stripe onboarding -- that error is meant for the TC to see and act on
+ * in their own Settings, not something an agent can do anything about.
+ */
+export async function isStripePayAvailable(tcUserId: string): Promise<boolean> {
+  const { data: account } = await supabaseServer
+    .from('payment_accounts')
+    .select('status')
+    .eq('tc_user_id', tcUserId)
+    .eq('provider', 'stripe_connect')
+    .maybeSingle();
+  return !!account && account.status === 'approved';
+}
+
+/**
  * Looks up the invoice's TC Stripe Connect status and, if they're
  * approved, generates a fresh Checkout Session URL for embedding in a
  * downloaded/emailed invoice PDF. Returns null when the invoice is
