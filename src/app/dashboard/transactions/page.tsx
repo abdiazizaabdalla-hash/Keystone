@@ -111,16 +111,16 @@ export default function TransactionsPage() {
     return <span className="text-xs text-slate-500 whitespace-nowrap">Due {tx.next_due_date}</span>;
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusTextColor = (status: string) => {
     switch (status) {
       case 'Closed':
-        return 'bg-green-900/30 border-green-700 text-green-400';
+        return 'text-green-400';
       case 'Contract Pending':
-        return 'bg-yellow-900/30 border-yellow-700 text-yellow-400';
+        return 'text-yellow-400';
       case 'Under Contract':
-        return 'bg-blue-900/30 border-blue-700 text-blue-400';
+        return 'text-blue-400';
       default:
-        return 'bg-slate-700/30 border-slate-600 text-slate-400';
+        return 'text-slate-400';
     }
   };
 
@@ -273,7 +273,7 @@ export default function TransactionsPage() {
                         <span className="font-semibold text-blue-400">${tx.purchase_price.toLocaleString()}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(tx.status)}`}>
+                        <span className={`text-sm font-medium ${getStatusTextColor(tx.status)}`}>
                           {tx.status}
                         </span>
                       </td>
