@@ -297,7 +297,7 @@ export default function Home() {
             <div className="rounded-xl border border-slate-700 overflow-hidden shadow-2xl bg-slate-800">
               <img
                 src="/screenshots/document-setup.jpg"
-                alt="Documents organized by category on a transaction in Relay, including an uploaded inspection report with its signature status"
+                alt="Documents on a transaction in Relay, organized into categories like Contract & Disclosures, Inspection & Repairs, and Title & Escrow"
                 className="w-full h-auto block"
               />
             </div>

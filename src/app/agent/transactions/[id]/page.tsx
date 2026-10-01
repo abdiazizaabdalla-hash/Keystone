@@ -400,16 +400,11 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
             dropdowns/inputs. Nothing about invoices or commission here,
             that stays TC-only (see lib/agentPortal.ts). */}
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <div>
-              <h1 className="text-xl font-display font-semibold text-slate-100">
-                {transaction.propertyAddress || transaction.fileNumber}
-              </h1>
-              <p className="text-slate-500 text-sm mt-0.5">Coordinated by {transaction.tcLabel}</p>
-            </div>
-            <span className="inline-block px-3 py-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 text-sm font-semibold rounded-full">
-              {transaction.status}
-            </span>
+          <div className="mb-4">
+            <h1 className="text-xl font-display font-semibold text-slate-100">
+              {transaction.propertyAddress || transaction.fileNumber}
+            </h1>
+            <p className="text-slate-500 text-sm mt-0.5">Coordinated by {transaction.tcLabel}</p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-slate-600">

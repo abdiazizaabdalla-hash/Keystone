@@ -1463,16 +1463,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         {/* Main Card */}
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
           <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <span className="inline-block px-3 py-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 text-sm font-semibold rounded-full">
-                {transaction.status}
-              </span>
-              {transaction.status === 'Closed' && invoice && (
+            {transaction.status === 'Closed' && invoice && (
+              <div className="flex justify-end mb-4">
                 <span className="inline-block px-3 py-1 bg-green-500/20 border border-green-500/50 text-green-300 text-xs font-semibold rounded-full">
                   ✓ Invoice Generated
                 </span>
-              )}
-            </div>
+              </div>
+            )}
             <h1 className="text-4xl font-display font-semibold text-slate-100 mb-2">{transaction.file_number}</h1>
             <p className="text-slate-400">{transaction.property_address}</p>
           </div>
