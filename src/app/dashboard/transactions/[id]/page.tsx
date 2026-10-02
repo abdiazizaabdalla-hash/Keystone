@@ -117,6 +117,20 @@ interface SigningRequestItem {
   created_at: string;
 }
 
+interface ExternalLink {
+  id: string;
+  scope: 'document' | 'dates';
+  document_id: string | null;
+  document_file_name?: string | null;
+  recipient_label: string | null;
+  token: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_accessed_at: string | null;
+  access_count: number;
+  created_at: string;
+}
+
 // Live-formats a Contacts phone field into "(555) 123-4567" as the user
 // types, regardless of how they type it (with dashes, spaces, pasted in
 // all at once, etc.) -- keeps only digits, then re-inserts the
@@ -151,6 +165,29 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [signatureRequestError, setSignatureRequestError] = useState<string | null>(null);
   const [agentName, setAgentName] = useState('');
   const [agent, setAgent] = useState<Agent | null>(null);
+
+  // Compliance/audit export -- a one-button, timestamped PDF snapshot
+  // of this deal's documents, messages, and checklist (see
+  // /api/transactions/[id]/compliance-export). No state kept beyond the
+  // in-flight/error flags -- it's a one-shot download, nothing to list.
+  const [isExportingCompliance, setIsExportingCompliance] = useState(false);
+  const [complianceExportError, setComplianceExportError] = useState<string | null>(null);
+
+  // Scoped external access -- magic-link, no-login views for a lender,
+  // title company, or inspector: either one document, or just this
+  // deal's key dates (see /api/transactions/[id]/external-links and the
+  // public /external/[token] page). `externalLinks` is this
+  // transaction's own link list; the create form's fields double as
+  // that form's draft state.
+  const [externalLinks, setExternalLinks] = useState<ExternalLink[]>([]);
+  const [externalLinksError, setExternalLinksError] = useState<string | null>(null);
+  const [showCreateLinkForm, setShowCreateLinkForm] = useState(false);
+  const [newLinkScope, setNewLinkScope] = useState<'document' | 'dates'>('dates');
+  const [newLinkDocumentId, setNewLinkDocumentId] = useState('');
+  const [newLinkRecipientLabel, setNewLinkRecipientLabel] = useState('');
+  const [isCreatingLink, setIsCreatingLink] = useState(false);
+  const [revokingLinkId, setRevokingLinkId] = useState<string | null>(null);
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
 
   // "Contacts" section, directly under the Checklist card: the agent
   // (read-only here, sourced from `agent` above) plus any other parties
@@ -242,6 +279,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     fetchAgentAccess();
     fetchMessages();
     fetchEmails();
+    fetchExternalLinks();
   }, [resolvedParams.id]);
 
   // Poll for new messages so the thread updates without a manual reload
@@ -423,6 +461,124 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       if (Array.isArray(data)) setSigningRequests(data);
     } catch {
       // ignore
+    }
+  };
+
+  // Compliance/audit export -- streams the PDF straight to a download,
+  // same blob-URL pattern as the invoice PDF download
+  // (dashboard/invoices/[id]/page.tsx handleDownloadPdf).
+  const handleExportCompliance = async () => {
+    setComplianceExportError(null);
+    try {
+      setIsExportingCompliance(true);
+      const response = await authFetch(`/api/transactions/${resolvedParams.id}/compliance-export`);
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || 'Failed to generate compliance export');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${transaction?.file_number || 'transaction'}-compliance-export.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setComplianceExportError(error instanceof Error ? error.message : 'Failed to generate compliance export');
+    } finally {
+      setIsExportingCompliance(false);
+    }
+  };
+
+  // Scoped external access: fetch this transaction's link list, create
+  // a new one, revoke one, and a small clipboard-copy helper for the
+  // list's "Copy link" buttons.
+  const fetchExternalLinks = async () => {
+    try {
+      const res = await authFetch(`/api/transactions/${resolvedParams.id}/external-links`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setExternalLinks(data);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleCreateExternalLink = async () => {
+    setExternalLinksError(null);
+    if (newLinkScope === 'document' && !newLinkDocumentId) {
+      setExternalLinksError('Choose a document to share.');
+      return;
+    }
+    try {
+      setIsCreatingLink(true);
+      const response = await authFetch(`/api/transactions/${resolvedParams.id}/external-links`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scope: newLinkScope,
+          documentId: newLinkScope === 'document' ? newLinkDocumentId : undefined,
+          recipientLabel: newLinkRecipientLabel.trim() || undefined,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to create link');
+      setExternalLinks((prev) => [data, ...prev]);
+      setShowCreateLinkForm(false);
+      setNewLinkDocumentId('');
+      setNewLinkRecipientLabel('');
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setExternalLinksError(error instanceof Error ? error.message : 'Failed to create link');
+    } finally {
+      setIsCreatingLink(false);
+    }
+  };
+
+  const handleRevokeExternalLink = async (linkId: string) => {
+    if (!confirm('Revoke this link? Anyone who still has it will no longer be able to open it.')) return;
+    try {
+      setRevokingLinkId(linkId);
+      const response = await authFetch(`/api/transactions/${resolvedParams.id}/external-links/${linkId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || 'Failed to revoke link');
+      }
+      setExternalLinks((prev) =>
+        prev.map((l) => (l.id === linkId ? { ...l, revoked_at: new Date().toISOString() } : l))
+      );
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setExternalLinksError(error instanceof Error ? error.message : 'Failed to revoke link');
+    } finally {
+      setRevokingLinkId(null);
+    }
+  };
+
+  const handleCopyExternalLink = async (link: ExternalLink) => {
+    const url = `${window.location.origin}/external/${link.token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLinkId(link.id);
+      setTimeout(() => setCopiedLinkId((prev) => (prev === link.id ? null : prev)), 2000);
+    } catch {
+      // Clipboard API unavailable (e.g. insecure context) -- the link is
+      // still visible in the list for a manual copy, so this just quietly
+      // no-ops rather than erroring the whole panel.
     }
   };
 
@@ -1621,13 +1777,27 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         {/* Main Card */}
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
           <div className="mb-8">
-            {transaction.status === 'Closed' && invoice && (
-              <div className="flex justify-end mb-4">
-                <span className="inline-block px-3 py-1 bg-green-500/20 border border-green-500/50 text-green-300 text-xs font-semibold rounded-full">
-                  ✓ Invoice Generated
-                </span>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                {transaction.status === 'Closed' && invoice && (
+                  <span className="inline-block px-3 py-1 bg-green-500/20 border border-green-500/50 text-green-300 text-xs font-semibold rounded-full">
+                    ✓ Invoice Generated
+                  </span>
+                )}
               </div>
-            )}
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={handleExportCompliance}
+                  disabled={isExportingCompliance}
+                  className="text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition disabled:opacity-50"
+                  title="Download a timestamped PDF of this deal's documents, messages, and checklist"
+                >
+                  {isExportingCompliance ? 'Exporting...' : 'Export Compliance Report'}
+                </button>
+                {complianceExportError && <p className="text-xs text-red-400 mt-1">{complianceExportError}</p>}
+              </div>
+            </div>
             <h1 className="text-4xl font-display font-semibold text-slate-100 mb-2">{transaction.file_number}</h1>
             <p className="text-slate-400">{transaction.property_address}</p>
           </div>
@@ -2414,6 +2584,140 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           >
             + Add another
           </button>
+        </div>
+
+        {/* External Access: magic links for a lender, title company, or
+            inspector -- one document, or just this deal's key dates, no
+            login required on their end. See /api/transactions/[id]/
+            external-links and the public /external/[token] page. */}
+        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-slate-100">External Access</h2>
+            <button
+              type="button"
+              onClick={() => setShowCreateLinkForm((v) => !v)}
+              className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
+            >
+              {showCreateLinkForm ? 'Cancel' : '+ Share'}
+            </button>
+          </div>
+
+          {showCreateLinkForm && (
+            <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-4 mb-4 space-y-3">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewLinkScope('dates')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                    newLinkScope === 'dates' ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  Key Dates
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewLinkScope('document')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                    newLinkScope === 'document' ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  One Document
+                </button>
+              </div>
+
+              {newLinkScope === 'document' && (
+                <select
+                  value={newLinkDocumentId}
+                  onChange={(e) => setNewLinkDocumentId(e.target.value)}
+                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">Choose a document...</option>
+                  {documents.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.file_name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <input
+                type="text"
+                value={newLinkRecipientLabel}
+                onChange={(e) => setNewLinkRecipientLabel(e.target.value)}
+                placeholder="Note for yourself (e.g. Wells Fargo -- lender), optional"
+                className="w-full bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              />
+
+              <button
+                type="button"
+                onClick={handleCreateExternalLink}
+                disabled={isCreatingLink}
+                className="w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+              >
+                {isCreatingLink ? 'Creating...' : 'Create Link'}
+              </button>
+            </div>
+          )}
+
+          {externalLinksError && <p className="text-xs text-red-400 mb-3">{externalLinksError}</p>}
+
+          {externalLinks.length === 0 ? (
+            <p className="text-sm text-slate-500 italic">No external links yet -- share a document or this deal&apos;s dates without giving anyone a login.</p>
+          ) : (
+            <div className="space-y-2">
+              {externalLinks.map((link) => {
+                const isExpired = new Date(link.expires_at) < new Date();
+                const isRevoked = Boolean(link.revoked_at);
+                const isLive = !isExpired && !isRevoked;
+                return (
+                  <div key={link.id} className="bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm text-slate-100 font-medium truncate">
+                          {link.scope === 'document' ? link.document_file_name || 'Document' : 'Key Dates'}
+                        </p>
+                        {link.recipient_label && (
+                          <p className="text-xs text-slate-400 truncate">{link.recipient_label}</p>
+                        )}
+                      </div>
+                      <span
+                        className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                          isLive
+                            ? 'bg-green-500/20 border border-green-500/50 text-green-300'
+                            : 'bg-slate-600/40 border border-slate-500/50 text-slate-400'
+                        }`}
+                      >
+                        {isRevoked ? 'Revoked' : isExpired ? 'Expired' : 'Active'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Expires {new Date(link.expires_at).toLocaleDateString()}
+                      {link.access_count > 0 && ` · opened ${link.access_count} time${link.access_count === 1 ? '' : 's'}`}
+                    </p>
+                    {isLive && (
+                      <div className="flex gap-3 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyExternalLink(link)}
+                          className="text-xs text-blue-400 hover:text-blue-300 font-medium transition"
+                        >
+                          {copiedLinkId === link.id ? 'Copied!' : 'Copy link'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRevokeExternalLink(link.id)}
+                          disabled={revokingLinkId === link.id}
+                          className="text-xs text-red-400 hover:text-red-300 font-medium transition disabled:opacity-50"
+                        >
+                          {revokingLinkId === link.id ? 'Revoking...' : 'Revoke'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
         </div>
 
