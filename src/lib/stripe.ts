@@ -1,8 +1,8 @@
 import Stripe from 'stripe';
 
-// Server-side Stripe client. STRIPE_SECRET_KEY is a test-mode secret key
-// for now (see .env.local) — swap for a live key only when going to
-// production billing.
+// Server-side Stripe client. Behaves identically against a sk_test_...
+// or sk_live_... STRIPE_SECRET_KEY (see .env.local) -- which mode this
+// runs in is purely that one env var, nothing in code.
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 // Stripe Price IDs for the paid plans, created once in the Stripe dashboard
