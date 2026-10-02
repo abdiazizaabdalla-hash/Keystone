@@ -70,6 +70,9 @@ interface Invoice {
   invoice_number: string;
   amount_owed: number;
   paid: boolean;
+  paid_at: string | null;
+  paid_amount: number | null;
+  refunded?: boolean;
   due_date: string;
 }
 
@@ -160,6 +163,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const [createInvoiceError, setCreateInvoiceError] = useState<string | null>(null);
   const [isClosingAndInvoicing, setIsClosingAndInvoicing] = useState(false);
+  const [isMarkingInvoicePaid, setIsMarkingInvoicePaid] = useState(false);
+  const [markInvoicePaidError, setMarkInvoicePaidError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -916,6 +921,61 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     }
   };
 
+  // Paid is all-or-nothing, same as the dedicated invoice page -- a
+  // closing payout isn't something agents pay in installments, so
+  // marking paid here always records the full invoiced amount too.
+  const handleMarkInvoicePaid = async () => {
+    if (!invoice) return;
+    try {
+      setIsMarkingInvoicePaid(true);
+      setMarkInvoicePaidError(null);
+      const response = await authFetch('/api/invoices', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceId: invoice.id,
+          paid: true,
+          paidAmount: invoice.amount_owed,
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to mark invoice as paid');
+      const updated = await response.json();
+      setInvoice(updated);
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setMarkInvoicePaidError(error instanceof Error ? error.message : 'Failed to mark invoice as paid');
+    } finally {
+      setIsMarkingInvoicePaid(false);
+    }
+  };
+
+  const handleMarkInvoiceUnpaid = async () => {
+    if (!invoice) return;
+    try {
+      setIsMarkingInvoicePaid(true);
+      setMarkInvoicePaidError(null);
+      const response = await authFetch('/api/invoices', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceId: invoice.id, paid: false }),
+      });
+      if (!response.ok) throw new Error('Failed to mark invoice as unpaid');
+      const updated = await response.json();
+      setInvoice(updated);
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setMarkInvoicePaidError(error instanceof Error ? error.message : 'Failed to mark invoice as unpaid');
+    } finally {
+      setIsMarkingInvoicePaid(false);
+    }
+  };
+
   const handleUpload = async (
     file: File,
     taskId: string | null,
@@ -1553,22 +1613,55 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               click either way. */}
           <div className="pt-6 mt-6 border-t border-slate-600">
             {invoice ? (
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Invoice</p>
-                  <p className="text-slate-100 font-semibold">
-                    {invoice.invoice_number} · ${invoice.amount_owed.toLocaleString()} ·{' '}
-                    <span className={invoice.paid ? 'text-green-400' : 'text-blue-400'}>
-                      {invoice.paid ? 'Paid' : 'Unpaid'}
-                    </span>
-                  </p>
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Invoice</p>
+                    <p className="text-slate-100 font-semibold">
+                      {invoice.invoice_number} · ${invoice.amount_owed.toLocaleString()} ·{' '}
+                      <span className={invoice.paid ? 'text-green-400' : 'text-blue-400'}>
+                        {invoice.paid ? 'Paid' : 'Unpaid'}
+                      </span>
+                    </p>
+                    {invoice.paid && invoice.paid_at && (
+                      <p className="text-xs text-slate-500 mt-0.5">Paid on {formatDisplayDate(invoice.paid_at)}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {/* Marking paid/unpaid right here saves the click into
+                        the dedicated invoice page for the common case --
+                        money came in some other way (check, Zelle, cash)
+                        and the TC just needs to record it. Not shown once
+                        Stripe has already settled it (refunded is a
+                        Stripe-only state) -- that stays a read-only record
+                        on the invoice page itself. */}
+                    {!invoice.refunded &&
+                      (invoice.paid ? (
+                        <button
+                          onClick={handleMarkInvoiceUnpaid}
+                          disabled={isMarkingInvoicePaid}
+                          className="px-3 py-1.5 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 rounded-lg transition text-sm font-medium disabled:opacity-50"
+                        >
+                          {isMarkingInvoicePaid ? 'Updating…' : 'Mark as Unpaid'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleMarkInvoicePaid}
+                          disabled={isMarkingInvoicePaid}
+                          className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition text-sm font-semibold disabled:opacity-50"
+                        >
+                          {isMarkingInvoicePaid ? 'Saving…' : 'Mark as Paid'}
+                        </button>
+                      ))}
+                    <Link
+                      href={`/dashboard/invoices/${invoice.id}`}
+                      className="text-sm font-medium text-blue-400 hover:text-blue-300 whitespace-nowrap"
+                    >
+                      View invoice →
+                    </Link>
+                  </div>
                 </div>
-                <Link
-                  href={`/dashboard/invoices/${invoice.id}`}
-                  className="text-sm font-medium text-blue-400 hover:text-blue-300"
-                >
-                  View invoice →
-                </Link>
+                {markInvoicePaidError && <p className="text-sm text-red-400">{markInvoicePaidError}</p>}
               </div>
             ) : (
               <div className="space-y-2">
