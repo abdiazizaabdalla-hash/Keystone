@@ -40,10 +40,37 @@ export default function NewTransactionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // AI contract intake -- upload a purchase contract PDF and pre-fill the
+  // form above instead of typing everything in by hand. aiAvailable comes
+  // from a GET check (ANTHROPIC_API_KEY configured?) so the upload option
+  // simply doesn't appear on an install that hasn't set it up yet, rather
+  // than showing a button that always fails.
+  const [aiAvailable, setAiAvailable] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractNotes, setExtractNotes] = useState<string | null>(null);
+  const [extractedFileName, setExtractedFileName] = useState<string | null>(null);
+  const [contractFile, setContractFile] = useState<File | null>(null);
+
   useEffect(() => {
     fetchAgents();
     fetchTemplates();
+    checkAiAvailability();
   }, []);
+
+  // Whether AI contract intake is configured at all -- purely additive,
+  // so any failure here just leaves the upload option hidden rather than
+  // surfacing an error on a page load that otherwise has nothing wrong.
+  const checkAiAvailability = async () => {
+    try {
+      const res = await authFetch('/api/transactions/extract-contract');
+      if (!res.ok) return;
+      const data = await res.json();
+      setAiAvailable(Boolean(data.available));
+    } catch {
+      // Silently unavailable -- the manual form still works fine.
+    }
+  };
 
   const fetchAgents = async () => {
     try {
@@ -107,6 +134,67 @@ export default function NewTransactionPage() {
 
   const blurOnWheel = (e: React.WheelEvent<HTMLInputElement>) => e.currentTarget.blur();
 
+  // Best-effort match of an extracted agent name against the TC's existing
+  // agent list, so the dropdown can be pre-selected when it's an obvious
+  // match -- never auto-creates or guesses when it isn't a clear hit.
+  const matchAgent = (name: string): string => {
+    if (!name) return '';
+    const needle = name.trim().toLowerCase();
+    if (!needle) return '';
+    const hit = agents.find((a) => {
+      const hay = a.name.trim().toLowerCase();
+      return hay === needle || hay.includes(needle) || needle.includes(hay);
+    });
+    return hit?.id || '';
+  };
+
+  const handleContractUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file after a retry
+    if (!file) return;
+
+    setExtracting(true);
+    setExtractError(null);
+    setExtractNotes(null);
+
+    try {
+      const body = new FormData();
+      body.append('file', file);
+
+      const res = await authFetch('/api/transactions/extract-contract', {
+        method: 'POST',
+        body,
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not read the contract');
+      }
+
+      const f = data.fields || {};
+      setFormData((prev) => ({
+        ...prev,
+        propertyAddress: f.propertyAddress || prev.propertyAddress,
+        purchasePrice: f.purchasePrice ? formatWithCommas(String(f.purchasePrice)) : prev.purchasePrice,
+        acceptanceDate: f.acceptanceDate || prev.acceptanceDate,
+        closingDate: f.closingDate || prev.closingDate,
+        agentId: matchAgent(f.buyerAgentName) || matchAgent(f.listingAgentName) || prev.agentId,
+      }));
+      setContractFile(file);
+      setExtractedFileName(file.name);
+      if (f.notes) setExtractNotes(f.notes);
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      const errorMsg = error instanceof Error ? error.message : 'Could not read the contract';
+      setExtractError(errorMsg);
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -135,6 +223,23 @@ export default function NewTransactionPage() {
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'Failed to create transaction');
+      }
+
+      const created = await res.json();
+
+      if (contractFile && created?.id) {
+        try {
+          const docBody = new FormData();
+          docBody.append('file', contractFile);
+          docBody.append('transactionId', created.id);
+          docBody.append('category', 'contract_disclosures');
+          docBody.append('documentType', 'Purchase Contract');
+          await authFetch('/api/documents', { method: 'POST', body: docBody });
+        } catch {
+          // The transaction itself was created fine -- don't block on
+          // re-attaching the contract PDF; the TC can upload it from the
+          // transaction page's Documents section if this quietly failed.
+        }
       }
 
       router.push('/dashboard/transactions');
@@ -188,6 +293,59 @@ export default function NewTransactionPage() {
           <h1 className="text-4xl font-display font-semibold text-slate-100 mb-3">Create New Deal</h1>
           <p className="text-slate-400">Enter the details to start tracking this transaction. Your checklist will be auto-generated.</p>
         </div>
+
+        {/* AI Contract Intake -- optional, only shown once ANTHROPIC_API_KEY
+            is configured server-side (see checkAiAvailability above). */}
+        {aiAvailable && (
+          <div className="mb-8 bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-slate-100 mb-1">Upload a Contract (optional)</h3>
+                <p className="text-sm text-slate-400 mb-3">
+                  Upload the purchase contract PDF and Relay will read the address, price, and key dates for you. Review everything below before saving -- this is a starting point, not a substitute for checking the actual contract.
+                </p>
+                <label className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-500 rounded-lg text-sm font-medium text-slate-100 cursor-pointer transition">
+                  {extracting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-slate-400 border-t-slate-100 rounded-full animate-spin" />
+                      Reading contract...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                      Choose PDF
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={handleContractUpload}
+                    disabled={extracting}
+                    className="hidden"
+                  />
+                </label>
+                {extractedFileName && !extractError && (
+                  <p className="text-xs text-emerald-400 mt-2">
+                    Extracted from {extractedFileName} -- fields below were pre-filled, double-check them.
+                  </p>
+                )}
+                {extractNotes && (
+                  <p className="text-xs text-amber-400 mt-2">Heads up: {extractNotes}</p>
+                )}
+                {extractError && (
+                  <p className="text-xs text-red-400 mt-2">{extractError}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Error Alert */}
         {error && (
