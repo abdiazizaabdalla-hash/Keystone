@@ -20,6 +20,16 @@ interface Transaction {
   checklist_template_name?: string | null;
   acceptance_date?: string | null;
   closing_date?: string | null;
+  inbound_token?: string | null;
+}
+
+interface TransactionEmail {
+  id: string;
+  from_email: string;
+  from_name: string | null;
+  subject: string | null;
+  body_text: string | null;
+  received_at: string;
 }
 
 interface Task {
@@ -216,6 +226,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       attachment?: { id: string; fileName: string; url: string | null; contentType: string | null; fileSize: number | null } | null;
     }[]
   >([]);
+  const [emails, setEmails] = useState<TransactionEmail[]>([]);
+  const [copiedInboundAddress, setCopiedInboundAddress] = useState(false);
   const [messageDraft, setMessageDraft] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<{ id: string; fileName: string } | null>(null);
@@ -229,6 +241,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     fetchSigningRequests();
     fetchAgentAccess();
     fetchMessages();
+    fetchEmails();
   }, [resolvedParams.id]);
 
   // Poll for new messages so the thread updates without a manual reload
@@ -267,6 +280,38 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       if (Array.isArray(data)) setMessages(data);
     } catch {
       // ignore
+    }
+  };
+
+  const fetchEmails = async () => {
+    try {
+      const res = await authFetch(`/api/email/inbound?transactionId=${resolvedParams.id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setEmails(data);
+    } catch {
+      // ignore -- the Communication card just shows nothing if this fails.
+    }
+  };
+
+  // This transaction's own inbound-email address -- forward/CC mail
+  // about the deal here and it threads onto the transaction (see
+  // src/app/api/email/inbound/route.ts). null until an inbound domain
+  // is actually configured (NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN), so the
+  // Communication card can show a setup note instead of a broken address.
+  const inboundDomain = process.env.NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN;
+  const inboundAddress =
+    transaction?.inbound_token && inboundDomain ? `deal-${transaction.inbound_token}@${inboundDomain}` : null;
+
+  const handleCopyInboundAddress = async () => {
+    if (!inboundAddress) return;
+    try {
+      await navigator.clipboard.writeText(inboundAddress);
+      setCopiedInboundAddress(true);
+      setTimeout(() => setCopiedInboundAddress(false), 2000);
+    } catch {
+      // Clipboard API can be blocked (permissions, non-HTTPS, etc.) --
+      // non-critical, the address is still shown as selectable text.
     }
   };
 
@@ -2370,6 +2415,58 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             + Add another
           </button>
         </div>
+        </div>
+
+        {/* Communication -- emails forwarded/CC'd to this transaction's
+            own inbound address land here (see
+            src/app/api/email/inbound/route.ts). Sits below Contacts in
+            the same right-hand column. */}
+        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+          <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
+          <p className="text-xs text-slate-400 mb-3">
+            Forward or CC emails about this deal here and they&apos;ll show up below -- no need to change how you
+            already send email.
+          </p>
+
+          {inboundAddress ? (
+            <div className="flex items-center gap-2 mb-4">
+              <code className="flex-1 min-w-0 truncate bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-blue-300">
+                {inboundAddress}
+              </code>
+              <button
+                type="button"
+                onClick={handleCopyInboundAddress}
+                className="flex-shrink-0 px-3 py-2 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition"
+              >
+                {copiedInboundAddress ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 mb-4">
+              Set NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN once an inbound domain is configured in Resend to turn this on.
+            </p>
+          )}
+
+          {emails.length === 0 ? (
+            <p className="text-xs text-slate-500">No emails forwarded to this deal yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {emails.map((email) => (
+                <div key={email.id} className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium text-slate-200 truncate">{email.subject || '(no subject)'}</p>
+                    <span className="text-xs text-slate-500 flex-shrink-0 whitespace-nowrap">
+                      {formatDisplayDate(email.received_at.slice(0, 10), { month: '2-digit', day: '2-digit' })}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">{email.from_name || email.from_email}</p>
+                  {email.body_text && (
+                    <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{email.body_text}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Documents Section (primary view, left column on desktop) */}

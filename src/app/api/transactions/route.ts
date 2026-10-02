@@ -12,8 +12,19 @@ import {
   normalizeTemplateSteps,
 } from '@/lib/checklistTemplates';
 import { computeDueDates, NO_DUE_DATE, DueDateSpec } from '@/lib/dueDates';
+import crypto from 'crypto';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
+
+// A short, URL/email-safe token for this transaction's inbound-email
+// address (deal-<token>@<inbound domain> -- see
+// src/app/api/email/inbound/route.ts). 8 hex chars is plenty unique for
+// something a human copy-pastes rather than memorizes; the DB-level
+// UNIQUE constraint on transactions.inbound_token is what actually
+// guarantees no collision, this is just picking a fresh guess each try.
+function generateInboundToken(): string {
+  return crypto.randomBytes(4).toString('hex');
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -187,23 +198,45 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create transaction
-    const { data: transaction, error: txError } = await supabaseServer
-      .from('transactions')
-      .insert({
-        agent_id: agentId,
-        file_number: fileNumber,
-        property_address: propertyAddress,
-        purchase_price: purchasePrice,
-        status: 'Contract Pending',
-        checklist_template_name: templateName,
-        acceptance_date: acceptanceDate || null,
-        closing_date: closingDate || null,
-      })
-      .select()
-      .single();
+    // Create transaction. Retries a handful of times on an inbound_token
+    // collision (astronomically unlikely with 32 bits of randomness, but
+    // the UNIQUE constraint is what actually guarantees safety, not the
+    // odds -- see add-email-ingestion.sql) rather than ever reusing one.
+    let transaction: ({ id: string; agent_id: string } & Record<string, unknown>) | null = null;
+    let txError: { code?: string; message?: string } | null = null;
+    for (let attempt = 0; attempt < 5 && !transaction; attempt++) {
+      const result = await supabaseServer
+        .from('transactions')
+        .insert({
+          agent_id: agentId,
+          file_number: fileNumber,
+          property_address: propertyAddress,
+          purchase_price: purchasePrice,
+          status: 'Contract Pending',
+          checklist_template_name: templateName,
+          acceptance_date: acceptanceDate || null,
+          closing_date: closingDate || null,
+          inbound_token: generateInboundToken(),
+        })
+        .select()
+        .single();
 
-    if (txError) throw txError;
+      if (!result.error) {
+        transaction = result.data;
+        txError = null;
+        break;
+      }
+
+      txError = result.error;
+      // 23505 = unique_violation. Only worth retrying if it's specifically
+      // the token column -- any other constraint failing means retrying
+      // with a new random token would just fail the same way again.
+      if (result.error.code !== '23505' || !/inbound_token/i.test(result.error.message || '')) {
+        break;
+      }
+    }
+
+    if (!transaction) throw txError || new Error('Failed to create transaction');
 
     // Resolve each step's due-date spec from this TC's own due-date
     // workflow (set up during onboarding, editable anytime in Settings --
