@@ -22,7 +22,14 @@ SET inbound_token = lower(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8
 WHERE inbound_token IS NULL;
 
 ALTER TABLE transactions ALTER COLUMN inbound_token SET NOT NULL;
-ALTER TABLE transactions ADD CONSTRAINT transactions_inbound_token_key UNIQUE (inbound_token);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'transactions_inbound_token_key'
+  ) THEN
+    ALTER TABLE transactions ADD CONSTRAINT transactions_inbound_token_key UNIQUE (inbound_token);
+  END IF;
+END $$;
 
 -- The communication log itself -- one row per inbound email, threaded
 -- to a transaction. Populated only by the webhook in
