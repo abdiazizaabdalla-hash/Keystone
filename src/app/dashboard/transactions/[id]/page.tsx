@@ -2420,15 +2420,18 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         {/* Communication -- emails forwarded/CC'd to this transaction's
             own inbound address land here (see
             src/app/api/email/inbound/route.ts). Sits below Contacts in
-            the same right-hand column. */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
-          <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
-          <p className="text-xs text-slate-400 mb-3">
-            Forward or CC emails about this deal here and they&apos;ll show up below -- no need to change how you
-            already send email.
-          </p>
+            the same right-hand column. Hidden entirely (not just the
+            address) until NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN is actually
+            set -- no TC should ever see a backend setup/env-var message;
+            it either works or it isn't there yet. */}
+        {inboundDomain && (
+          <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+            <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
+            <p className="text-xs text-slate-400 mb-3">
+              Forward or CC emails about this deal here and they&apos;ll show up below — no need to change how you
+              already send email.
+            </p>
 
-          {inboundAddress ? (
             <div className="flex items-center gap-2 mb-4">
               <code className="flex-1 min-w-0 truncate bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-blue-300">
                 {inboundAddress}
@@ -2441,33 +2444,29 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 {copiedInboundAddress ? 'Copied!' : 'Copy'}
               </button>
             </div>
-          ) : (
-            <p className="text-xs text-slate-500 mb-4">
-              Set NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN once an inbound domain is configured in Resend to turn this on.
-            </p>
-          )}
 
-          {emails.length === 0 ? (
-            <p className="text-xs text-slate-500">No emails forwarded to this deal yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {emails.map((email) => (
-                <div key={email.id} className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium text-slate-200 truncate">{email.subject || '(no subject)'}</p>
-                    <span className="text-xs text-slate-500 flex-shrink-0 whitespace-nowrap">
-                      {formatDisplayDate(email.received_at.slice(0, 10), { month: '2-digit', day: '2-digit' })}
-                    </span>
+            {emails.length === 0 ? (
+              <p className="text-xs text-slate-500">No emails forwarded to this deal yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {emails.map((email) => (
+                  <div key={email.id} className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-medium text-slate-200 truncate">{email.subject || '(no subject)'}</p>
+                      <span className="text-xs text-slate-500 flex-shrink-0 whitespace-nowrap">
+                        {formatDisplayDate(email.received_at.slice(0, 10), { month: '2-digit', day: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">{email.from_name || email.from_email}</p>
+                    {email.body_text && (
+                      <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{email.body_text}</p>
+                    )}
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">{email.from_name || email.from_email}</p>
-                  {email.body_text && (
-                    <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{email.body_text}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Documents Section (primary view, left column on desktop) */}
         <div className="lg:order-1 bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8">
