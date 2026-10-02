@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       model: CONTRACT_EXTRACTION_MODEL,
       max_tokens: 1500,
       tools: [EXTRACTION_TOOL],
-      tool_choice: { type: 'tool', name: 'record_contract_fields' },
+      tool_choice: { type: 'auto' },
       messages: [
         {
           role: 'user',
@@ -111,7 +111,8 @@ export async function POST(request: NextRequest) {
             },
             {
               type: 'text',
-              text: 'Extract the key fields from this real estate purchase contract using the record_contract_fields tool.',
+              text:
+                'Extract the key fields from this real estate purchase contract. You must respond by calling the record_contract_fields tool with what you find -- do not reply in plain text.',
             },
           ],
         },
