@@ -29,6 +29,8 @@ interface Task {
   completed: boolean;
   due_date?: string | null;
   due_date_spec?: DueDateSpec | null;
+  waiting_on?: string | null;
+  waiting_on_since?: string | null;
 }
 
 interface Agent {
@@ -686,6 +688,57 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     } finally {
       setIsSavingDueDate(false);
     }
+  };
+
+  // Per-task "Waiting On" -- who/what is blocking this task (lender,
+  // title, buyer, etc.) and since when, independent of due date and
+  // completed state. Feeds the cross-transaction "Needs Attention" view.
+  const [editingWaitingOnTaskId, setEditingWaitingOnTaskId] = useState<string | null>(null);
+  const [editingWaitingOnValue, setEditingWaitingOnValue] = useState('');
+  const [isSavingWaitingOn, setIsSavingWaitingOn] = useState(false);
+
+  const startEditWaitingOn = (task: Task) => {
+    setEditingWaitingOnTaskId(task.id);
+    setEditingWaitingOnValue(task.waiting_on ?? '');
+  };
+
+  const cancelEditWaitingOn = () => setEditingWaitingOnTaskId(null);
+
+  const saveWaitingOn = async (taskId: string, valueOverride?: string | null) => {
+    const value = (valueOverride !== undefined ? valueOverride ?? '' : editingWaitingOnValue).trim();
+    setIsSavingWaitingOn(true);
+    try {
+      const response = await authFetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ waitingOn: value || null }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to update "Waiting on"');
+
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId ? { ...t, waiting_on: result.waiting_on, waiting_on_since: result.waiting_on_since } : t
+        )
+      );
+      setEditingWaitingOnTaskId(null);
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error updating waiting on:', error);
+      alert('Failed to update "Waiting on". Check console for details.');
+    } finally {
+      setIsSavingWaitingOn(false);
+    }
+  };
+
+  const daysSince = (dateIso: string): number => {
+    const start = new Date(`${dateIso}T00:00:00Z`).getTime();
+    const now = new Date();
+    const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    return Math.max(0, Math.round((todayUtc - start) / 86400000));
   };
 
   const handleStatusChange = async (newStatus: string) => {
@@ -1970,7 +2023,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             {tasks.map((task) => (
               <div
                 key={task.id}
-                className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg hover:border-slate-600 transition"
+                className="group px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg hover:border-slate-600 transition"
               >
                 <div
                   className="flex items-center gap-3 group cursor-pointer"
@@ -2038,6 +2091,84 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                       type="button"
                       onClick={cancelEditDueDate}
                       disabled={isSavingDueDate}
+                      className="px-3 py-1.5 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
+                {!task.completed && editingWaitingOnTaskId !== task.id && (
+                  <div className="mt-1.5 pl-7 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    {task.waiting_on ? (
+                      <>
+                        <span className="text-xs font-medium text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-full px-2 py-0.5">
+                          {'\u23F3'} Waiting on {task.waiting_on}
+                          {task.waiting_on_since ? ` \u00b7 ${daysSince(task.waiting_on_since)}d` : ''}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => startEditWaitingOn(task)}
+                          className="text-xs text-blue-400 hover:text-blue-300 font-medium opacity-0 group-hover:opacity-100 transition"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveWaitingOn(task.id, null)}
+                          disabled={isSavingWaitingOn}
+                          className="text-xs text-slate-500 hover:text-slate-300 font-medium opacity-0 group-hover:opacity-100 transition disabled:opacity-50"
+                        >
+                          Clear
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => startEditWaitingOn(task)}
+                        className="text-xs text-slate-500 hover:text-slate-300 font-medium opacity-0 group-hover:opacity-100 transition"
+                      >
+                        + Waiting on...
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {editingWaitingOnTaskId === task.id && (
+                  <div
+                    className="mt-1.5 pl-7 flex flex-wrap items-center gap-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="text"
+                      value={editingWaitingOnValue}
+                      onChange={(e) => setEditingWaitingOnValue(e.target.value)}
+                      placeholder="e.g. Lender, Title, Buyer"
+                      autoFocus
+                      className="flex-1 min-w-[140px] bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    {['Lender', 'Title', 'Buyer', 'Seller', 'Inspector'].map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => setEditingWaitingOnValue(suggestion)}
+                        className="text-xs px-2 py-1 border border-slate-600 hover:border-slate-500 text-slate-400 hover:text-slate-200 rounded-lg transition"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => saveWaitingOn(task.id)}
+                      disabled={isSavingWaitingOn}
+                      className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium disabled:opacity-50"
+                    >
+                      {isSavingWaitingOn ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEditWaitingOn}
+                      disabled={isSavingWaitingOn}
                       className="px-3 py-1.5 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition disabled:opacity-50"
                     >
                       Cancel
