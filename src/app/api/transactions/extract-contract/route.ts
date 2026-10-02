@@ -51,6 +51,14 @@ const EXTRACTION_TOOL = {
         type: 'string',
         description: 'e.g. Cash, Conventional, FHA, VA. Empty string if not found.',
       },
+      lenderName: {
+        type: 'string',
+        description: 'The lending institution/bank name, if one is named in the contract. Empty string if not found (a financing type with no named lender is common and fine).',
+      },
+      titleCompanyName: { type: 'string', description: 'The title/escrow company name. Empty string if not found.' },
+      escrowOfficerName: { type: 'string', description: 'The escrow officer or title company contact person. Empty string if not found.' },
+      escrowOfficerEmail: { type: 'string', description: "The escrow officer's/title company's email. Empty string if not found." },
+      escrowOfficerPhone: { type: 'string', description: "The escrow officer's/title company's phone number. Empty string if not found." },
       notes: {
         type: 'string',
         description:

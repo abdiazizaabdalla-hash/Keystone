@@ -51,6 +51,15 @@ export default function NewTransactionPage() {
   const [extractNotes, setExtractNotes] = useState<string | null>(null);
   const [extractedFileName, setExtractedFileName] = useState<string | null>(null);
   const [contractFile, setContractFile] = useState<File | null>(null);
+  const [extractedParties, setExtractedParties] = useState<{
+    buyerNames: string[];
+    sellerNames: string[];
+    lenderName: string;
+    titleCompanyName: string;
+    escrowOfficerName: string;
+    escrowOfficerEmail: string;
+    escrowOfficerPhone: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchAgents();
@@ -156,6 +165,7 @@ export default function NewTransactionPage() {
     setExtracting(true);
     setExtractError(null);
     setExtractNotes(null);
+    setExtractedParties(null);
 
     try {
       const body = new FormData();
@@ -182,6 +192,15 @@ export default function NewTransactionPage() {
       }));
       setContractFile(file);
       setExtractedFileName(file.name);
+      setExtractedParties({
+        buyerNames: Array.isArray(f.buyerNames) ? f.buyerNames.filter(Boolean) : [],
+        sellerNames: Array.isArray(f.sellerNames) ? f.sellerNames.filter(Boolean) : [],
+        lenderName: f.lenderName || '',
+        titleCompanyName: f.titleCompanyName || '',
+        escrowOfficerName: f.escrowOfficerName || '',
+        escrowOfficerEmail: f.escrowOfficerEmail || '',
+        escrowOfficerPhone: f.escrowOfficerPhone || '',
+      });
       if (f.notes) setExtractNotes(f.notes);
     } catch (error) {
       if (error instanceof AuthRequiredError) {
@@ -239,6 +258,48 @@ export default function NewTransactionPage() {
           // The transaction itself was created fine -- don't block on
           // re-attaching the contract PDF; the TC can upload it from the
           // transaction page's Documents section if this quietly failed.
+        }
+      }
+
+      // Turn whatever parties the contract named into Deal Contacts rows
+      // on the new transaction -- buyer/seller/title-escrow info the form
+      // itself has no field for. The linked Agent is deliberately NOT
+      // duplicated in here (see api/transactions/[id]/contacts/route.ts),
+      // only the parties that table doesn't already represent. Best
+      // effort, same as the document upload above -- never blocks saving.
+      if (extractedParties && created?.id) {
+        const rows: { role: string; name: string; email?: string; phone?: string }[] = [];
+        if (extractedParties.buyerNames.length) {
+          rows.push({ role: 'Buyer', name: extractedParties.buyerNames.join(', ') });
+        }
+        if (extractedParties.sellerNames.length) {
+          rows.push({ role: 'Seller', name: extractedParties.sellerNames.join(', ') });
+        }
+        if (extractedParties.lenderName) {
+          rows.push({ role: 'Lender', name: extractedParties.lenderName });
+        }
+        if (extractedParties.titleCompanyName || extractedParties.escrowOfficerName) {
+          rows.push({
+            role: 'Title',
+            name: extractedParties.escrowOfficerName || extractedParties.titleCompanyName,
+            email: extractedParties.escrowOfficerEmail || undefined,
+            phone: extractedParties.escrowOfficerPhone || undefined,
+          });
+        }
+        try {
+          await Promise.all(
+            rows.map((row) =>
+              authFetch(`/api/transactions/${created.id}/contacts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(row),
+              })
+            )
+          );
+        } catch {
+          // Same reasoning as the document upload -- the transaction is
+          // already saved, contacts can always be added by hand from the
+          // transaction page if this quietly failed.
         }
       }
 
@@ -336,6 +397,26 @@ export default function NewTransactionPage() {
                     Extracted from {extractedFileName} -- fields below were pre-filled, double-check them.
                   </p>
                 )}
+                {extractedParties &&
+                  (extractedParties.buyerNames.length > 0 ||
+                    extractedParties.sellerNames.length > 0 ||
+                    extractedParties.titleCompanyName ||
+                    extractedParties.escrowOfficerName ||
+                    extractedParties.lenderName) && (
+                    <p className="text-xs text-slate-400 mt-2">
+                      Also found -- will be added to this deal&apos;s Contacts once saved:{' '}
+                      {[
+                        extractedParties.buyerNames.length ? `Buyer: ${extractedParties.buyerNames.join(', ')}` : null,
+                        extractedParties.sellerNames.length ? `Seller: ${extractedParties.sellerNames.join(', ')}` : null,
+                        extractedParties.lenderName ? `Lender: ${extractedParties.lenderName}` : null,
+                        extractedParties.titleCompanyName || extractedParties.escrowOfficerName
+                          ? `Title: ${extractedParties.escrowOfficerName || extractedParties.titleCompanyName}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  )}
                 {extractNotes && (
                   <p className="text-xs text-amber-400 mt-2">Heads up: {extractNotes}</p>
                 )}
