@@ -386,6 +386,9 @@ export default function Home() {
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
+            <Link href="/security" className="hover:text-slate-200 transition">Security</Link>
+            <Link href="/changelog" className="hover:text-slate-200 transition">Changelog</Link>
+            <Link href="/status" className="hover:text-slate-200 transition">Status</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
