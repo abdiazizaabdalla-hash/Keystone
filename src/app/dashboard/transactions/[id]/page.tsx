@@ -2565,7 +2565,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             should ever see a backend setup/env-var message; it either
             works or it isn't there yet. */}
         {inboundDomain && (
-          <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6 mt-8">
+          <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-6 mt-8">
             <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
             <p className="text-xs text-slate-400 mb-3">
               Forward or CC emails about this deal here and they&apos;ll show up below — no need to change how you
