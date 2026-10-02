@@ -22,7 +22,7 @@
 // cutoff are grandfathered onto the old free-forever Starter and never
 // see the trial/paywall at all.
 
-export type PlanId = 'starter' | 'pro' | 'team';
+export type PlanId = 'starter' | 'pro' | 'team' | 'brokerage';
 
 export const DEFAULT_PLAN: PlanId = 'starter';
 
@@ -59,6 +59,18 @@ export interface Plan {
   trial?: {
     days: number;
     description: string;
+  };
+  /**
+   * Team and Brokerage only: per-seat billing details, read by
+   * lib/team.ts (seat floor, Checkout quantity) and the frontend
+   * (collaborate/account/pricing pages) instead of hardcoding a price
+   * or seat count in copy. Undefined for Starter/Pro, which bill a
+   * single flat seat.
+   */
+  seatInfo?: {
+    pricePerSeat: number; // dollars/seat/month, for computing totals
+    pricePerSeatLabel: string; // e.g. "$19/mo" -- for copy only
+    minimumSeats: number;
   };
 }
 
@@ -131,8 +143,47 @@ export const PLANS: Plan[] = [
       adminDashboard: true,
       customChecklists: true,
     },
+    seatInfo: {
+      pricePerSeat: 19,
+      pricePerSeatLabel: '$19/mo',
+      minimumSeats: 3,
+    },
+  },
+  {
+    id: 'brokerage',
+    name: 'Brokerage',
+    price: '$15',
+    period: '/seat/mo',
+    description: 'For a broker buying seats across a whole team. 10-seat minimum ($150/month).',
+    features: [
+      'Everything in Team',
+      'Volume seat pricing for larger rosters',
+      'Sized for a brokerage, not just one small team',
+      'Seat-based billing, 10-seat minimum',
+      'Priority support',
+    ],
+    limits: {
+      maxActiveTransactions: null,
+      maxAgents: null,
+      adminDashboard: true,
+      customChecklists: true,
+    },
+    seatInfo: {
+      pricePerSeat: 15,
+      pricePerSeatLabel: '$15/mo',
+      minimumSeats: 10,
+    },
   },
 ];
+
+// Team and Brokerage are the same underlying shared-workspace feature
+// (src/lib/team.ts) -- they differ only in per-seat price and seat
+// minimum (see each plan's seatInfo above). Checked wherever code used
+// to special-case plan === 'team' alone, so a Brokerage owner/member
+// gets identical team behavior under their own plan label.
+export function isTeamPlan(planId: PlanId | string | null | undefined): boolean {
+  return planId === 'team' || planId === 'brokerage';
+}
 
 export function isValidPlan(value: unknown): value is PlanId {
   return typeof value === 'string' && PLANS.some((p) => p.id === value);

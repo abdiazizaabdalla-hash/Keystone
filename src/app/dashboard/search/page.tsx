@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
@@ -31,6 +31,25 @@ function dealLabel(result: SearchResult): string {
   return result.propertyAddress || result.fileNumber || 'Untitled deal';
 }
 
+// Recent searches are a per-browser convenience, not account data -- kept
+// in localStorage only (same pattern as the sidebar's collapsed state in
+// dashboard/layout.tsx), never sent to the server. Capped at 8 so the
+// dropdown stays short.
+const RECENT_SEARCHES_KEY = 'relaytc_recent_searches';
+const MAX_RECENT_SEARCHES = 8;
+
+function loadRecentSearches(): string[] {
+  try {
+    const raw = window.localStorage.getItem(RECENT_SEARCHES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((q) => typeof q === 'string') : [];
+  } catch {
+    // localStorage can throw in some private-browsing modes -- recents
+    // just won't persist, which is harmless.
+    return [];
+  }
+}
+
 export default function SearchPage() {
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -38,7 +57,43 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [showRecents, setShowRecents] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Deferred a tick past mount (same pattern as the sidebar's
+    // collapsed-state init in dashboard/layout.tsx) so the client's
+    // first render matches the server-rendered markup before this reads
+    // client-only state, and so the setState below isn't a synchronous
+    // call in the effect body (react-hooks/set-state-in-effect).
+    const init = async () => {
+      await Promise.resolve();
+      setRecentSearches(loadRecentSearches());
+    };
+    init();
+  }, []);
+
+  const saveRecentSearch = (q: string) => {
+    setRecentSearches((prev) => {
+      const next = [q, ...prev.filter((p) => p.toLowerCase() !== q.toLowerCase())].slice(0, MAX_RECENT_SEARCHES);
+      try {
+        window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+      } catch {
+        // Non-critical -- the list just won't persist across reloads.
+      }
+      return next;
+    });
+  };
+
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+    try {
+      window.localStorage.removeItem(RECENT_SEARCHES_KEY);
+    } catch {
+      // Non-critical.
+    }
+  };
 
   const runSearch = async (q: string) => {
     try {
@@ -49,6 +104,7 @@ export default function SearchPage() {
       }
       setResults(Array.isArray(data.results) ? data.results : []);
       setError(null);
+      saveRecentSearch(q);
     } catch (err) {
       if (err instanceof AuthRequiredError) {
         router.push('/auth');
@@ -70,6 +126,7 @@ export default function SearchPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setQuery(value);
+    setShowRecents(false);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -86,6 +143,19 @@ export default function SearchPage() {
     debounceRef.current = setTimeout(() => {
       runSearch(trimmed);
     }, 300);
+  };
+
+  const handleFocus = () => {
+    if (query.trim().length === 0 && recentSearches.length > 0) {
+      setShowRecents(true);
+    }
+  };
+
+  const handleSelectRecent = (q: string) => {
+    setQuery(q);
+    setShowRecents(false);
+    setLoading(true);
+    runSearch(q);
   };
 
   const grouped = TYPE_ORDER.map((type) => ({
@@ -117,10 +187,52 @@ export default function SearchPage() {
             type="text"
             value={query}
             onChange={handleChange}
+            onFocus={handleFocus}
+            onBlur={() => setShowRecents(false)}
             placeholder="Search transactions, messages, documents, tasks..."
             autoFocus
+            autoComplete="off"
             className="w-full pl-12 pr-4 py-4 bg-slate-700/50 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+
+          {showRecents && recentSearches.length > 0 && (
+            // onMouseDown (not onClick) + preventDefault on the container
+            // keeps the input from blurring when a row is clicked -- a
+            // blur would otherwise fire first and close this dropdown
+            // before the click on an item inside it ever registers.
+            <div
+              onMouseDown={(e) => e.preventDefault()}
+              className="absolute left-0 right-0 top-full mt-2 bg-slate-800 border border-slate-600 rounded-lg shadow-xl overflow-hidden z-10"
+            >
+              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-700">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Recent</span>
+                <button
+                  type="button"
+                  onClick={clearRecentSearches}
+                  className="text-xs text-slate-500 hover:text-slate-300 transition"
+                >
+                  Clear
+                </button>
+              </div>
+              {recentSearches.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => handleSelectRecent(q)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-700/50 transition"
+                >
+                  <svg className="w-4 h-4 text-slate-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 4a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <span className="text-slate-200 truncate">{q}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {error && (

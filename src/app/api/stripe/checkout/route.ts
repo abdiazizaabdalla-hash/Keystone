@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { stripe, STRIPE_PRICE_IDS, isBillablePlan } from '@/lib/stripe';
 import { getStripeCustomerByUserId, upsertStripeCustomer } from '@/lib/stripeCustomers';
-import { TEAM_SEAT_LIMIT } from '@/lib/team';
+import { TEAM_SEAT_LIMIT, BROKERAGE_SEAT_LIMIT } from '@/lib/team';
 
 // Starts a Stripe Checkout session for Starter (once its trial has ended),
 // Pro, or Team — the three plans in STRIPE_PRICE_IDS. The user's plan is
@@ -18,12 +18,12 @@ export async function POST(request: NextRequest) {
     const { plan } = body;
 
     if (!isBillablePlan(plan)) {
-      return NextResponse.json({ error: 'plan must be one of: starter, pro, team' }, { status: 400 });
+      return NextResponse.json({ error: 'plan must be one of: starter, pro, team, brokerage' }, { status: 400 });
     }
 
     const priceId = STRIPE_PRICE_IDS[plan];
     if (!priceId) {
-      console.error(`Missing Stripe price id for plan "${plan}" — check STRIPE_PRICE_STARTER/STRIPE_PRICE_PRO/STRIPE_PRICE_TEAM env vars`);
+      console.error(`Missing Stripe price id for plan "${plan}" — check STRIPE_PRICE_STARTER/STRIPE_PRICE_PRO/STRIPE_PRICE_TEAM/STRIPE_PRICE_BROKERAGE env vars`);
       return NextResponse.json({ error: 'Billing is not configured for this plan yet' }, { status: 500 });
     }
 
@@ -49,9 +49,14 @@ export async function POST(request: NextRequest) {
       mode: 'subscription',
       customer: customerId,
       client_reference_id: user.id,
-      // Team's price is $19/seat (quantity-based); checkout starts at
-      // the 3-seat minimum. Starter/Pro are always quantity 1.
-      line_items: [{ price: priceId, quantity: plan === 'team' ? TEAM_SEAT_LIMIT : 1 }],
+      // Team/Brokerage are quantity-based (per-seat); checkout starts at
+      // that plan's seat-count floor. Starter/Pro are always quantity 1.
+      line_items: [
+        {
+          price: priceId,
+          quantity: plan === 'team' ? TEAM_SEAT_LIMIT : plan === 'brokerage' ? BROKERAGE_SEAT_LIMIT : 1,
+        },
+      ],
       subscription_data: {
         metadata: { user_id: user.id, plan },
       },

@@ -148,7 +148,7 @@ function OnboardingContent() {
   const [isSavingPaymentPreference, setIsSavingPaymentPreference] = useState(false);
   const [paymentStepError, setPaymentStepError] = useState<string | null>(null);
 
-  const startCheckout = async (planId: 'pro' | 'team') => {
+  const startCheckout = async (planId: 'pro' | 'team' | 'brokerage') => {
     setCheckoutRedirecting(true);
     try {
       const res = await authFetch('/api/stripe/checkout', {
@@ -281,7 +281,7 @@ function OnboardingContent() {
       // Sending them through "choose a plan" here would let them pick
       // Pro/Team again and get bounced into a real Stripe Checkout for a
       // plan they're already on. Skip straight past plan selection.
-      if (existingPlan === 'pro' || existingPlan === 'team') {
+      if (existingPlan === 'pro' || existingPlan === 'team' || existingPlan === 'brokerage') {
         setSelectedPlan(existingPlan);
         setCurrentStep(2);
         return;
@@ -293,7 +293,7 @@ function OnboardingContent() {
       // upgrades or their trial ends. Pro/Team need actual payment, so send
       // them straight to Stripe Checkout rather than granting the plan for
       // free.
-      if (validPreselect === 'pro' || validPreselect === 'team') {
+      if (validPreselect === 'pro' || validPreselect === 'team' || validPreselect === 'brokerage') {
         startCheckout(validPreselect);
         return;
       }
@@ -481,7 +481,7 @@ function OnboardingContent() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               {PLANS.map((plan) => (
                 <div
                   key={plan.id}

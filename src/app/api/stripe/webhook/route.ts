@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
-import { isValidPlan, DEFAULT_PLAN } from '@/lib/plans';
+import { isValidPlan, isTeamPlan, DEFAULT_PLAN } from '@/lib/plans';
 import {
   getStripeCustomerByCustomerId,
   upsertStripeCustomer,
@@ -64,10 +64,10 @@ export async function POST(request: NextRequest) {
         });
         await setUserPlan(userId, plan);
 
-        // Team is a shared workspace — the person who just paid becomes
-        // the team owner. Idempotent, so a repeat/duplicate webhook event
-        // for the same user is harmless.
-        if (plan === 'team') {
+        // Team/Brokerage are a shared workspace — the person who just
+        // paid becomes the team owner. Idempotent, so a repeat/duplicate
+        // webhook event for the same user is harmless.
+        if (isTeamPlan(plan)) {
           await ensureTeamForOwner(userId);
         }
         break;

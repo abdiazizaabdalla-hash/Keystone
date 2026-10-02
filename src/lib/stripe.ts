@@ -20,14 +20,19 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 // price. A trialing user never hits this: checkout for 'starter' is only
 // ever started once their trial has actually expired (see the "Add
 // payment" flow on /dashboard/account and the dashboard trial banner).
-export const STRIPE_PRICE_IDS: Record<'starter' | 'pro' | 'team', string> = {
+export const STRIPE_PRICE_IDS: Record<'starter' | 'pro' | 'team' | 'brokerage', string> = {
   starter: process.env.STRIPE_PRICE_STARTER!,
   pro: process.env.STRIPE_PRICE_PRO!,
   team: process.env.STRIPE_PRICE_TEAM!,
+  // Brokerage reuses Team's per-seat-quantity Checkout shape (see
+  // api/stripe/checkout/route.ts) with its own, cheaper per-unit price
+  // -- a volume discount for a broker buying seats across a whole team
+  // rather than one small 3-person workspace.
+  brokerage: process.env.STRIPE_PRICE_BROKERAGE!,
 };
 
 export type BillablePlan = keyof typeof STRIPE_PRICE_IDS;
 
 export function isBillablePlan(value: unknown): value is BillablePlan {
-  return value === 'starter' || value === 'pro' || value === 'team';
+  return value === 'starter' || value === 'pro' || value === 'team' || value === 'brokerage';
 }

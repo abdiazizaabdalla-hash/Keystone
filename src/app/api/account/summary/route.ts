@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { getPlan, getPlanLimits, DEFAULT_PLAN } from '@/lib/plans';
+import { getPlan, getPlanLimits, isTeamPlan, DEFAULT_PLAN } from '@/lib/plans';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     // Billing section can say that instead of wrongly implying they're
     // still on Starter just because hasSubscription comes back false.
     let isTeamMember = false;
-    if (plan.id === 'team') {
+    if (isTeamPlan(plan.id)) {
       const membership = await getTeamForUser(user.id);
       isTeamMember = membership?.role === 'member';
     }

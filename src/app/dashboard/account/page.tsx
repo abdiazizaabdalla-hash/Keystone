@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
-import { PLANS } from '@/lib/plans';
+import { PLANS, type PlanId } from '@/lib/plans';
 
 interface AccountSummary {
   email: string;
@@ -87,7 +87,7 @@ function AccountContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const startCheckout = async (plan: 'starter' | 'pro' | 'team') => {
+  const startCheckout = async (plan: PlanId) => {
     setRedirecting(plan);
     try {
       const res = await authFetch('/api/stripe/checkout', {
@@ -254,7 +254,7 @@ function AccountContent() {
           </div>
         ) : summary.billing.isTeamMember ? (
           <p className="text-sm text-slate-400">
-            You&apos;re on the Team plan as a member. Billing is managed by your team&apos;s owner.
+            You&apos;re on {summary.plan.name === 'Brokerage' ? 'the Brokerage' : 'a Team'} plan as a member. Billing is managed by your team&apos;s owner.
           </p>
         ) : (
           <div className="space-y-3">
@@ -268,14 +268,14 @@ function AccountContent() {
                 {otherPlans.map((p) => (
                   <button
                     key={p.id}
-                    onClick={() => startCheckout(p.id as 'starter' | 'pro' | 'team')}
+                    onClick={() => startCheckout(p.id)}
                     disabled={redirecting !== null}
                     className="px-5 py-2.5 border border-blue-500 text-blue-400 hover:bg-blue-500/10 text-sm font-semibold rounded-lg transition disabled:opacity-50"
                   >
                     {redirecting === p.id
                       ? 'Redirecting…'
-                      : p.id === 'team'
-                      ? 'Upgrade to Team ($57/month for 3 seats)'
+                      : p.seatInfo
+                      ? `Upgrade to ${p.name} ($${p.seatInfo.minimumSeats * p.seatInfo.pricePerSeat}/month for ${p.seatInfo.minimumSeats} seats)`
                       : `Upgrade to ${p.name} (${p.price}${p.period})`}
                   </button>
                 ))}

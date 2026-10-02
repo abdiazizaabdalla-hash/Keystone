@@ -29,6 +29,7 @@ interface TeamResponse {
   team: { id: string; name: string } | null;
   role: 'owner' | 'member' | null;
   seatLimit: number;
+  seatPriceLabel?: string;
   members: Member[];
   pendingInvites: PendingInvite[];
 }
@@ -135,7 +136,7 @@ export default function CollaboratePage() {
     return (
       <div className="p-8">
         <h1 className="text-3xl font-display font-semibold text-slate-100 mb-2">Collaborate</h1>
-        <p className="text-slate-400">Collaborate is a Team plan feature. Upgrade to work with teammates.</p>
+        <p className="text-slate-400">Collaborate is a Team/Brokerage plan feature. Upgrade to work with teammates.</p>
       </div>
     );
   }
@@ -240,8 +241,8 @@ export default function CollaboratePage() {
               only the messaging changes to set expectations correctly. */}
           <p className="text-sm text-slate-400 mb-4">
             {seatsUsed < data.seatLimit
-              ? "They'll get Team-plan access right away — no separate payment needed, it's covered by your subscription."
-              : `You're at your current seat count (${seatsUsed}/${data.seatLimit}). Inviting one more adds a prorated seat to your subscription (~$19/mo) right away.`}
+              ? "They'll get the same plan access right away — no separate payment needed, it's covered by your subscription."
+              : `You're at your current seat count (${seatsUsed}/${data.seatLimit}). Inviting one more adds a prorated seat to your subscription (~${data.seatPriceLabel || '$19/mo'}) right away.`}
           </p>
           <form onSubmit={handleInvite} className="flex gap-3">
             <input

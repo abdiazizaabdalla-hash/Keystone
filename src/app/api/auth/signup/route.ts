@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase';
-import { getPendingInviteForEmail, addMemberToTeam, markInviteAccepted } from '@/lib/team';
+import { getPendingInviteForEmail, addMemberToTeam, markInviteAccepted, getTeamOwnerPlan } from '@/lib/team';
 import { setUserPlan } from '@/lib/stripeCustomers';
 import { checkRateLimit } from '@/lib/rateLimit';
 
@@ -61,7 +61,11 @@ export async function POST(request: NextRequest) {
         if (invite) {
           await addMemberToTeam(invite.team_id, data.user.id, 'member');
           await markInviteAccepted(invite.id);
-          await setUserPlan(data.user.id, 'team');
+          // Grant the same plan id as the team's owner -- 'team' or
+          // 'brokerage' -- not a hardcoded 'team', since this invite
+          // could have come from a Brokerage-plan owner.
+          const ownerPlan = await getTeamOwnerPlan(invite.team_id);
+          await setUserPlan(data.user.id, ownerPlan);
         }
       } catch (inviteError) {
         // Non-fatal — the account still exists on Starter; they can be

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getValidToken, clearSession, authFetch } from '@/lib/authClient';
+import { isTeamPlan } from '@/lib/plans';
 
 // Collapsed sidebar is icon-only -- narrow enough to stay useful on small
 // screens without hiding navigation entirely. Expanded shows icon + label.
@@ -331,7 +332,7 @@ export default function DashboardLayout({
             }
           />
 
-          {plan === 'team' && (
+          {isTeamPlan(plan) && (
             <NavLink
               href="/dashboard/collaborate"
               label="Collaborate"

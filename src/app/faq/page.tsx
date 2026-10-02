@@ -147,6 +147,11 @@ const FAQS: { category: string; q: string; a: string }[] = [
   },
   {
     category: 'Teams',
+    q: 'What’s the difference between Team and Brokerage?',
+    a: 'Same shared-roster feature set — Brokerage is just sized and priced for a larger roster: a ten-seat minimum at $15/seat/month instead of Team’s three-seat minimum at $19/seat/month, for a broker buying seats across a whole team rather than one small group.',
+  },
+  {
+    category: 'Teams',
     q: 'Can team members see each other’s transactions?',
     a: 'Only the team owner sees everyone’s work. A regular member sees their own transactions and agents, plus the team roster itself, but not a teammate’s pipeline.',
   },

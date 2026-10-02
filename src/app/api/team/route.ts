@@ -19,7 +19,9 @@ import {
   getPaidSeatCount,
   addPaidSeat,
   removePaidSeat,
+  getSeatInfo,
 } from '@/lib/team';
+import { isTeamPlan } from '@/lib/plans';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1];
 
@@ -49,7 +51,7 @@ export async function GET(request: NextRequest) {
     // Self-heal: a Team-plan user with no team yet (e.g. webhook hasn't
     // run, or an older account from before this feature existed) gets one
     // created on first visit here, as the owner.
-    if (!membership && user.user_metadata?.plan === 'team') {
+    if (!membership && isTeamPlan(user.user_metadata?.plan)) {
       const team = await ensureTeamForOwner(user.id);
       membership = { team, role: 'owner' };
     }
@@ -110,11 +112,18 @@ export async function GET(request: NextRequest) {
     const pendingInvites = isOwner ? await getTeamInvites(membership.team.id) : [];
 
     const seatLimit = await getPaidSeatCount(membership.team.owner_id);
+    // Every member on a team is granted the SAME plan id as its owner
+    // (see getTeamOwnerPlan / the invite-acceptance flows) -- 'team' or
+    // 'brokerage' -- so the caller's own plan metadata already reflects
+    // the right per-seat price, owner or member, without a second
+    // lookup of the owner's row.
+    const seatInfo = getSeatInfo(user.user_metadata?.plan);
 
     return NextResponse.json({
       team: { id: membership.team.id, name: membership.team.name },
       role: membership.role,
       seatLimit,
+      seatPriceLabel: seatInfo.pricePerSeatLabel,
       members,
       pendingInvites: pendingInvites.map((inv) => ({ id: inv.id, email: inv.email, createdAt: inv.created_at })),
     });
@@ -184,7 +193,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'That person is already on a team.' }, { status: 409 });
       }
       await addMemberToTeam(membership.team.id, existingUserId, 'member');
-      await setUserPlan(existingUserId, 'team');
+      // Grant the SAME plan id as the team owner -- 'team' or
+      // 'brokerage' -- not a hardcoded 'team', since the caller here (an
+      // owner adding someone directly) may be a Brokerage owner.
+      await setUserPlan(existingUserId, isTeamPlan(user.user_metadata?.plan) ? (user.user_metadata.plan as 'team' | 'brokerage') : 'team');
 
       let emailSent = true;
       try {

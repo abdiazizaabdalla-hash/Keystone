@@ -1,6 +1,7 @@
 import { supabaseServer } from './supabase';
 import { stripe } from './stripe';
 import { getStripeCustomerByUserId } from './stripeCustomers';
+import { getPlan, type PlanId } from './plans';
 
 // Team billing is now real per-seat quantity billing (see lib/stripe.ts —
 // STRIPE_PRICE_TEAM is a $19/mo per-unit price). 3 is the *minimum* a
@@ -9,6 +10,17 @@ import { getStripeCustomerByUserId } from './stripeCustomers';
 // Stripe subscription's quantity as members are added/removed, and
 // getPaidSeatCount reads the live quantity rather than assuming 3.
 export const TEAM_SEAT_LIMIT = 3;
+
+// Brokerage is the same shared-workspace model at a higher seat floor
+// and a cheaper per-seat price (see lib/plans.ts's seatInfo) -- sized
+// for a broker buying seats across a whole team rather than one small
+// workspace.
+export const BROKERAGE_SEAT_LIMIT = 10;
+
+/** The seat-count floor for whichever team-like plan an owner is on, falling back to Team's (the more conservative floor) if the plan is unknown. */
+function seatMinimumForPlan(planId: string | null | undefined): number {
+  return planId === 'brokerage' ? BROKERAGE_SEAT_LIMIT : TEAM_SEAT_LIMIT;
+}
 
 export type TeamRole = 'owner' | 'member';
 
@@ -19,10 +31,11 @@ export type TeamRole = 'owner' | 'member';
  */
 export async function getPaidSeatCount(ownerId: string): Promise<number> {
   const customer = await getStripeCustomerByUserId(ownerId);
-  if (!customer?.stripe_subscription_id) return TEAM_SEAT_LIMIT;
+  const floor = seatMinimumForPlan(customer?.plan);
+  if (!customer?.stripe_subscription_id) return floor;
 
   const subscription = await stripe.subscriptions.retrieve(customer.stripe_subscription_id);
-  return subscription.items.data[0]?.quantity || TEAM_SEAT_LIMIT;
+  return subscription.items.data[0]?.quantity || floor;
 }
 
 /**
@@ -67,8 +80,9 @@ export async function removePaidSeat(ownerId: string): Promise<void> {
   const item = subscription.items.data[0];
   if (!item) return;
 
-  const currentQuantity = item.quantity || TEAM_SEAT_LIMIT;
-  const newQuantity = Math.max(TEAM_SEAT_LIMIT, currentQuantity - 1);
+  const floor = seatMinimumForPlan(customer.plan);
+  const currentQuantity = item.quantity || floor;
+  const newQuantity = Math.max(floor, currentQuantity - 1);
   if (newQuantity === currentQuantity) return;
 
   await stripe.subscriptions.update(customer.stripe_subscription_id, {
@@ -106,6 +120,27 @@ export async function getTeamForUser(userId: string): Promise<TeamMembership | n
   if (teamError) throw teamError;
 
   return { team, role: membership.role as TeamRole };
+}
+
+/**
+ * The plan a team's seats are actually billed under -- 'team' or
+ * 'brokerage' -- read off the owner's own stripe_customers row, not
+ * assumed. Used when granting a NEW member the same plan as their
+ * team's owner (invite acceptance at signup, adding an existing user to
+ * the roster) rather than hardcoding 'team', which would be wrong for a
+ * Brokerage-owned team. Falls back to 'team' if the owner's plan can't
+ * be read (shouldn't happen for a real paid team, but a safe default).
+ */
+export async function getTeamOwnerPlan(teamId: string): Promise<PlanId> {
+  const { data: team, error } = await supabaseServer.from('teams').select('owner_id').eq('id', teamId).single();
+  if (error || !team) return 'team';
+  const customer = await getStripeCustomerByUserId(team.owner_id);
+  return customer?.plan === 'brokerage' ? 'brokerage' : 'team';
+}
+
+/** This plan's per-seat price label and seat-count floor, for frontend copy that used to hardcode Team's numbers (e.g. "$19/mo", "3 seats"). */
+export function getSeatInfo(planId: string | null | undefined) {
+  return getPlan(planId).seatInfo || { pricePerSeat: 0, pricePerSeatLabel: '', minimumSeats: TEAM_SEAT_LIMIT };
 }
 
 /** Creates a team owned by userId if they don't already own or belong to one. Idempotent. */
