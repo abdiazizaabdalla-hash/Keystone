@@ -12,7 +12,6 @@ function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const stripeReturnStatus = searchParams.get('stripe');
-  const googleCalendarReturnStatus = searchParams.get('googleCalendar');
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -35,13 +34,6 @@ function SettingsContent() {
   const [isStartingStripeConnect, setIsStartingStripeConnect] = useState(false);
   const [isSavingPaymentPreference, setIsSavingPaymentPreference] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState('');
-
-  // Google Calendar connect/disconnect (Settings only for now -- see
-  // /api/google-calendar/*).
-  const [googleCalendarStatus, setGoogleCalendarStatus] = useState<{ connected: boolean; email: string | null } | null>(null);
-  const [isStartingGoogleCalendar, setIsStartingGoogleCalendar] = useState(false);
-  const [isDisconnectingGoogleCalendar, setIsDisconnectingGoogleCalendar] = useState(false);
-  const [googleCalendarMessage, setGoogleCalendarMessage] = useState('');
 
   // Checklist templates (Pro/Team only) -- kept separate from the main
   // profile/agent-defaults form above since each template edit is its own
@@ -67,7 +59,6 @@ function SettingsContent() {
   useEffect(() => {
     fetchSettings();
     fetchStripeConnectStatus();
-    fetchGoogleCalendarStatus();
     fetchTemplates();
 
     // Landing back here from Stripe Connect's hosted onboarding (see
@@ -78,18 +69,6 @@ function SettingsContent() {
       setPaymentMessage('Something went wrong connecting Stripe. Please try again.');
     } else if (stripeReturnStatus === 'connected') {
       setPaymentMessage('Stripe connected.');
-    }
-
-    // Landing back here from Google's consent screen (see
-    // /api/google-calendar/callback).
-    if (googleCalendarReturnStatus === 'connected') {
-      setGoogleCalendarMessage('Google Calendar connected.');
-    } else if (googleCalendarReturnStatus === 'no_refresh_token') {
-      setGoogleCalendarMessage(
-        'Google didn\'t grant lasting access this time — disconnect any prior Relay access in your Google Account settings, then try connecting again.'
-      );
-    } else if (googleCalendarReturnStatus === 'error') {
-      setGoogleCalendarMessage('Something went wrong connecting Google Calendar. Please try again.');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -281,60 +260,6 @@ function SettingsContent() {
       }
       setPaymentMessage(error instanceof Error ? error.message : 'Error connecting to Stripe');
       setIsStartingStripeConnect(false);
-    }
-  };
-
-  const fetchGoogleCalendarStatus = async () => {
-    try {
-      const response = await authFetch('/api/google-calendar/status');
-      if (!response.ok) return;
-      const data = await response.json();
-      setGoogleCalendarStatus({ connected: Boolean(data.connected), email: data.email || null });
-    } catch {
-      // Non-fatal — section just shows as "not connected".
-    }
-  };
-
-  const handleConnectGoogleCalendar = async () => {
-    setIsStartingGoogleCalendar(true);
-    setGoogleCalendarMessage('');
-    try {
-      const response = await authFetch('/api/google-calendar/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: 'settings' }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to start Google Calendar connection');
-      window.location.href = data.url;
-    } catch (error) {
-      if (error instanceof AuthRequiredError) {
-        router.push('/auth');
-        return;
-      }
-      setGoogleCalendarMessage(error instanceof Error ? error.message : 'Error connecting to Google Calendar');
-      setIsStartingGoogleCalendar(false);
-    }
-  };
-
-  const handleDisconnectGoogleCalendar = async () => {
-    if (!confirm('Disconnect Google Calendar? Due dates will stop syncing until you reconnect.')) return;
-    setIsDisconnectingGoogleCalendar(true);
-    setGoogleCalendarMessage('');
-    try {
-      const response = await authFetch('/api/google-calendar/disconnect', { method: 'POST' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to disconnect Google Calendar');
-      setGoogleCalendarStatus({ connected: false, email: null });
-      setGoogleCalendarMessage('Google Calendar disconnected.');
-    } catch (error) {
-      if (error instanceof AuthRequiredError) {
-        router.push('/auth');
-        return;
-      }
-      setGoogleCalendarMessage(error instanceof Error ? error.message : 'Error disconnecting Google Calendar');
-    } finally {
-      setIsDisconnectingGoogleCalendar(false);
     }
   };
 
@@ -899,56 +824,6 @@ function SettingsContent() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
-          <h2 className="text-lg font-bold text-slate-100 mb-1">Integrations</h2>
-          <p className="text-sm text-slate-400 mb-6">
-            Connect your Google Calendar so checklist due dates show up automatically as events -- more
-            integrations (Drive, Dropbox, Dotloop) are on the way.
-          </p>
-
-          {googleCalendarMessage && (
-            <div className="mb-4 text-sm text-slate-300">{googleCalendarMessage}</div>
-          )}
-
-          <div
-            className={`rounded-lg border p-5 max-w-sm ${
-              googleCalendarStatus?.connected ? 'border-blue-500 bg-slate-800/50' : 'border-slate-600'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <h3 className="font-semibold text-slate-100 text-sm">Google Calendar</h3>
-              {googleCalendarStatus?.connected && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-900/30 text-green-300 border border-green-700/50">
-                  Connected
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-500 mb-4">
-              {googleCalendarStatus?.connected
-                ? `Connected as ${googleCalendarStatus.email || 'your Google account'}.`
-                : 'Syncs each checklist task\'s due date to your calendar automatically.'}
-            </p>
-            {googleCalendarStatus?.connected ? (
-              <button
-                type="button"
-                onClick={handleDisconnectGoogleCalendar}
-                disabled={isDisconnectingGoogleCalendar}
-                className="text-sm px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 rounded-lg transition disabled:opacity-50"
-              >
-                {isDisconnectingGoogleCalendar ? 'Disconnecting...' : 'Disconnect'}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleConnectGoogleCalendar}
-                disabled={isStartingGoogleCalendar}
-                className="text-sm px-4 py-2 bg-slate-600 hover:bg-slate-600 border border-slate-600 text-slate-100 font-semibold rounded-lg transition disabled:opacity-50"
-              >
-                {isStartingGoogleCalendar ? 'Opening...' : 'Connect Google Calendar'}
-              </button>
-            )}
-          </div>
-        </div>
 
         <div className="flex gap-3">
           <button

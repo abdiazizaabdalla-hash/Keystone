@@ -3,7 +3,6 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { statusFromTasks } from '@/lib/transactionStages';
-import { syncTransactionTasksToCalendar } from '@/lib/calendarSync';
 import { getVisibleTcUserIds } from '@/lib/team';
 
 export async function GET(request: NextRequest) {
@@ -171,23 +170,6 @@ export async function PATCH(request: NextRequest) {
         // dashboard/transactions/[id]/page.tsx's "Create Invoice" button).
       }
 
-      // Toggling completion changes whether this task should still have
-      // a calendar event -- resync (best-effort, no-op if this TC hasn't
-      // connected a calendar; see lib/calendarSync.ts).
-      if (transaction) {
-        const { data: agent } = await supabaseServer
-          .from('agents')
-          .select('tc_user_id')
-          .eq('id', transaction.agent_id)
-          .single();
-        if (agent?.tc_user_id) {
-          await syncTransactionTasksToCalendar(
-            agent.tc_user_id,
-            `${transaction.file_number} · ${transaction.property_address}`,
-            allTasks
-          );
-        }
-      }
     }
 
     // Return the up-to-date task list too, so the frontend can update its

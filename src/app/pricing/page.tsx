@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { PLANS } from '@/lib/plans';
+import DemoRequestButton from '@/components/DemoRequestButton';
 
 const CTA_LABELS: Record<string, string> = {
   starter: 'Start free',
@@ -27,7 +28,6 @@ const COMPARISON_ROWS: { feature: string; starter: ComparisonValue; pro: Compari
   { feature: 'Document storage & organization', starter: true, pro: true, team: true },
   { feature: 'E-signature requests', starter: true, pro: true, team: true },
   { feature: 'Invoicing & payment tracking', starter: true, pro: true, team: true },
-  { feature: 'Google Calendar sync', starter: true, pro: true, team: true },
   { feature: 'Daily deadline digest', starter: true, pro: true, team: true },
   { feature: 'Admin dashboard', starter: false, pro: true, team: true },
   { feature: 'Team roster & shared oversight', starter: false, pro: false, team: true },
@@ -222,6 +222,10 @@ export default function PricingPage() {
           <Link href="/faq" className="px-6 py-3 border border-slate-600 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">
             Read the FAQ
           </Link>
+          <DemoRequestButton
+            className="px-6 py-3 text-slate-300 hover:text-slate-100 font-semibold transition"
+            label="Request a demo"
+          />
         </div>
       </section>
 

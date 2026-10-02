@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PLANS } from '@/lib/plans';
 import { decodeStoredRole } from '@/lib/authClient';
+import DemoRequestButton from '@/components/DemoRequestButton';
 
 export default function Home() {
   const router = useRouter();
@@ -102,6 +103,10 @@ export default function Home() {
             >
               See pricing
             </Link>
+            <DemoRequestButton
+              className="px-6 py-3 text-slate-300 hover:text-slate-100 font-semibold transition"
+              label="Request a demo"
+            />
           </div>
           <p className="text-xs text-slate-500 mt-4">Free for 30 days, or until your first paid deal closes. No credit card required.</p>
         </div>

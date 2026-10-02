@@ -12,7 +12,6 @@ import {
   normalizeTemplateSteps,
 } from '@/lib/checklistTemplates';
 import { computeDueDates, NO_DUE_DATE, DueDateSpec } from '@/lib/dueDates';
-import { syncTransactionTasksToCalendar } from '@/lib/calendarSync';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -253,32 +252,13 @@ export async function POST(request: NextRequest) {
       due_days_after_acceptance: step.dueDate.mode === 'after_acceptance' ? step.dueDate.days ?? null : null,
     }));
 
-    const { data: insertedTasks, error: tasksError } = await supabaseServer
+    const { error: tasksError } = await supabaseServer
       .from('tasks')
       .insert(tasks)
       .select();
 
     if (tasksError) throw tasksError;
 
-    // Best-effort Google Calendar sync (see lib/calendarSync.ts) -- a
-    // no-op if this TC hasn't connected a calendar. The transaction's
-    // owner isn't always the requesting user (an admin can create one on
-    // someone else's behalf), so look it up from the agent rather than
-    // assuming it's `user.id`.
-    if (insertedTasks && insertedTasks.length > 0) {
-      const { data: ownerAgent } = await supabaseServer
-        .from('agents')
-        .select('tc_user_id')
-        .eq('id', agentId)
-        .single();
-      if (ownerAgent?.tc_user_id) {
-        await syncTransactionTasksToCalendar(
-          ownerAgent.tc_user_id,
-          `${fileNumber} · ${propertyAddress}`,
-          insertedTasks
-        );
-      }
-    }
 
     return NextResponse.json(transaction, { status: 201 });
   } catch (error) {

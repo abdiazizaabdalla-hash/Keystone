@@ -4,26 +4,6 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { syncTasksToStatus } from '@/lib/closeTransaction';
 import { computeDueDates, normalizeDueDateSpec, dueDaysToSpec } from '@/lib/dueDates';
-import { syncTransactionTasksToCalendar } from '@/lib/calendarSync';
-
-// Looks up which TC owns this transaction's agent (not necessarily the
-// requesting user -- an admin can act on someone else's transaction) and
-// builds the human-readable label calendar events are titled with.
-// Returns null (rather than throwing) if the agent lookup fails, so a
-// calendar-sync hiccup here can never break the actual status/date
-// update it's piggybacking on.
-async function getTransactionCalendarContext(
-  agentId: string,
-  transaction: { file_number: string; property_address: string }
-): Promise<{ tcUserId: string; label: string } | null> {
-  const { data: agent } = await supabaseServer.from('agents').select('tc_user_id').eq('id', agentId).single();
-  if (!agent?.tc_user_id) return null;
-  return {
-    tcUserId: agent.tc_user_id,
-    label: `${transaction.file_number} · ${transaction.property_address}`,
-  };
-}
-
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
@@ -90,14 +70,6 @@ export async function PATCH(request: NextRequest) {
       // transaction page once a deal is Closed (see
       // dashboard/transactions/[id]/page.tsx).
       responseTasks = await syncTasksToStatus(transactionId, status);
-
-      // A status change can complete/reopen tasks, which changes which
-      // ones should still have a calendar event -- resync (no-op if this
-      // TC hasn't connected a calendar).
-      const ownerLabel = await getTransactionCalendarContext(transaction.agent_id, transaction);
-      if (ownerLabel) {
-        await syncTransactionTasksToCalendar(ownerLabel.tcUserId, ownerLabel.label, responseTasks);
-      }
     }
 
     if (acceptanceDate !== undefined || closingDate !== undefined) {
@@ -143,13 +115,6 @@ export async function PATCH(request: NextRequest) {
         );
 
         responseTasks = updatedTasks;
-
-        // Best-effort Google Calendar sync (see lib/calendarSync.ts) --
-        // a no-op if this TC hasn't connected a calendar.
-        const ownerLabel = await getTransactionCalendarContext(transaction.agent_id, transaction);
-        if (ownerLabel) {
-          await syncTransactionTasksToCalendar(ownerLabel.tcUserId, ownerLabel.label, updatedTasks);
-        }
       }
     }
 

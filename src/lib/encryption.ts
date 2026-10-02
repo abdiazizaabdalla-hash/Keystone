@@ -4,13 +4,9 @@ const ALGO = 'aes-256-gcm';
 
 /**
  * Symmetric key used to encrypt sensitive third-party credentials before
- * they're stored in the database -- a connected Helcim merchant's
- * api-token, and (since the Google Calendar integration) a connected
- * TC's Google refresh_token in calendar_connections.refresh_token. The
- * env var name is a holdover from when Helcim was the only user of this
- * module; it's still the one and only encryption key, just under a name
- * that undersells what it's used for now. Set HELCIM_TOKEN_ENCRYPTION_KEY
- * in the environment to a random 32-byte value, base64-encoded
+ * they're stored in the database -- currently a connected Helcim
+ * merchant's api-token. Set HELCIM_TOKEN_ENCRYPTION_KEY in the
+ * environment to a random 32-byte value, base64-encoded
  * (`openssl rand -base64 32`). If it's set to something else, we hash it
  * down to 32 bytes rather than fail outright — but a real random key is
  * strongly preferred.

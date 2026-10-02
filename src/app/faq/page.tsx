@@ -29,7 +29,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Pricing & billing',
     q: 'What’s included on the free Starter plan?',
-    a: 'Starter includes unlimited transactions, up to 3 agent profiles, the baseline checklist, document storage, e-signature requests, invoicing, the free agent portal, and Google Calendar sync — enough to run your whole pipeline through Relay with no credit card required to start.',
+    a: 'Starter includes unlimited transactions, up to 3 agent profiles, the baseline checklist, document storage, e-signature requests, invoicing, and the free agent portal — enough to run your whole pipeline through Relay with no credit card required to start.',
   },
   {
     category: 'Pricing & billing',
@@ -44,7 +44,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Pricing & billing',
     q: 'What’s the difference between Starter and Pro?',
-    a: 'Pro removes the agent-profile limit entirely, unlocks custom checklist templates, and adds the admin usage dashboard. Everything else — the checklist, documents, e-signatures, invoicing, the agent portal, and calendar sync — works the same on both.',
+    a: 'Pro removes the agent-profile limit entirely, unlocks custom checklist templates, and adds the admin usage dashboard. Everything else — the checklist, documents, e-signatures, invoicing, and the agent portal — works the same on both.',
   },
   {
     category: 'Pricing & billing',
