@@ -154,7 +154,7 @@ function AccountContent() {
     day: 'numeric',
   });
 
-  const otherPlans = PLANS.filter((p) => p.id !== summary.plan.id && p.id !== 'starter');
+  const otherPlans = PLANS.filter((p) => p.id !== summary.plan.id && p.id !== 'starter' && !p.hidden);
 
   return (
     <div className="p-8 max-w-2xl">

@@ -320,12 +320,11 @@ export default function Home() {
       {/* Who it's for */}
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-12">Built for independent TCs and growing teams</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid sm:grid-cols-3 gap-6">
           {[
             { title: 'Independent TC', body: 'Run your transaction coordination business in one place — checklist, documents, invoicing, all of it.' },
             { title: 'TC team', body: 'Manage transactions, coordinate work, and share oversight across your team on the Team plan.' },
             { title: 'Real estate agent', body: 'Work with your TC, send documents, and track your deal in one workspace — free, by invitation.' },
-            { title: 'Brokerage', body: 'Give your agents a consistent place to manage transactions with the TCs they already work with.' },
           ].map((card) => (
             <div key={card.title} className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl">
               <h3 className="font-semibold text-slate-100 mb-2">{card.title}</h3>

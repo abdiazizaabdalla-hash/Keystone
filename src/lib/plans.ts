@@ -51,6 +51,20 @@ export interface Plan {
   popular?: boolean;
   limits: PlanLimits;
   /**
+   * True for a plan that still fully works (billing, feature limits,
+   * Collaborate/team behavior -- everything in this file and
+   * lib/team.ts) but is no longer offered to a new signup or shown as
+   * an upgrade target. Brokerage is being pulled out into its own
+   * product rather than killed outright, so existing Brokerage
+   * customers must see zero change -- only PUBLIC_PLANS (what the
+   * pricing page, onboarding's plan picker, and the account page's
+   * "upgrade to" buttons iterate over) excludes it. Every lookup by id
+   * (getPlan, getPlanLimits, planLabel, isTeamPlan, isValidPlan) still
+   * reads the full PLANS array, so an existing Brokerage account's own
+   * plan resolves exactly as before.
+   */
+  hidden?: boolean;
+  /**
    * Starter-only: describes its free trial (30 days, or the user's first
    * paid-and-closed deal, whichever happens first -- see src/lib/trial.ts
    * for the actual enforcement logic). Undefined for Pro/Team, which have
@@ -173,8 +187,21 @@ export const PLANS: Plan[] = [
       pricePerSeatLabel: '$15/mo',
       minimumSeats: 10,
     },
+    // Not a public offering right now -- see the `hidden` doc comment
+    // above. Brokerage is being rebuilt as its own product rather than
+    // a Relay plan tier; this entry stays so the one existing paying
+    // Brokerage account keeps working exactly as it does today.
+    hidden: true,
   },
 ];
+
+/**
+ * What a new signup, the onboarding plan picker, and the account
+ * page's "upgrade to" buttons should actually offer -- PLANS minus
+ * anything marked `hidden`. Launch surface is Starter/Pro/Team only
+ * until the Brokerage spinoff ships.
+ */
+export const PUBLIC_PLANS: Plan[] = PLANS.filter((p) => !p.hidden);
 
 // Team and Brokerage are the same underlying shared-workspace feature
 // (src/lib/team.ts) -- they differ only in per-seat price and seat

@@ -6,7 +6,7 @@ import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
 import { DueDateSpec, normalizeDueDateSpec } from '@/lib/dueDates';
 import DueDateControl from '@/components/DueDateControl';
 
-import { PLANS, type PlanId } from '@/lib/plans';
+import { PLANS, PUBLIC_PLANS, type PlanId } from '@/lib/plans';
 
 // Onboarding walks a new account through every setting one step at a time
 // before dropping them at the dashboard, instead of leaving Settings to be
@@ -106,7 +106,7 @@ function OnboardingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselected = searchParams.get('plan') as PlanId | null;
-  const validPreselect = preselected && PLANS.some((p) => p.id === preselected) ? preselected : null;
+  const validPreselect = preselected && PUBLIC_PLANS.some((p) => p.id === preselected) ? preselected : null;
   const checkoutStatus = searchParams.get('checkout');
   const checkoutCancelled = checkoutStatus === 'cancelled';
   // Set when landing back here from Stripe Connect's hosted onboarding
@@ -529,8 +529,8 @@ function OnboardingContent() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {PLANS.map((plan) => (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {PUBLIC_PLANS.map((plan) => (
                 <div
                   key={plan.id}
                   className={`rounded-lg border transition ${

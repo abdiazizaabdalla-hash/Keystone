@@ -13,11 +13,6 @@ interface Entry {
 const SHIPPED: Entry[] = [
   {
     date: 'October 2026',
-    title: 'Brokerage pricing tier',
-    body: 'A seat-based plan sized for a broker buying access across a whole team — 10-seat minimum at $15/seat/month, on the same shared-roster billing as the Team plan.',
-  },
-  {
-    date: 'October 2026',
     title: 'Scoped external access links',
     body: 'Share a single document, or a read-only view of a transaction, with someone outside Relay — a lender, an attorney, a client — through a link you control and can revoke at any time, without creating them an account.',
   },

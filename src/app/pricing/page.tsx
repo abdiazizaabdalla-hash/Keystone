@@ -1,14 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { PLANS } from '@/lib/plans';
+import { PUBLIC_PLANS } from '@/lib/plans';
 import DemoRequestButton from '@/components/DemoRequestButton';
 
 const CTA_LABELS: Record<string, string> = {
   starter: 'Start free',
   pro: 'Start Pro',
   team: 'Start Team',
-  brokerage: 'Start Brokerage',
 };
 
 const UPGRADE_REASONS = [
@@ -25,20 +24,19 @@ const COMPARISON_ROWS: {
   starter: ComparisonValue;
   pro: ComparisonValue;
   team: ComparisonValue;
-  brokerage: ComparisonValue;
 }[] = [
-  { feature: 'Transaction management', starter: true, pro: true, team: true, brokerage: true },
-  { feature: 'Baseline checklist', starter: true, pro: true, team: true, brokerage: true },
-  { feature: 'Custom checklist templates', starter: false, pro: true, team: true, brokerage: true },
-  { feature: 'Agent profiles (for invoicing)', starter: 'Up to 3', pro: 'Unlimited', team: 'Unlimited', brokerage: 'Unlimited' },
-  { feature: 'Agent portal invitations', starter: true, pro: true, team: true, brokerage: true },
-  { feature: 'Document storage & organization', starter: true, pro: true, team: true, brokerage: true },
-  { feature: 'E-signature requests', starter: true, pro: true, team: true, brokerage: true },
-  { feature: 'Invoicing & payment tracking', starter: true, pro: true, team: true, brokerage: true },
-  { feature: 'Daily deadline digest', starter: true, pro: true, team: true, brokerage: true },
-  { feature: 'Admin dashboard', starter: false, pro: true, team: true, brokerage: true },
-  { feature: 'Team roster & shared oversight', starter: false, pro: false, team: true, brokerage: true },
-  { feature: 'Seat minimum', starter: '—', pro: '—', team: '3 seats', brokerage: '10 seats' },
+  { feature: 'Transaction management', starter: true, pro: true, team: true },
+  { feature: 'Baseline checklist', starter: true, pro: true, team: true },
+  { feature: 'Custom checklist templates', starter: false, pro: true, team: true },
+  { feature: 'Agent profiles (for invoicing)', starter: 'Up to 3', pro: 'Unlimited', team: 'Unlimited' },
+  { feature: 'Agent portal invitations', starter: true, pro: true, team: true },
+  { feature: 'Document storage & organization', starter: true, pro: true, team: true },
+  { feature: 'E-signature requests', starter: true, pro: true, team: true },
+  { feature: 'Invoicing & payment tracking', starter: true, pro: true, team: true },
+  { feature: 'Daily deadline digest', starter: true, pro: true, team: true },
+  { feature: 'Admin dashboard', starter: false, pro: true, team: true },
+  { feature: 'Team roster & shared oversight', starter: false, pro: false, team: true },
+  { feature: 'Seat minimum', starter: '—', pro: '—', team: '3 seats' },
 ];
 
 function ComparisonCell({ value }: { value: ComparisonValue }) {
@@ -105,8 +103,8 @@ export default function PricingPage() {
 
       {/* Plans */}
       <section className="max-w-6xl mx-auto px-6 pb-16">
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {PLANS.map((plan) => (
+        <div className="grid md:grid-cols-3 gap-6">
+          {PUBLIC_PLANS.map((plan) => (
             <div
               key={plan.id}
               className={`rounded-xl border p-8 flex flex-col ${
@@ -146,7 +144,7 @@ export default function PricingPage() {
           ))}
         </div>
         <p className="text-center text-sm text-slate-500 mt-8">
-          Team is billed at $19 per TC seat per month, with a three-seat minimum ($57/month to start). Brokerage is billed at $15 per TC seat per month, with a ten-seat minimum ($150/month to start), for a broker buying seats across a whole team. Agents invited to collaborate on transactions do not require paid TC seats — the agent portal is free on every plan.
+          Team is billed at $19 per TC seat per month, with a three-seat minimum ($57/month to start). Agents invited to collaborate on transactions do not require paid TC seats — the agent portal is free on every plan.
         </p>
       </section>
 
@@ -161,7 +159,6 @@ export default function PricingPage() {
                 <th className="font-medium text-slate-300 px-5 py-4">Starter</th>
                 <th className="font-medium text-slate-300 px-5 py-4">Pro</th>
                 <th className="font-medium text-slate-300 px-5 py-4">Team</th>
-                <th className="font-medium text-slate-300 px-5 py-4">Brokerage</th>
               </tr>
             </thead>
             <tbody>
@@ -171,7 +168,6 @@ export default function PricingPage() {
                   <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><ComparisonCell value={row.starter} /></td>
                   <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><ComparisonCell value={row.pro} /></td>
                   <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><ComparisonCell value={row.team} /></td>
-                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><ComparisonCell value={row.brokerage} /></td>
                 </tr>
               ))}
             </tbody>
