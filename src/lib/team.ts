@@ -93,8 +93,14 @@ export async function removePaidSeat(ownerId: string): Promise<void> {
 export interface TeamRow {
   id: string;
   owner_id: string;
-  name: string;
+  name: string | null;
   created_at: string;
+  // Brokerage-only org-level defaults (see add-brokerage-org.sql) -- null
+  // on Team plans and on any Brokerage team that hasn't set them yet.
+  default_flat_fee: number | null;
+  default_percent_fee: number | null;
+  default_invoice_due_days: number | null;
+  default_checklist_template_id: string | null;
 }
 
 export interface TeamMembership {
@@ -120,6 +126,12 @@ export async function getTeamForUser(userId: string): Promise<TeamMembership | n
   if (teamError) throw teamError;
 
   return { team, role: membership.role as TeamRole };
+}
+
+/** The team id a user belongs to (owner or member), or null if they're on none. Thin convenience wrapper over getTeamForUser for call sites that only need the id. */
+export async function getTeamIdForUser(userId: string): Promise<string | null> {
+  const membership = await getTeamForUser(userId);
+  return membership ? membership.team.id : null;
 }
 
 /**

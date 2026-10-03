@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { syncTasksToStatus } from '@/lib/closeTransaction';
 import { computeDueDates, normalizeDueDateSpec, dueDaysToSpec } from '@/lib/dueDates';
+import { getVisibleTcUserIds, getTeamForUser } from '@/lib/team';
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
@@ -20,19 +21,22 @@ export async function PATCH(request: NextRequest) {
     if (!isAdmin) {
       const { data: existingTx } = await supabaseServer
         .from('transactions')
-        .select('agent_id')
+        .select('tc_user_id')
         .eq('id', transactionId)
         .single();
 
       if (existingTx) {
-        const { data: agent } = await supabaseServer
-          .from('agents')
-          .select('id')
-          .eq('id', existingTx.agent_id)
-          .eq('tc_user_id', user.id)
-          .single();
+        // The transaction's own assigned TC can always edit it. A team
+        // owner (the brokerage admin) can additionally edit any
+        // transaction belonging to their team -- oversight means more
+        // than read-only visibility -- but a regular teammate still
+        // can't touch someone else's deal.
+        const membership = await getTeamForUser(user.id);
+        const isOwnerOfVisibleTeam = membership?.role === 'owner';
+        const visibleIds = isOwnerOfVisibleTeam ? await getVisibleTcUserIds(user.id) : [user.id];
+        const allowed = visibleIds.includes(existingTx.tc_user_id);
 
-        if (!agent) {
+        if (!allowed) {
           return NextResponse.json({ error: 'You do not have permission to update this transaction' }, { status: 403 });
         }
       }

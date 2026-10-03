@@ -76,34 +76,27 @@ export async function GET(request: NextRequest) {
 
         if (!isOwner) return base;
 
-        const { data: memberAgents } = await supabaseServer
+        const { count: agentCount } = await supabaseServer
           .from('agents')
-          .select('id')
+          .select('id', { count: 'exact', head: true })
           .eq('tc_user_id', memberId);
-        const agentIds = (memberAgents || []).map((a) => a.id);
 
-        let activeTransactions = 0;
-        let totalTransactions = 0;
-        if (agentIds.length > 0) {
-          const { count: total } = await supabaseServer
-            .from('transactions')
-            .select('id', { count: 'exact', head: true })
-            .in('agent_id', agentIds);
-          const { count: active } = await supabaseServer
-            .from('transactions')
-            .select('id', { count: 'exact', head: true })
-            .in('agent_id', agentIds)
-            .neq('status', CLOSED_STATUS);
-          totalTransactions = total || 0;
-          activeTransactions = active || 0;
-        }
+        const { count: total } = await supabaseServer
+          .from('transactions')
+          .select('id', { count: 'exact', head: true })
+          .eq('tc_user_id', memberId);
+        const { count: active } = await supabaseServer
+          .from('transactions')
+          .select('id', { count: 'exact', head: true })
+          .eq('tc_user_id', memberId)
+          .neq('status', CLOSED_STATUS);
 
         return {
           ...base,
           stats: {
-            agents: agentIds.length,
-            activeTransactions,
-            totalTransactions,
+            agents: agentCount || 0,
+            activeTransactions: active || 0,
+            totalTransactions: total || 0,
           },
         };
       })
@@ -120,7 +113,14 @@ export async function GET(request: NextRequest) {
     const seatInfo = getSeatInfo(user.user_metadata?.plan);
 
     return NextResponse.json({
-      team: { id: membership.team.id, name: membership.team.name },
+      team: {
+        id: membership.team.id,
+        name: membership.team.name,
+        defaultFlatFee: membership.team.default_flat_fee,
+        defaultPercentFee: membership.team.default_percent_fee,
+        defaultInvoiceDueDays: membership.team.default_invoice_due_days,
+        defaultChecklistTemplateId: membership.team.default_checklist_template_id,
+      },
       role: membership.role,
       seatLimit,
       seatPriceLabel: seatInfo.pricePerSeatLabel,
@@ -133,6 +133,55 @@ export async function GET(request: NextRequest) {
     }
     console.error('Error fetching team:', error);
     return NextResponse.json({ error: 'Failed to fetch team' }, { status: 500 });
+  }
+}
+
+// PATCH: update the team/brokerage's own settings. Owner-only.
+// `name` applies to Team and Brokerage alike. The default_* fields are
+// Brokerage-only org-level defaults (checklist/fee/invoicing policy) --
+// writable even though the columns exist on every team row, since the
+// decision to introduce shared defaults at all was scoped to Brokerage.
+export async function PATCH(request: NextRequest) {
+  try {
+    const { user } = await getUserFromRequest(request);
+    const body = await request.json();
+
+    const membership = await getTeamForUser(user.id);
+    if (!membership || membership.role !== 'owner') {
+      return NextResponse.json({ error: 'Only the team owner can update team settings' }, { status: 403 });
+    }
+
+    const updateFields: Record<string, unknown> = {};
+
+    if (typeof body.name === 'string') {
+      const trimmed = body.name.trim();
+      updateFields.name = trimmed.length > 0 ? trimmed : null;
+    }
+
+    const isBrokerage = user.user_metadata?.plan === 'brokerage';
+    if (isBrokerage) {
+      if (body.defaultFlatFee !== undefined) updateFields.default_flat_fee = body.defaultFlatFee;
+      if (body.defaultPercentFee !== undefined) updateFields.default_percent_fee = body.defaultPercentFee;
+      if (body.defaultInvoiceDueDays !== undefined) updateFields.default_invoice_due_days = body.defaultInvoiceDueDays;
+      if (body.defaultChecklistTemplateId !== undefined) {
+        updateFields.default_checklist_template_id = body.defaultChecklistTemplateId;
+      }
+    }
+
+    if (Object.keys(updateFields).length === 0) {
+      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
+    }
+
+    const { error } = await supabaseServer.from('teams').update(updateFields).eq('id', membership.team.id);
+    if (error) throw error;
+
+    return NextResponse.json({ status: 'ok' });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error('Error updating team settings:', error);
+    return NextResponse.json({ error: 'Failed to update team settings' }, { status: 500 });
   }
 }
 

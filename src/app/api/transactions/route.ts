@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getPlanLimits } from '@/lib/plans';
-import { getVisibleTcUserIds } from '@/lib/team';
+import { getVisibleTcUserIds, getTeamIdForUser } from '@/lib/team';
 import {
   BASELINE_TEMPLATE_ID,
   BASELINE_CHECKLIST_TEMPLATE,
@@ -36,17 +36,14 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (!isAdmin) {
+      // transactions.tc_user_id is the explicit, reassignable "who's
+      // running this deal" column (see add-brokerage-org.sql) -- filtering
+      // on it directly, instead of resolving through agent_id ->
+      // agents.tc_user_id, is both simpler and correct once a transaction
+      // can be reassigned to a TC other than whoever owns its agent
+      // contact.
       const visibleIds = await getVisibleTcUserIds(user.id);
-      const { data: userAgents } = await supabaseServer
-        .from('agents')
-        .select('id')
-        .in('tc_user_id', visibleIds);
-
-      const agentIds = userAgents?.map((a) => a.id) || [];
-      if (agentIds.length === 0) {
-        return NextResponse.json([]);
-      }
-      query = query.in('agent_id', agentIds);
+      query = query.in('tc_user_id', visibleIds);
     }
 
     const { data, error } = await query;
@@ -114,12 +111,17 @@ export async function POST(request: NextRequest) {
     if (!isAdmin) {
       const { data: agent } = await supabaseServer
         .from('agents')
-        .select('id')
+        .select('id, tc_user_id, team_id')
         .eq('id', agentId)
-        .eq('tc_user_id', user.id)
         .single();
 
-      if (!agent) {
+      const visibleIds = await getVisibleTcUserIds(user.id);
+      const myTeamId = await getTeamIdForUser(user.id);
+      const allowed =
+        !!agent &&
+        (visibleIds.includes(agent.tc_user_id) || (agent.team_id !== null && agent.team_id === myTeamId));
+
+      if (!allowed) {
         return NextResponse.json({ error: 'Agent not found or does not belong to you' }, { status: 403 });
       }
     }
@@ -130,32 +132,22 @@ export async function POST(request: NextRequest) {
     // until/unless a future plan reintroduces a transaction cap.
     const { maxActiveTransactions } = getPlanLimits(user.user_metadata?.plan);
     if (maxActiveTransactions !== null) {
-      const { data: ownAgents, error: agentsError } = await supabaseServer
-        .from('agents')
-        .select('id')
-        .eq('tc_user_id', user.id);
+      const { count, error: countError } = await supabaseServer
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('tc_user_id', user.id)
+        .neq('status', CLOSED_STATUS);
 
-      if (agentsError) throw agentsError;
+      if (countError) throw countError;
 
-      const ownAgentIds = (ownAgents || []).map((a) => a.id);
-      if (ownAgentIds.length > 0) {
-        const { count, error: countError } = await supabaseServer
-          .from('transactions')
-          .select('id', { count: 'exact', head: true })
-          .in('agent_id', ownAgentIds)
-          .neq('status', CLOSED_STATUS);
-
-        if (countError) throw countError;
-
-        if ((count || 0) >= maxActiveTransactions) {
-          return NextResponse.json(
-            {
-              error: `Your plan allows up to ${maxActiveTransactions} active transactions. Close out an existing deal or upgrade to add more.`,
-              code: 'plan_limit_reached',
-            },
-            { status: 403 }
-          );
-        }
+      if ((count || 0) >= maxActiveTransactions) {
+        return NextResponse.json(
+          {
+            error: `Your plan allows up to ${maxActiveTransactions} active transactions. Close out an existing deal or upgrade to add more.`,
+            code: 'plan_limit_reached',
+          },
+          { status: 403 }
+        );
       }
     }
 
@@ -209,6 +201,7 @@ export async function POST(request: NextRequest) {
         .from('transactions')
         .insert({
           agent_id: agentId,
+          tc_user_id: user.id,
           file_number: fileNumber,
           property_address: propertyAddress,
           purchase_price: purchasePrice,
