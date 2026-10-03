@@ -8,6 +8,10 @@ interface MemberStats {
   agents: number;
   activeTransactions: number;
   totalTransactions: number;
+  overdueCount: number;
+  dueTodayCount: number;
+  waitingOnCount: number;
+  closingSoonCount: number;
 }
 
 interface Member {
@@ -363,6 +367,70 @@ export default function CollaboratePage() {
             ))}
         </div>
       </div>
+
+      {isOwner && data.members.length > 1 && (
+        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-slate-600">
+            <h2 className="font-display font-semibold text-slate-100">TC workload</h2>
+            <p className="text-sm text-slate-400 mt-1">
+              Who needs attention right now, across every TC on the {isBrokerage ? 'brokerage' : 'team'}.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-slate-500 uppercase tracking-wider">
+                  <th className="text-left font-semibold px-6 py-2">TC</th>
+                  <th className="text-right font-semibold px-4 py-2">Active</th>
+                  <th className="text-right font-semibold px-4 py-2">Overdue</th>
+                  <th className="text-right font-semibold px-4 py-2">Due today</th>
+                  <th className="text-right font-semibold px-4 py-2">Waiting on</th>
+                  <th className="text-right font-semibold px-6 py-2">Closing soon</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700">
+                {[...data.members]
+                  .filter((member) => !!member.stats)
+                  .sort((a, b) => {
+                    const sa = a.stats!;
+                    const sb = b.stats!;
+                    return (
+                      sb.overdueCount - sa.overdueCount ||
+                      sb.dueTodayCount - sa.dueTodayCount ||
+                      sb.waitingOnCount - sa.waitingOnCount
+                    );
+                  })
+                  .map((member) => {
+                    const stats = member.stats!;
+                    return (
+                      <tr
+                        key={member.userId}
+                        onClick={() => router.push(`/dashboard/collaborate/${member.userId}`)}
+                        className="cursor-pointer hover:bg-slate-600/30 transition"
+                      >
+                        <td className="px-6 py-3 text-slate-200 font-medium truncate max-w-[12rem]">
+                          {member.name || member.email}
+                          {member.isYou && <span className="ml-1.5 text-xs text-slate-500">(you)</span>}
+                        </td>
+                        <td className="text-right px-4 py-3 text-slate-300">{stats.activeTransactions}</td>
+                        <td className={`text-right px-4 py-3 ${stats.overdueCount > 0 ? 'text-red-400 font-semibold' : 'text-slate-500'}`}>
+                          {stats.overdueCount}
+                        </td>
+                        <td className={`text-right px-4 py-3 ${stats.dueTodayCount > 0 ? 'text-amber-400 font-semibold' : 'text-slate-500'}`}>
+                          {stats.dueTodayCount}
+                        </td>
+                        <td className={`text-right px-4 py-3 ${stats.waitingOnCount > 0 ? 'text-blue-300' : 'text-slate-500'}`}>
+                          {stats.waitingOnCount}
+                        </td>
+                        <td className="text-right px-6 py-3 text-slate-300">{stats.closingSoonCount}</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {isOwner && isBrokerage && (
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
