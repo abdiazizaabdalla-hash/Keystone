@@ -19,6 +19,17 @@ export interface ChecklistTemplateStep {
    * feature existed.
    */
   dueDate?: DueDateSpec | null;
+  /**
+   * Flags a step the template author considers non-negotiable -- a
+   * brokerage's default template marking "E&O disclosure" required, say.
+   * Purely a signal surfaced wherever templates themselves are shown
+   * (the builder, and the picker on the new-transaction form) -- it does
+   * NOT get copied onto the tasks a transaction actually generates, so
+   * there's no enforcement once a deal is created from the template.
+   * Omitted/absent means not required, same as every step before this
+   * field existed.
+   */
+  required?: boolean;
 }
 
 export interface ChecklistTemplateSummary {
@@ -67,19 +78,21 @@ export function normalizeTemplateSteps(raw: unknown): ChecklistTemplateStep[] {
         const name = (item as { name: string }).name.trim().slice(0, MAX_STEP_NAME_LENGTH);
         if (name.length === 0) return null;
 
+        const required = (item as { required?: unknown }).required === true ? { required: true } : {};
+
         const rawDueDate = (item as { dueDate?: unknown }).dueDate;
         if (rawDueDate && typeof rawDueDate === 'object') {
           const spec = normalizeDueDateSpec(rawDueDate);
-          return spec.mode !== 'none' ? { name, dueDate: spec } : { name };
+          return spec.mode !== 'none' ? { name, dueDate: spec, ...required } : { name, ...required };
         }
 
         // Legacy shape: a bare numeric `dueDays` meaning "days after acceptance".
         const rawDueDays = (item as { dueDays?: unknown }).dueDays;
         if (typeof rawDueDays === 'number' && Number.isFinite(rawDueDays)) {
-          return { name, dueDate: dueDaysToSpec(rawDueDays) };
+          return { name, dueDate: dueDaysToSpec(rawDueDays), ...required };
         }
 
-        return { name };
+        return { name, ...required };
       }
       return null;
     })

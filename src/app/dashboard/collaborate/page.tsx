@@ -83,6 +83,14 @@ export default function CollaboratePage() {
   // team-scoping has real UI -- see checklist_templates.team_id.)
   const [teamName, setTeamName] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
+  // Brokerage-only: which checklist template new transactions default to
+  // for the whole brokerage (see teams.default_checklist_template_id and
+  // the new-transaction page, which pre-selects this instead of
+  // Baseline). The list itself is whatever /api/checklist-templates
+  // already resolves for an owner -- their whole team's templates, per
+  // getVisibleTcUserIds.
+  const [availableTemplates, setAvailableTemplates] = useState<{ id: string; name: string; isBaseline: boolean }[]>([]);
+  const [defaultTemplateId, setDefaultTemplateId] = useState('');
   const [settingsMessage, setSettingsMessage] = useState('');
 
   // Brokerage agent directory -- a roster of real agents associated
@@ -151,6 +159,17 @@ export default function CollaboratePage() {
     }
   };
 
+  const loadTemplates = async () => {
+    try {
+      const res = await authFetch('/api/checklist-templates');
+      const json = await res.json();
+      if (!res.ok) return;
+      if (Array.isArray(json.templates)) setAvailableTemplates(json.templates);
+    } catch {
+      // Non-fatal -- the picker just stays empty.
+    }
+  };
+
   const load = async () => {
     try {
       const res = await authFetch('/api/team');
@@ -158,11 +177,13 @@ export default function CollaboratePage() {
       if (!res.ok) throw new Error(json.error || 'Failed to load team');
       setData(json);
       setTeamName(json.team?.name || '');
+      setDefaultTemplateId(json.team?.defaultChecklistTemplateId || '');
       if (json.role === 'owner') {
         await loadUnassigned();
       }
       if (json.role === 'owner' && json.planId === 'brokerage') {
         await loadDirectory();
+        await loadTemplates();
       }
     } catch (err) {
       if (err instanceof AuthRequiredError) {
@@ -213,6 +234,9 @@ export default function CollaboratePage() {
     setSettingsMessage('');
     try {
       const payload: Record<string, unknown> = { name: teamName };
+      if (isBrokerage) {
+        payload.defaultChecklistTemplateId = defaultTemplateId || null;
+      }
       const res = await authFetch('/api/team', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -335,6 +359,32 @@ export default function CollaboratePage() {
                 className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
+
+            {isBrokerage && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                  Default checklist template
+                </label>
+                <select
+                  value={defaultTemplateId}
+                  onChange={(e) => setDefaultTemplateId(e.target.value)}
+                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">Baseline (default)</option>
+                  {availableTemplates
+                    .filter((t) => !t.isBaseline)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">
+                  New transactions across the brokerage start with this checklist instead of Baseline.
+                </p>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={savingSettings}

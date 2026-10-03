@@ -41,11 +41,17 @@ function SettingsContent() {
   interface TemplateStepDraft {
     name: string;
     dueDate: DueDateSpec;
+    required: boolean;
   }
-  const EMPTY_STEP_DRAFT: TemplateStepDraft = { name: '', dueDate: { mode: 'none' } };
+  const EMPTY_STEP_DRAFT: TemplateStepDraft = { name: '', dueDate: { mode: 'none' }, required: false };
 
   const [templates, setTemplates] = useState<
-    { id: string; name: string; steps: { name: string; dueDate?: DueDateSpec | null }[]; isBaseline: boolean }[]
+    {
+      id: string;
+      name: string;
+      steps: { name: string; dueDate?: DueDateSpec | null; required?: boolean }[];
+      isBaseline: boolean;
+    }[]
   >([]);
   const [canUseCustomTemplates, setCanUseCustomTemplates] = useState(false);
   const [showBaselineSteps, setShowBaselineSteps] = useState(false);
@@ -104,7 +110,11 @@ function SettingsContent() {
     setTemplateStepsDraft([EMPTY_STEP_DRAFT]);
   };
 
-  const startEditTemplate = (template: { id: string; name: string; steps: { name: string; dueDate?: DueDateSpec | null }[] }) => {
+  const startEditTemplate = (template: {
+    id: string;
+    name: string;
+    steps: { name: string; dueDate?: DueDateSpec | null; required?: boolean }[];
+  }) => {
     setTemplateMessage('');
     setEditingTemplateId(template.id);
     setTemplateNameDraft(template.name);
@@ -113,6 +123,7 @@ function SettingsContent() {
         ? template.steps.map((step) => ({
             name: step.name,
             dueDate: step.dueDate ? normalizeDueDateSpec(step.dueDate) : { mode: 'none' },
+            required: step.required === true,
           }))
         : [EMPTY_STEP_DRAFT]
     );
@@ -130,6 +141,10 @@ function SettingsContent() {
 
   const updateStepDueDateDraft = (index: number, dueDate: DueDateSpec) => {
     setTemplateStepsDraft((prev) => prev.map((s, i) => (i === index ? { ...s, dueDate } : s)));
+  };
+
+  const toggleStepRequiredDraft = (index: number) => {
+    setTemplateStepsDraft((prev) => prev.map((s, i) => (i === index ? { ...s, required: !s.required } : s)));
   };
 
   const addStepDraft = () => {
@@ -152,15 +167,15 @@ function SettingsContent() {
 
   const saveTemplate = async () => {
     const name = templateNameDraft.trim();
-    const steps = templateStepsDraft
-      .map((s) => {
-        const trimmedName = s.name.trim();
-        if (trimmedName.length === 0) return null;
-        return s.dueDate.mode === 'none'
-          ? { name: trimmedName }
-          : { name: trimmedName, dueDate: s.dueDate };
-      })
-      .filter((s): s is { name: string; dueDate?: DueDateSpec } => s !== null);
+    const steps: { name: string; dueDate?: DueDateSpec; required?: boolean }[] = [];
+    for (const s of templateStepsDraft) {
+      const trimmedName = s.name.trim();
+      if (trimmedName.length === 0) continue;
+      const step: { name: string; dueDate?: DueDateSpec; required?: boolean } = { name: trimmedName };
+      if (s.dueDate.mode !== 'none') step.dueDate = s.dueDate;
+      if (s.required) step.required = true;
+      steps.push(step);
+    }
 
     if (!name) {
       setTemplateMessage('Give your template a name.');
@@ -605,7 +620,11 @@ function SettingsContent() {
                 >
                   <div>
                     <p className="text-slate-100 font-medium text-sm">{template.name}</p>
-                    <p className="text-slate-500 text-xs">{template.steps.length} steps</p>
+                    <p className="text-slate-500 text-xs">
+                      {template.steps.length} steps
+                      {template.steps.some((s) => s.required) &&
+                        ` · ${template.steps.filter((s) => s.required).length} required`}
+                    </p>
                   </div>
                   <div className="flex items-center gap-4 shrink-0">
                     <button
@@ -665,6 +684,15 @@ function SettingsContent() {
                       className="flex-1 min-w-[10rem] bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none text-sm"
                     />
                     <DueDateControl value={step.dueDate} onChange={(next) => updateStepDueDateDraft(index, next)} />
+                    <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer shrink-0" title="Flag this step as required -- shown wherever this template is shown, not enforced on the deal itself">
+                      <input
+                        type="checkbox"
+                        checked={step.required}
+                        onChange={() => toggleStepRequiredDraft(index)}
+                        className="w-3.5 h-3.5 rounded border-slate-500 bg-slate-600 text-amber-500 focus:ring-amber-500/40"
+                      />
+                      Required
+                    </label>
                     <button
                       type="button"
                       onClick={() => moveStepDraft(index, -1)}

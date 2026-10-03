@@ -16,7 +16,7 @@ interface Agent {
 interface ChecklistTemplate {
   id: string;
   name: string;
-  steps: { name: string; dueDate?: DueDateSpec | null }[];
+  steps: { name: string; dueDate?: DueDateSpec | null; required?: boolean }[];
   isBaseline: boolean;
 }
 
@@ -44,6 +44,14 @@ export default function NewTransactionPage() {
   // deal they just created.
   const [isTeamOwner, setIsTeamOwner] = useState(false);
   const [leaveUnassigned, setLeaveUnassigned] = useState(false);
+  // The team/brokerage's default checklist template (set from
+  // /dashboard/collaborate's settings panel, Brokerage-only to change but
+  // read here for any team member) -- pre-selected below once both this
+  // and the template list have loaded, instead of always defaulting to
+  // Baseline. appliedTeamDefaultTemplate guards against reapplying it
+  // after the TC has already picked something themselves.
+  const [teamDefaultTemplateId, setTeamDefaultTemplateId] = useState<string | null>(null);
+  const [appliedTeamDefaultTemplate, setAppliedTeamDefaultTemplate] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // AI contract intake -- upload a purchase contract PDF and pre-fill the
@@ -82,10 +90,24 @@ export default function NewTransactionPage() {
       if (!res.ok) return;
       const data = await res.json();
       setIsTeamOwner(data.role === 'owner');
+      if (data.team?.defaultChecklistTemplateId) {
+        setTeamDefaultTemplateId(data.team.defaultChecklistTemplateId);
+      }
     } catch {
       // Ignore -- same as checkAiAvailability above.
     }
   };
+
+  // Applies the team's default template exactly once, as soon as both
+  // it and the template list are in hand -- never again after that, so
+  // it can't clobber a template the TC picked themselves.
+  useEffect(() => {
+    if (appliedTeamDefaultTemplate || !teamDefaultTemplateId) return;
+    if (templates.some((t) => t.id === teamDefaultTemplateId)) {
+      setFormData((prev) => ({ ...prev, templateId: teamDefaultTemplateId }));
+      setAppliedTeamDefaultTemplate(true);
+    }
+  }, [teamDefaultTemplateId, templates, appliedTeamDefaultTemplate]);
 
   // Whether AI contract intake is configured at all -- purely additive,
   // so any failure here just leaves the upload option hidden rather than
@@ -647,11 +669,16 @@ export default function NewTransactionPage() {
                 onChange={handleChange}
                 className="w-full bg-slate-600 border border-slate-600 hover:border-slate-500 focus:border-blue-500 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition"
               >
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name} ({template.steps.length} steps)
-                  </option>
-                ))}
+                {templates.map((template) => {
+                  const requiredCount = template.steps.filter((s) => s.required).length;
+                  return (
+                    <option key={template.id} value={template.id}>
+                      {template.name} ({template.steps.length} steps
+                      {requiredCount > 0 ? `, ${requiredCount} required` : ''})
+                      {template.id === teamDefaultTemplateId ? ' — team default' : ''}
+                    </option>
+                  );
+                })}
               </select>
               <p className="text-xs text-slate-400 mt-2">
                 Choose which checklist this deal starts with.{' '}
