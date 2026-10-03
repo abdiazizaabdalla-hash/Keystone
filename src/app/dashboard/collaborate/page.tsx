@@ -148,6 +148,44 @@ export default function CollaboratePage() {
     }
   };
 
+  const [exportingCompliance, setExportingCompliance] = useState(false);
+  const [exportError, setExportError] = useState('');
+
+  // Same blob-URL download pattern as the per-transaction compliance
+  // export (dashboard/transactions/[id]/page.tsx handleExportCompliance)
+  // -- GET /api/team/compliance-export is bearer-token authed like every
+  // other API route here, so a plain <a href> download link can't carry
+  // the Authorization header; this fetches it with authFetch instead and
+  // hands the browser the resulting blob.
+  const handleExportCompliance = async () => {
+    setExportError('');
+    setExportingCompliance(true);
+    try {
+      const res = await authFetch('/api/team/compliance-export');
+      if (!res.ok) {
+        const result = await res.json().catch(() => ({}));
+        throw new Error(result.error || 'Failed to generate compliance export');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `compliance-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setExportError(err instanceof Error ? err.message : 'Failed to generate compliance export');
+    } finally {
+      setExportingCompliance(false);
+    }
+  };
+
   const loadDirectory = async () => {
     try {
       const res = await authFetch('/api/team/agents');
@@ -329,9 +367,21 @@ export default function CollaboratePage() {
 
   return (
     <div className="p-8 max-w-4xl">
-      <h1 className="text-3xl font-display font-semibold text-slate-100 mb-1">
-        {data.team.name || 'Collaborate'}
-      </h1>
+      <div className="flex items-start justify-between gap-4 mb-1">
+        <h1 className="text-3xl font-display font-semibold text-slate-100">
+          {data.team.name || 'Collaborate'}
+        </h1>
+        {isOwner && (
+          <button
+            onClick={handleExportCompliance}
+            disabled={exportingCompliance}
+            className="shrink-0 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 text-sm font-medium rounded-lg transition disabled:opacity-50"
+          >
+            {exportingCompliance ? 'Exporting…' : 'Export compliance CSV'}
+          </button>
+        )}
+      </div>
+      {exportError && <p className="text-sm text-red-400 mb-2">{exportError}</p>}
       <p className="text-slate-400 mb-8">
         {isOwner
           ? "Your team's roster and pipeline, all in one place."
