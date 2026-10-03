@@ -45,6 +45,16 @@ interface TeamResponse {
   pendingInvites: PendingInvite[];
 }
 
+interface UnassignedTransaction {
+  id: string;
+  fileNumber: string;
+  propertyAddress: string | null;
+  purchasePrice: number | null;
+  status: string;
+  createdAt: string;
+  agent: { name: string; email: string | null; phone: string | null; brokerage: string | null } | null;
+}
+
 interface DirectoryAgent {
   id: string;
   name: string;
@@ -86,6 +96,50 @@ export default function CollaboratePage() {
   const [addingAgent, setAddingAgent] = useState(false);
   const [directoryMessage, setDirectoryMessage] = useState('');
 
+  // The brokerage/team's unassigned-transaction queue -- deals created
+  // with "leave unassigned" checked on the new-transaction form (see
+  // POST /api/transactions) instead of being handed straight to the
+  // creator. Owner-only, same as everything else on this page.
+  const [unassigned, setUnassigned] = useState<UnassignedTransaction[]>([]);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [assignPicks, setAssignPicks] = useState<Record<string, string>>({});
+  const [unassignedMessage, setUnassignedMessage] = useState('');
+
+  const loadUnassigned = async () => {
+    try {
+      const res = await authFetch('/api/team/unassigned');
+      const json = await res.json();
+      if (!res.ok) return;
+      setUnassigned(json as UnassignedTransaction[]);
+    } catch {
+      // Non-fatal -- the queue section just stays empty.
+    }
+  };
+
+  const handleAssign = async (transactionId: string) => {
+    const tcUserId = assignPicks[transactionId];
+    if (!tcUserId) {
+      setUnassignedMessage('Pick who should get this one first.');
+      return;
+    }
+    setAssigningId(transactionId);
+    setUnassignedMessage('');
+    try {
+      const res = await authFetch(`/api/team/unassigned/${transactionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tcUserId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to assign transaction');
+      setUnassigned((prev) => prev.filter((t) => t.id !== transactionId));
+    } catch (err) {
+      setUnassignedMessage(err instanceof Error ? err.message : 'Failed to assign transaction');
+    } finally {
+      setAssigningId(null);
+    }
+  };
+
   const loadDirectory = async () => {
     try {
       const res = await authFetch('/api/team/agents');
@@ -104,6 +158,9 @@ export default function CollaboratePage() {
       if (!res.ok) throw new Error(json.error || 'Failed to load team');
       setData(json);
       setTeamName(json.team?.name || '');
+      if (json.role === 'owner') {
+        await loadUnassigned();
+      }
       if (json.role === 'owner' && json.planId === 'brokerage') {
         await loadDirectory();
       }
@@ -367,6 +424,62 @@ export default function CollaboratePage() {
             ))}
         </div>
       </div>
+
+      {isOwner && unassigned.length > 0 && (
+        <div className="bg-gradient-to-br from-amber-900/30 to-slate-800 border border-amber-700/40 rounded-lg overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-amber-700/30 flex items-center justify-between">
+            <div>
+              <h2 className="font-display font-semibold text-slate-100">Unassigned queue</h2>
+              <p className="text-sm text-slate-400 mt-1">
+                Deals that came in without a TC picked yet. Assign one to get it moving.
+              </p>
+            </div>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
+              {unassigned.length}
+            </span>
+          </div>
+          <div className="divide-y divide-slate-700">
+            {unassigned.map((tx) => (
+              <div key={tx.id} className="px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+                <div className="min-w-0">
+                  <div className="text-slate-100 font-medium truncate">
+                    {tx.fileNumber} &middot; {tx.propertyAddress || 'No address yet'}
+                  </div>
+                  <div className="text-xs text-slate-500 truncate">
+                    {tx.agent ? tx.agent.name : 'No agent on file'}
+                    {tx.agent?.brokerage ? ` · ${tx.agent.brokerage}` : ''}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <select
+                    value={assignPicks[tx.id] || ''}
+                    onChange={(e) => setAssignPicks((prev) => ({ ...prev, [tx.id]: e.target.value }))}
+                    className="bg-slate-600 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">Assign to…</option>
+                    {data.members.map((member) => (
+                      <option key={member.userId} value={member.userId}>
+                        {member.name || member.email}
+                        {member.isYou ? ' (you)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleAssign(tx.id)}
+                    disabled={assigningId === tx.id}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                  >
+                    {assigningId === tx.id ? 'Assigning…' : 'Assign'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {unassignedMessage && (
+            <p className="px-6 py-3 text-sm text-amber-300 border-t border-amber-700/30">{unassignedMessage}</p>
+          )}
+        </div>
+      )}
 
       {isOwner && data.members.length > 1 && (
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">

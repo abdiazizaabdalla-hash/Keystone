@@ -38,6 +38,12 @@ export default function NewTransactionPage() {
   });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // Only a team/brokerage owner can leave a transaction unassigned (see
+  // POST /api/transactions' leaveUnassigned flag) -- it's meaningless for
+  // a regular member or a solo TC, who are always the one working the
+  // deal they just created.
+  const [isTeamOwner, setIsTeamOwner] = useState(false);
+  const [leaveUnassigned, setLeaveUnassigned] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // AI contract intake -- upload a purchase contract PDF and pre-fill the
@@ -65,7 +71,21 @@ export default function NewTransactionPage() {
     fetchAgents();
     fetchTemplates();
     checkAiAvailability();
+    checkTeamOwner();
   }, []);
+
+  // Non-fatal either way: a 403/404 (no team, or a regular member) just
+  // leaves the "leave unassigned" option hidden.
+  const checkTeamOwner = async () => {
+    try {
+      const res = await authFetch('/api/team');
+      if (!res.ok) return;
+      const data = await res.json();
+      setIsTeamOwner(data.role === 'owner');
+    } catch {
+      // Ignore -- same as checkAiAvailability above.
+    }
+  };
 
   // Whether AI contract intake is configured at all -- purely additive,
   // so any failure here just leaves the upload option hidden rather than
@@ -236,6 +256,7 @@ export default function NewTransactionPage() {
           acceptanceDate: formData.acceptanceDate || null,
           closingDate: formData.closingDate || null,
           templateId: formData.templateId,
+          ...(isTeamOwner && leaveUnassigned ? { leaveUnassigned: true } : {}),
         }),
       });
 
@@ -474,6 +495,24 @@ export default function NewTransactionPage() {
               )}
             </select>
             <p className="text-xs text-slate-400 mt-2">Choose which agent this transaction belongs to</p>
+
+            {isTeamOwner && (
+              <label className="flex items-start gap-2 mt-4 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={leaveUnassigned}
+                  onChange={(e) => setLeaveUnassigned(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-slate-500 bg-slate-600 text-blue-500 focus:ring-blue-500/40"
+                />
+                <span className="text-sm text-slate-300">
+                  Leave unassigned for now
+                  <span className="block text-xs text-slate-500">
+                    This deal goes into your team&rsquo;s unassigned queue on the Collaborate page instead of
+                    being assigned to you -- pick it up or hand it to a TC later.
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
 
           {/* File Number */}
