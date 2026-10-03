@@ -26,8 +26,11 @@ const COMPARISON_ROWS: {
   team: ComparisonValue;
 }[] = [
   { feature: 'Transaction management', starter: true, pro: true, team: true },
+  { feature: 'AI contract intake (auto-fills the deal)', starter: true, pro: true, team: true },
   { feature: 'Baseline checklist', starter: true, pro: true, team: true },
+  { feature: 'Configurable per-step due dates', starter: true, pro: true, team: true },
   { feature: 'Custom checklist templates', starter: false, pro: true, team: true },
+  { feature: 'Required-step flags on templates', starter: false, pro: true, team: true },
   { feature: 'Agent profiles (for invoicing)', starter: 'Up to 3', pro: 'Unlimited', team: 'Unlimited' },
   { feature: 'Agent portal invitations', starter: true, pro: true, team: true },
   { feature: 'Document storage & organization', starter: true, pro: true, team: true },

@@ -13,7 +13,12 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Getting started',
     q: 'What happens when I create a new transaction?',
-    a: 'Relay automatically builds a standard closing checklist (Contract & File Setup, Earnest Money & Option, Inspection & Repairs, Title/Appraisal & Financing, Clear to Close, Closing & Post-Closing) so you’re not starting from a blank page on every deal. Pro and Team accounts can also build their own custom checklist templates.',
+    a: 'Relay automatically builds a standard closing checklist (Contract & File Setup, Earnest Money & Option, Inspection & Repairs, Title/Appraisal & Financing, Clear to Close, Closing & Post-Closing) so you’re not starting from a blank page on every deal, with each step’s due date computed off your acceptance and closing dates. Pro and Team accounts can also build their own custom checklist templates, with their own steps, due-date rules, and required-step flags.',
+  },
+  {
+    category: 'Getting started',
+    q: 'Can Relay fill in a new transaction from the contract itself?',
+    a: 'Yes. Upload the signed purchase contract when creating a transaction and Relay reads it: property address, purchase price, acceptance and closing dates, buyers, sellers, the lender, and the title/escrow contact all come back pre-filled, and matching parties get added to the transaction as contacts automatically. Everything lands in an editable form first, so you review and adjust before it’s actually saved. Available on every plan, including Starter.',
   },
   {
     category: 'Getting started',

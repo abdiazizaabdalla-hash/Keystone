@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { PLANS } from '@/lib/plans';
+import { PUBLIC_PLANS } from '@/lib/plans';
 import { decodeStoredRole } from '@/lib/authClient';
 import DemoRequestButton from '@/components/DemoRequestButton';
 
@@ -200,6 +200,39 @@ export default function Home() {
         </div>
       </section>
 
+      {/* AI contract intake */}
+      <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">AI-Powered</p>
+            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Start a deal by uploading the contract -- not retyping it</h2>
+            <p className="text-slate-400 mb-4">
+              Drop in the signed purchase contract when you create a transaction and Relay reads
+              it for you. The property, the price, the key dates, and everyone on the deal are
+              filled in automatically, so a new file starts set up instead of blank.
+            </p>
+            <p className="text-slate-400">
+              On every plan, Starter included -- this isn&apos;t a Pro-only add-on.
+            </p>
+          </div>
+          <div className="grid gap-3">
+            {[
+              'Property address, purchase price, and acceptance/closing dates pulled straight off the contract',
+              'Buyers, sellers, the lender, and the title/escrow contact added to the transaction as contacts, automatically',
+              'The agent on the deal matched to an existing profile when the name on the contract is recognized',
+              'Everything lands in an editable form first -- you review and adjust before anything is actually created',
+            ].map((line) => (
+              <div key={line} className="flex items-start gap-3 p-4 bg-slate-800/60 border border-slate-700 rounded-xl">
+                <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                <span className="text-sm text-slate-300">{line}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Core workflow / features */}
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Everything for the deal, organized together</h2>
@@ -208,7 +241,7 @@ export default function Home() {
           {[
             {
               title: 'Auto-built checklists',
-              body: 'Every new deal gets a standard closing checklist the moment you create it, with deadlines you control.',
+              body: "Every new deal gets a standard closing checklist the moment you create it. Each step's due date can run off the acceptance date, the closing date, or a fixed date you set — and recalculates automatically if either date changes.",
             },
             {
               title: 'Documents by category',
@@ -228,7 +261,7 @@ export default function Home() {
             },
             {
               title: 'Custom checklist templates',
-              body: 'Build your own checklist templates for the deal types you run most, on Pro and Team.',
+              body: 'Build your own templates for the deal types you run most — cash, new construction, whatever you need — with your own steps, due-date rules, and steps flagged as required. Pro and Team.',
             },
           ].map((f) => (
             <div key={f.title} className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl">
@@ -346,7 +379,7 @@ export default function Home() {
           </Link>
         </div>
         <div className="grid sm:grid-cols-3 gap-6">
-          {PLANS.map((plan) => (
+          {PUBLIC_PLANS.map((plan) => (
             <div key={plan.id} className={`p-6 rounded-xl border flex flex-col ${plan.popular ? 'border-blue-500/60 bg-blue-500/5' : 'border-slate-700 bg-slate-800/60'}`}>
               {plan.popular && <p className="text-xs font-semibold text-blue-400 uppercase tracking-wide mb-2">Most popular</p>}
               <h3 className="font-semibold text-slate-100">{plan.name}</h3>
@@ -385,11 +418,6 @@ export default function Home() {
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
-            <Link href="/security" className="hover:text-slate-200 transition">Security</Link>
-            <Link href="/changelog" className="hover:text-slate-200 transition">Changelog</Link>
-            <Link href="/status" className="hover:text-slate-200 transition">Status</Link>
-            <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
-            <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
           </div>
         </div>
