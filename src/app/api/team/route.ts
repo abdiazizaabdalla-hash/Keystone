@@ -116,9 +116,6 @@ export async function GET(request: NextRequest) {
       team: {
         id: membership.team.id,
         name: membership.team.name,
-        defaultFlatFee: membership.team.default_flat_fee,
-        defaultPercentFee: membership.team.default_percent_fee,
-        defaultInvoiceDueDays: membership.team.default_invoice_due_days,
         defaultChecklistTemplateId: membership.team.default_checklist_template_id,
       },
       role: membership.role,
@@ -142,11 +139,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PATCH: update the team/brokerage's own settings. Owner-only.
-// `name` applies to Team and Brokerage alike. The default_* fields are
-// Brokerage-only org-level defaults (checklist/fee/invoicing policy) --
-// writable even though the columns exist on every team row, since the
-// decision to introduce shared defaults at all was scoped to Brokerage.
+// PATCH: update the team/brokerage's own settings. Owner-only. `name`
+// applies to Team and Brokerage alike. defaultChecklistTemplateId is
+// Brokerage-only (standardizing the checklist/workflow across the
+// brokerage's TCs) -- there's deliberately no fee/invoicing default
+// here, see the comment on TeamRow in lib/team.ts.
 export async function PATCH(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
@@ -165,13 +162,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     const isBrokerage = user.user_metadata?.plan === 'brokerage';
-    if (isBrokerage) {
-      if (body.defaultFlatFee !== undefined) updateFields.default_flat_fee = body.defaultFlatFee;
-      if (body.defaultPercentFee !== undefined) updateFields.default_percent_fee = body.defaultPercentFee;
-      if (body.defaultInvoiceDueDays !== undefined) updateFields.default_invoice_due_days = body.defaultInvoiceDueDays;
-      if (body.defaultChecklistTemplateId !== undefined) {
-        updateFields.default_checklist_template_id = body.defaultChecklistTemplateId;
-      }
+    if (isBrokerage && body.defaultChecklistTemplateId !== undefined) {
+      updateFields.default_checklist_template_id = body.defaultChecklistTemplateId;
     }
 
     if (Object.keys(updateFields).length === 0) {

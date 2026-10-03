@@ -94,6 +94,22 @@ async function main() {
   if (updateError) throw updateError;
   console.log(`Set plan=brokerage for ${user.email}`);
 
+  // getPaidSeatCount (lib/team.ts) reads the seat floor off the
+  // stripe_customers row, not user_metadata -- with no real Stripe
+  // subscription behind this test account, a missing/no-plan row here
+  // makes it fall back to Team's 3-seat floor instead of Brokerage's 10.
+  // stripe_customer_id is a harmless placeholder; stripe_subscription_id
+  // stays null on purpose, which is exactly what makes getPaidSeatCount
+  // use the floor instead of trying to read a real Stripe subscription.
+  const { error: customerError } = await supabase
+    .from('stripe_customers')
+    .upsert(
+      { user_id: user.id, stripe_customer_id: 'test_bypass', plan: 'brokerage', subscription_status: 'active' },
+      { onConflict: 'user_id' }
+    );
+  if (customerError) throw customerError;
+  console.log(`Set stripe_customers.plan=brokerage for ${user.email} (no real subscription, seat floor only)`);
+
   let teamId;
   if (existingMembership) {
     teamId = existingMembership.team_id;

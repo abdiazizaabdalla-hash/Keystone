@@ -28,9 +28,6 @@ interface PendingInvite {
 interface TeamInfo {
   id: string;
   name: string | null;
-  defaultFlatFee: number | null;
-  defaultPercentFee: number | null;
-  defaultInvoiceDueDays: number | null;
   defaultChecklistTemplateId: string | null;
 }
 
@@ -63,11 +60,12 @@ export default function CollaboratePage() {
   const [inviteMessage, setInviteMessage] = useState('');
   const [removingId, setRemovingId] = useState<string | null>(null);
 
-  // Team/brokerage settings (name + Brokerage-only workspace defaults).
+  // Team/brokerage settings -- just the name for now. (No fee/invoicing
+  // defaults here: a brokerage isn't charging its own in-house agents a
+  // coordination fee, so there's nothing to default. A Brokerage-only
+  // default checklist template picker belongs here once template
+  // team-scoping has real UI -- see checklist_templates.team_id.)
   const [teamName, setTeamName] = useState('');
-  const [defaultFlatFee, setDefaultFlatFee] = useState('');
-  const [defaultPercentFee, setDefaultPercentFee] = useState('');
-  const [defaultInvoiceDueDays, setDefaultInvoiceDueDays] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState('');
 
@@ -96,9 +94,6 @@ export default function CollaboratePage() {
       if (!res.ok) throw new Error(json.error || 'Failed to load team');
       setData(json);
       setTeamName(json.team?.name || '');
-      setDefaultFlatFee(json.team?.defaultFlatFee != null ? String(json.team.defaultFlatFee) : '');
-      setDefaultPercentFee(json.team?.defaultPercentFee != null ? String(json.team.defaultPercentFee) : '');
-      setDefaultInvoiceDueDays(json.team?.defaultInvoiceDueDays != null ? String(json.team.defaultInvoiceDueDays) : '');
       if (json.role === 'owner' && json.planId === 'brokerage' && json.team?.id) {
         await loadRoster(json.team.id);
       }
@@ -150,13 +145,7 @@ export default function CollaboratePage() {
     setSavingSettings(true);
     setSettingsMessage('');
     try {
-      const isBrokerage = data?.planId === 'brokerage';
       const payload: Record<string, unknown> = { name: teamName };
-      if (isBrokerage) {
-        payload.defaultFlatFee = defaultFlatFee === '' ? null : parseFloat(defaultFlatFee);
-        payload.defaultPercentFee = defaultPercentFee === '' ? null : parseFloat(defaultPercentFee);
-        payload.defaultInvoiceDueDays = defaultInvoiceDueDays === '' ? null : parseInt(defaultInvoiceDueDays, 10);
-      }
       const res = await authFetch('/api/team', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -264,9 +253,7 @@ export default function CollaboratePage() {
             {isBrokerage ? 'Brokerage settings' : 'Team settings'}
           </h2>
           <p className="text-sm text-slate-400 mb-4">
-            {isBrokerage
-              ? 'Your brokerage name, and the defaults new members start with (they can still change their own).'
-              : "Your team's name."}
+            {isBrokerage ? 'Your brokerage name.' : "Your team's name."}
           </p>
           <form onSubmit={handleSaveSettings} className="space-y-4">
             <div>
@@ -281,43 +268,6 @@ export default function CollaboratePage() {
                 className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
-            {isBrokerage && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                    Default flat fee ($)
-                  </label>
-                  <input
-                    type="number"
-                    value={defaultFlatFee}
-                    onChange={(e) => setDefaultFlatFee(e.target.value)}
-                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                    Default fee (%)
-                  </label>
-                  <input
-                    type="number"
-                    value={defaultPercentFee}
-                    onChange={(e) => setDefaultPercentFee(e.target.value)}
-                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                    Invoice due (days)
-                  </label>
-                  <input
-                    type="number"
-                    value={defaultInvoiceDueDays}
-                    onChange={(e) => setDefaultInvoiceDueDays(e.target.value)}
-                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-            )}
             <button
               type="submit"
               disabled={savingSettings}

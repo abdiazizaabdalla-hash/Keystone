@@ -95,11 +95,12 @@ export interface TeamRow {
   owner_id: string;
   name: string | null;
   created_at: string;
-  // Brokerage-only org-level defaults (see add-brokerage-org.sql) -- null
-  // on Team plans and on any Brokerage team that hasn't set them yet.
-  default_flat_fee: number | null;
-  default_percent_fee: number | null;
-  default_invoice_due_days: number | null;
+  // Brokerage-only: a shared checklist/workflow template, standardized
+  // across the brokerage's TCs (see add-brokerage-org.sql). There's
+  // deliberately no fee/invoicing default here -- a brokerage pays for
+  // Relay to run its own transaction operation, it doesn't charge its
+  // own in-house agents a coordination fee the way an independent TC
+  // bills outside agents it works with deal-by-deal.
   default_checklist_template_id: string | null;
 }
 
