@@ -25,6 +25,13 @@ interface FormData {
   percentFee: string;
 }
 
+interface DirectoryAgent {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+}
+
 export default function AgentsPage() {
   const router = useRouter();
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -34,6 +41,13 @@ export default function AgentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [defaultFees, setDefaultFees] = useState({ flatFee: '400', percentFee: '0' });
+  // The brokerage's own agent directory (see /api/team/agents) -- lets a
+  // TC on a Team/Brokerage plan link a new contact to an existing real
+  // person instead of re-typing their info from scratch, so the
+  // directory's "how many TCs work with this agent" rollup actually
+  // connects. Empty/hidden for a solo TC with no team.
+  const [directory, setDirectory] = useState<DirectoryAgent[]>([]);
+  const [selectedDirectoryId, setSelectedDirectoryId] = useState('');
 
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -47,7 +61,33 @@ export default function AgentsPage() {
   useEffect(() => {
     fetchAgents();
     fetchDefaultFees();
+    fetchDirectory();
   }, []);
+
+  // Non-fatal -- a 403 (no team) just leaves the picker hidden.
+  const fetchDirectory = async () => {
+    try {
+      const response = await authFetch('/api/team/agents');
+      if (!response.ok) return;
+      const data = await response.json();
+      setDirectory(Array.isArray(data) ? data : []);
+    } catch {
+      // Ignore.
+    }
+  };
+
+  const handlePickDirectoryAgent = (id: string) => {
+    setSelectedDirectoryId(id);
+    if (!id) return;
+    const entry = directory.find((d) => d.id === id);
+    if (!entry) return;
+    setFormData((prev) => ({
+      ...prev,
+      name: entry.name,
+      email: entry.email || prev.email,
+      phone: entry.phone || prev.phone,
+    }));
+  };
 
   const fetchDefaultFees = async () => {
     try {
@@ -93,6 +133,7 @@ export default function AgentsPage() {
       flatFee: defaultFees.flatFee,
       percentFee: defaultFees.percentFee,
     });
+    setSelectedDirectoryId('');
     setEditingId(null);
     setShowForm(false);
   };
@@ -124,6 +165,7 @@ export default function AgentsPage() {
     try {
       const payload = {
         ...(editingId && { id: editingId }),
+        ...(!editingId && selectedDirectoryId && { brokerageAgentId: selectedDirectoryId }),
         name: formData.name.trim(),
         brokerage: formData.brokerage?.trim() || null,
         email: formData.email?.trim() || null,
@@ -238,6 +280,30 @@ export default function AgentsPage() {
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {!editingId && directory.length > 0 && (
+              <div className="bg-slate-800/60 border border-slate-600 rounded-lg p-4">
+                <label className="text-sm text-slate-400 block mb-2">
+                  Link to brokerage directory <span className="text-slate-500">(optional)</span>
+                </label>
+                <select
+                  value={selectedDirectoryId}
+                  onChange={(e) => handlePickDirectoryAgent(e.target.value)}
+                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">-- Not linked (new contact) --</option>
+                  {directory.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-2">
+                  Picking someone already in your brokerage&rsquo;s agent directory fills in their info below --
+                  still your own contact, with your own fee terms, just connected to the same real person.
+                </p>
+              </div>
+            )}
+
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <label className="text-sm text-slate-400 block mb-2">

@@ -12,20 +12,21 @@ const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1];
 // directory.sql) -- a roster of real agents associated with the
 // brokerage, distinct from any individual TC's per-transaction
 // invoicing contact and distinct from the free agent-portal login.
-// Owner-only, same as the rest of /dashboard/collaborate's admin
-// surface. For each directory entry, aggregates across every TC-level
-// `agents` contact linked to it (agents.brokerage_agent_id) to answer
-// "how many transactions does this real person have, and with how many
-// different TCs" without requiring every TC who works with them to
-// share one row.
+// Readable by any team member -- a regular TC needs this list to link
+// a new per-TC agent contact to the right directory entry when they
+// create one (see POST /api/agents' brokerageAgentId, and the "Add
+// Agent" form) -- but the per-entry stats (how many TCs/transactions)
+// are owner-only insight, same as the rest of /dashboard/collaborate's
+// admin surface, so a non-owner gets just {id, name, email, phone}.
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
 
     const membership = await getTeamForUser(user.id);
-    if (!membership || membership.role !== 'owner') {
-      return NextResponse.json({ error: 'Only the team owner can view the agent directory' }, { status: 403 });
+    if (!membership) {
+      return NextResponse.json({ error: 'You are not on a team' }, { status: 403 });
     }
+    const isOwner = membership.role === 'owner';
 
     const { data: directory, error } = await supabaseServer
       .from('brokerage_agents')
@@ -33,6 +34,17 @@ export async function GET(request: NextRequest) {
       .eq('team_id', membership.team.id)
       .order('name', { ascending: true });
     if (error) throw error;
+
+    if (!isOwner) {
+      return NextResponse.json(
+        (directory || []).map((entry) => ({
+          id: entry.id,
+          name: entry.name,
+          email: entry.email,
+          phone: entry.phone,
+        }))
+      );
+    }
 
     const entries = await Promise.all(
       (directory || []).map(async (entry) => {
