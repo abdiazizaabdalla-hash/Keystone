@@ -120,6 +120,12 @@ function OnboardingContent() {
     validPreselect === 'starter' ? validPreselect : null
   );
   const [checkoutRedirecting, setCheckoutRedirecting] = useState(false);
+  // Set while we're polling to confirm a just-completed Stripe Checkout's
+  // webhook has actually landed the paid plan before letting onboarding's
+  // own PATCH /api/auth/me calls touch user_metadata -- see
+  // waitForPlanActivation below and the race documented in
+  // lib/userMetadata.ts.
+  const [confirmingPlan, setConfirmingPlan] = useState(false);
 
   // Steps 2, 3, 4: account settings — same fields/defaults as the
   // Settings page (src/app/dashboard/settings/page.tsx).
@@ -213,6 +219,36 @@ function OnboardingContent() {
     }
   };
 
+  // The Stripe webhook that grants a paid plan runs fully async, decoupled
+  // from this redirect back from Checkout -- if onboarding trusts the
+  // `plan` URL param and immediately lets its own PATCH /api/auth/me calls
+  // (steps 2/3/4, fired as soon as someone clicks Continue) touch
+  // user_metadata, one of them can read-modify-write a split second before
+  // the webhook's own write lands, silently clobbering the plan the
+  // customer just paid for back to whatever it was before (this is the
+  // exact race lib/userMetadata.ts's mergeUserMetadata shrinks but can't
+  // fully close -- see the comment there). Poll here until the plan has
+  // actually taken effect server-side before advancing past this point, so
+  // no onboarding PATCH is in flight while the webhook might still be
+  // mid-write.
+  const waitForPlanActivation = async (targetPlan: PlanId) => {
+    setConfirmingPlan(true);
+    const maxAttempts = 15;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const plan = await fetchProfile();
+      if (plan === targetPlan) {
+        setConfirmingPlan(false);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    // Gave it 15 seconds and the webhook still hasn't landed -- proceed
+    // anyway rather than trapping the user on a spinner forever. Worst
+    // case they land on step 2 before the plan has synced, same exposure
+    // as before this fix existed, just far less likely.
+    setConfirmingPlan(false);
+  };
+
   const updateDueDateWorkflowStep = (index: number, dueDate: DueDateSpec) => {
     setDueDateWorkflowSteps((prev) => prev.map((s, i) => (i === index ? { ...s, dueDate } : s)));
   };
@@ -247,6 +283,7 @@ function OnboardingContent() {
       // (or is about to) grant the plan, so move on to the rest of the
       // walkthrough rather than sending them back through checkout again.
       if (checkoutStatus === 'success' && validPreselect) {
+        await waitForPlanActivation(validPreselect);
         setSelectedPlan(validPreselect);
         setCurrentStep(2);
         return;
@@ -438,6 +475,17 @@ function OnboardingContent() {
         <div className="text-center">
           <div className="w-12 h-12 rounded-full border-4 border-slate-600 border-t-blue-400 animate-spin mx-auto mb-4" />
           <p className="text-slate-300">Taking you to secure checkout…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (confirmingPlan) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-full border-4 border-slate-600 border-t-blue-400 animate-spin mx-auto mb-4" />
+          <p className="text-slate-300">Finishing up your payment…</p>
         </div>
       </div>
     );
