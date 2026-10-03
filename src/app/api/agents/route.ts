@@ -3,7 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getPlanLimits } from '@/lib/plans';
-import { getVisibleTcUserIds, getTeamForUser } from '@/lib/team';
+import { getVisibleTcUserIds, getTeamIdForUser } from '@/lib/team';
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,23 +38,27 @@ export async function POST(request: NextRequest) {
     const { user } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { name, brokerage, email, phone, flatFee, percentFee, teamWide } = body;
+    const { name, brokerage, email, phone, flatFee, percentFee, brokerageAgentId } = body;
 
-    // Adding to the brokerage-wide roster (as opposed to this TC's own
-    // private contact list) is owner-only -- it's what makes the agent
-    // usable by every TC on the team when creating a transaction (see
-    // POST /api/transactions), not just whoever's name ends up on
-    // tc_user_id below.
-    let teamId: string | null = null;
-    if (teamWide) {
-      const membership = await getTeamForUser(user.id);
-      if (!membership || membership.role !== 'owner') {
-        return NextResponse.json(
-          { error: 'Only the team owner can add an agent to the brokerage-wide roster' },
-          { status: 403 }
-        );
+    // Linking this TC-level contact to a brokerage_agents directory
+    // entry (see add-brokerage-agent-directory.sql) is how the
+    // brokerage's Agent Directory aggregates "this real person has N
+    // transactions across M TCs" -- it does NOT make the row itself
+    // shared/usable by other TCs; each TC still has their own contact
+    // (and their own fee terms) for the same real agent. Only valid for
+    // a directory entry that actually belongs to this user's own team.
+    let linkedBrokerageAgentId: string | null = null;
+    if (brokerageAgentId) {
+      const { data: directoryEntry } = await supabaseServer
+        .from('brokerage_agents')
+        .select('id, team_id')
+        .eq('id', brokerageAgentId)
+        .single();
+      const myTeamId = await getTeamIdForUser(user.id);
+      if (!directoryEntry || !myTeamId || directoryEntry.team_id !== myTeamId) {
+        return NextResponse.json({ error: 'Brokerage agent not found' }, { status: 404 });
       }
-      teamId = membership.team.id;
+      linkedBrokerageAgentId = directoryEntry.id;
     }
 
     // Plan-gated: Starter is capped at 3 agent profiles. Admins creating
@@ -84,7 +88,7 @@ export async function POST(request: NextRequest) {
       .from('agents')
       .insert({
         tc_user_id: user.id,
-        team_id: teamId,
+        brokerage_agent_id: linkedBrokerageAgentId,
         name,
         brokerage: brokerage || null,
         email: email || null,

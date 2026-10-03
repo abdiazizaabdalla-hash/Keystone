@@ -41,12 +41,14 @@ interface TeamResponse {
   pendingInvites: PendingInvite[];
 }
 
-interface RosterAgent {
+interface DirectoryAgent {
   id: string;
   name: string;
   email: string | null;
   phone: string | null;
-  team_id: string | null;
+  tcCount: number;
+  activeTransactions: number;
+  totalTransactions: number;
 }
 
 export default function CollaboratePage() {
@@ -69,21 +71,25 @@ export default function CollaboratePage() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState('');
 
-  // Brokerage-wide agent roster.
-  const [rosterAgents, setRosterAgents] = useState<RosterAgent[]>([]);
+  // Brokerage agent directory -- a roster of real agents associated
+  // with the brokerage itself, distinct from any TC's own per-
+  // transaction invoicing contacts and from the free agent-portal login
+  // (see add-brokerage-agent-directory.sql). Adding someone here never
+  // creates a Relay account.
+  const [directory, setDirectory] = useState<DirectoryAgent[]>([]);
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentEmail, setNewAgentEmail] = useState('');
   const [addingAgent, setAddingAgent] = useState(false);
-  const [rosterMessage, setRosterMessage] = useState('');
+  const [directoryMessage, setDirectoryMessage] = useState('');
 
-  const loadRoster = async (teamId: string) => {
+  const loadDirectory = async () => {
     try {
-      const res = await authFetch('/api/agents');
+      const res = await authFetch('/api/team/agents');
       const json = await res.json();
       if (!res.ok) return;
-      setRosterAgents((json as RosterAgent[]).filter((a) => a.team_id === teamId));
+      setDirectory(json as DirectoryAgent[]);
     } catch {
-      // Non-fatal -- the roster section just stays empty.
+      // Non-fatal -- the directory section just stays empty.
     }
   };
 
@@ -94,8 +100,8 @@ export default function CollaboratePage() {
       if (!res.ok) throw new Error(json.error || 'Failed to load team');
       setData(json);
       setTeamName(json.team?.name || '');
-      if (json.role === 'owner' && json.planId === 'brokerage' && json.team?.id) {
-        await loadRoster(json.team.id);
+      if (json.role === 'owner' && json.planId === 'brokerage') {
+        await loadDirectory();
       }
     } catch (err) {
       if (err instanceof AuthRequiredError) {
@@ -162,24 +168,24 @@ export default function CollaboratePage() {
     }
   };
 
-  const handleAddRosterAgent = async (e: React.FormEvent) => {
+  const handleAddDirectoryAgent = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddingAgent(true);
-    setRosterMessage('');
+    setDirectoryMessage('');
     try {
-      const res = await authFetch('/api/agents', {
+      const res = await authFetch('/api/team/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newAgentName, email: newAgentEmail || undefined, teamWide: true }),
+        body: JSON.stringify({ name: newAgentName, email: newAgentEmail || undefined }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to add agent');
       setNewAgentName('');
       setNewAgentEmail('');
-      setRosterMessage(`${json.name} added to the brokerage roster.`);
-      if (data?.team?.id) await loadRoster(data.team.id);
+      setDirectoryMessage(`${json.name} added to the brokerage's agent directory.`);
+      await loadDirectory();
     } catch (err) {
-      setRosterMessage(err instanceof Error ? err.message : 'Failed to add agent');
+      setDirectoryMessage(err instanceof Error ? err.message : 'Failed to add agent');
     } finally {
       setAddingAgent(false);
     }
@@ -361,26 +367,34 @@ export default function CollaboratePage() {
       {isOwner && isBrokerage && (
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
           <div className="px-6 py-4 border-b border-slate-600 flex items-center justify-between">
-            <h2 className="font-display font-semibold text-slate-100">Brokerage agent roster</h2>
-            <span className="text-xs text-slate-400">{rosterAgents.length}</span>
+            <h2 className="font-display font-semibold text-slate-100">Brokerage agent directory</h2>
+            <span className="text-xs text-slate-400">{directory.length}</span>
           </div>
+          <p className="px-6 pt-4 text-sm text-slate-400">
+            The brokerage&rsquo;s own agents -- separate from any TC&rsquo;s personal contacts, and from any Relay login.
+            Adding someone here doesn&rsquo;t create an account; they get the free agent portal only once a TC invites
+            them to a specific transaction.
+          </p>
 
-          <div className="divide-y divide-slate-700">
-            {rosterAgents.length === 0 && (
-              <p className="px-6 py-8 text-sm text-slate-500 text-center">
-                No agents on the brokerage roster yet -- add one below. Any TC on your team can assign them to a
-                transaction.
-              </p>
+          <div className="divide-y divide-slate-700 mt-2">
+            {directory.length === 0 && (
+              <p className="px-6 py-8 text-sm text-slate-500 text-center">No agents in the directory yet -- add one below.</p>
             )}
-            {rosterAgents.map((agent) => (
-              <div key={agent.id} className="px-6 py-4">
-                <span className="text-slate-100 font-medium">{agent.name}</span>
-                {agent.email && <span className="ml-2 text-xs text-slate-500">{agent.email}</span>}
+            {directory.map((agent) => (
+              <div key={agent.id} className="px-6 py-4 flex items-center justify-between gap-4">
+                <div>
+                  <span className="text-slate-100 font-medium">{agent.name}</span>
+                  {agent.email && <span className="ml-2 text-xs text-slate-500">{agent.email}</span>}
+                </div>
+                <div className="text-sm text-slate-400 text-right shrink-0">
+                  {agent.activeTransactions} active · {agent.totalTransactions} total
+                  {agent.tcCount > 0 && ` · ${agent.tcCount} TC${agent.tcCount === 1 ? '' : 's'}`}
+                </div>
               </div>
             ))}
           </div>
 
-          <form onSubmit={handleAddRosterAgent} className="px-6 py-4 border-t border-slate-600 flex gap-3">
+          <form onSubmit={handleAddDirectoryAgent} className="px-6 py-4 border-t border-slate-600 flex gap-3">
             <input
               type="text"
               required
@@ -401,10 +415,10 @@ export default function CollaboratePage() {
               disabled={addingAgent}
               className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
             >
-              {addingAgent ? 'Adding…' : 'Add to roster'}
+              {addingAgent ? 'Adding…' : 'Add to directory'}
             </button>
           </form>
-          {rosterMessage && <p className="px-6 py-3 text-sm text-slate-300">{rosterMessage}</p>}
+          {directoryMessage && <p className="px-6 py-3 text-sm text-slate-300">{directoryMessage}</p>}
         </div>
       )}
 

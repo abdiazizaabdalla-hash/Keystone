@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getPlanLimits } from '@/lib/plans';
-import { getVisibleTcUserIds, getTeamIdForUser } from '@/lib/team';
+import { getVisibleTcUserIds } from '@/lib/team';
 import {
   BASELINE_TEMPLATE_ID,
   BASELINE_CHECKLIST_TEMPLATE,
@@ -111,17 +111,12 @@ export async function POST(request: NextRequest) {
     if (!isAdmin) {
       const { data: agent } = await supabaseServer
         .from('agents')
-        .select('id, tc_user_id, team_id')
+        .select('id, tc_user_id')
         .eq('id', agentId)
         .single();
 
       const visibleIds = await getVisibleTcUserIds(user.id);
-      const myTeamId = await getTeamIdForUser(user.id);
-      const allowed =
-        !!agent &&
-        (visibleIds.includes(agent.tc_user_id) || (agent.team_id !== null && agent.team_id === myTeamId));
-
-      if (!allowed) {
+      if (!agent || !visibleIds.includes(agent.tc_user_id)) {
         return NextResponse.json({ error: 'Agent not found or does not belong to you' }, { status: 403 });
       }
     }
