@@ -22,6 +22,12 @@ interface MemberTransactionsResponse {
   closed: MemberTransaction[];
 }
 
+interface RosterOption {
+  userId: string;
+  name: string;
+  email: string;
+}
+
 function getStatusColor(status: string) {
   switch (status) {
     case 'Closed':
@@ -35,7 +41,19 @@ function getStatusColor(status: string) {
   }
 }
 
-function TransactionTable({ rows }: { rows: MemberTransaction[] }) {
+function TransactionTable({
+  rows,
+  roster,
+  currentUserId,
+  reassigningId,
+  onReassign,
+}: {
+  rows: MemberTransaction[];
+  roster: RosterOption[];
+  currentUserId: string;
+  reassigningId: string | null;
+  onReassign: (transactionId: string, newTcUserId: string) => void;
+}) {
   if (rows.length === 0) {
     return <p className="px-6 py-8 text-sm text-slate-500 text-center">Nothing here yet.</p>;
   }
@@ -60,6 +78,9 @@ function TransactionTable({ rows }: { rows: MemberTransaction[] }) {
             <th className="px-6 py-3 text-left">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</span>
             </th>
+            <th className="px-6 py-3 text-left">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Assigned TC</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -80,6 +101,20 @@ function TransactionTable({ rows }: { rows: MemberTransaction[] }) {
                   {tx.status}
                 </span>
               </td>
+              <td className="px-6 py-3">
+                <select
+                  value={currentUserId}
+                  disabled={reassigningId === tx.id}
+                  onChange={(e) => onReassign(tx.id, e.target.value)}
+                  className="bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-sm text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                >
+                  {roster.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.name || m.email}
+                    </option>
+                  ))}
+                </select>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -93,27 +128,66 @@ export default function TeammateTransactionsPage({ params }: { params: Promise<{
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<MemberTransactionsResponse | null>(null);
+  const [roster, setRoster] = useState<RosterOption[]>([]);
   const [error, setError] = useState('');
+  const [reassigningId, setReassigningId] = useState<string | null>(null);
+  const [reassignMessage, setReassignMessage] = useState('');
+
+  const load = async () => {
+    try {
+      const [txRes, teamRes] = await Promise.all([
+        authFetch(`/api/team/${userId}/transactions`),
+        authFetch('/api/team'),
+      ]);
+      const txJson = await txRes.json();
+      if (!txRes.ok) throw new Error(txJson.error || "Failed to load this teammate's transactions");
+      setData(txJson);
+
+      const teamJson = await teamRes.json();
+      if (teamRes.ok && Array.isArray(teamJson.members)) {
+        setRoster(teamJson.members.map((m: { userId: string; name: string; email: string }) => ({
+          userId: m.userId,
+          name: m.name,
+          email: m.email,
+        })));
+      }
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Failed to load this teammate's transactions");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await authFetch(`/api/team/${userId}/transactions`);
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Failed to load this teammate's transactions");
-        setData(json);
-      } catch (err) {
-        if (err instanceof AuthRequiredError) {
-          router.push('/auth');
-          return;
-        }
-        setError(err instanceof Error ? err.message : "Failed to load this teammate's transactions");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  const handleReassign = async (transactionId: string, newTcUserId: string) => {
+    if (newTcUserId === userId) return;
+    setReassigningId(transactionId);
+    setReassignMessage('');
+    try {
+      const res = await authFetch(`/api/team/${userId}/transactions`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId, newTcUserId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to reassign');
+      const newOwner = roster.find((m) => m.userId === newTcUserId);
+      setReassignMessage(`Reassigned to ${newOwner?.name || newOwner?.email || 'the new TC'}.`);
+      await load();
+    } catch (err) {
+      setReassignMessage(err instanceof Error ? err.message : 'Failed to reassign');
+    } finally {
+      setReassigningId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -144,14 +218,22 @@ export default function TeammateTransactionsPage({ params }: { params: Promise<{
         ‹ Back to team
       </Link>
       <h1 className="text-3xl font-display font-semibold text-slate-100 mt-3 mb-1">{displayName}</h1>
-      <p className="text-slate-400 mb-8">{data.member.email}</p>
+      <p className="text-slate-400 mb-2">{data.member.email}</p>
+      {reassignMessage && <p className="text-sm text-blue-300 mb-6">{reassignMessage}</p>}
+      {!reassignMessage && <div className="mb-8" />}
 
       <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
         <div className="px-6 py-4 border-b border-slate-600 flex items-center justify-between">
           <h2 className="font-display font-semibold text-slate-100">Active transactions</h2>
           <span className="text-xs text-slate-400">{data.active.length}</span>
         </div>
-        <TransactionTable rows={data.active} />
+        <TransactionTable
+          rows={data.active}
+          roster={roster}
+          currentUserId={userId}
+          reassigningId={reassigningId}
+          onReassign={handleReassign}
+        />
       </div>
 
       <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden">
@@ -159,7 +241,13 @@ export default function TeammateTransactionsPage({ params }: { params: Promise<{
           <h2 className="font-display font-semibold text-slate-100">Closed transactions</h2>
           <span className="text-xs text-slate-400">{data.closed.length}</span>
         </div>
-        <TransactionTable rows={data.closed} />
+        <TransactionTable
+          rows={data.closed}
+          roster={roster}
+          currentUserId={userId}
+          reassigningId={reassigningId}
+          onReassign={handleReassign}
+        />
       </div>
     </div>
   );

@@ -122,6 +122,12 @@ export async function GET(request: NextRequest) {
         defaultChecklistTemplateId: membership.team.default_checklist_template_id,
       },
       role: membership.role,
+      // So the frontend can show Brokerage-only settings (workspace
+      // defaults, the agent roster) without a second round trip -- every
+      // member is granted the same plan id as the owner (see
+      // getTeamOwnerPlan), so the caller's own metadata already reflects
+      // it correctly whether they're the owner or not.
+      planId: user.user_metadata?.plan || null,
       seatLimit,
       seatPriceLabel: seatInfo.pricePerSeatLabel,
       members,

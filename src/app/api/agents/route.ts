@@ -3,7 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getPlanLimits } from '@/lib/plans';
-import { getVisibleTcUserIds } from '@/lib/team';
+import { getVisibleTcUserIds, getTeamForUser } from '@/lib/team';
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +38,24 @@ export async function POST(request: NextRequest) {
     const { user } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { name, brokerage, email, phone, flatFee, percentFee } = body;
+    const { name, brokerage, email, phone, flatFee, percentFee, teamWide } = body;
+
+    // Adding to the brokerage-wide roster (as opposed to this TC's own
+    // private contact list) is owner-only -- it's what makes the agent
+    // usable by every TC on the team when creating a transaction (see
+    // POST /api/transactions), not just whoever's name ends up on
+    // tc_user_id below.
+    let teamId: string | null = null;
+    if (teamWide) {
+      const membership = await getTeamForUser(user.id);
+      if (!membership || membership.role !== 'owner') {
+        return NextResponse.json(
+          { error: 'Only the team owner can add an agent to the brokerage-wide roster' },
+          { status: 403 }
+        );
+      }
+      teamId = membership.team.id;
+    }
 
     // Plan-gated: Starter is capped at 3 agent profiles. Admins creating
     // agents for themselves are still subject to their own plan's limit —
@@ -67,6 +84,7 @@ export async function POST(request: NextRequest) {
       .from('agents')
       .insert({
         tc_user_id: user.id,
+        team_id: teamId,
         name,
         brokerage: brokerage || null,
         email: email || null,

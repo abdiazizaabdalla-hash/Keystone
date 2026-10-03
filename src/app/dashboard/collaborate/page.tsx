@@ -25,13 +25,31 @@ interface PendingInvite {
   createdAt: string;
 }
 
+interface TeamInfo {
+  id: string;
+  name: string | null;
+  defaultFlatFee: number | null;
+  defaultPercentFee: number | null;
+  defaultInvoiceDueDays: number | null;
+  defaultChecklistTemplateId: string | null;
+}
+
 interface TeamResponse {
-  team: { id: string; name: string } | null;
+  team: TeamInfo | null;
   role: 'owner' | 'member' | null;
+  planId: string | null;
   seatLimit: number;
   seatPriceLabel?: string;
   members: Member[];
   pendingInvites: PendingInvite[];
+}
+
+interface RosterAgent {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  team_id: string | null;
 }
 
 export default function CollaboratePage() {
@@ -45,12 +63,45 @@ export default function CollaboratePage() {
   const [inviteMessage, setInviteMessage] = useState('');
   const [removingId, setRemovingId] = useState<string | null>(null);
 
+  // Team/brokerage settings (name + Brokerage-only workspace defaults).
+  const [teamName, setTeamName] = useState('');
+  const [defaultFlatFee, setDefaultFlatFee] = useState('');
+  const [defaultPercentFee, setDefaultPercentFee] = useState('');
+  const [defaultInvoiceDueDays, setDefaultInvoiceDueDays] = useState('');
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsMessage, setSettingsMessage] = useState('');
+
+  // Brokerage-wide agent roster.
+  const [rosterAgents, setRosterAgents] = useState<RosterAgent[]>([]);
+  const [newAgentName, setNewAgentName] = useState('');
+  const [newAgentEmail, setNewAgentEmail] = useState('');
+  const [addingAgent, setAddingAgent] = useState(false);
+  const [rosterMessage, setRosterMessage] = useState('');
+
+  const loadRoster = async (teamId: string) => {
+    try {
+      const res = await authFetch('/api/agents');
+      const json = await res.json();
+      if (!res.ok) return;
+      setRosterAgents((json as RosterAgent[]).filter((a) => a.team_id === teamId));
+    } catch {
+      // Non-fatal -- the roster section just stays empty.
+    }
+  };
+
   const load = async () => {
     try {
       const res = await authFetch('/api/team');
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to load team');
       setData(json);
+      setTeamName(json.team?.name || '');
+      setDefaultFlatFee(json.team?.defaultFlatFee != null ? String(json.team.defaultFlatFee) : '');
+      setDefaultPercentFee(json.team?.defaultPercentFee != null ? String(json.team.defaultPercentFee) : '');
+      setDefaultInvoiceDueDays(json.team?.defaultInvoiceDueDays != null ? String(json.team.defaultInvoiceDueDays) : '');
+      if (json.role === 'owner' && json.planId === 'brokerage' && json.team?.id) {
+        await loadRoster(json.team.id);
+      }
     } catch (err) {
       if (err instanceof AuthRequiredError) {
         router.push('/auth');
@@ -91,6 +142,57 @@ export default function CollaboratePage() {
       setInviteMessage(err instanceof Error ? err.message : 'Failed to invite');
     } finally {
       setInviting(false);
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    setSettingsMessage('');
+    try {
+      const isBrokerage = data?.planId === 'brokerage';
+      const payload: Record<string, unknown> = { name: teamName };
+      if (isBrokerage) {
+        payload.defaultFlatFee = defaultFlatFee === '' ? null : parseFloat(defaultFlatFee);
+        payload.defaultPercentFee = defaultPercentFee === '' ? null : parseFloat(defaultPercentFee);
+        payload.defaultInvoiceDueDays = defaultInvoiceDueDays === '' ? null : parseInt(defaultInvoiceDueDays, 10);
+      }
+      const res = await authFetch('/api/team', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to save settings');
+      setSettingsMessage('Saved.');
+      await load();
+    } catch (err) {
+      setSettingsMessage(err instanceof Error ? err.message : 'Failed to save settings');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleAddRosterAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddingAgent(true);
+    setRosterMessage('');
+    try {
+      const res = await authFetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newAgentName, email: newAgentEmail || undefined, teamWide: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to add agent');
+      setNewAgentName('');
+      setNewAgentEmail('');
+      setRosterMessage(`${json.name} added to the brokerage roster.`);
+      if (data?.team?.id) await loadRoster(data.team.id);
+    } catch (err) {
+      setRosterMessage(err instanceof Error ? err.message : 'Failed to add agent');
+    } finally {
+      setAddingAgent(false);
     }
   };
 
@@ -142,16 +244,91 @@ export default function CollaboratePage() {
   }
 
   const isOwner = data.role === 'owner';
+  const isBrokerage = data.planId === 'brokerage';
   const seatsUsed = data.members.length + data.pendingInvites.length;
 
   return (
     <div className="p-8 max-w-4xl">
-      <h1 className="text-3xl font-display font-semibold text-slate-100 mb-1">Collaborate</h1>
+      <h1 className="text-3xl font-display font-semibold text-slate-100 mb-1">
+        {data.team.name || 'Collaborate'}
+      </h1>
       <p className="text-slate-400 mb-8">
         {isOwner
           ? "Your team's roster and pipeline, all in one place."
           : "Your team's roster. Only your team owner can see everyone's transaction details."}
       </p>
+
+      {isOwner && (
+        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 mb-6">
+          <h2 className="font-display font-semibold text-slate-100 mb-1">
+            {isBrokerage ? 'Brokerage settings' : 'Team settings'}
+          </h2>
+          <p className="text-sm text-slate-400 mb-4">
+            {isBrokerage
+              ? 'Your brokerage name, and the defaults new members start with (they can still change their own).'
+              : "Your team's name."}
+          </p>
+          <form onSubmit={handleSaveSettings} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                {isBrokerage ? 'Brokerage name' : 'Team name'}
+              </label>
+              <input
+                type="text"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder={isBrokerage ? 'Acme Realty' : "Sarah's Team"}
+                className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+            {isBrokerage && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Default flat fee ($)
+                  </label>
+                  <input
+                    type="number"
+                    value={defaultFlatFee}
+                    onChange={(e) => setDefaultFlatFee(e.target.value)}
+                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Default fee (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={defaultPercentFee}
+                    onChange={(e) => setDefaultPercentFee(e.target.value)}
+                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                    Invoice due (days)
+                  </label>
+                  <input
+                    type="number"
+                    value={defaultInvoiceDueDays}
+                    onChange={(e) => setDefaultInvoiceDueDays(e.target.value)}
+                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={savingSettings}
+              className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+            >
+              {savingSettings ? 'Saving…' : 'Save'}
+            </button>
+            {settingsMessage && <p className="text-sm text-slate-300">{settingsMessage}</p>}
+          </form>
+        </div>
+      )}
 
       <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
         <div className="px-6 py-4 border-b border-slate-600 flex items-center justify-between">
@@ -230,6 +407,56 @@ export default function CollaboratePage() {
             ))}
         </div>
       </div>
+
+      {isOwner && isBrokerage && (
+        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-slate-600 flex items-center justify-between">
+            <h2 className="font-display font-semibold text-slate-100">Brokerage agent roster</h2>
+            <span className="text-xs text-slate-400">{rosterAgents.length}</span>
+          </div>
+
+          <div className="divide-y divide-slate-700">
+            {rosterAgents.length === 0 && (
+              <p className="px-6 py-8 text-sm text-slate-500 text-center">
+                No agents on the brokerage roster yet -- add one below. Any TC on your team can assign them to a
+                transaction.
+              </p>
+            )}
+            {rosterAgents.map((agent) => (
+              <div key={agent.id} className="px-6 py-4">
+                <span className="text-slate-100 font-medium">{agent.name}</span>
+                {agent.email && <span className="ml-2 text-xs text-slate-500">{agent.email}</span>}
+              </div>
+            ))}
+          </div>
+
+          <form onSubmit={handleAddRosterAgent} className="px-6 py-4 border-t border-slate-600 flex gap-3">
+            <input
+              type="text"
+              required
+              value={newAgentName}
+              onChange={(e) => setNewAgentName(e.target.value)}
+              placeholder="Agent name"
+              className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+            />
+            <input
+              type="email"
+              value={newAgentEmail}
+              onChange={(e) => setNewAgentEmail(e.target.value)}
+              placeholder="Email (optional)"
+              className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={addingAgent}
+              className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+            >
+              {addingAgent ? 'Adding…' : 'Add to roster'}
+            </button>
+          </form>
+          {rosterMessage && <p className="px-6 py-3 text-sm text-slate-300">{rosterMessage}</p>}
+        </div>
+      )}
 
       {isOwner && (
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6">
