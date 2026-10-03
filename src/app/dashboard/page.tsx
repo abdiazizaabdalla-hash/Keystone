@@ -48,6 +48,10 @@ interface AttentionDueItem {
   taskName: string;
   transactionId: string;
   label: string;
+  // Set only for a team/brokerage owner viewing a rolled-up team-wide
+  // list -- null for a solo TC's own view, where every item is already
+  // theirs and a label would be redundant.
+  tcLabel: string | null;
 }
 
 interface AttentionOverdueItem extends AttentionDueItem {
@@ -68,6 +72,7 @@ interface AttentionClosingSoonItem {
   label: string;
   closingDate: string;
   daysUntil: number;
+  tcLabel: string | null;
 }
 
 interface AttentionSummary {
@@ -435,7 +440,8 @@ export default function Dashboard() {
                         href={`/dashboard/transactions/${item.transactionId}`}
                         className="block text-xs text-slate-300 hover:text-slate-100 transition"
                       >
-                        <span className="text-slate-400">{item.label}</span> — {item.taskName}{' '}
+                        <span className="text-slate-400">{item.label}</span>
+                        {item.tcLabel && <span className="text-slate-500"> ({item.tcLabel})</span>} — {item.taskName}{' '}
                         <span className="text-red-400 font-medium">
                           {item.daysOverdue}d overdue
                         </span>
@@ -464,7 +470,8 @@ export default function Dashboard() {
                         href={`/dashboard/transactions/${item.transactionId}`}
                         className="block text-xs text-slate-300 hover:text-slate-100 transition"
                       >
-                        <span className="text-slate-400">{item.label}</span> — {item.taskName}
+                        <span className="text-slate-400">{item.label}</span>
+                        {item.tcLabel && <span className="text-slate-500"> ({item.tcLabel})</span>} — {item.taskName}
                       </Link>
                     </li>
                   ))}
@@ -490,7 +497,8 @@ export default function Dashboard() {
                         href={`/dashboard/transactions/${item.transactionId}`}
                         className="block text-xs text-slate-300 hover:text-slate-100 transition"
                       >
-                        <span className="text-slate-400">{item.label}</span> — Waiting on {item.waitingOn}{' '}
+                        <span className="text-slate-400">{item.label}</span>
+                        {item.tcLabel && <span className="text-slate-500"> ({item.tcLabel})</span>} — Waiting on {item.waitingOn}{' '}
                         <span className="text-orange-400 font-medium">
                           · {item.daysSince}d
                         </span>

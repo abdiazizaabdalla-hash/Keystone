@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { setUserPlan } from '@/lib/stripeCustomers';
-import { TRANSACTION_STAGES } from '@/lib/transactionStages';
+import { computeAttentionSummary } from '@/lib/attentionSummary';
 import { sendTeamAddedEmail, sendTeamInviteEmail, sendTeamRemovedEmail } from '@/lib/teamEmails';
 import {
   TEAM_SEAT_LIMIT,
@@ -22,8 +22,6 @@ import {
   getSeatInfo,
 } from '@/lib/team';
 import { isTeamPlan } from '@/lib/plans';
-
-const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1];
 
 interface UserInfo {
   email: string;
@@ -63,6 +61,16 @@ export async function GET(request: NextRequest) {
     const isOwner = membership.role === 'owner';
     const memberIds = await getTeamMemberUserIds(membership.team.id);
 
+    // One shared computation for the whole roster instead of a
+    // per-member round trip for each count -- see lib/attentionSummary.ts
+    // (same function the dashboard's "Needs Attention" widget uses).
+    // This is what backs each member's overdue/due-today/waiting-on/
+    // closing-soon counts below (the "TC workload" view on
+    // /dashboard/collaborate); isOwner-gated since a regular member
+    // doesn't get this breakdown for their teammates at all.
+    const workload = isOwner ? await computeAttentionSummary(memberIds) : null;
+    const workloadByTc = new Map((workload?.byTc || []).map((w) => [w.tcUserId, w]));
+
     const members = await Promise.all(
       memberIds.map(async (memberId) => {
         const { email, name } = await getUserInfo(memberId);
@@ -85,18 +93,19 @@ export async function GET(request: NextRequest) {
           .from('transactions')
           .select('id', { count: 'exact', head: true })
           .eq('tc_user_id', memberId);
-        const { count: active } = await supabaseServer
-          .from('transactions')
-          .select('id', { count: 'exact', head: true })
-          .eq('tc_user_id', memberId)
-          .neq('status', CLOSED_STATUS);
+
+        const tcWorkload = workloadByTc.get(memberId);
 
         return {
           ...base,
           stats: {
             agents: agentCount || 0,
-            activeTransactions: active || 0,
+            activeTransactions: tcWorkload?.activeTransactions || 0,
             totalTransactions: total || 0,
+            overdueCount: tcWorkload?.overdueCount || 0,
+            dueTodayCount: tcWorkload?.dueTodayCount || 0,
+            waitingOnCount: tcWorkload?.waitingOnCount || 0,
+            closingSoonCount: tcWorkload?.closingSoonCount || 0,
           },
         };
       })

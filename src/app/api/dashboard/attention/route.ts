@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { getVisibleTcUserIds } from '@/lib/team';
+import { getVisibleTcUserIds, getTeamForUser } from '@/lib/team';
+import { computeAttentionSummary } from '@/lib/attentionSummary';
 
 /**
  * Powers the "Needs Attention Today" panel at the top of the dashboard
  * (dashboard/page.tsx) -- a single cross-transaction triage view instead
  * of having to open each deal to see what's overdue, what's due soon,
  * what's stuck waiting on someone, and what's closing soon.
+ *
+ * For a team/brokerage owner this already rolls up the whole team (via
+ * getVisibleTcUserIds); tcLabel is attached per item so the owner's view
+ * can show whose deal each item belongs to, not just the file number.
  *
  * Read-only, so (unlike the task-editing routes) this never calls
  * assertTrialActive -- a TC whose trial lapsed should still be able to
@@ -17,147 +22,56 @@ export async function GET(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
 
-    let txQuery = supabaseServer
-      .from('transactions')
-      .select('id, file_number, property_address, closing_date, agent_id')
-      .neq('status', 'Closed');
+    let tcUserIds: string[];
+    if (isAdmin) {
+      // Platform admin (is_admin -- a completely different concept from
+      // a brokerage owner) sees every open transaction, so pull the
+      // distinct set of real tc_user_ids with open deals instead of
+      // guessing at who those are from the full auth user list.
+      const { data: allOpenTx } = await supabaseServer
+        .from('transactions')
+        .select('tc_user_id')
+        .neq('status', 'Closed')
+        .not('tc_user_id', 'is', null);
+      tcUserIds = Array.from(new Set((allOpenTx || []).map((t) => t.tc_user_id as string)));
+    } else {
+      tcUserIds = await getVisibleTcUserIds(user.id);
+    }
 
-    if (!isAdmin) {
-      const visibleIds = await getVisibleTcUserIds(user.id);
-      const { data: userAgents } = await supabaseServer
-        .from('agents')
-        .select('id')
-        .in('tc_user_id', visibleIds);
+    const summary = await computeAttentionSummary(tcUserIds);
 
-      const agentIds = userAgents?.map((a) => a.id as string) || [];
-      if (agentIds.length === 0) {
-        return NextResponse.json({
-          overdue: [],
-          dueToday: [],
-          dueSoon: [],
-          waitingOn: [],
-          closingsSoon: [],
-          totalNeedsAttention: 0,
-        });
+    // Only a team/brokerage owner has more than one id in tcUserIds --
+    // resolve labels just for those, so a solo TC's request (by far the
+    // common case) skips the extra admin API round-trips entirely.
+    const membership = await getTeamForUser(user.id);
+    const isOwner = membership?.role === 'owner' && !isAdmin;
+    const tcLabels = new Map<string, string>();
+    if (isOwner) {
+      const distinctIds = new Set<string>();
+      for (const item of [...summary.overdue, ...summary.dueToday, ...summary.dueSoon, ...summary.waitingOn, ...summary.closingsSoon]) {
+        distinctIds.add(item.tcUserId);
       }
-      txQuery = txQuery.in('agent_id', agentIds);
+      await Promise.all(
+        Array.from(distinctIds).map(async (id) => {
+          const { data } = await supabaseServer.auth.admin.getUserById(id);
+          const label = (data.user?.user_metadata?.full_name as string | undefined) || data.user?.email || 'Unknown';
+          tcLabels.set(id, label);
+        })
+      );
     }
 
-    const { data: transactions, error: txError } = await txQuery;
-    if (txError) throw txError;
-
-    if (!transactions || transactions.length === 0) {
-      return NextResponse.json({
-        overdue: [],
-        dueToday: [],
-        dueSoon: [],
-        waitingOn: [],
-        closingsSoon: [],
-        totalNeedsAttention: 0,
-      });
-    }
-
-    const txIds = transactions.map((t) => t.id as string);
-    const labelByTxId = new Map(
-      transactions.map((t) => [t.id as string, `${t.file_number} · ${t.property_address}`])
-    );
-
-    const { data: tasks, error: tasksError } = await supabaseServer
-      .from('tasks')
-      .select('id, name, due_date, transaction_id, waiting_on, waiting_on_since')
-      .in('transaction_id', txIds)
-      .eq('completed', false);
-
-    if (tasksError) throw tasksError;
-
-    const todayStr = new Date().toISOString().split('T')[0];
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
-    const dayDiff = (dateStr: string) =>
-      Math.round((new Date(`${dateStr}T00:00:00Z`).getTime() - todayMs) / msPerDay);
-
-    interface OverdueItem {
-      taskId: string;
-      taskName: string;
-      transactionId: string;
-      label: string;
-      daysOverdue: number;
-    }
-    interface DueItem {
-      taskId: string;
-      taskName: string;
-      transactionId: string;
-      label: string;
-    }
-    interface DueSoonItem extends DueItem {
-      dueInDays: number;
-    }
-    interface WaitingOnItem extends DueItem {
-      waitingOn: string;
-      daysSince: number;
-    }
-
-    const overdue: OverdueItem[] = [];
-    const dueToday: DueItem[] = [];
-    const dueSoon: DueSoonItem[] = [];
-    const waitingOn: WaitingOnItem[] = [];
-
-    for (const task of tasks || []) {
-      const label = labelByTxId.get(task.transaction_id as string) || 'Unknown deal';
-      const taskId = task.id as string;
-      const taskName = task.name as string;
-      const transactionId = task.transaction_id as string;
-
-      const dueDate = task.due_date as string | null;
-      if (dueDate) {
-        const diff = dayDiff(dueDate);
-        if (diff < 0) {
-          overdue.push({ taskId, taskName, transactionId, label, daysOverdue: -diff });
-        } else if (diff === 0) {
-          dueToday.push({ taskId, taskName, transactionId, label });
-        } else if (diff <= 3) {
-          dueSoon.push({ taskId, taskName, transactionId, label, dueInDays: diff });
-        }
-      }
-
-      const waitingOnValue = task.waiting_on as string | null;
-      if (waitingOnValue) {
-        const since = task.waiting_on_since as string | null;
-        const daysSince = since ? Math.max(0, -dayDiff(since)) : 0;
-        waitingOn.push({ taskId, taskName, transactionId, label, waitingOn: waitingOnValue, daysSince });
-      }
-    }
-
-    overdue.sort((a, b) => b.daysOverdue - a.daysOverdue);
-    dueSoon.sort((a, b) => a.dueInDays - b.dueInDays);
-    waitingOn.sort((a, b) => b.daysSince - a.daysSince);
-
-    const closingsSoon = transactions
-      .filter((t) => {
-        if (!t.closing_date) return false;
-        const diff = dayDiff(t.closing_date as string);
-        return diff >= 0 && diff <= 7;
-      })
-      .map((t) => ({
-        transactionId: t.id as string,
-        label: labelByTxId.get(t.id as string) || 'Unknown deal',
-        closingDate: t.closing_date as string,
-        daysUntil: dayDiff(t.closing_date as string),
-      }))
-      .sort((a, b) => a.daysUntil - b.daysUntil);
+    const withLabel = <T extends { tcUserId: string }>(item: T) => ({
+      ...item,
+      tcLabel: isOwner ? tcLabels.get(item.tcUserId) || null : null,
+    });
 
     return NextResponse.json({
-      overdue,
-      dueToday,
-      dueSoon,
-      waitingOn,
-      closingsSoon,
-      // What actually needs action today -- overdue, due today, and
-      // anything stuck waiting on someone. "Due soon" and "closings
-      // soon" are useful lookahead but deliberately excluded from this
-      // count, same split as the mockup this was built from (Overdue /
-      // Due Today / Waiting On vs. a separate Coming Up section).
-      totalNeedsAttention: overdue.length + dueToday.length + waitingOn.length,
+      overdue: summary.overdue.map(withLabel),
+      dueToday: summary.dueToday.map(withLabel),
+      dueSoon: summary.dueSoon.map(withLabel),
+      waitingOn: summary.waitingOn.map(withLabel),
+      closingsSoon: summary.closingsSoon.map(withLabel),
+      totalNeedsAttention: summary.totalNeedsAttention,
     });
   } catch (error) {
     if (error instanceof AuthError) {
