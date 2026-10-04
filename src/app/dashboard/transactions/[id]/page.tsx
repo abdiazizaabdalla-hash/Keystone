@@ -2997,10 +2997,11 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                       key={email.id}
                       className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden"
                     >
+                      <div className="flex items-stretch">
                       <button
                         type="button"
                         onClick={() => setExpandedEmailId(isExpanded ? null : email.id)}
-                        className="w-full text-left px-3 py-2 hover:bg-slate-700/50 transition"
+                        className="flex-1 min-w-0 text-left px-3 py-2 hover:bg-slate-700/50 transition"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-medium text-slate-200 truncate">
@@ -3020,25 +3021,25 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                           <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{email.body_text}</p>
                         )}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEmail(email.id)}
+                        disabled={deletingEmailId === email.id}
+                        className="flex-shrink-0 px-3 text-xs text-slate-500 hover:text-red-400 hover:bg-slate-700/50 border-l border-slate-600 transition disabled:opacity-50"
+                        title="Delete this forwarded email"
+                        aria-label="Delete this forwarded email"
+                      >
+                        {deletingEmailId === email.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                      </div>
 
                       {isExpanded && (
                         <div className="px-3 pb-3 border-t border-slate-600">
-                          <div className="flex items-start justify-between gap-2 mt-2 mb-2">
-                            <p className="text-xs text-slate-500">
-                              From{' '}
-                              {email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email} ·{' '}
-                              {new Date(email.received_at).toLocaleString()}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteEmail(email.id)}
-                              disabled={deletingEmailId === email.id}
-                              className="text-slate-500 hover:text-red-400 text-xs flex-shrink-0 disabled:opacity-50"
-                              title="Delete this forwarded email"
-                            >
-                              {deletingEmailId === email.id ? 'Deleting…' : 'Delete'}
-                            </button>
-                          </div>
+                          <p className="text-xs text-slate-500 mt-2 mb-2">
+                            From{' '}
+                            {email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email} ·{' '}
+                            {new Date(email.received_at).toLocaleString()}
+                          </p>
 
                           {email.body_html ? (
                             <div
