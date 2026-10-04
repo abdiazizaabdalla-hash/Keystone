@@ -161,6 +161,40 @@ function formatEmailInput(value: string): string {
   return value.replace(/\s+/g, '');
 }
 
+// navigator.clipboard.writeText can reject with NotAllowedError even on a
+// direct user click -- e.g. the Permissions-Policy denies clipboard-write,
+// or (seen in testing) the browser has the clipboard-write permission
+// explicitly set to "denied" rather than "prompt". When that happens, fall
+// back to the old execCommand('copy') path: it copies via text selection
+// rather than the Permissions-gated API, so it still works in exactly the
+// cases where the Clipboard API is blocked. Returns whether either path
+// actually succeeded, so callers can show real failure feedback instead of
+// a button that silently does nothing.
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.top = '0';
+      textarea.style.left = '-9999px';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 export default function TransactionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const resolvedParams = use(params);
@@ -198,6 +232,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [isCreatingLink, setIsCreatingLink] = useState(false);
   const [revokingLinkId, setRevokingLinkId] = useState<string | null>(null);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+  const [copyFailedLinkId, setCopyFailedLinkId] = useState<string | null>(null);
 
   // "Contacts" section, directly under the Checklist card: the agent
   // (read-only here, sourced from `agent` above) plus any other parties
@@ -276,6 +311,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [emails, setEmails] = useState<TransactionEmail[]>([]);
   const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null);
   const [copiedInboundAddress, setCopiedInboundAddress] = useState(false);
+  const [inboundCopyFailed, setInboundCopyFailed] = useState(false);
   const [messageDraft, setMessageDraft] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<{ id: string; fileName: string } | null>(null);
@@ -354,13 +390,19 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
   const handleCopyInboundAddress = async () => {
     if (!inboundAddress) return;
-    try {
-      await navigator.clipboard.writeText(inboundAddress);
+    const ok = await copyTextToClipboard(inboundAddress);
+    if (ok) {
+      setInboundCopyFailed(false);
       setCopiedInboundAddress(true);
       setTimeout(() => setCopiedInboundAddress(false), 2000);
-    } catch {
-      // Clipboard API can be blocked (permissions, non-HTTPS, etc.) --
-      // non-critical, the address is still shown as selectable text.
+    } else {
+      // Both the Clipboard API and the execCommand fallback failed (e.g.
+      // clipboard-write permission is denied at the browser level, not
+      // just missing). Say so instead of leaving the button looking like
+      // it did nothing -- the address is still right there to select by
+      // hand.
+      setInboundCopyFailed(true);
+      setTimeout(() => setInboundCopyFailed(false), 4000);
     }
   };
 
@@ -582,14 +624,16 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
   const handleCopyExternalLink = async (link: ExternalLink) => {
     const url = `${window.location.origin}/external/${link.token}`;
-    try {
-      await navigator.clipboard.writeText(url);
+    const ok = await copyTextToClipboard(url);
+    if (ok) {
+      setCopyFailedLinkId((prev) => (prev === link.id ? null : prev));
       setCopiedLinkId(link.id);
       setTimeout(() => setCopiedLinkId((prev) => (prev === link.id ? null : prev)), 2000);
-    } catch {
-      // Clipboard API unavailable (e.g. insecure context) -- the link is
-      // still visible in the list for a manual copy, so this just quietly
-      // no-ops rather than erroring the whole panel.
+    } else {
+      // Both the Clipboard API and the execCommand fallback failed -- say
+      // so instead of the button quietly doing nothing.
+      setCopyFailedLinkId(link.id);
+      setTimeout(() => setCopyFailedLinkId((prev) => (prev === link.id ? null : prev)), 4000);
     }
   };
 
@@ -2712,7 +2756,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                           onClick={() => handleCopyExternalLink(link)}
                           className="text-xs text-blue-400 hover:text-blue-300 font-medium transition"
                         >
-                          {copiedLinkId === link.id ? 'Copied!' : 'Copy link'}
+                          {copiedLinkId === link.id ? 'Copied!' : copyFailedLinkId === link.id ? 'Copy failed' : 'Copy link'}
                         </button>
                         <button
                           type="button"
@@ -2887,7 +2931,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               already send email.
             </p>
 
-            <div className="flex items-center gap-2 mb-4">
+            <div className={`flex items-center gap-2 ${inboundCopyFailed ? 'mb-1' : 'mb-4'}`}>
               <code className="flex-1 min-w-0 truncate bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-blue-300">
                 {inboundAddress}
               </code>
@@ -2899,6 +2943,11 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 {copiedInboundAddress ? 'Copied!' : 'Copy'}
               </button>
             </div>
+            {inboundCopyFailed && (
+              <p className="text-xs text-amber-400 mb-3">
+                Couldn&apos;t copy automatically — select the address above and copy it manually.
+              </p>
+            )}
 
             {emails.length === 0 ? (
               <p className="text-xs text-slate-500">No emails forwarded to this deal yet.</p>
