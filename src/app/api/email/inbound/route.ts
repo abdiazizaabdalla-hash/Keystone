@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getVisibleTcUserIds } from '@/lib/team';
+import { sanitizeEmailHtml } from '@/lib/emailHtml';
 
 /**
  * Per-transaction email ingestion (Phase 2, Section 21 of the roadmap).
@@ -27,6 +28,7 @@ import { getVisibleTcUserIds } from '@/lib/team';
 
 const RESEND_API_BASE = 'https://api.resend.com';
 const BUCKET = 'transaction-documents';
+const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour, matching GET /api/documents
 
 // Resend signs webhooks the same way Svix does, but the installed
 // `resend` SDK version (6.28) has no webhooks.verify() helper, so this
@@ -275,13 +277,63 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabaseServer
       .from('transaction_emails')
-      .select('id, from_email, from_name, subject, body_text, received_at')
+      .select('id, from_email, from_name, subject, body_text, body_html, received_at')
       .eq('transaction_id', transactionId)
       .order('received_at', { ascending: false });
 
     if (error) throw error;
 
-    return NextResponse.json(data || []);
+    const emails = data || [];
+    const emailIds = emails.map((e) => e.id as string);
+
+    // Attachments filed from these emails already live in the regular
+    // documents table (see the POST handler above), tagged with which
+    // email they came from via source_email_id -- they were just never
+    // queried back out and attached to the email itself before now, so
+    // the Communication card had no way to show them. Signed URLs use
+    // the same mechanism and TTL as GET /api/documents.
+    const attachmentsByEmailId = new Map<
+      string,
+      { id: string; fileName: string; fileSize: number | null; contentType: string | null; url: string | null }[]
+    >();
+
+    if (emailIds.length > 0) {
+      const { data: attachmentDocs, error: attachmentsError } = await supabaseServer
+        .from('documents')
+        .select('id, file_name, file_size, content_type, storage_path, source_email_id')
+        .in('source_email_id', emailIds);
+
+      if (attachmentsError) throw attachmentsError;
+
+      for (const doc of attachmentDocs || []) {
+        const { data: signed } = await supabaseServer.storage
+          .from(BUCKET)
+          .createSignedUrl(doc.storage_path as string, SIGNED_URL_TTL_SECONDS);
+
+        const emailId = doc.source_email_id as string;
+        const list = attachmentsByEmailId.get(emailId) || [];
+        list.push({
+          id: doc.id as string,
+          fileName: doc.file_name as string,
+          fileSize: (doc.file_size as number | null) ?? null,
+          contentType: (doc.content_type as string | null) ?? null,
+          url: signed?.signedUrl || null,
+        });
+        attachmentsByEmailId.set(emailId, list);
+      }
+    }
+
+    const withBodyAndAttachments = emails.map((email) => ({
+      ...email,
+      // Sanitized at read time, not write time -- see src/lib/emailHtml.ts.
+      // Keeping the raw HTML in storage and sanitizing on every read means
+      // tightening the sanitizer later doesn't require re-processing or
+      // losing anything already stored.
+      body_html: email.body_html ? sanitizeEmailHtml(email.body_html as string) : null,
+      attachments: attachmentsByEmailId.get(email.id as string) || [],
+    }));
+
+    return NextResponse.json(withBodyAndAttachments);
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

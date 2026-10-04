@@ -66,3 +66,48 @@ body {
 .font-brand {
   font-family: var(--font-brand);
 }
+
+/* Renders a sanitized inbound email body (see src/lib/emailHtml.ts and
+   the Communication card on a transaction's page). The sanitizer strips
+   every color/background style off the original email, so this is the
+   only place email text gets its color from -- it always matches the
+   app's own dark theme instead of whatever the sender's email client
+   hardcoded. */
+.email-body {
+  color: var(--color-ink-200);
+  line-height: 1.6;
+}
+
+.email-body p,
+.email-body ul,
+.email-body ol,
+.email-body blockquote,
+.email-body table {
+  margin: 0 0 0.6em;
+}
+
+.email-body a {
+  color: #60a5fa;
+  text-decoration: underline;
+}
+
+.email-body img {
+  max-width: 100%;
+  border-radius: 4px;
+}
+
+.email-body table {
+  border-collapse: collapse;
+}
+
+.email-body td,
+.email-body th {
+  border: 1px solid var(--color-ink-600);
+  padding: 4px 8px;
+}
+
+.email-body blockquote {
+  border-left: 2px solid var(--color-ink-600);
+  padding-left: 0.75em;
+  color: var(--color-ink-300);
+}

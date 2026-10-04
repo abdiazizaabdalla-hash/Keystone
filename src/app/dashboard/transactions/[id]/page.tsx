@@ -23,13 +23,23 @@ interface Transaction {
   inbound_token?: string | null;
 }
 
+interface TransactionEmailAttachment {
+  id: string;
+  fileName: string;
+  fileSize: number | null;
+  contentType: string | null;
+  url: string | null;
+}
+
 interface TransactionEmail {
   id: string;
   from_email: string;
   from_name: string | null;
   subject: string | null;
   body_text: string | null;
+  body_html: string | null;
   received_at: string;
+  attachments: TransactionEmailAttachment[];
 }
 
 interface Task {
@@ -264,6 +274,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     }[]
   >([]);
   const [emails, setEmails] = useState<TransactionEmail[]>([]);
+  const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null);
   const [copiedInboundAddress, setCopiedInboundAddress] = useState(false);
   const [messageDraft, setMessageDraft] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -2893,20 +2904,88 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               <p className="text-xs text-slate-500">No emails forwarded to this deal yet.</p>
             ) : (
               <div className="space-y-2">
-                {emails.map((email) => (
-                  <div key={email.id} className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-medium text-slate-200 truncate">{email.subject || '(no subject)'}</p>
-                      <span className="text-xs text-slate-500 flex-shrink-0 whitespace-nowrap">
-                        {formatDisplayDate(email.received_at.slice(0, 10), { month: '2-digit', day: '2-digit' })}
-                      </span>
+                {emails.map((email) => {
+                  const isExpanded = expandedEmailId === email.id;
+                  const attachmentCount = email.attachments.length;
+                  return (
+                    <div
+                      key={email.id}
+                      className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setExpandedEmailId(isExpanded ? null : email.id)}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-700/50 transition"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-slate-200 truncate">
+                            {email.subject || '(no subject)'}
+                          </p>
+                          <span className="text-xs text-slate-500 flex-shrink-0 whitespace-nowrap">
+                            {formatDisplayDate(email.received_at.slice(0, 10), { month: '2-digit', day: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-slate-400 truncate">{email.from_name || email.from_email}</p>
+                          {attachmentCount > 0 && (
+                            <span className="text-xs text-slate-500 flex-shrink-0">📎 {attachmentCount}</span>
+                          )}
+                        </div>
+                        {!isExpanded && email.body_text && (
+                          <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{email.body_text}</p>
+                        )}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-3 pb-3 border-t border-slate-600">
+                          <p className="text-xs text-slate-500 mt-2 mb-2">
+                            From{' '}
+                            {email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email} ·{' '}
+                            {new Date(email.received_at).toLocaleString()}
+                          </p>
+
+                          {email.body_html ? (
+                            <div
+                              className="email-body text-xs"
+                              // Sanitized server-side on every read (see
+                              // GET /api/email/inbound, src/lib/emailHtml.ts)
+                              // before it ever reaches this component --
+                              // this inbound address is unauthenticated, so
+                              // the HTML here is attacker-controlled by
+                              // default.
+                              dangerouslySetInnerHTML={{ __html: email.body_html }}
+                            />
+                          ) : email.body_text ? (
+                            <p className="text-xs text-slate-300 whitespace-pre-wrap">{email.body_text}</p>
+                          ) : (
+                            <p className="text-xs text-slate-500 italic">No readable content in this email.</p>
+                          )}
+
+                          {attachmentCount > 0 && (
+                            <div className="mt-3 space-y-1.5">
+                              {email.attachments.map((att) => (
+                                <a
+                                  key={att.id}
+                                  href={att.url || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center justify-between gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-3 py-2 hover:border-slate-500 transition"
+                                >
+                                  <span className="text-blue-400 hover:text-blue-300 truncate text-xs">
+                                    📄 {att.fileName}
+                                  </span>
+                                  <span className="text-xs text-slate-500 flex-shrink-0">
+                                    {att.fileSize ? `${(att.fileSize / 1024).toFixed(0)} KB` : ''}
+                                  </span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">{email.from_name || email.from_email}</p>
-                    {email.body_text && (
-                      <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{email.body_text}</p>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

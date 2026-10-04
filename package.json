@@ -19,6 +19,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "resend": "^6.28.1",
+    "sanitize-html": "^2.18.0",
     "stripe": "^22.6.2"
   },
   "devDependencies": {
@@ -27,6 +28,7 @@
     "@types/pdfkit": "^0.17.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sanitize-html": "^2.16.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4",
