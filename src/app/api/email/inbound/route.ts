@@ -242,6 +242,94 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ matched: true, emailId: emailRow.id, attachmentsFiled: filedCount });
 }
 
+// Lets a TC remove a forwarded email from the Communication card -- e.g.
+// something irrelevant that got CC'd in, or sent to the wrong deal. Owner
+// -only, matching DELETE /api/documents (a team owner can view a
+// teammate's forwarded emails via GET above, but not delete them).
+//
+// Attachments this email had filed into the Documents system
+// (documents.source_email_id) are cleaned up here too: the FK is
+// ON DELETE SET NULL, not CASCADE, so without this they'd survive the
+// email's deletion as orphaned, unlabeled documents -- still taking up
+// storage and still showing up in the Documents list with no indication
+// of where they came from.
+export async function DELETE(request: NextRequest) {
+  try {
+    const { user, isAdmin } = await getUserFromRequest(request);
+    const id = request.nextUrl.searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Email id is required' }, { status: 400 });
+    }
+
+    const { data: email, error: fetchError } = await supabaseServer
+      .from('transaction_emails')
+      .select('id, transaction_id')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !email) {
+      return NextResponse.json({ error: 'Email not found' }, { status: 404 });
+    }
+
+    const { data: transaction, error: txError } = await supabaseServer
+      .from('transactions')
+      .select('id, agent_id')
+      .eq('id', email.transaction_id)
+      .single();
+
+    if (txError || !transaction) {
+      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+    }
+
+    if (!isAdmin) {
+      const { data: agent } = await supabaseServer
+        .from('agents')
+        .select('id')
+        .eq('id', transaction.agent_id)
+        .eq('tc_user_id', user.id)
+        .single();
+
+      if (!agent) {
+        return NextResponse.json({ error: 'You do not have permission to delete this email' }, { status: 403 });
+      }
+    }
+
+    const { data: attachmentDocs, error: attachmentsFetchError } = await supabaseServer
+      .from('documents')
+      .select('id, storage_path')
+      .eq('source_email_id', id);
+
+    if (attachmentsFetchError) throw attachmentsFetchError;
+
+    for (const doc of attachmentDocs || []) {
+      // Best-effort, same as DELETE /api/documents -- a storage removal
+      // failure shouldn't block clearing the DB row and the email itself.
+      const { error: removeError } = await supabaseServer.storage.from(BUCKET).remove([doc.storage_path as string]);
+      if (removeError) console.warn('email/inbound DELETE: storage removal failed, deleting row anyway', removeError);
+    }
+
+    if (attachmentDocs && attachmentDocs.length > 0) {
+      const { error: deleteDocsError } = await supabaseServer
+        .from('documents')
+        .delete()
+        .in('id', attachmentDocs.map((doc) => doc.id));
+      if (deleteDocsError) throw deleteDocsError;
+    }
+
+    const { error: deleteEmailError } = await supabaseServer.from('transaction_emails').delete().eq('id', id);
+    if (deleteEmailError) throw deleteEmailError;
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error('Error deleting transaction email:', error);
+    return NextResponse.json({ error: 'Failed to delete email' }, { status: 500 });
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);

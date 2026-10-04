@@ -310,6 +310,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   >([]);
   const [emails, setEmails] = useState<TransactionEmail[]>([]);
   const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null);
+  const [deletingEmailId, setDeletingEmailId] = useState<string | null>(null);
   const [copiedInboundAddress, setCopiedInboundAddress] = useState(false);
   const [inboundCopyFailed, setInboundCopyFailed] = useState(false);
   const [messageDraft, setMessageDraft] = useState('');
@@ -1431,6 +1432,41 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
   const toggleCategoryCollapsed = (categoryKey: string) => {
     setCollapsedCategories((prev) => ({ ...prev, [categoryKey]: !prev[categoryKey] }));
+  };
+
+  const handleDeleteEmail = async (emailId: string) => {
+    if (
+      !confirm(
+        'Delete this forwarded email? Any attachments it filed into Documents will be deleted too. This cannot be undone.'
+      )
+    )
+      return;
+
+    try {
+      setDeletingEmailId(emailId);
+      const response = await authFetch(`/api/email/inbound?id=${emailId}`, { method: 'DELETE' });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || 'Failed to delete email');
+      }
+
+      setEmails((prev) => prev.filter((e) => e.id !== emailId));
+      setExpandedEmailId((prev) => (prev === emailId ? null : prev));
+      // The delete may have removed attachment documents too (see the
+      // DELETE handler) -- refetch so the Documents card doesn't keep
+      // showing ones that no longer exist.
+      fetchData();
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error deleting email:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete email');
+    } finally {
+      setDeletingEmailId(null);
+    }
   };
 
   const handleDeleteDocument = async (docId: string) => {
@@ -2987,11 +3023,22 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
                       {isExpanded && (
                         <div className="px-3 pb-3 border-t border-slate-600">
-                          <p className="text-xs text-slate-500 mt-2 mb-2">
-                            From{' '}
-                            {email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email} ·{' '}
-                            {new Date(email.received_at).toLocaleString()}
-                          </p>
+                          <div className="flex items-start justify-between gap-2 mt-2 mb-2">
+                            <p className="text-xs text-slate-500">
+                              From{' '}
+                              {email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email} ·{' '}
+                              {new Date(email.received_at).toLocaleString()}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteEmail(email.id)}
+                              disabled={deletingEmailId === email.id}
+                              className="text-slate-500 hover:text-red-400 text-xs flex-shrink-0 disabled:opacity-50"
+                              title="Delete this forwarded email"
+                            >
+                              {deletingEmailId === email.id ? 'Deleting…' : 'Delete'}
+                            </button>
+                          </div>
 
                           {email.body_html ? (
                             <div
