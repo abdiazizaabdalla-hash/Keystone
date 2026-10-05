@@ -166,19 +166,19 @@ export default function Home() {
       <section id="how-it-works" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
           name="contract-intake.jpg"
+          alt="Uploading a purchase contract in Relay so the deal details can be read from it"
           stacked
-          alt="Reviewing the property, price, dates, and contacts Relay extracted from an uploaded purchase contract, before creating the transaction"
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">AI contract intake</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Start with the contract, not a blank transaction.</h2>
           <p className="text-slate-400 mb-5">Upload the signed purchase contract and Relay pulls the key details into the new transaction. Check the information, make any changes, and create the deal.</p>
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-slate-300">
+          <ul className="space-y-2.5 text-sm text-slate-300">
             {[
               "Property address and purchase price",
-              "Acceptance and closing dates",
-              "Buyers, sellers, lender, and title contacts",
-              "Agent matched to an existing profile",
-              "Review everything before creating the transaction",
+              "Key dates",
+              "Buyer, seller, lender, and title contacts",
+              "Agent",
+              "Review before creating the transaction",
             ].map((line) => (
               <li key={line} className="flex items-start gap-2.5">
                 <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
@@ -200,12 +200,12 @@ export default function Home() {
           </p>
           <ul className="flex flex-wrap justify-center gap-2.5 text-sm text-slate-300">
             {[
-              'Status, price, and key dates',
-              'Checklist and progress',
-              'Documents by category',
-              'Messages with the agent',
-              'Contacts for the deal',
-              'Invoice and payment status',
+              'Checklist',
+              'Documents',
+              'Messages',
+              'Contacts',
+              'Invoice',
+              'Payment status',
             ].map((line) => (
               <li key={line} className="px-3 py-1.5 rounded-full border border-slate-700 bg-slate-800/60">
                 {line}
@@ -218,93 +218,17 @@ export default function Home() {
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
           name="checklist.jpg"
-          alt="A transaction checklist in Relay with steps like Contract & File Setup and Inspection & Repairs, each with a due date and completion status"
+          alt="A transaction checklist in Relay with steps like Contract & File Setup and Inspection & Repairs, a progress bar, and due dates"
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Workflow</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Know what needs to happen next.</h2>
           <p className="text-slate-400 mb-5">Each transaction starts with a closing checklist. Set deadlines for each step and keep track of what is done, what is coming up, and what needs attention.</p>
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-slate-300">
+          <ul className="space-y-2.5 text-sm text-slate-300">
             {[
-              "A baseline closing checklist on every deal",
-              "Due dates based on acceptance, closing, or a fixed date",
-              "Dates update automatically when a transaction date changes",
-              "Progress at a glance",
-              "Overdue and upcoming steps clearly flagged",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="template-builder.jpg"
-          alt="The checklist template builder in Relay, with a Cash Purchase template, its steps, and per-step deadline rules"
-          reverse
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Custom workflows · Pro and Team</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Build templates around the way you work.</h2>
-          <p className="text-slate-400 mb-5">Use Relay’s default workflow or make your own templates for different types of transactions, such as cash, financed, new construction, or your own process.</p>
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-slate-300">
-            {[
-              "Add, remove, and reorder steps",
-              "Set a deadline rule for each step",
-              "Mark steps as required",
-              "Save templates for different deal types",
-              "Apply a template when creating a transaction",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="document-setup.jpg"
-          alt="Documents on a transaction in Relay, organized into categories like Contract & Disclosures, Inspection & Repairs, and Title & Escrow"
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Documents</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Keep every file where it belongs.</h2>
-          <p className="text-slate-400 mb-5">Store the documents for each deal in Relay and organize them by category. You can also link a document to the checklist step it goes with.</p>
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-slate-300">
-            {[
-              "Categories from contract through post-closing",
-              "Link documents to checklist steps",
-              "See which documents still need a signature",
-              "Secure, short-lived download links",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="esign-request.jpg"
-          stacked
-          alt="Sending a document for signature from a transaction in Relay, and the signature status shown on the document"
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">E-signatures</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Sign without leaving the transaction.</h2>
-          <p className="text-slate-400 mb-5">Send a document for signature from the transaction, check its status in Relay, or record it as signed if it was completed somewhere else.</p>
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-slate-300">
-            {[
-              "Secure signing link",
-              "No separate DocuSign account required",
-              "Signature status shown on the document",
-              "Mark documents signed outside Relay",
+              "A default closing checklist on every deal",
+              "Due dates based on acceptance, closing, or a fixed date, updated when the dates change",
+              "Your own templates for different deal types (Pro and Team)",
+              "Overdue, due-today, waiting, and upcoming items show on your dashboard and in a daily email digest",
             ].map((line) => (
               <li key={line} className="flex items-start gap-2.5">
                 <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
@@ -319,25 +243,17 @@ export default function Home() {
         <ShotRow
           name="agent-full-view.jpg"
           alt="The agent portal view of a transaction, with documents by category, a message thread, checklist progress, and contacts"
-          caption="One deal, one shared workspace."
+          reverse
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Agent portal</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Give your agents their own view of the deal.</h2>
-          <p className="text-slate-400 mb-6">
-            Agents get a free portal where they can check progress, upload documents, message
-            you, and see their invoice. They only see the transactions and information you&apos;ve
-            shared with them.
-          </p>
-          <div className="grid sm:grid-cols-2 gap-6">
-            <div>
-              <p className="text-xs font-semibold text-slate-200 mb-3">Agents can</p>
-              <ul className="space-y-2.5 text-sm text-slate-300">
+          <p className="text-slate-400 mb-5">Agents get a free portal where they can check progress, upload documents, message you, and see their invoice. They only see the transactions and information you&apos;ve shared with them.</p>
+          <ul className="space-y-2.5 text-sm text-slate-300">
             {[
               "See transaction status and dates",
               "View checklist progress",
-              "Upload documents and mark them signed",
-              "Message you with file attachments",
-              "Add contacts",
+              "Upload documents",
+              "Message you, with file attachments",
               "View their invoices",
             ].map((line) => (
               <li key={line} className="flex items-start gap-2.5">
@@ -346,28 +262,10 @@ export default function Home() {
               </li>
             ))}
           </ul>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-200 mb-3">Agents can&apos;t</p>
-              <ul className="space-y-2.5 text-sm text-slate-300">
-            {[
-              "Check off your checklist",
-              "Send or void signature requests",
-              "Delete documents or edit contacts",
-              "See your other clients",
-              "See your billing",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-            </div>
-          </div>
+          <p className="text-sm font-semibold text-slate-200 mt-5">Agents never need a paid Relay subscription.</p>
           <Link
             href="/for-agents"
-            className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-medium transition mt-6"
+            className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-medium transition mt-4"
           >
             See the agent portal &rarr;
           </Link>
@@ -376,45 +274,18 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="agent-conversation.jpg"
-          alt="An agent’s view of a transaction in Relay, mid-conversation with their TC about an inspection report and a requested repair credit"
-          reverse
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Messaging</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Keep deal conversations with the deal.</h2>
-          <p className="text-slate-400 mb-5">Agents and TCs can message each other from the transaction and attach files to the conversation. Emails can also be forwarded or CC&apos;d to the deal.</p>
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-slate-300">
-            {[
-              "Conversation thread on every transaction",
-              "File attachments",
-              "Forward or CC emails into the transaction",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
           name="invoice.jpg"
+          alt="The Invoices page in Relay showing total invoiced, outstanding, and received amounts"
           stacked
-          alt="An invoice generated from a transaction in Relay, showing the fee, due date, payment status, and pay link"
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Invoicing</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Send the invoice and keep track of payment.</h2>
+          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Keep invoicing with the deal.</h2>
           <p className="text-slate-400 mb-5">Generate an invoice from the transaction, send it to the agent, and keep the payment status with the rest of the deal.</p>
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-slate-300">
+          <ul className="space-y-2.5 text-sm text-slate-300">
             {[
-              "Generate an invoice from the transaction",
-              "Send it to the agent by email",
-              "Accept payment through your connected Stripe account",
-              "Record payments received another way",
-              "See payment status on each deal",
-              "Keep fee and payment history by agent",
+              "Generate and send invoices",
+              "Accept online payment through your Stripe account",
+              "Track paid and unpaid status",
             ].map((line) => (
               <li key={line} className="flex items-start gap-2.5">
                 <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
@@ -425,53 +296,24 @@ export default function Home() {
         </ShotRow>
       </section>
 
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="dashboard.jpg"
-          stacked
-          alt="The Needs Attention Today panel on the Relay dashboard, listing overdue, due today, waiting on, and coming up items, above the key numbers for active deals and invoices"
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Daily digest</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">See what needs attention each morning.</h2>
-          <p className="text-slate-400 mb-5">Relay sends a daily email with checklist steps that are overdue or due today. Your dashboard gives you the same view across your open transactions.</p>
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-slate-300">
-            {[
-              "Overdue and due-today steps in one email",
-              "Dashboard view across open transactions",
-              "Items waiting on someone else",
-              "Upcoming closings",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <div className="max-w-2xl mx-auto text-center">
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Solo and teams</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Run your transactions your way, on your own or with a team.</h2>
-          <p className="text-slate-400 mb-6">
-            Use Relay on your own or share a workspace with other coordinators. Each coordinator
-            can manage their own transactions, while the team owner can see the team&apos;s files.
-          </p>
-          <ul className="flex flex-wrap justify-center gap-2.5 text-sm text-slate-300">
-            {[
-              'Shared team roster',
-              'Owner access to team transactions and documents',
-              'Shared agent roster',
-              'Team-wide checklist templates',
-              '$19 per coordinator seat, 3-seat minimum',
-              'Agents never need a paid seat',
-            ].map((line) => (
-              <li key={line} className="px-3 py-1.5 rounded-full border border-slate-700 bg-slate-800/60">
-                {line}
-              </li>
-            ))}
-          </ul>
+      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-10 text-center">Everything you need to run the deal</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { title: "Built-in e-signatures", body: 'Send a document for signature from the transaction. No separate DocuSign account.' },
+            { title: "Document organization", body: 'Documents sorted into categories and linked to checklist steps.' },
+            { title: "Agent messaging", body: 'Message agents on the deal and attach files.' },
+            { title: "Email-to-transaction", body: 'Forward or CC an email to the deal and it lands on the transaction, attachments included.' },
+            { title: "Daily digest", body: 'A morning email with overdue and due-today steps.' },
+            { title: "Custom templates", body: 'Build checklists for different deal types. Pro and Team.' },
+            { title: "Team workspaces", body: 'Share a workspace with other coordinators. The owner sees the team’s files.' },
+            { title: "Payment tracking", body: 'See which invoices are paid and which are still outstanding.' },
+          ].map((f) => (
+            <div key={f.title} className="p-5 bg-slate-800/60 border border-slate-700 rounded-xl">
+              <h3 className="font-semibold text-slate-100 text-sm mb-1.5">{f.title}</h3>
+              <p className="text-sm text-slate-400">{f.body}</p>
+            </div>
+          ))}
         </div>
       </section>
 
