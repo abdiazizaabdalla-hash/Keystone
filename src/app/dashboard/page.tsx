@@ -413,11 +413,7 @@ export default function Dashboard() {
         <div className="mb-8 bg-gradient-to-br from-slate-800/80 to-slate-800/40 border border-slate-700 rounded-lg p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-semibold text-slate-100">Needs Attention Today</h2>
-            {attention.totalNeedsAttention > 0 ? (
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-900/30 border border-red-700 text-red-300 whitespace-nowrap">
-                {attention.totalNeedsAttention} thing{attention.totalNeedsAttention !== 1 ? 's' : ''} need attention
-              </span>
-            ) : (
+            {attention.totalNeedsAttention === 0 && (
               <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-900/30 border border-green-700 text-green-300 whitespace-nowrap">
                 All caught up
               </span>

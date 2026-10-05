@@ -190,30 +190,28 @@ export default function Home() {
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="transaction-workspace.jpg"
-          alt="A full transaction workspace in Relay showing status, price, key dates, checklist progress, documents, and messages together"
-          reverse
-        >
+        <div className="max-w-2xl mx-auto text-center">
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">The transaction workspace</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">One transaction. Everything attached to it.</h2>
-          <p className="text-slate-400 mb-5">Open a deal and see the information you need in one place. The checklist, documents, messages, contacts, and invoice all stay with the transaction.</p>
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-slate-300">
+          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Every deal gets its own page.</h2>
+          <p className="text-slate-400 mb-6">
+            Open a transaction and everything for that deal is right there, from the checklist
+            and documents to the messages, contacts, and invoice.
+          </p>
+          <ul className="flex flex-wrap justify-center gap-2.5 text-sm text-slate-300">
             {[
-              "Status, price, and key dates",
-              "Checklist and progress",
-              "Documents by category",
-              "Messages with the agent",
-              "Contacts for the deal",
-              "Invoice and payment status",
+              'Status, price, and key dates',
+              'Checklist and progress',
+              'Documents by category',
+              'Messages with the agent',
+              'Contacts for the deal',
+              'Invoice and payment status',
             ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+              <li key={line} className="px-3 py-1.5 rounded-full border border-slate-700 bg-slate-800/60">
                 {line}
               </li>
             ))}
           </ul>
-        </ShotRow>
+        </div>
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
