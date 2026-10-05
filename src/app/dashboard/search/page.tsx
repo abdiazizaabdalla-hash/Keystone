@@ -170,9 +170,9 @@ export default function SearchPage() {
   })).filter((group) => group.items.length > 0);
 
   return (
-    <div className="min-h-screen px-6 py-12">
+    <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-display font-semibold text-slate-100 mb-2">Search</h1>
+        <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">Search</h1>
         <p className="text-slate-400 mb-8">
           Find a deal by address or file number, or search inside messages, documents, and tasks.
         </p>

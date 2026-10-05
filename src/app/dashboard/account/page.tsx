@@ -127,7 +127,7 @@ function AccountContent() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="flex items-center justify-center py-24">
           <div className="text-center">
             <div className="w-12 h-12 rounded-full border-4 border-slate-600 border-t-blue-400 animate-spin mx-auto mb-4" />
@@ -140,7 +140,7 @@ function AccountContent() {
 
   if (error || !summary) {
     return (
-      <div className="p-8 max-w-2xl">
+      <div className="p-4 md:p-8 max-w-2xl">
         <div className="p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-200 text-sm">
           {error || 'Could not load your account.'}
         </div>
@@ -162,9 +162,9 @@ function AccountContent() {
   );
 
   return (
-    <div className="p-8 max-w-2xl">
+    <div className="p-4 md:p-8 max-w-2xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-display font-semibold text-slate-100 mb-1">Account</h1>
+        <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Account</h1>
         <p className="text-slate-400">Your plan, billing, and usage at a glance</p>
       </div>
 

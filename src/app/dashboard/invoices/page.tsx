@@ -179,7 +179,7 @@ export default function InvoicesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen px-6 py-12">
+      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-center py-24">
             <div className="text-center">
@@ -193,11 +193,11 @@ export default function InvoicesPage() {
   }
 
   return (
-    <div className="min-h-screen px-6 py-12">
+    <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-display font-semibold text-slate-100 mb-2">Invoices</h1>
+        <div className="mb-6 md:mb-12">
+          <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">Invoices</h1>
           <p className="text-slate-400">Manage and track agent fee invoices</p>
         </div>
 
@@ -272,7 +272,82 @@ export default function InvoicesPage() {
             <p className="text-slate-400">Close a deal, then create its invoice from the transaction page</p>
           </div>
         ) : (
-          <div className="bg-slate-700/50 border border-slate-600 rounded-lg overflow-hidden">
+          <>
+          {/* Phones: one stacked card per invoice -- no sideways scroll. */}
+          <div className="md:hidden space-y-3">
+            {filteredInvoices.map((invoice) => (
+              <div key={invoice.id} className="bg-slate-700/50 border border-slate-600 rounded-lg p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <Link href={`/dashboard/invoices/${invoice.id}`} className="font-mono text-blue-400 font-semibold break-all">
+                    {invoice.invoice_number}
+                  </Link>
+                  <span className={`shrink-0 inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                    invoice.refunded
+                      ? 'bg-orange-500/20 text-orange-300'
+                      : invoice.paid
+                      ? 'bg-green-500/20 text-green-300'
+                      : 'bg-yellow-500/20 text-yellow-300'
+                  }`}>
+                    {invoice.refunded ? 'Refunded' : invoice.paid ? 'Paid' : 'Unpaid'}
+                  </span>
+                </div>
+                <p className="text-slate-100 text-xl font-semibold mt-2">
+                  ${invoice.amount_owed.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </p>
+                {invoice.transaction?.property_address && (
+                  <p className="text-slate-100 text-sm mt-2 break-words">{invoice.transaction.property_address}</p>
+                )}
+                <p className="text-slate-300 text-sm mt-1 break-words">{invoice.agent?.name || 'Unknown Agent'}</p>
+                <p className="text-slate-500 text-xs mt-0.5 break-words">File {invoice.transaction?.file_number || 'N/A'}</p>
+                <div className="mt-3 text-sm text-slate-400">
+                  {editingDueDateId === invoice.id ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="date"
+                        value={dueDateDraft}
+                        onChange={(e) => setDueDateDraft(e.target.value)}
+                        className="bg-slate-600 border border-slate-600 rounded-lg px-2 py-1.5 text-slate-100 text-base focus:border-blue-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => saveDueDate(invoice.id)}
+                        disabled={savingDueDateId === invoice.id}
+                        className="text-blue-400 text-sm font-semibold disabled:opacity-50 px-1 py-1"
+                      >
+                        {savingDueDateId === invoice.id ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={cancelEditingDueDate}
+                        disabled={savingDueDateId === invoice.id}
+                        className="text-slate-500 text-sm disabled:opacity-50 px-1 py-1"
+                      >
+                        Cancel
+                      </button>
+                      {dueDateError && <span className="text-red-400 text-xs w-full">{dueDateError}</span>}
+                    </div>
+                  ) : (
+                    <button onClick={() => startEditingDueDate(invoice)} className="text-left py-1">
+                      Due {formatDisplayDate(invoice.due_date)} <span className="text-blue-400">· Edit</span>
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-4 mt-3 pt-3 border-t border-slate-600">
+                  <Link href={`/dashboard/invoices/${invoice.id}`} className="text-slate-300 text-sm font-medium py-1">
+                    View →
+                  </Link>
+                  <button
+                    onClick={() => handleDelete(invoice.id)}
+                    disabled={deletingId === invoice.id}
+                    className="text-slate-500 hover:text-red-400 text-sm font-medium disabled:opacity-50 py-1"
+                  >
+                    {deletingId === invoice.id ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Tablet and desktop: the original table, unchanged. */}
+          <div className="hidden md:block bg-slate-700/50 border border-slate-600 rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -375,6 +450,7 @@ export default function InvoicesPage() {
               </table>
             </div>
           </div>
+          </>
         )}
       </div>
     </div>

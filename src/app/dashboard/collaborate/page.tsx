@@ -348,7 +348,7 @@ export default function CollaboratePage() {
 
   if (error) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <div className="p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
       </div>
     );
@@ -356,8 +356,8 @@ export default function CollaboratePage() {
 
   if (!data || !data.team) {
     return (
-      <div className="p-8">
-        <h1 className="text-3xl font-display font-semibold text-slate-100 mb-2">Collaborate</h1>
+      <div className="p-4 md:p-8">
+        <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-2">Collaborate</h1>
         <p className="text-slate-400">Collaborate is a Team/Brokerage plan feature. Upgrade to work with teammates.</p>
       </div>
     );
@@ -368,9 +368,9 @@ export default function CollaboratePage() {
   const seatsUsed = data.members.length + data.pendingInvites.length;
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-4 md:p-8 max-w-4xl">
       <div className="flex items-start justify-between gap-4 mb-1">
-        <h1 className="text-3xl font-display font-semibold text-slate-100">
+        <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100">
           {data.team.name || 'Collaborate'}
         </h1>
         {isOwner && (

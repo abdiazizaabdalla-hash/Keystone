@@ -55,6 +55,8 @@ export default function DashboardLayout({
   } | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  // Phones only: the sidebar is replaced by a top bar with a slide-down menu.
+  const [mobileOpen, setMobileOpen] = useState(false);
   const router = useRouter();
 
   // Default to collapsed on small screens (phones/narrow tablets) so the
@@ -178,12 +180,73 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="h-screen bg-slate-900 flex overflow-hidden">
-      {/* Sidebar */}
+    <div className="h-screen bg-slate-900 flex flex-col md:flex-row overflow-hidden">
+      {/* Phones: compact top bar + menu (the desktop sidebar below is hidden under md) */}
+      <div className="md:hidden shrink-0 relative z-40 bg-slate-800 border-b border-slate-700">
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <Link href="/dashboard" className="flex items-center gap-2.5" onClick={() => setMobileOpen(false)}>
+            <span className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1">
+              <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
+            </span>
+            <span className="text-white font-display font-semibold">Relay TC</span>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setMobileOpen((o) => !o)}
+            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileOpen}
+            className="p-2.5 -mr-2 text-slate-300 hover:text-slate-100 hover:bg-slate-700 rounded-lg transition"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              {mobileOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
+        </div>
+        {mobileOpen && (
+          <div className="absolute left-0 right-0 top-full max-h-[calc(100vh-56px)] overflow-y-auto bg-slate-800 border-b border-slate-700 shadow-xl px-3 pb-3 space-y-1">
+            {[
+              { href: '/dashboard', label: 'Dashboard' },
+              { href: '/dashboard/messages', label: 'Messages' },
+              { href: '/dashboard/search', label: 'Search' },
+              { href: '/dashboard/transactions', label: 'Transactions' },
+              { href: '/dashboard/agents', label: 'Agents' },
+              { href: '/dashboard/invoices', label: 'Invoices' },
+              { href: '/dashboard/settings', label: 'Settings' },
+              ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: 'Collaborate' }] : []),
+              { href: '/dashboard/account', label: plan ? `Account · ${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan` : 'Account' },
+              ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin' }] : []),
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={`block px-4 py-3 rounded-lg font-medium transition hover:bg-slate-700 ${
+                  item.label === 'Admin' ? 'text-amber-200' : 'text-slate-200'
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full text-left px-4 py-3 rounded-lg font-medium text-slate-300 hover:bg-red-900/30 hover:text-red-300 border-t border-slate-700 mt-1 transition"
+            >
+              Logout
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Sidebar (tablet and desktop) */}
       <div
         className={`${
           collapsed ? 'w-20' : 'w-64'
-        } shrink-0 h-full bg-gradient-to-b from-slate-800 to-slate-900 border-r border-slate-700 flex flex-col transition-all duration-200`}
+        } shrink-0 h-full bg-gradient-to-b from-slate-800 to-slate-900 border-r border-slate-700 hidden md:flex flex-col transition-all duration-200`}
       >
         {/* Logo */}
         <div
@@ -420,7 +483,7 @@ export default function DashboardLayout({
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 min-w-0 overflow-auto">
         {trial?.applies && trial.expired && (
           <div className="px-6 py-3 bg-red-900/40 border-b border-red-700 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-red-200">

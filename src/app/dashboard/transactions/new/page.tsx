@@ -354,7 +354,7 @@ export default function NewTransactionPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen px-6 py-12">
+      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
         <div className="max-w-2xl mx-auto">
           <Link href="/dashboard/transactions" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -374,7 +374,7 @@ export default function NewTransactionPage() {
   }
 
   return (
-    <div className="min-h-screen px-6 py-12">
+    <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
       <div className="max-w-2xl mx-auto">
         {/* Back Button */}
         <Link href="/dashboard/transactions" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
@@ -386,7 +386,7 @@ export default function NewTransactionPage() {
 
         {/* Header */}
         <div className="mb-12">
-          <h1 className="text-4xl font-display font-semibold text-slate-100 mb-3">Create New Deal</h1>
+          <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-3">Create New Deal</h1>
           <p className="text-slate-400">Enter the details to start tracking this transaction. Your checklist will be auto-generated.</p>
         </div>
 

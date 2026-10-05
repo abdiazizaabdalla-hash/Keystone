@@ -302,7 +302,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
   if (loading) {
     return (
-      <div className="min-h-screen px-6 py-12">
+      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
         <div className="max-w-4xl mx-auto">
           <Link href="/dashboard/invoices" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -323,7 +323,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
   if (error) {
     return (
-      <div className="min-h-screen px-6 py-12">
+      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
         <div className="max-w-4xl mx-auto">
           <Link href="/dashboard/invoices" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -342,7 +342,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
   if (!invoice) {
     return (
-      <div className="min-h-screen px-6 py-12">
+      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
         <div className="max-w-4xl mx-auto">
           <Link href="/dashboard/invoices" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -362,7 +362,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const isOverdue = new Date(invoice.due_date) < new Date() && !invoice.paid;
 
   return (
-    <div className="min-h-screen px-6 py-12">
+    <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
       <div className="max-w-4xl mx-auto">
         {/* Back Button */}
         <Link href="/dashboard/invoices" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
@@ -376,7 +376,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
           <div className="flex items-start justify-between mb-8">
             <div>
-              <h1 className="text-4xl font-display font-semibold text-slate-100 mb-2">{invoice.invoice_number}</h1>
+              <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">{invoice.invoice_number}</h1>
               <p className="text-slate-400">Agent Invoice</p>
             </div>
             <div className="text-right">

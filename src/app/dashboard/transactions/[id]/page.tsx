@@ -1531,7 +1531,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
   if (loading) {
     return (
-      <div className="min-h-screen px-6 py-12">
+      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
         <div className="max-w-6xl mx-auto">
           <Link href="/dashboard/transactions" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1552,7 +1552,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
   if (error) {
     return (
-      <div className="min-h-screen px-6 py-12">
+      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
         <div className="max-w-6xl mx-auto">
           <Link href="/dashboard/transactions" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1560,7 +1560,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </svg>
             Back to Transactions
           </Link>
-          <div className="bg-red-900/30 border border-red-700 rounded-lg p-6">
+          <div className="bg-red-900/30 border border-red-700 rounded-lg p-4 md:p-6">
             <h2 className="text-lg font-bold text-red-300 mb-2">Error Loading Transaction</h2>
             <p className="text-red-200 mb-4">{error}</p>
             <p className="text-red-300 text-sm">
@@ -1574,7 +1574,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
   if (!transaction) {
     return (
-      <div className="min-h-screen px-6 py-12">
+      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
         <div className="max-w-6xl mx-auto">
           <Link href="/dashboard/transactions" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1855,7 +1855,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   };
 
   return (
-    <div className="min-h-screen px-6 py-12">
+    <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
       <div className="max-w-6xl mx-auto">
         {/* Back Button */}
         <Link href="/dashboard/transactions" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
@@ -1866,7 +1866,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         </Link>
 
         {/* Main Card */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
+        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-8 mb-8">
           <div className="mb-8">
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
@@ -1889,11 +1889,11 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 {complianceExportError && <p className="text-xs text-red-400 mt-1">{complianceExportError}</p>}
               </div>
             </div>
-            <h1 className="text-4xl font-display font-semibold text-slate-100 mb-2">{transaction.file_number}</h1>
-            <p className="text-slate-400">{transaction.property_address}</p>
+            <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2 break-words">{transaction.file_number}</h1>
+            <p className="text-slate-400 break-words">{transaction.property_address}</p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-slate-600">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 pt-6 border-t border-slate-600">
             {/* Agent */}
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent</p>
@@ -2145,7 +2145,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             message, read/reply in a dedicated view instead of this narrow
             column. See fetchMessages/messages state above, still used here
             to drive the preview and the unread-feeling "latest line". */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6 flex flex-col h-[28rem]">
+        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6 flex flex-col h-[28rem]">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-slate-100">Messages</h2>
             {acceptedAgentUsers.length > 0 && (
@@ -2244,7 +2244,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </>
           )}
         </div>
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6">
           <div className="mb-5">
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-lg font-bold text-slate-100">Checklist</h2>
@@ -2489,7 +2489,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         {/* Contacts: the agent (read-only, from the agents record)
             plus any other parties for this deal, typed in by hand. Sits
             directly under the Checklist card via the shared wrapper above. */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6">
           <h2 className="text-lg font-bold text-slate-100 mb-4">Contacts</h2>
 
           <div className="space-y-4">
@@ -2681,7 +2681,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             inspector -- one document, or just this deal's key dates, no
             login required on their end. See /api/transactions/[id]/
             external-links and the public /external/[token] page. */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-slate-100">External Access</h2>
             <button
@@ -2813,7 +2813,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         </div>
 
         {/* Documents Section (primary view, left column on desktop) */}
-        <div className="lg:order-1 bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8">
+        <div className="lg:order-1 bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-8">
           <input
             ref={categoryFileInputRef}
             type="file"
@@ -2960,7 +2960,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             should ever see a backend setup/env-var message; it either
             works or it isn't there yet. */}
         {inboundDomain && (
-          <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-6 mt-8">
+          <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4 md:p-6 mt-8">
             <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
             <p className="text-xs text-slate-400 mb-3">
               Forward or CC emails about this deal here and they&apos;ll show up below — no need to change how you
@@ -3089,7 +3089,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         )}
 
         {/* Danger Zone */}
-        <div className="bg-red-950/20 border border-red-900/50 rounded-lg p-8 mt-8">
+        <div className="bg-red-950/20 border border-red-900/50 rounded-lg p-4 md:p-8 mt-8">
           <h2 className="text-xl font-bold text-red-300 mb-2">Danger Zone</h2>
           <p className="text-sm text-slate-400 mb-6">
             Permanently delete this transaction, its checklist, uploaded documents, and any invoice generated from it.

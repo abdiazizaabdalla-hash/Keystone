@@ -199,7 +199,7 @@ export default function TeammateTransactionsPage({ params }: { params: Promise<{
 
   if (error) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <Link href="/dashboard/collaborate" className="text-sm text-blue-400 hover:text-blue-300">
           ‹ Back to team
         </Link>
@@ -213,11 +213,11 @@ export default function TeammateTransactionsPage({ params }: { params: Promise<{
   const displayName = data.member.name || data.member.email;
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 md:p-8 max-w-5xl">
       <Link href="/dashboard/collaborate" className="text-sm text-blue-400 hover:text-blue-300">
         ‹ Back to team
       </Link>
-      <h1 className="text-3xl font-display font-semibold text-slate-100 mt-3 mb-1">{displayName}</h1>
+      <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mt-3 mb-1">{displayName}</h1>
       <p className="text-slate-400 mb-2">{data.member.email}</p>
       {reassignMessage && <p className="text-sm text-blue-300 mb-6">{reassignMessage}</p>}
       {!reassignMessage && <div className="mb-8" />}

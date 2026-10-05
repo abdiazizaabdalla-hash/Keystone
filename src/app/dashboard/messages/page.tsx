@@ -60,7 +60,7 @@ export default function MessagesOverviewPage() {
   };
 
   return (
-    <div className="min-h-screen px-6 py-12">
+    <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-display font-semibold text-slate-100 mb-1">Messages</h1>
         <p className="text-slate-400 text-sm mb-8">

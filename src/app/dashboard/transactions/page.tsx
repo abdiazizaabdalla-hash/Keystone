@@ -152,7 +152,7 @@ export default function TransactionsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen px-6 py-12">
+      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-center py-24">
             <div className="text-center">
@@ -167,7 +167,7 @@ export default function TransactionsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen px-6 py-12">
+      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
         <div className="max-w-7xl mx-auto">
           <div className="bg-red-900/30 border border-red-700 rounded-lg p-6">
             <h2 className="text-lg font-bold text-red-300 mb-2">Error Loading Transactions</h2>
@@ -182,18 +182,18 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="min-h-screen px-6 py-12">
+    <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-4">
+        <div className="mb-6 md:mb-12">
+          <div className="flex items-center justify-between gap-3 mb-4">
             <div>
-              <h1 className="text-4xl font-display font-semibold text-slate-100 mb-2">Transactions</h1>
-              <p className="text-slate-400">Manage and track all your active and closed deals</p>
+              <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">Transactions</h1>
+              <p className="text-slate-400 text-sm md:text-base">Manage and track all your active and closed deals</p>
             </div>
             <Link
               href="/dashboard/transactions/new"
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-blue-500/50"
+              className="shrink-0 px-4 py-2.5 md:px-6 md:py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-blue-500/50 whitespace-nowrap"
             >
               + New Deal
             </Link>
@@ -202,7 +202,7 @@ export default function TransactionsPage() {
 
         {/* Empty State */}
         {transactions.length === 0 ? (
-          <div className="bg-slate-700/50 border border-dashed border-slate-600 rounded-lg p-16 text-center">
+          <div className="bg-slate-700/50 border border-dashed border-slate-600 rounded-lg p-8 md:p-16 text-center">
             <div className="w-16 h-16 bg-slate-600/50 rounded-lg flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -218,8 +218,46 @@ export default function TransactionsPage() {
             </Link>
           </div>
         ) : (
-          /* Transactions Table */
-          <div className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden">
+          <>
+          {/* Phones: one stacked card per deal -- full address wraps, no sideways scroll. */}
+          <div className="md:hidden space-y-3">
+            {transactions.map((tx) => (
+              <div
+                key={tx.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => (window.location.href = `/dashboard/transactions/${tx.id}`)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') window.location.href = `/dashboard/transactions/${tx.id}`;
+                }}
+                className="bg-slate-700/30 border border-slate-600 rounded-lg p-4 active:bg-slate-600/40 transition cursor-pointer"
+              >
+                <p className="text-slate-100 font-semibold text-base leading-snug break-words">{tx.property_address}</p>
+                <p className="text-slate-400 text-sm mt-1">{agents.get(tx.agent_id) || 'Unknown'}</p>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mt-3">
+                  <span className={`text-sm font-medium ${getStatusTextColor(tx.status)}`}>{tx.status}</span>
+                  <span className="font-semibold text-blue-400">${tx.purchase_price.toLocaleString()}</span>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mt-2">
+                  <span>{getDueBadge(tx)}</span>
+                  <button
+                    onClick={(e) => handleDelete(e, tx.id)}
+                    disabled={deletingId === tx.id}
+                    className="text-slate-500 hover:text-red-400 text-sm font-medium transition disabled:opacity-50 py-1"
+                  >
+                    {deletingId === tx.id ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
+                <p className="font-mono text-xs text-slate-500 mt-2">File {tx.file_number}</p>
+              </div>
+            ))}
+            <p className="text-sm text-slate-400 px-1">
+              Showing <span className="font-semibold text-slate-300">{transactions.length}</span> transaction{transactions.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+
+          {/* Tablet and desktop: the original table, unchanged. */}
+          <div className="hidden md:block bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -304,6 +342,7 @@ export default function TransactionsPage() {
               </p>
             </div>
           </div>
+          </>
         )}
       </div>
     </div>
