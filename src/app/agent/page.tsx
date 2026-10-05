@@ -181,13 +181,13 @@ export default function AgentHubPage() {
   }, [transactions]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 px-6 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 px-4 py-6 md:px-6 md:py-12">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between gap-3 mb-8">
+        <div className="flex items-center justify-between gap-3 mb-5 md:mb-8">
           <div className="flex items-center gap-3">
-            <img src="/relay-icon.png" alt="Relay TC" className="w-10 h-10 object-contain" />
+            <img src="/relay-icon.png" alt="Relay TC" className="hidden md:block w-10 h-10 object-contain" />
             <div>
-              <h1 className="text-2xl font-display font-semibold text-slate-100">Your deals</h1>
+              <h1 className="text-xl md:text-2xl font-display font-semibold text-slate-100">Your deals</h1>
               <p className="text-slate-400 text-sm mt-0.5">Every transaction you&apos;ve been added to, across every TC.</p>
             </div>
           </div>
@@ -204,7 +204,7 @@ export default function AgentHubPage() {
                   key={invite.inviteId}
                   className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-br from-amber-900/20 to-slate-800 border border-amber-700/50 rounded-lg px-5 py-4"
                 >
-                  <div>
+                  <div className="min-w-0 break-words">
                     <p className="text-slate-100 text-sm font-semibold">
                       {invite.propertyAddress || invite.fileNumber}
                     </p>
@@ -214,7 +214,7 @@ export default function AgentHubPage() {
                     type="button"
                     onClick={() => handleAccept(invite.transactionId)}
                     disabled={accepting === invite.transactionId}
-                    className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 shrink-0"
+                    className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 shrink-0 w-full sm:w-auto"
                   >
                     {accepting === invite.transactionId ? 'Accepting…' : 'Accept'}
                   </button>
@@ -270,7 +270,30 @@ export default function AgentHubPage() {
               {tcGroups.map((g) => (
                 <div key={g.tcUserId || g.tcLabel}>
                   <p className="text-sm font-semibold text-slate-300 mb-2">{g.tcLabel}</p>
-                  <div className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden">
+                  {/* Phones: one stacked card per deal, so the full address wraps and
+                      status + due date are visible without sideways scrolling. */}
+                  <div className="md:hidden space-y-3">
+                    {g.transactions.map((tx) => (
+                      <button
+                        key={tx.id}
+                        type="button"
+                        onClick={() => router.push(`/agent/transactions/${tx.id}`)}
+                        className="block w-full text-left bg-slate-700/30 border border-slate-600 rounded-lg p-4 active:bg-slate-600/40 transition"
+                      >
+                        <p className="text-slate-100 font-semibold text-base leading-snug break-words">
+                          {tx.propertyAddress || tx.fileNumber}
+                        </p>
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mt-3">
+                          <span className={`text-sm font-medium ${getStatusTextColor(tx.status)}`}>{tx.status}</span>
+                          <span>{getDueBadge(tx)}</span>
+                        </div>
+                        <p className="font-mono text-xs text-slate-500 mt-2">File {tx.fileNumber}</p>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Tablets and desktop: the original table, unchanged. */}
+                  <div className="hidden md:block bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
