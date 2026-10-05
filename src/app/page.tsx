@@ -166,6 +166,7 @@ export default function Home() {
       <section id="how-it-works" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
           name="contract-intake.jpg"
+          stacked
           alt="Reviewing the property, price, dates, and contacts Relay extracted from an uploaded purchase contract, before creating the transaction"
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">AI contract intake</p>
@@ -292,8 +293,8 @@ export default function Home() {
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
           name="esign-request.jpg"
+          stacked
           alt="Sending a document for signature from a transaction in Relay, and the signature status shown on the document"
-          reverse
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">E-signatures</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Sign without leaving the transaction.</h2>
@@ -400,6 +401,7 @@ export default function Home() {
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
           name="invoice.jpg"
+          stacked
           alt="An invoice generated from a transaction in Relay, showing the fee, due date, payment status, and pay link"
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Invoicing</p>
@@ -425,9 +427,9 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="daily-digest.jpg"
-          alt="A Relay daily digest email listing overdue and due-today checklist steps across transactions"
-          reverse
+          name="dashboard.jpg"
+          stacked
+          alt="The Needs Attention Today panel on the Relay dashboard, listing overdue, due today, waiting on, and coming up items, above the key numbers for active deals and invoices"
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Daily digest</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">See what needs attention each morning.</h2>
@@ -449,29 +451,28 @@ export default function Home() {
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="team-dashboard.jpg"
-          alt="The team view in Relay, showing the shared team roster and each coordinator’s transactions"
-        >
+        <div className="max-w-2xl mx-auto text-center">
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Solo and teams</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Run your transactions your way, on your own or with a team.</h2>
-          <p className="text-slate-400 mb-5">Use Relay on your own or share a workspace with other coordinators. Each coordinator can manage their own transactions, while the team owner can see the team&apos;s files.</p>
-          <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5 text-sm text-slate-300">
+          <p className="text-slate-400 mb-6">
+            Use Relay on your own or share a workspace with other coordinators. Each coordinator
+            can manage their own transactions, while the team owner can see the team&apos;s files.
+          </p>
+          <ul className="flex flex-wrap justify-center gap-2.5 text-sm text-slate-300">
             {[
-              "Shared team roster",
-              "Owner access to team transactions and documents",
-              "Shared agent roster",
-              "Team-wide checklist templates",
-              "$19 per coordinator seat, 3-seat minimum",
-              "Agents never need a paid seat",
+              'Shared team roster',
+              'Owner access to team transactions and documents',
+              'Shared agent roster',
+              'Team-wide checklist templates',
+              '$19 per coordinator seat, 3-seat minimum',
+              'Agents never need a paid seat',
             ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+              <li key={line} className="px-3 py-1.5 rounded-full border border-slate-700 bg-slate-800/60">
                 {line}
               </li>
             ))}
           </ul>
-        </ShotRow>
+        </div>
       </section>
 
       {/* Pricing teaser */}
