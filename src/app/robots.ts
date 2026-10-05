@@ -16,6 +16,6 @@ export default function robots(): MetadataRoute.Robots {
         '/onboarding',
       ],
     },
-    sitemap: 'https://relaytc.com/sitemap.xml',
+    sitemap: 'https://www.relaytc.com/sitemap.xml',
   };
 }
