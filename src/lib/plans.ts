@@ -121,7 +121,7 @@ export const PLANS: Plan[] = [
     name: 'Pro',
     price: '$29',
     period: '/month',
-    description: 'For solo TCs running every deal through Relay.',
+    description: 'For solo TCs running their transactions in Relay.',
     features: [
       'Unlimited transactions',
       'Unlimited agent profiles',
@@ -144,7 +144,7 @@ export const PLANS: Plan[] = [
     name: 'Team',
     price: '$19',
     period: '/seat/mo',
-    description: 'For a shared workflow. 3-seat minimum ($57/month).',
+    description: 'For teams sharing transactions, agents, and workflows. 3-seat minimum ($57/month).',
     features: [
       'Everything in Pro',
       'Shared agent roster across the team',
