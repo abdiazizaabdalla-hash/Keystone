@@ -101,7 +101,7 @@ function WelcomeContent() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
-          <img src="/relay-icon.png" alt="Relay TC" className="w-16 h-16 object-contain inline-block mb-4" />
+          <img src="/relay-icon.png" alt="Relay TC" className="w-16 h-16 object-contain inline-block mb-4 bg-white rounded-xl p-2" />
           <h1 className="text-2xl font-display font-semibold text-slate-100">Set up your free account</h1>
           <p className="text-slate-400 text-sm mt-1">
             You&apos;re in. Add your name and a password so you can log straight back in next time.

@@ -94,7 +94,7 @@ function AcceptContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md text-center">
-        <img src="/relay-icon.png" alt="Relay TC" className="w-16 h-16 object-contain inline-block mb-6" />
+        <img src="/relay-icon.png" alt="Relay TC" className="w-16 h-16 object-contain inline-block mb-6 bg-white rounded-xl p-2" />
 
         {status === 'working' ? (
           <>

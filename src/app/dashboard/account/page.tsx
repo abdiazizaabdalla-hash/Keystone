@@ -154,7 +154,12 @@ function AccountContent() {
     day: 'numeric',
   });
 
-  const otherPlans = PLANS.filter((p) => p.id !== summary.plan.id && p.id !== 'starter' && !p.hidden);
+  // Only offer plans ABOVE the current one -- a Team owner was being shown
+  // "Upgrade to Pro".
+  const planRank: Record<string, number> = { starter: 0, pro: 1, team: 2, brokerage: 3 };
+  const otherPlans = PLANS.filter(
+    (p) => !p.hidden && p.id !== 'starter' && (planRank[p.id] ?? 0) > (planRank[summary.plan.id] ?? 0)
+  );
 
   return (
     <div className="p-8 max-w-2xl">
