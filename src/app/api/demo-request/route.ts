@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 // Where demo requests land. Defaults to the owner's own inbox -- there's
 // no team alias set up yet (support@relaytc.com isn't a working inbox as
@@ -23,6 +24,12 @@ function escapeHtml(value: string): string {
 // HTML-escaped before it goes anywhere near an email body.
 export async function POST(request: NextRequest) {
   try {
+    // Public endpoint that sends an email: cap it per IP so it can't be
+    // used to spam the inbox or burn the Resend quota.
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || request.headers.get('x-real-ip') || 'unknown';
+    if (!(await checkRateLimit(`demo-request:ip:${ip}`, 5, 60 * 60))) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    }
     const body = await request.json().catch(() => ({}));
     const name = typeof body.name === 'string' ? body.name.trim().slice(0, 200) : '';
     const email = typeof body.email === 'string' ? body.email.trim().slice(0, 200) : '';

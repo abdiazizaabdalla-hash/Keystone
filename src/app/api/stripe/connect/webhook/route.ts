@@ -4,6 +4,40 @@ import { stripe } from '@/lib/stripe';
 import { supabaseServer } from '@/lib/supabase';
 import { constructConnectWebhookEvent, statusFromConnectedAccount } from '@/lib/stripeConnect';
 
+// The metadata on a Stripe event is whatever the account that created the
+// Checkout Session put there, so an event is only trusted for an invoice if
+// it came from the connected account that invoice's TC actually linked to
+// Relay. Without this, any TC with their own Connect account could mark
+// someone else's invoice paid (or refunded) by naming its id in metadata.
+async function invoiceBelongsToAccount(invoiceId: string, connectedAccountId: string | undefined) {
+  if (!connectedAccountId) return null;
+
+  const { data: invoice } = await supabaseServer
+    .from('invoices')
+    .select('id, agent_id, amount_owed')
+    .eq('id', invoiceId)
+    .maybeSingle();
+  if (!invoice) return null;
+
+  const { data: agent } = await supabaseServer
+    .from('agents')
+    .select('tc_user_id')
+    .eq('id', invoice.agent_id)
+    .maybeSingle();
+  if (!agent?.tc_user_id) return null;
+
+  const { data: account } = await supabaseServer
+    .from('payment_accounts')
+    .select('id')
+    .eq('tc_user_id', agent.tc_user_id)
+    .eq('provider', 'stripe_connect')
+    .eq('connected_account_id', connectedAccountId)
+    .maybeSingle();
+  if (!account) return null;
+
+  return { amountOwed: Number(invoice.amount_owed) };
+}
+
 // Receives Connect-scoped webhook events -- a SEPARATE scope from the
 // platform's own subscription webhook (/api/stripe/webhook). Locally this
 // is reached via `stripe listen --forward-connect-to`, not `--forward-to`;
@@ -87,6 +121,19 @@ export async function POST(request: NextRequest) {
             ? object.amount
             : null;
 
+        const owned = await invoiceBelongsToAccount(invoiceId, event.account);
+        if (!owned) {
+          console.error(`Ignoring ${event.type} for invoice ${invoiceId}: not from that invoice's connected account`);
+          break;
+        }
+        // Only a payment that covers the invoice counts as paid (a cent of
+        // tolerance for rounding). Anything smaller is left for the TC to
+        // reconcile by hand rather than silently closing the invoice.
+        if (amountTotal === null || amountTotal / 100 < owned.amountOwed - 0.01) {
+          console.error(`Ignoring ${event.type} for invoice ${invoiceId}: amount ${amountTotal} is less than the amount owed`);
+          break;
+        }
+
         const { error } = await supabaseServer
           .from('invoices')
           .update({
@@ -136,6 +183,11 @@ export async function POST(request: NextRequest) {
         }
 
         if (!invoiceId) break;
+
+        if (!(await invoiceBelongsToAccount(invoiceId, event.account))) {
+          console.error(`Ignoring charge.refunded for invoice ${invoiceId}: not from that invoice's connected account`);
+          break;
+        }
 
         const { error: refundError } = await supabaseServer
           .from('invoices')

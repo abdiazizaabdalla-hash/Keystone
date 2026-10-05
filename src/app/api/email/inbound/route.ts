@@ -100,7 +100,7 @@ async function fetchAttachmentDownloadUrl(emailId: string, attachmentId: string)
 function extractToken(address: string): string | null {
   const local = address.split('@')[0]?.trim().toLowerCase();
   if (!local) return null;
-  const match = local.match(/^(?:deal-)?([a-f0-9]{8})$/);
+  const match = local.match(/^(?:deal-)?([a-f0-9]{8,16})$/);
   return match ? match[1] : null;
 }
 
@@ -113,6 +113,11 @@ export async function POST(request: NextRequest) {
 
   if (!svixId || !svixTimestamp || !svixSignature) {
     return NextResponse.json({ error: 'Missing signature headers' }, { status: 400 });
+  }
+  // Reject replays: Svix timestamps older/newer than 5 minutes are not accepted.
+  const tsSeconds = Number(svixTimestamp);
+  if (!Number.isFinite(tsSeconds) || Math.abs(Date.now() / 1000 - tsSeconds) > 5 * 60) {
+    return NextResponse.json({ error: 'Timestamp outside tolerance' }, { status: 400 });
   }
   if (!verifySignature(rawBody, { id: svixId, timestamp: svixTimestamp, signature: svixSignature })) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase';
-import { getPendingInviteForEmail, addMemberToTeam, markInviteAccepted, getTeamOwnerPlan } from '@/lib/team';
-import { setUserPlan } from '@/lib/stripeCustomers';
+import { applyPendingTeamInvite, sameOriginRedirect } from '@/lib/teamInvites';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 function getClientIp(request: NextRequest): string {
@@ -42,7 +41,7 @@ export async function POST(request: NextRequest) {
       email,
       password,
       options: {
-        ...(redirectTo ? { emailRedirectTo: redirectTo } : {}),
+        ...(sameOriginRedirect(redirectTo, request.nextUrl.origin) ? { emailRedirectTo: sameOriginRedirect(redirectTo, request.nextUrl.origin) } : {}),
         ...(trimmedName ? { data: { full_name: trimmedName } } : {}),
       },
     });
@@ -52,24 +51,17 @@ export async function POST(request: NextRequest) {
     }
 
     // If someone invited this email to a Team workspace before they signed
-    // up, join them to that team and grant Team-plan access immediately —
-    // seats on a Team subscription are pre-paid by the owner, so an
-    // invited teammate shouldn't have to pay or wait to be upgraded.
-    if (data.user) {
+    // up, join them to it -- but only for a brand-new account whose email is
+    // already confirmed (see applyPendingTeamInvite). Signing up with an
+    // email that already has an account returns a stub user with no
+    // identities, which must not consume anyone's invite. Otherwise the
+    // invite is applied at their first confirmed sign-in.
+    if (data.user && (data.user.identities?.length ?? 0) > 0) {
       try {
-        const invite = await getPendingInviteForEmail(email);
-        if (invite) {
-          await addMemberToTeam(invite.team_id, data.user.id, 'member');
-          await markInviteAccepted(invite.id);
-          // Grant the same plan id as the team's owner -- 'team' or
-          // 'brokerage' -- not a hardcoded 'team', since this invite
-          // could have come from a Brokerage-plan owner.
-          const ownerPlan = await getTeamOwnerPlan(invite.team_id);
-          await setUserPlan(data.user.id, ownerPlan);
-        }
+        await applyPendingTeamInvite(data.user);
       } catch (inviteError) {
-        // Non-fatal — the account still exists on Starter; they can be
-        // re-invited or added manually if this failed.
+        // Non-fatal -- the account still exists on Starter; the invite is
+        // retried at sign-in.
         console.error('Error applying team invite at signup:', inviteError);
       }
     }

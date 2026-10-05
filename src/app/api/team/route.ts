@@ -193,6 +193,18 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
+// True if an existing account already has its own agents, transactions, or a
+// Stripe billing record -- i.e. adding it to someone else's team would
+// expose or overwrite real data.
+async function accountHasOwnData(userId: string): Promise<boolean> {
+  const [agents, transactions, billing] = await Promise.all([
+    supabaseServer.from('agents').select('id', { count: 'exact', head: true }).eq('tc_user_id', userId),
+    supabaseServer.from('transactions').select('id', { count: 'exact', head: true }).eq('tc_user_id', userId),
+    supabaseServer.from('stripe_customers').select('user_id', { count: 'exact', head: true }).eq('user_id', userId),
+  ]);
+  return (agents.count ?? 0) > 0 || (transactions.count ?? 0) > 0 || (billing.count ?? 0) > 0;
+}
+
 // POST: invite a teammate by email. Owner-only. If the email already has
 // an account, they're added immediately and granted Team-plan access
 // (seats are pre-paid by the owner's subscription). Otherwise a pending
@@ -213,6 +225,33 @@ export async function POST(request: NextRequest) {
     const membership = await getTeamForUser(user.id);
     if (!membership || membership.role !== 'owner') {
       return NextResponse.json({ error: 'Only the team owner can invite teammates' }, { status: 403 });
+    }
+
+    // Look at the invitee BEFORE charging for a seat, so a rejected add
+    // never costs the owner money.
+    const existingUserId = await findUserIdByEmail(email);
+    if (existingUserId) {
+      if (existingUserId === user.id) {
+        return NextResponse.json({ error: "You're already on this team." }, { status: 409 });
+      }
+      if (await getTeamForUser(existingUserId)) {
+        return NextResponse.json({ error: 'That person is already on a team.' }, { status: 409 });
+      }
+      // Adding someone puts their agents, transactions and documents in
+      // the owner's view and replaces their plan. That's only OK for an
+      // account with nothing of its own yet (e.g. a teammate who signed
+      // up a minute ago). For an account that's already in use, the
+      // person has to have a say first, and there is no accept step for
+      // existing accounts, so refuse rather than take their data.
+      if (await accountHasOwnData(existingUserId)) {
+        return NextResponse.json(
+          {
+            error:
+              'That email already belongs to a Relay account with its own deals, agents, or paid plan, so it cannot be added directly. Ask them to cancel their subscription and clear their account first, or invite a different email.',
+          },
+          { status: 409 }
+        );
+      }
     }
 
     const [memberCount, pendingCount, paidSeats] = await Promise.all([
@@ -242,13 +281,7 @@ export async function POST(request: NextRequest) {
     const ownerLabel = user.user_metadata?.full_name || user.email || 'Your team owner';
     const appUrl = request.nextUrl.origin;
 
-    const existingUserId = await findUserIdByEmail(email);
-
     if (existingUserId) {
-      const existingMembership = await getTeamForUser(existingUserId);
-      if (existingMembership) {
-        return NextResponse.json({ error: 'That person is already on a team.' }, { status: 409 });
-      }
       await addMemberToTeam(membership.team.id, existingUserId, 'member');
       // Grant the SAME plan id as the team owner -- 'team' or
       // 'brokerage' -- not a hardcoded 'team', since the caller here (an

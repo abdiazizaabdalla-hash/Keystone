@@ -5,7 +5,7 @@ import { getPlan, getPlanLimits, isTeamPlan, DEFAULT_PLAN } from '@/lib/plans';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
-import { getTeamForUser } from '@/lib/team';
+import { getTeamForUser, getVisibleTcUserIds } from '@/lib/team';
 import { getUserPlan } from '@/lib/privileged';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
@@ -22,36 +22,35 @@ export async function GET(request: NextRequest) {
 
     let usage = null;
     if (plan.limits.adminDashboard) {
-      const { data: agents, error: agentsError } = await supabaseServer
-        .from('agents')
-        .select('id')
-        .eq('tc_user_id', user.id);
+      // Same visibility the dashboard lists use (agents/transactions GET):
+      // a team owner sees the whole team's rows, everyone else just their
+      // own. Transactions are matched on transactions.tc_user_id (the
+      // reassignable "who's running this deal" column), not via agent_id.
+      const visibleIds = await getVisibleTcUserIds(user.id);
 
+      const { count: agentCount, error: agentsError } = await supabaseServer
+        .from('agents')
+        .select('id', { count: 'exact', head: true })
+        .in('tc_user_id', visibleIds);
       if (agentsError) throw agentsError;
 
-      const agentIds = (agents || []).map((a) => a.id);
-      let activeTransactions = 0;
-      let totalTransactions = 0;
+      const { count: activeCount, error: activeError } = await supabaseServer
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .in('tc_user_id', visibleIds)
+        .neq('status', CLOSED_STATUS);
+      if (activeError) throw activeError;
+      const activeTransactions = activeCount || 0;
 
-      if (agentIds.length > 0) {
-        const { count: activeCount, error: activeError } = await supabaseServer
-          .from('transactions')
-          .select('id', { count: 'exact', head: true })
-          .in('agent_id', agentIds)
-          .neq('status', CLOSED_STATUS);
-        if (activeError) throw activeError;
-        activeTransactions = activeCount || 0;
-
-        const { count: totalCount, error: totalError } = await supabaseServer
-          .from('transactions')
-          .select('id', { count: 'exact', head: true })
-          .in('agent_id', agentIds);
-        if (totalError) throw totalError;
-        totalTransactions = totalCount || 0;
-      }
+      const { count: totalCount, error: totalError } = await supabaseServer
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .in('tc_user_id', visibleIds);
+      if (totalError) throw totalError;
+      const totalTransactions = totalCount || 0;
 
       usage = {
-        agents: agentIds.length,
+        agents: agentCount || 0,
         maxAgents: getPlanLimits(planId).maxAgents,
         activeTransactions,
         maxActiveTransactions: getPlanLimits(planId).maxActiveTransactions,

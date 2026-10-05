@@ -5,6 +5,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { generateSigningToken, hashDocumentBytes } from '@/lib/signing';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { getVisibleTcUserIds } from '@/lib/team';
+import { escapeHtml } from '@/lib/escapeHtml';
 
 const BUCKET = 'transaction-documents';
 // Signing links used to never expire at all -- found during the 2026-09
@@ -179,8 +180,8 @@ export async function POST(request: NextRequest) {
         subject: `Signature requested: ${document.file_name}`,
         html: `
           <div style="font-family: Georgia, serif; color: #1a1a1a; max-width: 560px; margin: 0 auto;">
-            <p>Hi ${signerName.trim().split(' ')[0] || signerName.trim()},</p>
-            <p>You've been asked to sign <strong>${document.file_name}</strong> for ${transaction.property_address} (file #${transaction.file_number}).</p>
+            <p>Hi ${escapeHtml(signerName.trim().split(' ')[0] || signerName.trim())},</p>
+            <p>You've been asked to sign <strong>${escapeHtml(document.file_name)}</strong> for ${escapeHtml(transaction.property_address)} (file #${escapeHtml(transaction.file_number)}).</p>
             <p><a href="${signUrl}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px;">Review &amp; Sign</a></p>
             <p style="font-size: 13px; color: #666;">Or paste this link into your browser: ${signUrl}</p>
           </div>

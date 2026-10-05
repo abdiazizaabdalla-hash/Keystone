@@ -21,6 +21,15 @@ function getClientIp(request: NextRequest): string | null {
 // itself IS the auth (see lib/signing.ts) -- deliberately returns only
 // what the signer's page needs (file name, a scoped preview link, and
 // status), never anything else about the transaction.
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
@@ -135,7 +144,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const declinedAtIso = new Date().toISOString();
       const declineReason = typeof reason === 'string' ? reason.trim().slice(0, 1000) : null;
 
-      const { error: declineError } = await supabaseServer
+      const { data: declinedRows, error: declineError } = await supabaseServer
         .from('signing_requests')
         .update({
           status: 'declined',
@@ -143,9 +152,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           decline_reason: declineReason || null,
           updated_at: declinedAtIso,
         })
-        .eq('id', signingRequest.id);
+        .eq('id', signingRequest.id)
+        .eq('status', 'pending')
+        .select('id');
 
       if (declineError) throw declineError;
+      if (!declinedRows || declinedRows.length === 0) {
+        return NextResponse.json({ error: 'This document has already been signed' }, { status: 409 });
+      }
 
       try {
         const { data: tcUserData } = await supabaseServer.auth.admin.getUserById(signingRequest.requested_by);
@@ -158,9 +172,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             subject: `Signature declined: ${signingRequest.source_file_name}`,
             html: `
               <div style="font-family: Georgia, serif; color: #1a1a1a; max-width: 560px; margin: 0 auto;">
-                <p><strong>${signingRequest.signer_name}</strong> (${signingRequest.signer_email}) declined to sign
-                <strong>${signingRequest.source_file_name}</strong>.</p>
-                ${declineReason ? `<p>Their note: "${declineReason}"</p>` : ''}
+                <p><strong>${escapeHtml(signingRequest.signer_name)}</strong> (${escapeHtml(signingRequest.signer_email)}) declined to sign
+                <strong>${escapeHtml(signingRequest.source_file_name)}</strong>.</p>
+                ${declineReason ? `<p>Their note: "${escapeHtml(declineReason)}"</p>` : ''}
                 <p style="font-size: 13px; color: #666;">You can send a corrected request or reach out to them directly from Relay TC.</p>
               </div>
             `,
@@ -253,7 +267,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       console.error('Signed PDF stored, but failed to add it to Documents (non-fatal):', docInsertError);
     }
 
-    const { error: updateError } = await supabaseServer
+    const { data: signedRows, error: updateError } = await supabaseServer
       .from('signing_requests')
       .update({
         status: 'signed',
@@ -265,9 +279,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         signed_document_id: signedDocRow?.id || null,
         updated_at: signedAtIso,
       })
-      .eq('id', signingRequest.id);
+      .eq('id', signingRequest.id)
+      .eq('status', 'pending')
+      .select('id');
 
     if (updateError) throw updateError;
+
+    // Two submissions racing on the same link: only the one that flips
+    // pending -> signed wins. The loser removes the copy it just stored
+    // so the transaction doesn't end up with duplicate signed documents.
+    if (!signedRows || signedRows.length === 0) {
+      if (signedDocRow?.id) await supabaseServer.from('documents').delete().eq('id', signedDocRow.id);
+      await supabaseServer.storage.from(BUCKET).remove([signedStoragePath]);
+      return NextResponse.json({ error: 'This document has already been signed' }, { status: 409 });
+    }
 
     const { data: downloadSigned } = await supabaseServer.storage
       .from(BUCKET)

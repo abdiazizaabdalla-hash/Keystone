@@ -24,7 +24,7 @@ const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Clo
 // UNIQUE constraint on transactions.inbound_token is what actually
 // guarantees no collision, this is just picking a fresh guess each try.
 function generateInboundToken(): string {
-  return crypto.randomBytes(4).toString('hex');
+  return crypto.randomBytes(6).toString('hex');
 }
 
 export async function GET(request: NextRequest) {

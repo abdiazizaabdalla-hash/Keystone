@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import PublicMobileMenu from '@/components/PublicMobileMenu';
 
 const FAQS: { category: string; q: string; a: string }[] = [
   // Getting started
@@ -172,11 +173,14 @@ export default function FAQPage() {
       {/* Nav */}
       <header className="border-b border-slate-700">
         <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-              <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
-            </span>
-          </Link>
+          <div className="flex items-center gap-2">
+            <PublicMobileMenu />
+            <Link href="/" className="flex items-center gap-2">
+              <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
+                <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
+              </span>
+            </Link>
+          </div>
           <nav className="hidden sm:flex items-center gap-8 text-sm text-slate-300">
             <Link href="/" className="hover:text-slate-100 transition">Home</Link>
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { applyPendingTeamInvite } from '@/lib/teamInvites';
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -43,6 +44,14 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+
+    // Pick up a Team invite that couldn't be applied at signup because the
+    // email wasn't confirmed yet. Non-fatal.
+    try {
+      await applyPendingTeamInvite(data.user);
+    } catch (inviteError) {
+      console.error('Error applying team invite at sign-in:', inviteError);
     }
 
     return NextResponse.json({

@@ -27,7 +27,13 @@ const TYPE_LABELS: Record<SearchResultType, string> = {
 
 const TYPE_ORDER: SearchResultType[] = ['transaction', 'message', 'document', 'task'];
 
-function dealLabel(result: SearchResult): string {
+function dealLabel(result: SearchResult): string | null {
+  // A transaction hit's title is already its address (or file number) --
+  // repeating the address underneath just duplicates it, so only show the
+  // file number when it isn't what the title already says.
+  if (result.type === 'transaction') {
+    return result.fileNumber && result.fileNumber !== result.title ? result.fileNumber : null;
+  }
   return result.propertyAddress || result.fileNumber || 'Untitled deal';
 }
 
@@ -270,7 +276,9 @@ export default function SearchPage() {
                         {item.snippet && (
                           <p className="text-slate-400 text-sm truncate mt-0.5">{item.snippet}</p>
                         )}
-                        <p className="text-slate-500 text-xs mt-1">{dealLabel(item)}</p>
+                        {dealLabel(item) && (
+                          <p className="text-slate-500 text-xs mt-1">{dealLabel(item)}</p>
+                        )}
                       </div>
                     </div>
                   </Link>

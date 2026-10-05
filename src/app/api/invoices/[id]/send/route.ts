@@ -8,6 +8,7 @@ import { getInvoicePayUrlForDocument } from '@/lib/stripeConnect';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
+import { escapeHtml } from '@/lib/escapeHtml';
 
 const BUCKET = 'transaction-documents';
 // Keep the direct email attachment well under typical provider limits
@@ -138,20 +139,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const html = `
       <div style="font-family: Georgia, serif; color: #1a1a1a; max-width: 560px; margin: 0 auto;">
-        <p>Hi ${agent.name.split(' ')[0] || agent.name},</p>
-        <p>${message ? message.replace(/\n/g, '<br/>') : `Attached is your invoice for ${transaction.property_address}, along with the completed transaction documents.`}</p>
+        <p>Hi ${escapeHtml(agent.name.split(' ')[0] || agent.name)},</p>
+        <p>${message ? escapeHtml(message).replace(/\n/g, '<br/>') : `Attached is your invoice for ${escapeHtml(transaction.property_address)}, along with the completed transaction documents.`}</p>
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-          <tr><td style="padding: 6px 0; color: #666;">Invoice</td><td style="padding: 6px 0; text-align: right;">${invoice.invoice_number}</td></tr>
-          <tr><td style="padding: 6px 0; color: #666;">Property</td><td style="padding: 6px 0; text-align: right;">${transaction.property_address}</td></tr>
-          <tr><td style="padding: 6px 0; color: #666;">File #</td><td style="padding: 6px 0; text-align: right;">${transaction.file_number}</td></tr>
+          <tr><td style="padding: 6px 0; color: #666;">Invoice</td><td style="padding: 6px 0; text-align: right;">${escapeHtml(invoice.invoice_number)}</td></tr>
+          <tr><td style="padding: 6px 0; color: #666;">Property</td><td style="padding: 6px 0; text-align: right;">${escapeHtml(transaction.property_address)}</td></tr>
+          <tr><td style="padding: 6px 0; color: #666;">File #</td><td style="padding: 6px 0; text-align: right;">${escapeHtml(transaction.file_number)}</td></tr>
           <tr><td style="padding: 6px 0; color: #666;">Due Date</td><td style="padding: 6px 0; text-align: right;">${formatDisplayDate(invoice.due_date)}</td></tr>
           <tr><td style="padding: 10px 0; color: #1a1a1a; font-weight: bold; border-top: 1px solid #ddd;">Total Due</td><td style="padding: 10px 0; text-align: right; font-weight: bold; border-top: 1px solid #ddd;">${money(invoice.amount_owed)}</td></tr>
         </table>
         <p>The invoice PDF is attached${zipBuffer && !zipDownloadUrl ? ', along with a zip of every document uploaded for this transaction.' : '.'}</p>
         ${zipDownloadUrl ? `<p>The document set was too large to attach directly — you can download it here (link expires in 7 days): <a href="${zipDownloadUrl}">${zipDownloadUrl}</a></p>` : ''}
         ${!hasDocuments ? '<p>No documents have been uploaded for this transaction yet.</p>' : ''}
-        ${failedDocs.length ? `<p style="color: #b45309;">Note: ${failedDocs.length} file(s) could not be attached (${failedDocs.join(', ')}).</p>` : ''}
-        <p>Thanks,<br/>${tc.name}</p>
+        ${failedDocs.length ? `<p style="color: #b45309;">Note: ${failedDocs.length} file(s) could not be attached (${escapeHtml(failedDocs.join(', '))}).</p>` : ''}
+        <p>Thanks,<br/>${escapeHtml(tc.name)}</p>
       </div>
     `;
 

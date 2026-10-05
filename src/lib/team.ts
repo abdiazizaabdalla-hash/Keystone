@@ -220,12 +220,12 @@ export async function removeMemberFromTeam(teamId: string, userId: string) {
   if (error) throw error;
 }
 
-/** Pending invite for this email (case-insensitive), if any. */
+/** Pending invite for this email (exact match, case-insensitive), if any. */
 export async function getPendingInviteForEmail(email: string) {
   const { data, error } = await supabaseServer
     .from('team_invites')
     .select('*')
-    .ilike('email', email)
+    .eq('email', email.trim().toLowerCase())
     .eq('status', 'pending')
     .maybeSingle();
   if (error) throw error;

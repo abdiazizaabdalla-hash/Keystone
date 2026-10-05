@@ -1,8 +1,9 @@
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { escapeHtml } from '@/lib/escapeHtml';
 
 const wrapper = (title: string, bodyHtml: string) => `
   <div style="font-family: Georgia, serif; color: #1a1a1a; max-width: 520px; margin: 0 auto;">
-    <h2 style="margin: 0 0 16px;">${title}</h2>
+    <h2 style="margin: 0 0 16px;">${escapeHtml(title)}</h2>
     ${bodyHtml}
     <p style="margin-top: 24px;">Thanks,<br/>Relay TC</p>
   </div>
@@ -21,7 +22,7 @@ export async function sendTeamAddedEmail(params: {
   const { toEmail, ownerLabel, appUrl } = params;
   const html = wrapper(
     "You've been added to a team",
-    `<p><strong>${ownerLabel}</strong> added you to their team on Relay TC. You now have Team-plan
+    `<p><strong>${escapeHtml(ownerLabel)}</strong> added you to their team on Relay TC. You now have Team-plan
      access — no separate payment needed, it's covered by their subscription.</p>
      <p><a href="${appUrl}/dashboard/collaborate" style="color: #b45309;">View your team</a></p>`
   );
@@ -50,7 +51,7 @@ export async function sendTeamRemovedEmail(params: {
   const { toEmail, ownerLabel, appUrl } = params;
   const html = wrapper(
     "You've been removed from a team",
-    `<p><strong>${ownerLabel}</strong> removed you from their team on Relay TC. Your account has been
+    `<p><strong>${escapeHtml(ownerLabel)}</strong> removed you from their team on Relay TC. Your account has been
      moved to the Starter plan, so you'll keep your own data, but any Team-plan features and access to
      that team's workspace are no longer available.</p>
      <p><a href="${appUrl}/dashboard/account" style="color: #b45309;">Review your plan</a></p>`
@@ -79,7 +80,7 @@ export async function sendTeamInviteEmail(params: {
   const signupUrl = `${appUrl}/auth?mode=signup&email=${encodeURIComponent(toEmail)}`;
   const html = wrapper(
     "You're invited to a team on Relay TC",
-    `<p><strong>${ownerLabel}</strong> invited you to join their team on Relay TC, a transaction
+    `<p><strong>${escapeHtml(ownerLabel)}</strong> invited you to join their team on Relay TC, a transaction
      coordination workspace. Create your account with this email address to activate it — you'll get
      Team-plan access right away, covered by their subscription.</p>
      <p><a href="${signupUrl}" style="color: #b45309;">Create your account</a></p>`

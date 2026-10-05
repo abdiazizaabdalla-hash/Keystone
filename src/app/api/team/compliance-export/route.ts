@@ -9,8 +9,11 @@ import { getTeamForUser, getTeamMemberUserIds } from '@/lib/team';
 // own CSV writer does.
 function csvField(value: unknown): string {
   if (value === null || value === undefined) return '';
-  const s = String(value);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = String(value);
+  // Spreadsheet formula injection: a cell starting with = + - @ (or a tab/CR)
+  // is executed as a formula by Excel/Sheets. Prefix with an apostrophe.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 // GET /api/team/compliance-export

@@ -178,12 +178,12 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex">
+    <div className="h-screen bg-slate-900 flex overflow-hidden">
       {/* Sidebar */}
       <div
         className={`${
           collapsed ? 'w-20' : 'w-64'
-        } shrink-0 bg-gradient-to-b from-slate-800 to-slate-900 border-r border-slate-700 flex flex-col transition-all duration-200`}
+        } shrink-0 h-full bg-gradient-to-b from-slate-800 to-slate-900 border-r border-slate-700 flex flex-col transition-all duration-200`}
       >
         {/* Logo */}
         <div
@@ -230,7 +230,7 @@ export default function DashboardLayout({
         )}
 
         {/* Navigation */}
-        <nav className={`flex-1 py-6 space-y-2 ${collapsed ? 'px-2' : 'px-4'}`}>
+        <nav className={`flex-1 min-h-0 overflow-y-auto py-6 space-y-2 ${collapsed ? 'px-2' : 'px-4'}`}>
           <NavLink
             href="/dashboard"
             label="Dashboard"

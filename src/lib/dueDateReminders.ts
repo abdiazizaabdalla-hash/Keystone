@@ -1,4 +1,5 @@
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { escapeHtml } from '@/lib/escapeHtml';
 
 export interface ReminderTransactionGroup {
   transactionId: string;
@@ -12,7 +13,7 @@ export interface ReminderTransactionGroup {
 
 const wrapper = (title: string, bodyHtml: string) => `
   <div style="font-family: Georgia, serif; color: #1a1a1a; max-width: 560px; margin: 0 auto;">
-    <h2 style="margin: 0 0 16px;">${title}</h2>
+    <h2 style="margin: 0 0 16px;">${escapeHtml(title)}</h2>
     ${bodyHtml}
     <p style="margin-top: 24px;">Thanks,<br/>Relay TC</p>
   </div>
@@ -66,26 +67,26 @@ export async function sendDueDateReminderDigest(params: {
       const items: string[] = [
         ...g.overdueTasks.map(
           (t) =>
-            `<li style="color:#991b1b;">${t} <span style="font-weight:600;">(overdue)</span></li>`
+            `<li style="color:#991b1b;">${escapeHtml(t)} <span style="font-weight:600;">(overdue)</span></li>`
         ),
         ...g.dueTodayTasks.map(
-          (t) => `<li style="color:#92400e;">${t} <span style="font-weight:600;">(due today)</span></li>`
+          (t) => `<li style="color:#92400e;">${escapeHtml(t)} <span style="font-weight:600;">(due today)</span></li>`
         ),
         ...g.dueIn1DayTasks.map(
-          (t) => `<li style="color:#92400e;">${t} <span style="font-weight:600;">(due tomorrow)</span></li>`
+          (t) => `<li style="color:#92400e;">${escapeHtml(t)} <span style="font-weight:600;">(due tomorrow)</span></li>`
         ),
         ...g.dueIn3DaysTasks.map(
-          (t) => `<li style="color:#1e3a8a;">${t} <span style="font-weight:600;">(due in 3 days)</span></li>`
+          (t) => `<li style="color:#1e3a8a;">${escapeHtml(t)} <span style="font-weight:600;">(due in 3 days)</span></li>`
         ),
         ...g.dueIn7DaysTasks.map(
-          (t) => `<li style="color:#1e3a8a;">${t} <span style="font-weight:600;">(due in 7 days)</span></li>`
+          (t) => `<li style="color:#1e3a8a;">${escapeHtml(t)} <span style="font-weight:600;">(due in 7 days)</span></li>`
         ),
       ];
       if (items.length === 0) return '';
       return `
         <div style="margin-bottom:16px;">
           <p style="margin:0 0 4px;">
-            <a href="${appUrl}/dashboard/transactions/${g.transactionId}" style="color:#2563eb;font-weight:600;text-decoration:none;">${g.label}</a>
+            <a href="${appUrl}/dashboard/transactions/${g.transactionId}" style="color:#2563eb;font-weight:600;text-decoration:none;">${escapeHtml(g.label)}</a>
           </p>
           <ul style="margin:4px 0 0;padding-left:20px;">${items.join('')}</ul>
         </div>`;

@@ -1,8 +1,9 @@
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { escapeHtml } from '@/lib/escapeHtml';
 
 const wrapper = (title: string, bodyHtml: string) => `
   <div style="font-family: Georgia, serif; color: #1a1a1a; max-width: 520px; margin: 0 auto;">
-    <h2 style="margin: 0 0 16px;">${title}</h2>
+    <h2 style="margin: 0 0 16px;">${escapeHtml(title)}</h2>
     ${bodyHtml}
     <p style="margin-top: 24px;">Thanks,<br/>Relay TC</p>
   </div>
@@ -23,7 +24,7 @@ export async function sendAgentInviteEmail(params: {
   const dealLabel = propertyAddress ? `for ${propertyAddress}` : 'on Relay TC';
   const html = wrapper(
     "You've been added to a deal",
-    `<p><strong>${tcLabel}</strong> added you ${dealLabel} on Relay TC, a transaction coordination
+    `<p><strong>${escapeHtml(tcLabel)}</strong> added you ${escapeHtml(dealLabel)} on Relay TC, a transaction coordination
      workspace.</p>
      <p><a href="${actionLink}" style="color: #b45309;">Log in to Relay TC</a></p>
      <p>Once in, you'll be able to see the deal's checklist, upload and download documents, and
@@ -55,8 +56,8 @@ export async function sendNewMessageEmail(params: {
   const trimmedPreview = preview.length > 200 ? `${preview.slice(0, 200)}…` : preview;
   const html = wrapper(
     `New message about ${dealLabel}`,
-    `<p><strong>${senderLabel}</strong> sent a message on Relay TC:</p>
-     <p style="padding: 12px 16px; background: #f5f0e6; border-radius: 6px; white-space: pre-wrap;">${trimmedPreview}</p>
+    `<p><strong>${escapeHtml(senderLabel)}</strong> sent a message on Relay TC:</p>
+     <p style="padding: 12px 16px; background: #f5f0e6; border-radius: 6px; white-space: pre-wrap;">${escapeHtml(trimmedPreview)}</p>
      <p><a href="${portalUrl}" style="color: #b45309;">Reply on Relay TC</a></p>`
   );
 

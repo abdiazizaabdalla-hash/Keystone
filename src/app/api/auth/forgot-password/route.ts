@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { sameOriginRedirect } from '@/lib/teamInvites';
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { error } = await createAuthClient().auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: typeof redirectTo === 'string' ? redirectTo : undefined,
+      redirectTo: sameOriginRedirect(redirectTo, request.nextUrl.origin),
     });
 
     // Rate-limit errors etc. are worth surfacing; anything that would
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     // itself doesn't distinguish "no such user" from success.
     if (error) {
       console.error('Error requesting password reset:', error);
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: 'Could not send the reset email. Please try again in a minute.' }, { status: 400 });
     }
 
     return NextResponse.json({ status: 'sent' });
