@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { clearSession } from '@/lib/authClient';
 
 // Lightweight mirror of the TC sidebar (dashboard/layout.tsx) -- just
-// two destinations an agent actually has (their deals, and now their
-// messages), plus the same Logout action that used to live only on the
-// hub page header. Skipped on the pre-login/activation flow pages
+// destinations an agent actually has (deals, messages, invoices, settings),
+// plus the same Logout button at the bottom that the TC sidebar has. Skipped on the pre-login/activation flow pages
 // (/agent/login, /agent/accept, /agent/welcome), which are their own
 // centered full-screen steps, not part of the logged-in portal shell.
 const BARE_PREFIXES = ['/agent/login', '/agent/accept', '/agent/welcome'];
@@ -27,6 +27,7 @@ function SideLink({ href, label, active, icon }: { href: string; label: string; 
 
 export default function AgentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   if (BARE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return <>{children}</>;
@@ -36,6 +37,11 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   const isInvoices = pathname.startsWith('/agent/invoices');
   const isSettings = pathname.startsWith('/agent/settings');
   const isDeals = !isMessages && !isInvoices && !isSettings;
+
+  const handleLogout = () => {
+    clearSession();
+    router.push('/agent/login');
+  };
 
   return (
     <div className="h-screen bg-slate-900 flex overflow-hidden">
@@ -103,6 +109,15 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
             }
           />
         </nav>
+
+        <div className="border-t border-slate-700 p-4">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition text-sm py-2 px-4"
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}

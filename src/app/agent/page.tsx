@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
+import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 
 interface AgentTransaction {
@@ -137,14 +137,6 @@ export default function AgentHubPage() {
     load();
   }, [router, reloadCount]);
 
-  // Same clearSession-then-redirect shape as the TC dashboard's logout
-  // (src/app/dashboard/layout.tsx) -- just back to the agent login page
-  // instead of the TC one.
-  const handleLogout = () => {
-    clearSession();
-    router.push('/agent/login');
-  };
-
   // Explicit accept from the dashboard -- the only way access is granted
   // now that signing in (via an invite's link or a plain /agent/login)
   // no longer auto-accepts anything (see src/app/agent/accept/page.tsx).
@@ -199,12 +191,6 @@ export default function AgentHubPage() {
               <p className="text-slate-400 text-sm mt-0.5">Every transaction you&apos;ve been added to, across every TC.</p>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="shrink-0 text-sm text-slate-400 hover:text-red-300 font-medium px-3 py-1.5 rounded-lg hover:bg-red-900/20 transition"
-          >
-            Log out
-          </button>
         </div>
 
         {pendingInvites.length > 0 && (

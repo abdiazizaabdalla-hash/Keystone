@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
+import { authFetch, AuthRequiredError } from '@/lib/authClient';
 
 export default function AgentSettingsPage() {
   const router = useRouter();
@@ -44,10 +44,7 @@ export default function AgentSettingsPage() {
     load();
   }, [router]);
 
-  const handleLogout = () => {
-    clearSession();
-    router.push('/agent/login');
-  };
+
 
   const handleSaveName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,12 +122,6 @@ export default function AgentSettingsPage() {
               <p className="text-slate-400 text-sm mt-0.5">Your name, login, and how TCs see you.</p>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="shrink-0 text-sm text-slate-400 hover:text-red-300 font-medium px-3 py-1.5 rounded-lg hover:bg-red-900/20 transition"
-          >
-            Log out
-          </button>
         </div>
 
         {loading ? (

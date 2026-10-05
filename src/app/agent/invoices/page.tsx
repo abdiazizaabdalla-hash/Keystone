@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
+import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 
 interface AgentInvoice {
@@ -63,10 +63,7 @@ export default function AgentInvoicesPage() {
     load();
   }, [router]);
 
-  const handleLogout = () => {
-    clearSession();
-    router.push('/agent/login');
-  };
+
 
   const handleGeneratePayLink = async (invoiceId: string) => {
     setGeneratingId(invoiceId);
@@ -210,12 +207,6 @@ export default function AgentInvoicesPage() {
               <p className="text-slate-400 text-sm mt-0.5">Every invoice across every deal and TC, in one place.</p>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="shrink-0 text-sm text-slate-400 hover:text-red-300 font-medium px-3 py-1.5 rounded-lg hover:bg-red-900/20 transition"
-          >
-            Log out
-          </button>
         </div>
 
         {loading ? (
