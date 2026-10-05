@@ -167,7 +167,7 @@ export default function Home() {
         <ShotRow
           name="contract-intake.jpg"
           alt="Uploading a purchase contract in Relay so the deal details can be read from it"
-          stacked
+          wide
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">AI contract intake</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Start with the contract, not a blank transaction.</h2>
@@ -191,14 +191,16 @@ export default function Home() {
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <div className="max-w-2xl mx-auto text-center">
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">The transaction workspace</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Every deal gets its own page.</h2>
-          <p className="text-slate-400 mb-6">
-            Open a transaction and everything for that deal is right there, from the checklist
-            and documents to the messages, contacts, and invoice.
-          </p>
-          <ul className="flex flex-wrap justify-center gap-2.5 text-sm text-slate-300">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">The transaction workspace</p>
+            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Every deal gets its own page.</h2>
+            <p className="text-slate-400">
+              Open a transaction and everything for that deal is right there, from the checklist
+              and documents to the messages, contacts, and invoice.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
             {[
               'Checklist',
               'Documents',
@@ -207,11 +209,12 @@ export default function Home() {
               'Invoice',
               'Payment status',
             ].map((line) => (
-              <li key={line} className="px-3 py-1.5 rounded-full border border-slate-700 bg-slate-800/60">
-                {line}
-              </li>
+              <div key={line} className="flex items-center gap-3 p-4 bg-slate-800/60 border border-slate-700 rounded-xl">
+                <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                <span className="text-sm text-slate-300">{line}</span>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       </section>
 
@@ -219,6 +222,7 @@ export default function Home() {
         <ShotRow
           name="checklist.jpg"
           alt="A transaction checklist in Relay with steps like Contract & File Setup and Inspection & Repairs, a progress bar, and due dates"
+          reverse
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Workflow</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Know what needs to happen next.</h2>
@@ -243,7 +247,6 @@ export default function Home() {
         <ShotRow
           name="agent-full-view.jpg"
           alt="The agent portal view of a transaction, with documents by category, a message thread, checklist progress, and contacts"
-          reverse
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Agent portal</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Give your agents their own view of the deal.</h2>
@@ -276,7 +279,8 @@ export default function Home() {
         <ShotRow
           name="invoice.jpg"
           alt="The Invoices page in Relay showing total invoiced, outstanding, and received amounts"
-          stacked
+          wide
+          reverse
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Invoicing</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Keep invoicing with the deal.</h2>
@@ -297,7 +301,7 @@ export default function Home() {
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-10 text-center">Everything you need to run the deal</h2>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-8">Everything you need to run the deal</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { title: "Built-in e-signatures", body: 'Send a document for signature from the transaction. No separate DocuSign account.' },
@@ -341,23 +345,25 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <p className="text-center text-xs text-slate-500 mt-6">The agent portal is free on every plan. Agents never need their own Relay subscription.</p>
+        <p className="text-xs text-slate-500 mt-6">The agent portal is free on every plan. Agents never need their own Relay subscription.</p>
       </section>
 
       {/* CTA */}
-      <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700 text-center">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-6">Run your next closing in Relay.</h2>
-        <div className="flex flex-wrap items-center justify-center gap-4">
-          <Link
-            href="/auth?mode=signup&plan=starter"
-            className="inline-block px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
-          >
-            Start free
-          </Link>
-          <DemoRequestButton
-            className="px-6 py-3 text-slate-300 hover:text-slate-100 font-semibold transition"
-            label="Request a demo"
-          />
+      <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <h2 className="font-display text-3xl font-semibold text-slate-100">Run your next closing in Relay.</h2>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link
+              href="/auth?mode=signup&plan=starter"
+              className="inline-block px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
+            >
+              Start free
+            </Link>
+            <DemoRequestButton
+              className="px-6 py-3 text-slate-300 hover:text-slate-100 font-semibold transition"
+              label="Request a demo"
+            />
+          </div>
         </div>
       </section>
 
