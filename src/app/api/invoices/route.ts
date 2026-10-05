@@ -114,6 +114,18 @@ export async function POST(request: NextRequest) {
       if (!agentRecord || agentRecord.tc_user_id !== user.id) {
         return NextResponse.json({ error: 'Agent not found or does not belong to you' }, { status: 403 });
       }
+
+      // The transaction has to belong to that agent. Without this, any TC
+      // could invoice (and then email the documents of) someone else's
+      // transaction by pairing their own agent with a foreign transactionId.
+      const { data: txRow } = await supabaseServer
+        .from('transactions')
+        .select('id, agent_id')
+        .eq('id', transactionId)
+        .maybeSingle();
+      if (!txRow || txRow.agent_id !== agentId) {
+        return NextResponse.json({ error: 'Transaction not found or does not belong to this agent' }, { status: 403 });
+      }
     }
 
     // One invoice per transaction -- a direct user action, so a repeat

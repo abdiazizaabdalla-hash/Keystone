@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { hasAgentRole, mergeAppMetadata } from '@/lib/privileged';
 
 // POST: called from /agent/accept right after the agent's Supabase
 // session is established from their emailed link. Trusts the caller's
@@ -39,10 +40,8 @@ export async function POST(request: NextRequest) {
     // otherwise silently let a TC's own login end up with agent access
     // too. Self-heals by setting the flag rather than erroring, since the
     // invite itself already proves they were meant to get access.
-    if (user.user_metadata?.role !== 'agent') {
-      await supabaseServer.auth.admin.updateUserById(user.id, {
-        user_metadata: { ...user.user_metadata, role: 'agent' },
-      });
+    if (!hasAgentRole(user)) {
+      await mergeAppMetadata(user.id, { role: 'agent' });
     }
 
     const { error: grantError } = await supabaseServer

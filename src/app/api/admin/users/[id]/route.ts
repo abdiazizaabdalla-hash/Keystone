@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { isPlatformAdmin } from '@/lib/privileged';
 
 // Indefinite suspension, Supabase-native: setting `banned_until` far in the
 // future blocks the account at the Auth/GoTrue level (sign-in itself
@@ -45,7 +46,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // deliberately rare action (revoking an operator, not a customer)
     // that shouldn't be one accidental click away in the same table as
     // every regular customer.
-    if (action === 'suspend' && targetData.user.user_metadata?.is_admin === true) {
+    if (action === 'suspend' && isPlatformAdmin(targetData.user)) {
       return NextResponse.json({ error: "Can't suspend another admin account from here" }, { status: 400 });
     }
 

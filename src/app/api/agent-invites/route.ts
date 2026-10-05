@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { sendAgentInviteEmail } from '@/lib/agentPortalEmails';
+import { hasAgentRole, mergeAppMetadata } from '@/lib/privileged';
 
 // Confirms the caller (a TC) owns `transactionId`, the same ownership
 // check src/app/api/documents/route.ts uses -- direct-owner only, not the
@@ -151,9 +152,29 @@ export async function POST(request: NextRequest) {
       email,
       options: {
         redirectTo: `${appUrl}/agent/accept`,
-        data: { role: 'agent' },
       },
     });
+
+    // Tag a brand-new invited account as an agent right away (the agent
+    // dashboard where they accept the invite is gated on this role). The
+    // role lives in app_metadata, which only our server can write -- see
+    // lib/privileged.ts. An email that already belongs to an existing
+    // account (a TC, say) is deliberately NOT retagged here; that only
+    // happens when that account's owner accepts the invite
+    // (api/agent-invites/accept).
+    const invitedUser = linkData?.user;
+    if (
+      invitedUser &&
+      !invitedUser.last_sign_in_at &&
+      !hasAgentRole(invitedUser) &&
+      Date.now() - new Date(invitedUser.created_at).getTime() < 2 * 60 * 1000
+    ) {
+      try {
+        await mergeAppMetadata(invitedUser.id, { role: 'agent' });
+      } catch (err) {
+        console.error('Error tagging invited agent account:', err);
+      }
+    }
 
     const actionLink = linkData?.properties?.action_link;
     let inviteEmailSent = true;

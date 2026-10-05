@@ -1,5 +1,5 @@
 import { supabaseServer } from './supabase';
-import { mergeUserMetadata } from './userMetadata';
+import { mergeAppMetadata } from './privileged';
 import type { PlanId } from './plans';
 import { DEFAULT_PLAN } from './plans';
 
@@ -51,5 +51,5 @@ export async function upsertStripeCustomer(row: Partial<StripeCustomerRow> & { u
  * who just paid silently not getting what they paid for).
  */
 export async function setUserPlan(userId: string, plan: PlanId | typeof DEFAULT_PLAN) {
-  await mergeUserMetadata(userId, { plan });
+  await mergeAppMetadata(userId, { plan });
 }

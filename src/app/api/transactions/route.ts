@@ -13,6 +13,7 @@ import {
 } from '@/lib/checklistTemplates';
 import { computeDueDates, NO_DUE_DATE, DueDateSpec } from '@/lib/dueDates';
 import crypto from 'crypto';
+import { getUserPlan } from '@/lib/privileged';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -140,7 +141,7 @@ export async function POST(request: NextRequest) {
     // though no current plan actually caps transactions -- Starter's only
     // real limit these days is agent profiles. This block is a no-op
     // until/unless a future plan reintroduces a transaction cap.
-    const { maxActiveTransactions } = getPlanLimits(user.user_metadata?.plan);
+    const { maxActiveTransactions } = getPlanLimits(getUserPlan(user));
     if (maxActiveTransactions !== null) {
       const { count, error: countError } = await supabaseServer
         .from('transactions')
@@ -171,7 +172,7 @@ export async function POST(request: NextRequest) {
     let templateName: string = BASELINE_CHECKLIST_TEMPLATE.name;
 
     if (templateId && templateId !== BASELINE_TEMPLATE_ID) {
-      const { customChecklists } = getPlanLimits(user.user_metadata?.plan);
+      const { customChecklists } = getPlanLimits(getUserPlan(user));
       if (!customChecklists) {
         return NextResponse.json(
           { error: 'Custom checklist templates are a Pro and Team plan feature.', code: 'plan_feature_locked' },

@@ -1,6 +1,7 @@
 import { supabaseServer } from './supabase';
 import { DEFAULT_PLAN } from './plans';
 import { getStripeCustomerByUserId } from './stripeCustomers';
+import { getUserPlan } from './privileged';
 
 // Starter used to be free forever. It's now a 30-day-or-first-paid-deal
 // trial (whichever comes first), after which the account needs to add
@@ -116,7 +117,7 @@ export class TrialExpiredError extends Error {
 type MinimalUser = {
   id: string;
   created_at: string;
-  user_metadata?: Record<string, unknown> | null;
+  app_metadata?: Record<string, unknown> | null;
 };
 
 /**
@@ -130,7 +131,7 @@ type MinimalUser = {
  * it and return its .status) once the trial's actually over.
  */
 export async function assertTrialActive(user: MinimalUser): Promise<void> {
-  const planId = (user.user_metadata?.plan as string | undefined) || DEFAULT_PLAN;
+  const planId = (getUserPlan(user) as string | undefined) || DEFAULT_PLAN;
   if (planId !== 'starter') return;
 
   const billing = await getStripeCustomerByUserId(user.id);

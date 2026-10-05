@@ -1,21 +1,22 @@
 import { supabaseServer } from './supabase';
 import { AuthError } from './auth';
+import { hasAgentRole } from './privileged';
 
 // Shape getUserFromRequest's `user` already has -- kept minimal here so
 // this file doesn't need to import the full Supabase User type.
 export interface MinimalUser {
   id: string;
   email?: string;
-  user_metadata?: { role?: string; [key: string]: unknown };
+  app_metadata?: { role?: string; [key: string]: unknown };
 }
 
 // Agents are real Supabase Auth users, distinguished from TCs purely by
-// user_metadata.role (set at creation -- see POST /api/agent-invites and
+// app_metadata.role (server-only, set at creation -- see POST /api/agent-invites and
 // src/app/agent/accept/page.tsx). There's no separate "agents" auth
 // table; the existing `agents` table stays what it's always been -- a
 // TC's own commission/contact record for someone, not a login.
 export function isAgentUser(user: MinimalUser): boolean {
-  return user.user_metadata?.role === 'agent';
+  return hasAgentRole(user);
 }
 
 // Confirms `userId` (an agent) has accepted access to `transactionId`.

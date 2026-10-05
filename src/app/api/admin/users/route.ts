@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getTrialStatus } from '@/lib/trial';
+import { getUserPlan, isPlatformAdmin } from '@/lib/privileged';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -99,14 +100,14 @@ export async function GET(request: NextRequest) {
     // Promises instead of the actual status.
     const trialEntries = await Promise.all(
       usersData.users
-        .filter((u) => ((u.user_metadata?.plan as string | undefined) || DEFAULT_PLAN) === 'starter')
+        .filter((u) => ((getUserPlan(u) as string | undefined) || DEFAULT_PLAN) === 'starter')
         .map(async (u) => [u.id, await getTrialStatus(u.id, u.created_at)] as const)
     );
     const trialByUser = new Map(trialEntries);
 
     const users = usersData.users.map((u) => {
       const stats = statsByTcUser.get(u.id);
-      const plan = (u.user_metadata?.plan as string | undefined) || DEFAULT_PLAN;
+      const plan = (getUserPlan(u) as string | undefined) || DEFAULT_PLAN;
       const stripeRow = stripeByUser.get(u.id) || null;
       const trial = trialByUser.get(u.id) || null;
       // banned_until in the far future (we set it to ~100 years) means
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
       return {
         id: u.id,
         email: u.email,
-        is_admin: u.user_metadata?.is_admin === true,
+        is_admin: isPlatformAdmin(u),
         plan,
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at || null,

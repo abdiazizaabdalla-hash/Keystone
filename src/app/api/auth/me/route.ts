@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isAgentUser } from '@/lib/agentPortal';
 import { mergeUserMetadata } from '@/lib/userMetadata';
 import { DEFAULT_PLAN } from '@/lib/plans';
+import { getUserPlan, isPlatformAdmin } from '@/lib/privileged';
 import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
 import { needsOnboarding } from '@/lib/onboarding';
@@ -15,13 +16,18 @@ const DEFAULT_FLAT_FEE = 400;
 const DEFAULT_PERCENT_FEE = 0;
 const DEFAULT_INVOICE_DUE_DAYS = 30;
 
-function shapeUser(user: { id: string; email?: string; user_metadata?: Record<string, unknown> | null }) {
+function shapeUser(user: {
+  id: string;
+  email?: string;
+  user_metadata?: Record<string, unknown> | null;
+  app_metadata?: Record<string, unknown> | null;
+}) {
   const meta = user.user_metadata || {};
   return {
     id: user.id,
     email: user.email,
-    is_admin: meta.is_admin || false,
-    plan: meta.plan || DEFAULT_PLAN,
+    is_admin: isPlatformAdmin(user),
+    plan: getUserPlan(user) || DEFAULT_PLAN,
     fullName: typeof meta.full_name === 'string' ? meta.full_name : '',
     defaultFlatFee:
       typeof meta.default_flat_fee === 'number' ? meta.default_flat_fee : DEFAULT_FLAT_FEE,
@@ -109,7 +115,7 @@ export async function GET(request: NextRequest) {
     // Whether DashboardLayout should bounce this sign-in to /onboarding
     // instead of rendering the dashboard -- see lib/onboarding.ts for why
     // this is safe to check on every account, not just new ones.
-    const needsOnboardingFlow = await needsOnboarding(user.id, user.user_metadata);
+    const needsOnboardingFlow = await needsOnboarding(user.id, user.user_metadata, isPlatformAdmin(user));
 
     return NextResponse.json({ ...shaped, trial, needsOnboarding: needsOnboardingFlow });
   } catch (error) {
@@ -247,7 +253,18 @@ export async function PATCH(request: NextRequest) {
 
     const updatedMetadata = await mergeUserMetadata(user.id, changes);
 
-    return NextResponse.json(shapeUser({ id: user.id, email: user.email, user_metadata: updatedMetadata }));
+    // Re-read app_metadata (plan) fresh too, for the same reason the
+    // user_metadata merge above does: the Stripe webhook may have just
+    // written a new plan.
+    const { data: fresh } = await supabaseServer.auth.admin.getUserById(user.id);
+    return NextResponse.json(
+      shapeUser({
+        id: user.id,
+        email: user.email,
+        user_metadata: updatedMetadata,
+        app_metadata: fresh?.user?.app_metadata ?? user.app_metadata,
+      })
+    );
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

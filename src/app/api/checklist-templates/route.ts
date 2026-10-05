@@ -10,6 +10,7 @@ import {
   validateTemplateName,
   validateTemplateSteps,
 } from '@/lib/checklistTemplates';
+import { getUserPlan } from '@/lib/privileged';
 
 /**
  * Lists checklist templates available to the caller: the free baseline
@@ -23,7 +24,7 @@ import {
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    const { customChecklists } = getPlanLimits(user.user_metadata?.plan);
+    const { customChecklists } = getPlanLimits(getUserPlan(user));
 
     const visibleIds = await getVisibleTcUserIds(user.id);
     const { data, error } = await supabaseServer
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    const { customChecklists } = getPlanLimits(user.user_metadata?.plan);
+    const { customChecklists } = getPlanLimits(getUserPlan(user));
 
     if (!customChecklists) {
       return NextResponse.json(

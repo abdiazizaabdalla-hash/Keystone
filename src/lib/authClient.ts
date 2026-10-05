@@ -24,7 +24,7 @@ function decodeExp(token: string): number | null {
 }
 
 /**
- * Reads `user_metadata.role` straight out of the currently-stored access
+ * Reads the account role straight out of the currently-stored access
  * token (if any), with no network round-trip -- used only for client-side
  * routing decisions (e.g. "should a reload send this session to /agent or
  * /dashboard?"). This is unverified, exactly like decodeExp above: it's
@@ -38,7 +38,9 @@ export function decodeStoredRole(): string | null {
     if (!token) return null;
     const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
     const payload = JSON.parse(atob(base64));
-    const role = payload?.user_metadata?.role;
+    // app_metadata is where the server stores it (see lib/privileged.ts);
+    // user_metadata is only a fallback for tokens issued before that move.
+    const role = payload?.app_metadata?.role ?? payload?.user_metadata?.role;
     return typeof role === 'string' ? role : null;
   } catch {
     return null;

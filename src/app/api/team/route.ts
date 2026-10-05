@@ -22,6 +22,7 @@ import {
   getSeatInfo,
 } from '@/lib/team';
 import { isTeamPlan } from '@/lib/plans';
+import { getUserPlan } from '@/lib/privileged';
 
 interface UserInfo {
   email: string;
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
     // Self-heal: a Team-plan user with no team yet (e.g. webhook hasn't
     // run, or an older account from before this feature existed) gets one
     // created on first visit here, as the owner.
-    if (!membership && isTeamPlan(user.user_metadata?.plan)) {
+    if (!membership && isTeamPlan(getUserPlan(user))) {
       const team = await ensureTeamForOwner(user.id);
       membership = { team, role: 'owner' };
     }
@@ -119,7 +120,7 @@ export async function GET(request: NextRequest) {
     // 'brokerage' -- so the caller's own plan metadata already reflects
     // the right per-seat price, owner or member, without a second
     // lookup of the owner's row.
-    const seatInfo = getSeatInfo(user.user_metadata?.plan);
+    const seatInfo = getSeatInfo(getUserPlan(user));
 
     return NextResponse.json({
       team: {
@@ -133,7 +134,7 @@ export async function GET(request: NextRequest) {
       // member is granted the same plan id as the owner (see
       // getTeamOwnerPlan), so the caller's own metadata already reflects
       // it correctly whether they're the owner or not.
-      planId: user.user_metadata?.plan || null,
+      planId: getUserPlan(user) || null,
       seatLimit,
       seatPriceLabel: seatInfo.pricePerSeatLabel,
       members,
@@ -170,7 +171,7 @@ export async function PATCH(request: NextRequest) {
       updateFields.name = trimmed.length > 0 ? trimmed : null;
     }
 
-    const isBrokerage = user.user_metadata?.plan === 'brokerage';
+    const isBrokerage = getUserPlan(user) === 'brokerage';
     if (isBrokerage && body.defaultChecklistTemplateId !== undefined) {
       updateFields.default_checklist_template_id = body.defaultChecklistTemplateId;
     }
@@ -252,7 +253,7 @@ export async function POST(request: NextRequest) {
       // Grant the SAME plan id as the team owner -- 'team' or
       // 'brokerage' -- not a hardcoded 'team', since the caller here (an
       // owner adding someone directly) may be a Brokerage owner.
-      await setUserPlan(existingUserId, isTeamPlan(user.user_metadata?.plan) ? (user.user_metadata.plan as 'team' | 'brokerage') : 'team');
+      await setUserPlan(existingUserId, isTeamPlan(getUserPlan(user)) ? (getUserPlan(user) as 'team' | 'brokerage') : 'team');
 
       let emailSent = true;
       try {
@@ -327,8 +328,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Downgrade the plan BEFORE removing the membership row, not after.
-    // Every feature gate in this app checks user.user_metadata.plan
-    // live on each request (see getPlanLimits(user.user_metadata?.plan)
+    // Every feature gate in this app checks the plan in app_metadata (getUserPlan)
+    // live on each request (see getPlanLimits(getUserPlan(user))
     // in the agents/transactions/checklist-template routes) -- that
     // field, not the membership row, is what actually grants Team-tier
     // access. If setUserPlan threw AFTER the membership row was already

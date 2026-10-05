@@ -26,10 +26,11 @@ import { supabaseServer } from './supabase';
  */
 export async function needsOnboarding(
   userId: string,
-  metadata: Record<string, unknown> | null | undefined
+  metadata: Record<string, unknown> | null | undefined,
+  isAdmin = false
 ): Promise<boolean> {
   if (metadata?.onboarding_completed === true) return false;
-  if (metadata?.is_admin === true) return false;
+  if (isAdmin) return false;
 
   const { data: agents, error } = await supabaseServer
     .from('agents')

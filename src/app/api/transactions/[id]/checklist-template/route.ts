@@ -11,6 +11,7 @@ import {
   normalizeTemplateSteps,
 } from '@/lib/checklistTemplates';
 import { computeDueDates, NO_DUE_DATE, DueDateSpec } from '@/lib/dueDates';
+import { getUserPlan } from '@/lib/privileged';
 
 /**
  * Switches an existing transaction onto a different checklist template.
@@ -70,7 +71,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     let templateName: string = BASELINE_CHECKLIST_TEMPLATE.name;
 
     if (templateId !== BASELINE_TEMPLATE_ID) {
-      const { customChecklists } = getPlanLimits(user.user_metadata?.plan);
+      const { customChecklists } = getPlanLimits(getUserPlan(user));
       if (!customChecklists) {
         return NextResponse.json(
           { error: 'Custom checklist templates are a Pro and Team plan feature.', code: 'plan_feature_locked' },

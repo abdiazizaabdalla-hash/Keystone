@@ -6,6 +6,7 @@ import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
 import { getTeamForUser } from '@/lib/team';
+import { getUserPlan } from '@/lib/privileged';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -16,7 +17,7 @@ const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Clo
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    const planId = user.user_metadata?.plan || DEFAULT_PLAN;
+    const planId = getUserPlan(user) || DEFAULT_PLAN;
     const plan = getPlan(planId);
 
     let usage = null;

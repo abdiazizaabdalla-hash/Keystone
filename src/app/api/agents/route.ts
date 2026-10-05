@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getPlanLimits } from '@/lib/plans';
 import { getVisibleTcUserIds, getTeamIdForUser } from '@/lib/team';
+import { getUserPlan } from '@/lib/privileged';
 
 export async function GET(request: NextRequest) {
   try {
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
     // Plan-gated: Starter is capped at 3 agent profiles. Admins creating
     // agents for themselves are still subject to their own plan's limit —
     // is_admin only affects cross-tenant visibility, not billing tier.
-    const { maxAgents } = getPlanLimits(user.user_metadata?.plan);
+    const { maxAgents } = getPlanLimits(getUserPlan(user));
     if (maxAgents !== null) {
       const { count, error: countError } = await supabaseServer
         .from('agents')

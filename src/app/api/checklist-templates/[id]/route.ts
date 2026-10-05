@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getPlanLimits } from '@/lib/plans';
 import { normalizeTemplateSteps, validateTemplateName, validateTemplateSteps } from '@/lib/checklistTemplates';
+import { getUserPlan } from '@/lib/privileged';
 
 /**
  * Only the TC who created a template can edit or delete it -- even for a
@@ -25,7 +26,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const { id } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
-    const { customChecklists } = getPlanLimits(user.user_metadata?.plan);
+    const { customChecklists } = getPlanLimits(getUserPlan(user));
 
     if (!customChecklists && !isAdmin) {
       return NextResponse.json(

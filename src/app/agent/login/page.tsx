@@ -9,7 +9,7 @@ import { saveSession } from '@/lib/authClient';
 // Returning-agent login. Password is the default now that every agent
 // sets one during /agent/welcome (their first-ever invite acceptance) --
 // same POST /api/auth/signin any TC account already uses, since an agent
-// is just a Supabase Auth user distinguished by user_metadata.role. The
+// is just a Supabase Auth user distinguished by app_metadata.role. The
 // magic-link mode below is only the fallback for someone who forgot
 // their password (or, in principle, never finished /agent/welcome).
 export default function AgentLoginPage() {

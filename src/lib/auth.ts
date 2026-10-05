@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { supabase } from './supabase';
+import { isPlatformAdmin } from './privileged';
 
 export class AuthError extends Error {
   status: number;
@@ -30,7 +31,7 @@ export async function getUserFromRequest(request: NextRequest) {
     throw new AuthError('Unauthorized', 401);
   }
 
-  const isAdmin = user.user_metadata?.is_admin === true;
+  const isAdmin = isPlatformAdmin(user);
 
   return { user, isAdmin };
 }
