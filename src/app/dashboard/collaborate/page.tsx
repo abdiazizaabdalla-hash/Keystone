@@ -105,9 +105,11 @@ export default function CollaboratePage() {
   const [directoryMessage, setDirectoryMessage] = useState('');
 
   // The brokerage/team's unassigned-transaction queue -- deals created
-  // with "leave unassigned" checked on the new-transaction form (see
-  // POST /api/transactions) instead of being handed straight to the
-  // creator. Owner-only, same as everything else on this page.
+  // with the API's leaveUnassigned flag (see POST /api/transactions)
+  // instead of being handed straight to the creator. The new-transaction
+  // form no longer offers that option, so this only lists deals that
+  // were already left unassigned. Owner-only, same as everything else
+  // on this page.
   const [unassigned, setUnassigned] = useState<UnassignedTransaction[]>([]);
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [assignPicks, setAssignPicks] = useState<Record<string, string>>({});
