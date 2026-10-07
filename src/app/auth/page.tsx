@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { isValidPlan, planLabel } from '@/lib/plans';
+import { track } from '@vercel/analytics';
 
 function AuthContent() {
   const router = useRouter();
@@ -74,6 +75,7 @@ function AuthContent() {
           // New accounts go through onboarding to pick/confirm a plan and
           // get set up, carrying along whatever plan they arrived with from
           // the pricing page.
+          track('signup_completed', { plan: plan || 'none' });
           router.push(plan ? `/onboarding?plan=${plan}` : '/onboarding');
         } else {
           router.push('/dashboard');
@@ -82,6 +84,7 @@ function AuthContent() {
         // Signup succeeded but Supabase requires email confirmation before
         // issuing a session (no session comes back yet). Tell the person
         // clearly instead of leaving the button looking like it did nothing.
+        track('signup_completed', { plan: plan || 'none' });
         setConfirmationSentTo(email);
       } else {
         setError('Sign in failed. Please try again.');

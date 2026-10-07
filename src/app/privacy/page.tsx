@@ -43,7 +43,7 @@ export default function PrivacyPage() {
         <p>We use a small number of service providers to run Relay. They process data only for us:</p>
         <ul>
           <li><strong>Supabase</strong> &mdash; database, sign-in, and file storage;</li>
-          <li><strong>Vercel</strong> &mdash; hosting;</li>
+          <li><strong>Vercel</strong> &mdash; hosting, and privacy-friendly page-view statistics for our public pages (no cookies, and no information about your transactions);</li>
           <li><strong>Stripe</strong> &mdash; payments and subscriptions;</li>
           <li><strong>Resend</strong> &mdash; sending and receiving email;</li>
           <li><strong>Sentry</strong> &mdash; error monitoring;</li>
@@ -95,7 +95,7 @@ export default function PrivacyPage() {
         <h2>Cookies and local storage</h2>
         <p>
           Relay uses your browser&rsquo;s local storage to keep you signed in and to remember interface settings such as whether a
-          sidebar is collapsed. We do not use advertising cookies or third-party ad trackers.
+          sidebar is collapsed. We do not use advertising cookies or third-party ad trackers. On our public marketing pages we count visits with cookie-free analytics (page, referring site, country, device type); it is not used inside your signed-in workspace.
         </p>
       </section>
 

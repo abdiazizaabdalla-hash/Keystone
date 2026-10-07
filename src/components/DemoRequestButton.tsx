@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import { track } from '@vercel/analytics';
 
 interface DemoRequestButtonProps {
   className: string;
@@ -48,6 +49,7 @@ export default function DemoRequestButton({ className, label = 'Request a Demo' 
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Something went wrong sending your request.');
+      track('demo_requested');
       setSubmitted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong sending your request.');
