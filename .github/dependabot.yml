@@ -8,8 +8,3 @@ updates:
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
-    ignore:
-      # Major versions of these change payment/auth behavior; upgrade them
-      # deliberately (with testing), not through an automatic PR.
-      - dependency-name: "stripe"
-        update-types: ["version-update:semver-major"]

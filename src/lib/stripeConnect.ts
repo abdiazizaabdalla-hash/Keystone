@@ -142,7 +142,10 @@ export async function createInvoiceCheckoutSession(
   return stripe.checkout.sessions.create(
     {
       mode: 'payment',
-      payment_method_types: ['card', 'us_bank_account'],
+      // Stripe SDK v23 replaced `payment_method_types` with this filter: Stripe
+      // picks from the connected account's enabled payment methods, limited to
+      // cards and US bank accounts (ACH) -- same options agents had before.
+      allowed_payment_method_types: ['card', 'us_bank_account'],
       line_items: [
         {
           price_data: {
