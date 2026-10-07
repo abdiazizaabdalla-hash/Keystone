@@ -138,5 +138,16 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     response = await doFetch(refreshed);
   }
 
+  // An account with two-step sign-in on rejects any session that skipped the
+  // authenticator step (e.g. one created by a password-reset link). Send it
+  // back to sign in properly rather than leaving pages half-loaded.
+  if (response.status === 401) {
+    const body = await response.clone().json().catch(() => null);
+    if (body?.error === 'Two-factor verification required') {
+      clearSession();
+      throw new AuthRequiredError('Two-factor verification required');
+    }
+  }
+
   return response;
 }

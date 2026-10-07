@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { applyPendingTeamInvite } from '@/lib/teamInvites';
+import { logAudit } from '@/lib/audit';
+import { findVerifiedTotpFactor } from '@/lib/mfa';
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -31,6 +33,7 @@ export async function POST(request: NextRequest) {
       checkRateLimit(`signin:email:${email.toLowerCase()}`, 8, 5 * 60),
     ]);
     if (!ipOk || !emailOk) {
+      await logAudit(request, null, 'auth.signin_rate_limited', { metadata: { email: String(email).toLowerCase() } });
       return NextResponse.json(
         { error: 'Too many sign-in attempts. Please wait a few minutes and try again.' },
         { status: 429 }
@@ -43,6 +46,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
+      await logAudit(request, null, 'auth.signin_failed', { entityType: 'user', metadata: { email: String(email).toLowerCase() } });
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
@@ -52,6 +56,21 @@ export async function POST(request: NextRequest) {
       await applyPendingTeamInvite(data.user);
     } catch (inviteError) {
       console.error('Error applying team invite at sign-in:', inviteError);
+    }
+
+    await logAudit(request, data.user, 'auth.signin', { entityType: 'user', entityId: data.user.id });
+    // Accounts with two-step sign-in on get only a password-level (aal1)
+    // session here, which the API refuses everywhere except the MFA verify
+    // route. The browser must collect the authenticator code, then trade
+    // this session for a fully verified one.
+    const mfaFactor = await findVerifiedTotpFactor(data.user);
+    if (mfaFactor) {
+      return NextResponse.json({
+        mfaRequired: true,
+        factorId: mfaFactor.id,
+        user: data.user,
+        session: data.session,
+      });
     }
 
     return NextResponse.json({

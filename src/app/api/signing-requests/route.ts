@@ -6,6 +6,7 @@ import { generateSigningToken, hashDocumentBytes } from '@/lib/signing';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { escapeHtml } from '@/lib/escapeHtml';
+import { logAudit } from '@/lib/audit';
 
 const BUCKET = 'transaction-documents';
 // Signing links used to never expire at all -- found during the 2026-09
@@ -194,6 +195,7 @@ export async function POST(request: NextRequest) {
       console.error('Failed to email signing request (non-fatal):', emailError);
     }
 
+    await logAudit(request, user, 'signing.request', { entityType: 'signing_request', entityId: signingRequest.id, metadata: { signerEmail: signerEmail.trim() } });
     return NextResponse.json({ ...signingRequest, signUrl }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

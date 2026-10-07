@@ -14,6 +14,7 @@ import {
 import { computeDueDates, NO_DUE_DATE, DueDateSpec } from '@/lib/dueDates';
 import crypto from 'crypto';
 import { getUserPlan } from '@/lib/privileged';
+import { logAudit } from '@/lib/audit';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -297,6 +298,7 @@ export async function POST(request: NextRequest) {
     if (tasksError) throw tasksError;
 
 
+    await logAudit(request, user, 'transaction.create', { entityType: 'transaction', entityId: transaction.id });
     return NextResponse.json(transaction, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -375,6 +377,7 @@ export async function DELETE(request: NextRequest) {
 
     if (deleteError) throw deleteError;
 
+    await logAudit(request, user, 'transaction.delete', { entityType: 'transaction', entityId: id });
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof AuthError) {

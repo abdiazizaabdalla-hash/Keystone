@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthClient } from '@/lib/supabase';
 import { applyPendingTeamInvite, sameOriginRedirect } from '@/lib/teamInvites';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { mergeAppMetadata } from '@/lib/privileged';
+import { LEGAL_VERSION } from '@/lib/site';
+import { logAudit } from '@/lib/audit';
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -11,13 +14,26 @@ function getClientIp(request: NextRequest): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, redirectTo, fullName } = await request.json();
+    const { email, password, redirectTo, fullName, acceptedTerms } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
       );
+    }
+
+    if (acceptedTerms !== true) {
+      return NextResponse.json(
+        { error: 'Please accept the Terms of Service and Privacy Policy to create an account.' },
+        { status: 400 }
+      );
+    }
+    if (typeof password !== 'string' || password.length < 10) {
+      return NextResponse.json({ error: 'Password must be at least 10 characters.' }, { status: 400 });
+    }
+    if (password.length > 200 || /^\d+$/.test(password) || password.toLowerCase() === String(email).toLowerCase()) {
+      return NextResponse.json({ error: 'Choose a stronger password (not only digits, and not your email).' }, { status: 400 });
     }
 
     // Looser than signin's limits -- a shared office/coworking IP can
@@ -57,6 +73,17 @@ export async function POST(request: NextRequest) {
     // identities, which must not consume anyone's invite. Otherwise the
     // invite is applied at their first confirmed sign-in.
     if (data.user && (data.user.identities?.length ?? 0) > 0) {
+      // Record when (and which version of) the terms were accepted. Stored
+      // in app_metadata so a user can't edit it.
+      await logAudit(request, data.user, 'auth.signup', { entityType: 'user', entityId: data.user.id, metadata: { termsVersion: LEGAL_VERSION } });
+      try {
+        await mergeAppMetadata(data.user.id, {
+          terms_accepted_at: new Date().toISOString(),
+          terms_version: LEGAL_VERSION,
+        });
+      } catch (consentError) {
+        console.error('Error recording terms acceptance (non-fatal):', consentError);
+      }
       try {
         await applyPendingTeamInvite(data.user);
       } catch (inviteError) {

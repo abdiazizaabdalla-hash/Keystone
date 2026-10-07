@@ -255,6 +255,8 @@ export default function PricingPage() {
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
+            <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
+            <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>
           </div>
         </div>
       </footer>

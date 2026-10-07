@@ -6,9 +6,12 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { PLANS, type PlanId } from '@/lib/plans';
+import AccountDataSection from '@/components/AccountDataSection';
+import AccountSecuritySection from '@/components/AccountSecuritySection';
 
 interface AccountSummary {
   email: string;
+  deletionRequestedAt?: string | null;
   createdAt: string;
   plan: { id: string; name: string };
   usage: {
@@ -310,6 +313,10 @@ function AccountContent() {
           <p className="text-sm text-slate-400">A detailed usage breakdown — agents, active transactions, and plan limits — is available on Pro and Team.</p>
         </div>
       )}
+
+      <AccountSecuritySection />
+
+      <AccountDataSection deletionRequestedAt={summary.deletionRequestedAt ?? null} />
 
       <p className="text-xs text-slate-500 mt-6">
         Looking for other preferences, like default agent fees? Head to{' '}

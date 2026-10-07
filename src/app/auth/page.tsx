@@ -15,6 +15,11 @@ function AuthContent() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState(searchParams.get('email') || '');
   const [password, setPassword] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  // Set when the account has two-step sign-in on: holds the password-level
+  // session in memory (never localStorage) until the authenticator code is checked.
+  const [mfa, setMfa] = useState<{ accessToken: string; factorId: string } | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [confirmationSentTo, setConfirmationSentTo] = useState('');
@@ -37,6 +42,7 @@ function AuthContent() {
           password,
           ...(redirectTo ? { redirectTo } : {}),
           ...(isSignUp && fullName.trim() ? { fullName: fullName.trim() } : {}),
+          ...(isSignUp ? { acceptedTerms } : {}),
         }),
       });
 
@@ -44,6 +50,12 @@ function AuthContent() {
 
       if (!response.ok) {
         setError(data.error || 'Authentication failed');
+        return;
+      }
+
+      if (data.mfaRequired && data.session?.access_token) {
+        setMfa({ accessToken: data.session.access_token, factorId: data.factorId });
+        setMfaCode('');
         return;
       }
 
@@ -77,6 +89,33 @@ function AuthContent() {
     } catch (err) {
       setError('An error occurred. Please try again.');
       console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfa) return;
+    setError('');
+    setLoading(true);
+    try {
+      const response = await fetch('/api/auth/mfa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${mfa.accessToken}` },
+        body: JSON.stringify({ code: mfaCode.trim() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.session?.access_token) {
+        setError(data.error || 'That code didn\'t work. Please try again.');
+        return;
+      }
+      localStorage.setItem('auth_token', data.session.access_token);
+      if (data.session.refresh_token) localStorage.setItem('refresh_token', data.session.refresh_token);
+      if (data.session.user?.id) localStorage.setItem('user_id', data.session.user.id);
+      router.push('/dashboard');
+    } catch {
+      setError('An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -155,6 +194,44 @@ function AuthContent() {
                   </div>
                 )}
 
+                {mfa ? (
+                  <form onSubmit={handleMfaSubmit} className="space-y-4">
+                    <p className="text-slate-300 text-sm">
+                      Enter the 6-digit code from your authenticator app to finish signing in.
+                    </p>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="123456"
+                      className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-3 text-center text-xl tracking-[0.4em] text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      autoFocus
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={loading || mfaCode.length !== 6}
+                      className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+                    >
+                      {loading ? 'Verifying...' : 'Verify and sign in'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMfa(null);
+                        setMfaCode('');
+                        setError('');
+                      }}
+                      className="w-full text-sm text-slate-400 hover:text-slate-200"
+                    >
+                      Back
+                    </button>
+                  </form>
+                ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {isSignUp && (
                     <div>
@@ -198,8 +275,29 @@ function AuthContent() {
                       placeholder="••••••••"
                       className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                       required
+                      minLength={isSignUp ? 10 : undefined}
+                      autoComplete={isSignUp ? 'new-password' : 'current-password'}
                     />
+                    {isSignUp && <p className="text-xs text-slate-500 mt-1.5">At least 10 characters.</p>}
                   </div>
+
+                  {isSignUp && (
+                    <label className="flex items-start gap-3 text-sm text-slate-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={acceptedTerms}
+                        onChange={(e) => setAcceptedTerms(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 shrink-0 accent-blue-500"
+                        required
+                      />
+                      <span>
+                        I agree to the{' '}
+                        <Link href="/terms" target="_blank" className="text-blue-400 hover:text-blue-300">Terms of Service</Link>{' '}
+                        and{' '}
+                        <Link href="/privacy" target="_blank" className="text-blue-400 hover:text-blue-300">Privacy Policy</Link>.
+                      </span>
+                    </label>
+                  )}
 
                   <button
                     type="submit"
@@ -209,7 +307,9 @@ function AuthContent() {
                     {loading ? 'Processing...' : isSignUp ? 'Create Account' : 'Sign In'}
                   </button>
                 </form>
+                )}
 
+                {!mfa && (
                 <div className="mt-6 pt-6 border-t border-slate-600 text-center">
                   <p className="text-slate-400 text-sm mb-3">
                     {isSignUp ? 'Already have an account?' : "Don't have an account?"}
@@ -224,6 +324,7 @@ function AuthContent() {
                     {isSignUp ? 'Sign In' : 'Create Account'}
                   </button>
                 </div>
+                )}
               </>
             )}
           </div>

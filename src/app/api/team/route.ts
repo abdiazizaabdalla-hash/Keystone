@@ -23,6 +23,7 @@ import {
 } from '@/lib/team';
 import { isTeamPlan } from '@/lib/plans';
 import { getUserPlan } from '@/lib/privileged';
+import { logAudit } from '@/lib/audit';
 
 interface UserInfo {
   email: string;
@@ -296,6 +297,7 @@ export async function POST(request: NextRequest) {
         console.error('Error sending team-added email:', emailError);
       }
 
+      await logAudit(request, user, 'team.member_added', { entityType: 'team', metadata: { email, addedPaidSeat } });
       return NextResponse.json({ status: 'added', email, emailSent, addedPaidSeat });
     }
 
@@ -317,6 +319,7 @@ export async function POST(request: NextRequest) {
       console.error('Error sending team-invite email:', emailError);
     }
 
+    await logAudit(request, user, 'team.invite', { entityType: 'team', metadata: { email } });
     return NextResponse.json({ status: 'invited', email, emailSent, addedPaidSeat });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -401,6 +404,7 @@ export async function DELETE(request: NextRequest) {
       console.error('Error sending team-removed email:', emailError);
     }
 
+    await logAudit(request, user, 'team.member_removed', { entityType: 'user', entityId: targetUserId });
     return NextResponse.json({ status: 'removed', emailSent });
   } catch (error) {
     if (error instanceof AuthError) {

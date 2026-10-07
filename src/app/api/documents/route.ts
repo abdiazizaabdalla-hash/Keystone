@@ -5,9 +5,33 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isValidCategory, isValidDocumentType, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE } from '@/lib/documentTaxonomy';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
+import { logAudit } from '@/lib/audit';
 
 const BUCKET = 'transaction-documents';
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
+
+// Allowlist of document types a transaction file legitimately needs. Anything
+// else (scripts, executables, HTML/SVG that could run in a browser, archives)
+// is refused. The stored content type is derived from the extension rather
+// than trusted from the browser.
+const ALLOWED_UPLOAD_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  csv: 'text/csv',
+  txt: 'text/plain',
+  rtf: 'application/rtf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+};
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
 
 let bucketEnsured = false;
@@ -175,6 +199,17 @@ export async function POST(request: NextRequest) {
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json({ error: 'File exceeds the 25MB limit' }, { status: 400 });
     }
+    if (file.size === 0) {
+      return NextResponse.json({ error: 'That file is empty' }, { status: 400 });
+    }
+    const fileExtension = (file.name.split('.').pop() || '').toLowerCase();
+    const allowedContentType = ALLOWED_UPLOAD_TYPES[fileExtension];
+    if (!allowedContentType) {
+      return NextResponse.json(
+        { error: 'This file type isn\'t supported. Upload a PDF, Word or Excel file, an image, or a text/CSV file.' },
+        { status: 400 }
+      );
+    }
 
     const category = typeof categoryRaw === 'string' && categoryRaw ? categoryRaw : DEFAULT_CATEGORY_KEY;
     const documentType = typeof documentTypeRaw === 'string' && documentTypeRaw ? documentTypeRaw : DEFAULT_DOCUMENT_TYPE;
@@ -205,7 +240,7 @@ export async function POST(request: NextRequest) {
     const { error: uploadError } = await supabaseServer.storage
       .from(BUCKET)
       .upload(storagePath, arrayBuffer, {
-        contentType: file.type || 'application/octet-stream',
+        contentType: allowedContentType,
         upsert: false,
       });
 
@@ -220,7 +255,7 @@ export async function POST(request: NextRequest) {
         document_type: documentType,
         file_name: file.name,
         storage_path: storagePath,
-        content_type: file.type || null,
+        content_type: allowedContentType,
         file_size: file.size,
         uploaded_by: user.id,
         requires_signature: requiresSignature,
@@ -239,6 +274,7 @@ export async function POST(request: NextRequest) {
       .from(BUCKET)
       .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
 
+    await logAudit(request, user, 'document.upload', { entityType: 'document', entityId: docRow.id, metadata: { transactionId, fileName: file.name, size: file.size } });
     return NextResponse.json({ ...docRow, url: signed?.signedUrl || null }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -361,6 +397,7 @@ export async function DELETE(request: NextRequest) {
     const { error: deleteError } = await supabaseServer.from('documents').delete().eq('id', id);
     if (deleteError) throw deleteError;
 
+    await logAudit(request, user, 'document.delete', { entityType: 'document', entityId: id, metadata: { transactionId: doc.transaction_id } });
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof AuthError) {

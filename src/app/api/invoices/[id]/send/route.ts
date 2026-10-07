@@ -9,6 +9,7 @@ import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { escapeHtml } from '@/lib/escapeHtml';
+import { logAudit } from '@/lib/audit';
 
 const BUCKET = 'transaction-documents';
 // Keep the direct email attachment well under typical provider limits
@@ -186,6 +187,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (updateError) throw updateError;
 
+    await logAudit(request, user, 'invoice.send', { entityType: 'invoice', entityId: invoice.id, metadata: { to: agent.email } });
     return NextResponse.json({
       ...updatedInvoice,
       agent,

@@ -43,6 +43,10 @@ export default function AgentLoginPage() {
         setError(data.error || 'Incorrect email or password.');
         return;
       }
+      if (data.mfaRequired) {
+        setError('This account uses two-step sign-in. Please sign in from the main sign-in page.');
+        return;
+      }
       saveSession(data.session.access_token, data.session.refresh_token, data.user.id);
       router.push('/agent');
     } catch (err) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isPlatformAdmin } from '@/lib/privileged';
+import { logAudit } from '@/lib/audit';
 
 // Indefinite suspension, Supabase-native: setting `banned_until` far in the
 // future blocks the account at the Auth/GoTrue level (sign-in itself
@@ -55,6 +56,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     });
     if (updateError) throw updateError;
 
+    await logAudit(request, caller, action === 'suspend' ? 'admin.suspend_user' : 'admin.reactivate_user', { entityType: 'user', entityId: targetUserId });
     return NextResponse.json({ id: targetUserId, suspended: action === 'suspend' });
   } catch (error) {
     if (error instanceof AuthError) {

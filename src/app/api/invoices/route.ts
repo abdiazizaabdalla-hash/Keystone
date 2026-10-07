@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
+import { logAudit } from '@/lib/audit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -192,6 +193,7 @@ export async function POST(request: NextRequest) {
 
     if (invoiceError) throw invoiceError;
 
+    await logAudit(request, user, 'invoice.create', { entityType: 'invoice', entityId: invoice.id });
     return NextResponse.json(invoice, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -337,6 +339,7 @@ export async function DELETE(request: NextRequest) {
 
     if (deleteError) throw deleteError;
 
+    await logAudit(request, user, 'invoice.delete', { entityType: 'invoice', entityId: id });
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof AuthError) {

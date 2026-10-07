@@ -96,6 +96,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       email: user.email,
       createdAt: user.created_at,
+      deletionRequestedAt: (user.app_metadata as { deletion_requested_at?: string } | null)?.deletion_requested_at ?? null,
       plan: {
         id: plan.id,
         name: plan.name,

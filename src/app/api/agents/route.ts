@@ -5,6 +5,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getPlanLimits } from '@/lib/plans';
 import { getVisibleTcUserIds, getTeamIdForUser } from '@/lib/team';
 import { getUserPlan } from '@/lib/privileged';
+import { logAudit } from '@/lib/audit';
 
 export async function GET(request: NextRequest) {
   try {
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
+    await logAudit(request, user, 'agent.create', { entityType: 'agent', entityId: agent.id });
     return NextResponse.json(agent, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -216,6 +218,7 @@ export async function DELETE(request: NextRequest) {
 
     if (error) throw error;
 
+    await logAudit(request, user, 'agent.delete', { entityType: 'agent', entityId: id });
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof AuthError) {
