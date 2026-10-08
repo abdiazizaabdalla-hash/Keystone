@@ -217,12 +217,16 @@ export async function getInvoicePayUrlForDocument(params: {
 
     if (!account || account.status !== 'approved') return null;
 
+    // Don't hand out a fresh pay link while a payment for this invoice is
+    // already received or still clearing (e.g. an ACH bank transfer).
+    if ((await getInvoicePaymentState(account.connected_account_id, params.invoice.id)) !== 'none') return null;
+
     const session = await createInvoiceCheckoutSession({
       connectedAccountId: account.connected_account_id,
       invoiceId: params.invoice.id,
       invoiceNumber: params.invoice.invoice_number,
       amountOwed: params.invoice.amount_owed,
-      successUrl: `${params.origin}/pay/success`,
+      successUrl: successUrlFor(params.origin, params.invoice.id),
       cancelUrl: `${params.origin}/pay/cancelled`,
     });
     return session.url;
@@ -245,4 +249,101 @@ export function constructConnectWebhookEvent(rawBody: string, signature: string)
     throw new Error('STRIPE_CONNECT_WEBHOOK_SECRET is not set');
   }
   return stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+}
+
+
+/** Where Stripe sends the payer after Checkout. `{CHECKOUT_SESSION_ID}` is a
+ * literal Stripe placeholder it replaces with the real session id, which
+ * lets the success page confirm the payment with Stripe directly instead
+ * of depending only on the webhook arriving first. */
+export function successUrlFor(origin: string, invoiceId: string): string {
+  return `${origin}/pay/success?invoice=${encodeURIComponent(invoiceId)}&session_id={CHECKOUT_SESSION_ID}`;
+}
+
+/**
+ * Asks Stripe whether a payment for this invoice has already been received
+ * ('paid') or is still clearing ('processing', e.g. an ACH bank transfer).
+ * Used to stop a second payment link being created while one is in flight.
+ * Fails open ('none') if Stripe's search is unavailable -- the invoice's
+ * own `paid` flag is still the primary guard.
+ */
+export async function getInvoicePaymentState(
+  connectedAccountId: string,
+  invoiceId: string
+): Promise<'paid' | 'processing' | 'none'> {
+  try {
+    const result = await stripe.paymentIntents.search(
+      { query: `metadata['relay_invoice_id']:'${invoiceId.replace(/[^a-zA-Z0-9-]/g, '')}'`, limit: 20 },
+      { stripeAccount: connectedAccountId }
+    );
+    if (result.data.some((pi) => pi.status === 'succeeded')) return 'paid';
+    if (result.data.some((pi) => pi.status === 'processing')) return 'processing';
+    return 'none';
+  } catch (error) {
+    console.error('Error checking Stripe for existing invoice payment:', error);
+    return 'none';
+  }
+}
+
+/**
+ * Confirms an invoice payment straight from Stripe (the source of truth)
+ * and marks the invoice paid. Called from the payment success page so the
+ * invoice flips to paid right away even if the webhook is slow or not
+ * running. Nothing in the URL is trusted: the invoice's connected account
+ * comes from our own database, the Checkout Session is fetched from that
+ * account, and its metadata must name this same invoice.
+ */
+export async function confirmInvoicePaymentFromSession(
+  invoiceId: string,
+  sessionId: string
+): Promise<'paid' | 'processing' | 'unknown'> {
+  try {
+    const { data: invoice } = await supabaseServer
+      .from('invoices')
+      .select('id, agent_id, amount_owed, paid')
+      .eq('id', invoiceId)
+      .maybeSingle();
+    if (!invoice) return 'unknown';
+    if (invoice.paid) return 'paid';
+
+    const { data: agent } = await supabaseServer
+      .from('agents')
+      .select('tc_user_id')
+      .eq('id', invoice.agent_id)
+      .maybeSingle();
+    if (!agent?.tc_user_id) return 'unknown';
+
+    const { data: account } = await supabaseServer
+      .from('payment_accounts')
+      .select('connected_account_id')
+      .eq('tc_user_id', agent.tc_user_id)
+      .eq('provider', 'stripe_connect')
+      .maybeSingle();
+    if (!account) return 'unknown';
+
+    const session = await stripe.checkout.sessions.retrieve(
+      sessionId,
+      {},
+      { stripeAccount: account.connected_account_id }
+    );
+    if (session.metadata?.relay_invoice_id !== invoice.id) return 'unknown';
+    if (session.payment_status === 'unpaid') return session.status === 'complete' ? 'processing' : 'unknown';
+
+    const amountTotal = session.amount_total;
+    if (typeof amountTotal !== 'number' || amountTotal / 100 < Number(invoice.amount_owed) - 0.01) return 'unknown';
+
+    await supabaseServer
+      .from('invoices')
+      .update({
+        paid: true,
+        paid_at: new Date().toISOString(),
+        paid_amount: amountTotal / 100,
+      })
+      .eq('id', invoice.id)
+      .eq('paid', false);
+    return 'paid';
+  } catch (error) {
+    console.error('Error confirming invoice payment with Stripe:', error);
+    return 'unknown';
+  }
 }

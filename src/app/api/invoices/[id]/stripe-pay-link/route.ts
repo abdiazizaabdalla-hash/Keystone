@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { loadInvoiceBundle } from '@/lib/invoiceData';
-import { createInvoiceCheckoutSession } from '@/lib/stripeConnect';
+import { createInvoiceCheckoutSession, getInvoicePaymentState, successUrlFor } from '@/lib/stripeConnect';
 import { isAgentUser } from '@/lib/agentPortal';
 
 // Creates a fresh Stripe Checkout payment link for an invoice. Unlike the
@@ -50,13 +50,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
 
+    // Block a second payment: Stripe already has a succeeded payment for this
+    // invoice (webhook not yet processed) or a bank transfer still clearing.
+    const paymentState = await getInvoicePaymentState(account.connected_account_id, invoice.id);
+    if (paymentState === 'paid') {
+      await supabaseServer
+        .from('invoices')
+        .update({ paid: true, paid_at: new Date().toISOString(), paid_amount: invoice.amount_owed })
+        .eq('id', invoice.id)
+        .eq('paid', false);
+      return NextResponse.json({ error: 'This invoice is already paid.' }, { status: 400 });
+    }
+    if (paymentState === 'processing') {
+      return NextResponse.json(
+        { error: 'A payment for this invoice is already processing. It will be marked paid once it clears.' },
+        { status: 409 }
+      );
+    }
+
     const origin = new URL(request.url).origin;
     const session = await createInvoiceCheckoutSession({
       connectedAccountId: account.connected_account_id,
       invoiceId: invoice.id,
       invoiceNumber: invoice.invoice_number,
       amountOwed: invoice.amount_owed,
-      successUrl: `${origin}/pay/success`,
+      successUrl: successUrlFor(origin, invoice.id),
       cancelUrl: `${origin}/pay/cancelled`,
     });
 

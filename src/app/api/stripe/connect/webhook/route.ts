@@ -109,10 +109,17 @@ export async function POST(request: NextRequest) {
       // this event either way, so this handles both a Checkout-level and
       // a PaymentIntent-level event without needing both.
       case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded':
       case 'payment_intent.succeeded': {
         const object = event.data.object as Stripe.Checkout.Session | Stripe.PaymentIntent;
         const invoiceId = object.metadata?.relay_invoice_id;
         if (!invoiceId) break;
+
+        // A bank (ACH) payment completes Checkout before the money has
+        // actually cleared -- the session says payment_status 'unpaid' until
+        // then. Don't close the invoice on that; the later
+        // async_payment_succeeded / payment_intent.succeeded event does.
+        if ('payment_status' in object && object.payment_status === 'unpaid') break;
 
         const amountTotal =
           'amount_total' in object && typeof object.amount_total === 'number'
