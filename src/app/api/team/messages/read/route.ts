@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { getMessagingContext, parseThread, threadKey } from '@/lib/teamMessaging';
+import { getMessagingContext, parseThread, threadKey, describeMessagingError, SETUP_MISSING_RESPONSE } from '@/lib/teamMessaging';
 
 // POST /api/team/messages/read { thread, upTo } -- records that the caller
 // has read a conversation up to the given message timestamp (taken from
@@ -41,7 +41,9 @@ export async function POST(request: NextRequest) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    console.error('Error marking team messages read:', error);
+    if (describeMessagingError('Error marking team messages read:', error).setupMissing) {
+      return NextResponse.json(SETUP_MISSING_RESPONSE, { status: 503 });
+    }
     return NextResponse.json({ error: 'Failed to update read state' }, { status: 500 });
   }
 }

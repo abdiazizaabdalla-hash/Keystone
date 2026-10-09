@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { getMessagingContext } from '@/lib/teamMessaging';
+import { getMessagingContext, describeMessagingError, SETUP_MISSING_RESPONSE } from '@/lib/teamMessaging';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -39,7 +39,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    console.error('Error deleting team message:', error);
+    if (describeMessagingError('Error deleting team message:', error).setupMissing) {
+      return NextResponse.json(SETUP_MISSING_RESPONSE, { status: 503 });
+    }
     return NextResponse.json({ error: 'Failed to delete message' }, { status: 500 });
   }
 }

@@ -52,3 +52,21 @@ export function parseThread(thread: unknown, selfId: string, memberIds: string[]
 export function threadKey(parsed: ParsedThread): string {
   return parsed.kind === 'board' ? BOARD_THREAD : parsed.otherId;
 }
+
+/**
+ * Logs a database/server error with its real details (Supabase errors are
+ * plain objects that print as `{}` otherwise) and, when the cause is that the
+ * messaging tables haven't been created yet, returns a clear message for the
+ * response instead of a generic failure.
+ */
+export function describeMessagingError(label: string, error: unknown): { setupMissing: boolean } {
+  const e = error as { code?: string; message?: string; details?: string; hint?: string } | null;
+  console.error(label, { code: e?.code, message: e?.message, details: e?.details, hint: e?.hint });
+  // PGRST205 / 42P01 = "table not found" in PostgREST / Postgres.
+  const setupMissing = e?.code === 'PGRST205' || e?.code === '42P01' || /team_message/i.test(e?.message || '') && /not find|does not exist|schema cache/i.test(e?.message || '');
+  return { setupMissing };
+}
+
+export const SETUP_MISSING_RESPONSE = {
+  error: 'Team messaging is not set up yet: the database tables are missing. Run add-team-messaging.sql in Supabase.',
+};

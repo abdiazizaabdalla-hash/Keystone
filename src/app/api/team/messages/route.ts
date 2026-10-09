@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { getMessagingContext, parseThread, MAX_TEAM_MESSAGE_LENGTH } from '@/lib/teamMessaging';
+import { getMessagingContext, parseThread, MAX_TEAM_MESSAGE_LENGTH, describeMessagingError, SETUP_MISSING_RESPONSE } from '@/lib/teamMessaging';
 
 interface MessageRow {
   id: string;
@@ -63,7 +63,9 @@ export async function GET(request: NextRequest) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    console.error('Error loading team messages:', error);
+    if (describeMessagingError('Error loading team messages:', error).setupMissing) {
+      return NextResponse.json(SETUP_MISSING_RESPONSE, { status: 503 });
+    }
     return NextResponse.json({ error: 'Failed to load messages' }, { status: 500 });
   }
 }
@@ -109,7 +111,9 @@ export async function POST(request: NextRequest) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    console.error('Error sending team message:', error);
+    if (describeMessagingError('Error sending team message:', error).setupMissing) {
+      return NextResponse.json(SETUP_MISSING_RESPONSE, { status: 503 });
+    }
     return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
   }
 }

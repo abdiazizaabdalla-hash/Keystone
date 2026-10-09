@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getTeamForUser } from '@/lib/team';
-import { BOARD_THREAD } from '@/lib/teamMessaging';
+import { BOARD_THREAD, describeMessagingError, SETUP_MISSING_RESPONSE } from '@/lib/teamMessaging';
 
 const LOOKBACK_DAYS = 30;
 
@@ -52,7 +52,9 @@ export async function GET(request: NextRequest) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    console.error('Error loading team message summary:', error);
+    if (describeMessagingError('Error loading team message summary:', error).setupMissing) {
+      return NextResponse.json(SETUP_MISSING_RESPONSE, { status: 503 });
+    }
     return NextResponse.json({ error: 'Failed to load message summary' }, { status: 500 });
   }
 }
