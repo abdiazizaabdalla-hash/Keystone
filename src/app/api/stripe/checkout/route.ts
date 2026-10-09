@@ -32,8 +32,25 @@ export async function POST(request: NextRequest) {
     // a single customer record instead of creating duplicates.
     let customerId: string;
     const existing = await getStripeCustomerByUserId(user.id);
-    if (existing) {
-      customerId = existing.stripe_customer_id;
+    // A stored customer id can be stale — e.g. it was created under test
+    // keys and we've since switched to live keys, or the customer was
+    // deleted in Stripe. In that case Stripe answers "resource_missing", so
+    // we make a fresh customer instead of failing checkout for that user.
+    let reusable: string | null = null;
+    if (existing && existing.stripe_customer_id.startsWith('cus_')) {
+      try {
+        const found = await stripe.customers.retrieve(existing.stripe_customer_id);
+        if (!('deleted' in found && found.deleted)) reusable = existing.stripe_customer_id;
+      } catch (err) {
+        const code = (err as { code?: string } | null)?.code;
+        if (code !== 'resource_missing') throw err;
+      }
+    } else if (existing) {
+      // Non-Stripe placeholder id (e.g. an admin bypass row): keep old behavior.
+      reusable = existing.stripe_customer_id;
+    }
+    if (reusable) {
+      customerId = reusable;
     } else {
       const customer = await stripe.customers.create({
         email: user.email,

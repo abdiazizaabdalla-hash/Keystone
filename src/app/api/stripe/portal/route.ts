@@ -21,10 +21,22 @@ export async function POST(request: NextRequest) {
 
     const origin = new URL(request.url).origin;
 
-    const session = await stripe.billingPortal.sessions.create({
-      customer: existing.stripe_customer_id,
-      return_url: `${origin}/dashboard/account`,
-    });
+    let session;
+    try {
+      session = await stripe.billingPortal.sessions.create({
+        customer: existing.stripe_customer_id,
+        return_url: `${origin}/dashboard/account`,
+      });
+    } catch (err) {
+      // Stale customer id (e.g. created under test keys): nothing to manage yet.
+      if ((err as { code?: string } | null)?.code === 'resource_missing') {
+        return NextResponse.json(
+          { error: 'No billing account found for this user yet. Upgrade to Pro or Team first.' },
+          { status: 400 }
+        );
+      }
+      throw err;
+    }
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
