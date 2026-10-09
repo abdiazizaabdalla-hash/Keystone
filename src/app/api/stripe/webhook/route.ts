@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
+import { cleanWebhookSecret, describeSecretShape } from '@/lib/webhookSecret';
 import { isValidPlan, isTeamPlan, DEFAULT_PLAN } from '@/lib/plans';
 import {
   getStripeCustomerByCustomerId,
@@ -17,7 +18,7 @@ import { ensureTeamForOwner, dissolveTeamMembership } from '@/lib/team';
 // Starter — every other route just reads whatever plan is on the account.
 export async function POST(request: NextRequest) {
   const signature = request.headers.get('stripe-signature');
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const webhookSecret = cleanWebhookSecret(process.env.STRIPE_WEBHOOK_SECRET);
 
   if (!signature || !webhookSecret) {
     console.error('Stripe webhook called without a signature header or STRIPE_WEBHOOK_SECRET configured');
@@ -30,7 +31,12 @@ export async function POST(request: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (err) {
-    console.error('Stripe webhook signature verification failed:', err);
+    console.error(
+      'Stripe webhook signature verification failed:',
+      err instanceof Error ? err.message : err,
+      'secret shape:',
+      describeSecretShape(process.env.STRIPE_WEBHOOK_SECRET)
+    );
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 

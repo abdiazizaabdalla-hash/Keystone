@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { cleanWebhookSecret, describeSecretShape } from '@/lib/webhookSecret';
 import { stripe } from './stripe';
 import { supabaseServer } from './supabase';
 
@@ -244,11 +245,21 @@ export async function getInvoicePayUrlForDocument(params: {
  * Connected accounts" and requiring `stripe listen --forward-connect-to`
  * (not --forward-to) for local testing. */
 export function constructConnectWebhookEvent(rawBody: string, signature: string): Stripe.Event {
-  const webhookSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+  const webhookSecret = cleanWebhookSecret(process.env.STRIPE_CONNECT_WEBHOOK_SECRET);
   if (!webhookSecret) {
     throw new Error('STRIPE_CONNECT_WEBHOOK_SECRET is not set');
   }
-  return stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+  try {
+    return stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+  } catch (err) {
+    console.error(
+      'Stripe Connect webhook signature verification failed:',
+      err instanceof Error ? err.message : err,
+      'secret shape:',
+      describeSecretShape(process.env.STRIPE_CONNECT_WEBHOOK_SECRET)
+    );
+    throw err;
+  }
 }
 
 
