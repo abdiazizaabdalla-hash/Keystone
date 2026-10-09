@@ -55,12 +55,31 @@ export async function POST(request: NextRequest) {
           break;
         }
 
+        // Stripe can deliver (or retry) this event late — e.g. after the
+        // webhook was failing, or after the customer already cancelled. Only
+        // grant the plan if the subscription is still live right now, so a
+        // stale event can never give someone a plan they are no longer paying for.
+        let liveStatus: string = 'active';
+        if (subscriptionId) {
+          try {
+            const sub = await stripe.subscriptions.retrieve(subscriptionId);
+            liveStatus = sub.status;
+          } catch (err) {
+            console.error('checkout.session.completed: could not verify subscription', subscriptionId, err);
+            return NextResponse.json({ error: 'Could not verify subscription' }, { status: 500 });
+          }
+        }
+        if (!['active', 'trialing', 'past_due'].includes(liveStatus)) {
+          console.warn(`checkout.session.completed ignored: subscription ${subscriptionId} is ${liveStatus}`);
+          break;
+        }
+
         await upsertStripeCustomer({
           user_id: userId,
           stripe_customer_id: customerId,
           stripe_subscription_id: subscriptionId || null,
           plan,
-          subscription_status: 'active',
+          subscription_status: liveStatus,
         });
         await setUserPlan(userId, plan);
 
