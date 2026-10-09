@@ -16,23 +16,33 @@ function NavLink({
   icon,
   collapsed,
   className = 'text-slate-100 hover:bg-slate-700',
+  badge = 0,
 }: {
   href: string;
   label: string;
   icon: React.ReactNode;
   collapsed: boolean;
   className?: string;
+  badge?: number;
 }) {
   return (
     <Link
       href={href}
       title={collapsed ? label : undefined}
-      className={`flex items-center rounded-lg transition font-medium ${
+      className={`relative flex items-center rounded-lg transition font-medium ${
         collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-4 py-3'
       } ${className}`}
     >
       {icon}
       {!collapsed && <span className="truncate">{label}</span>}
+      {badge > 0 &&
+        (collapsed ? (
+          <span className="absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-red-500" />
+        ) : (
+          <span className="ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        ))}
     </Link>
   );
 }
@@ -57,7 +67,33 @@ export default function DashboardLayout({
   const [collapsed, setCollapsed] = useState(false);
   // Phones only: the sidebar is replaced by a top bar with a slide-down menu.
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Unread team messages (Team/Brokerage plans) -- shown on the Collaborate link.
+  const [teamUnread, setTeamUnread] = useState(0);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!isTeamPlan(plan)) return;
+    let cancelled = false;
+    const load = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const res = await authFetch('/api/team/messages/summary');
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        setTeamUnread(typeof json.total === 'number' ? json.total : 0);
+      } catch {
+        // Non-critical -- the badge just doesn't update.
+      }
+    };
+    load();
+    const id = window.setInterval(load, 30000);
+    window.addEventListener('team-chat-read', load);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      window.removeEventListener('team-chat-read', load);
+    };
+  }, [plan]);
 
   // Default to collapsed on small screens (phones/narrow tablets) so the
   // nav doesn't eat most of the viewport, but respect an explicit choice
@@ -216,7 +252,7 @@ export default function DashboardLayout({
               { href: '/dashboard/agents', label: 'Agents' },
               { href: '/dashboard/invoices', label: 'Invoices' },
               { href: '/dashboard/settings', label: 'Settings' },
-              ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: 'Collaborate' }] : []),
+              ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: teamUnread > 0 ? `Collaborate (${teamUnread})` : 'Collaborate' }] : []),
               { href: '/dashboard/account', label: plan ? `Account · ${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan` : 'Account' },
               ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin' }] : []),
             ].map((item) => (
@@ -400,6 +436,7 @@ export default function DashboardLayout({
               href="/dashboard/collaborate"
               label="Collaborate"
               collapsed={collapsed}
+              badge={teamUnread}
               icon={
                 <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />

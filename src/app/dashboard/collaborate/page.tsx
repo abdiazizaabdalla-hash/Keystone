@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import TeamMessaging from '@/components/TeamMessaging';
 
 interface MemberStats {
   agents: number;
@@ -389,6 +390,8 @@ export default function CollaboratePage() {
           ? "Your team's roster and pipeline, all in one place."
           : "Your team's roster. Only your team owner can see everyone's transaction details."}
       </p>
+
+      <TeamMessaging members={data.members} isOwner={isOwner} />
 
       {isOwner && (
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 mb-6">

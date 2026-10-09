@@ -68,6 +68,15 @@ export async function GET(request: NextRequest) {
       fetchAll('signing_requests', 'transaction_id', txIds),
     ]);
 
+    // Team chat messages this person sent. Best-effort: a missing table (the
+    // messaging SQL not run yet) must never break the rest of the export.
+    let teamMessages: Row[] = [];
+    try {
+      teamMessages = await fetchAll('team_messages', 'sender_id', [user.id]);
+    } catch {
+      teamMessages = [];
+    }
+
     const exportData = {
       exportedAt: new Date().toISOString(),
       account: {
@@ -86,6 +95,7 @@ export async function GET(request: NextRequest) {
       invoices: clean(invoices),
       messages: clean(messages),
       signingRequests: clean(signingRequests),
+      teamMessagesSent: clean(teamMessages),
       checklistTemplates: clean(templates),
       note:
         agentIds.length === 0 && txIds.length === 0
