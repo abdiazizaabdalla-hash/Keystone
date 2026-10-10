@@ -5,6 +5,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { mergeAppMetadata } from '@/lib/privileged';
 import { LEGAL_VERSION } from '@/lib/site';
 import { logAudit } from '@/lib/audit';
+import { notifyNewSignup } from '@/lib/signupNotification';
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -84,6 +85,11 @@ export async function POST(request: NextRequest) {
       } catch (consentError) {
         console.error('Error recording terms acceptance (non-fatal):', consentError);
       }
+      await notifyNewSignup({
+        email: String(email),
+        fullName: trimmedName,
+        emailConfirmed: Boolean(data.user.email_confirmed_at),
+      });
       try {
         await applyPendingTeamInvite(data.user);
       } catch (inviteError) {

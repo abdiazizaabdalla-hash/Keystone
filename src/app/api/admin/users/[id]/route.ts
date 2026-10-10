@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isPlatformAdmin } from '@/lib/privileged';
 import { logAudit } from '@/lib/audit';
+import { deleteUserCompletely, DeleteAccountError } from '@/lib/deleteAccount';
 
 // Indefinite suspension, Supabase-native: setting `banned_until` far in the
 // future blocks the account at the Auth/GoTrue level (sign-in itself
@@ -64,5 +65,56 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     console.error('Error updating user suspension state:', error);
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
+  }
+}
+
+// DELETE: permanently remove an account and all of its data. The caller must
+// send the account's email as `confirmEmail` so a stray click or a wrong row
+// can't remove the wrong person. Admins can't delete themselves or each other.
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { user: caller, isAdmin } = await getUserFromRequest(request);
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
+    const { id: targetUserId } = await params;
+    if (targetUserId === caller.id) {
+      return NextResponse.json({ error: "You can't delete your own account" }, { status: 400 });
+    }
+
+    const { data: targetData, error: targetError } = await supabaseServer.auth.admin.getUserById(targetUserId);
+    if (targetError || !targetData.user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    if (isPlatformAdmin(targetData.user)) {
+      return NextResponse.json({ error: "Can't delete another admin account from here" }, { status: 400 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const targetEmail = (targetData.user.email || '').toLowerCase();
+    if (!targetEmail || String(body?.confirmEmail || '').trim().toLowerCase() !== targetEmail) {
+      return NextResponse.json({ error: "Type the account's email to confirm deletion" }, { status: 400 });
+    }
+
+    // Logged first: the account (and its own audit trail pointers) won't be
+    // around afterwards, and the log itself is kept.
+    await logAudit(request, caller, 'admin.delete_user', {
+      entityType: 'user',
+      entityId: targetUserId,
+      metadata: { email: targetEmail },
+    });
+
+    const result = await deleteUserCompletely(targetUserId);
+    return NextResponse.json({ deleted: true, id: targetUserId, ...result });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof DeleteAccountError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error('Error deleting user:', error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to delete user' }, { status: 500 });
   }
 }

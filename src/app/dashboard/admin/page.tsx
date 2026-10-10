@@ -114,6 +114,36 @@ export default function AdminPage() {
     }
   };
 
+  const handleDelete = async (user: TCUser) => {
+    const typed = window.prompt(
+      `PERMANENTLY delete ${user.email} and ALL of their data (deals, documents, agents, invoices, subscription)? This cannot be undone.\n\nType their email to confirm:`
+    );
+    if (typed === null) return;
+    setActionError(null);
+    setActionLoadingId(user.id);
+    try {
+      const response = await authFetch(`/api/admin/users/${user.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmEmail: typed }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete user');
+      }
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error deleting user:', error);
+      setActionError(error instanceof Error ? error.message : 'Failed to delete user');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   if (!isAdmin) {
     return (
       <div className="p-4 md:p-8">
@@ -271,6 +301,15 @@ export default function AdminPage() {
                         }`}
                       >
                         {actionLoadingId === user.id ? 'Working…' : user.suspended ? 'Reactivate' : 'Suspend'}
+                      </button>
+                    )}
+                    {!user.is_admin && (
+                      <button
+                        onClick={() => handleDelete(user)}
+                        disabled={actionLoadingId === user.id}
+                        className="ml-2 px-3 py-1.5 rounded-md text-xs font-medium transition bg-slate-700/60 text-slate-300 hover:bg-red-900/50 hover:text-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Delete
                       </button>
                     )}
                   </td>
