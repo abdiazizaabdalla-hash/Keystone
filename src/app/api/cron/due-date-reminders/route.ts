@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
-import { sendDueDateReminderDigest, ReminderTransactionGroup } from '@/lib/dueDateReminders';
+import { sendDueDateReminderDigest, sendAgentKeyDateReminder, ReminderTransactionGroup } from '@/lib/dueDateReminders';
 
 /**
  * Daily digest job: emails each TC a summary of checklist tasks that
@@ -54,15 +54,44 @@ export async function GET(request: NextRequest) {
     console.error('due-date-reminders: failed to load tasks', tasksError);
     return NextResponse.json({ error: 'Failed to load tasks' }, { status: 500 });
   }
-  if (!tasks || tasks.length === 0) {
+
+  // Critical dates (contract deadlines) ride the same digest and the same
+  // 1/3/7-day + overdue rules as checklist tasks. A failure here must not
+  // stop the task reminders, so it only logs.
+  const { data: keyDateRows, error: keyDatesError } = await supabaseServer
+    .from('transaction_key_dates')
+    .select('id, transaction_id, label, due_date, notify_agent')
+    .eq('completed', false)
+    .lte('due_date', windowEndStr);
+  if (keyDatesError) {
+    console.error('due-date-reminders: failed to load critical dates', keyDatesError);
+  }
+  const keyDates = keyDatesError ? [] : keyDateRows || [];
+
+  if ((!tasks || tasks.length === 0) && keyDates.length === 0) {
     return NextResponse.json({ notified: 0, reason: 'no tasks due' });
   }
+
+  // One list for the grouping loop below: checklist tasks as-is, critical
+  // dates labelled so they stand out in the email.
+  const reminderItems: { transaction_id: string; name: string; due_date: string }[] = [
+    ...(tasks || []).map((t) => ({
+      transaction_id: t.transaction_id as string,
+      name: t.name as string,
+      due_date: t.due_date as string,
+    })),
+    ...keyDates.map((k) => ({
+      transaction_id: k.transaction_id as string,
+      name: `Critical date: ${k.label as string}`,
+      due_date: k.due_date as string,
+    })),
+  ];
 
   // Closed deals are excluded -- nothing actionable there, and status
   // syncing already checks off every task on close anyway (see
   // syncTasksToStatus in lib/closeTransaction.ts), so this should rarely
   // matter in practice.
-  const transactionIds = [...new Set(tasks.map((t) => t.transaction_id as string))];
+  const transactionIds = [...new Set(reminderItems.map((t) => t.transaction_id))];
   const { data: transactions, error: txError } = await supabaseServer
     .from('transactions')
     .select('id, file_number, property_address, status, agent_id')
@@ -82,7 +111,7 @@ export async function GET(request: NextRequest) {
   const agentIds = [...new Set(Array.from(openTransactionsById.values()).map((t) => t.agent_id as string))];
   const { data: agents, error: agentsError } = await supabaseServer
     .from('agents')
-    .select('id, tc_user_id')
+    .select('id, tc_user_id, name, email')
     .in('id', agentIds);
 
   if (agentsError) {
@@ -98,13 +127,13 @@ export async function GET(request: NextRequest) {
   const msPerDay = 24 * 60 * 60 * 1000;
   const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
 
-  for (const task of tasks) {
-    const transaction = openTransactionsById.get(task.transaction_id as string);
+  for (const task of reminderItems) {
+    const transaction = openTransactionsById.get(task.transaction_id);
     if (!transaction) continue; // closed, or belongs to a transaction we excluded above
     const tcUserId = tcUserIdByAgentId.get(transaction.agent_id as string);
     if (!tcUserId) continue;
 
-    const dueDateStr = task.due_date as string;
+    const dueDateStr = task.due_date;
     const daysUntilDue = Math.round((new Date(`${dueDateStr}T00:00:00Z`).getTime() - todayMs) / msPerDay);
 
     // Skip anything that isn't overdue, due today, or landing on exactly
@@ -136,21 +165,55 @@ export async function GET(request: NextRequest) {
     }
 
     if (isOverdue) {
-      group.overdueTasks.push(task.name as string);
+      group.overdueTasks.push(task.name);
     } else if (isDueToday) {
-      group.dueTodayTasks.push(task.name as string);
+      group.dueTodayTasks.push(task.name);
     } else if (milestone === 1) {
-      group.dueIn1DayTasks.push(task.name as string);
+      group.dueIn1DayTasks.push(task.name);
     } else if (milestone === 3) {
-      group.dueIn3DaysTasks.push(task.name as string);
+      group.dueIn3DaysTasks.push(task.name);
     } else if (milestone === 7) {
-      group.dueIn7DaysTasks.push(task.name as string);
+      group.dueIn7DaysTasks.push(task.name);
     }
   }
 
   const appUrl = new URL(request.url).origin;
   let notified = 0;
+  let agentNotified = 0;
   const errors: string[] = [];
+
+  // Opt-in agent reminders: only critical dates the TC ticked "Also email the
+  // agent" on, and only at 3 days, 1 day and the day itself (never nagging
+  // while overdue -- that's the TC's job to handle directly).
+  const agentById = new Map((agents || []).map((a) => [a.id as string, a]));
+  for (const k of keyDates) {
+    if (!k.notify_agent) continue;
+    const transaction = openTransactionsById.get(k.transaction_id as string);
+    if (!transaction) continue;
+    const daysUntilDue = Math.round(
+      (new Date(`${k.due_date as string}T00:00:00Z`).getTime() - todayMs) / msPerDay
+    );
+    if (![0, 1, 3].includes(daysUntilDue)) continue;
+    const agent = agentById.get(transaction.agent_id as string);
+    if (!agent?.email) continue;
+    try {
+      const tcUserId = agent.tc_user_id as string;
+      const { data: tcData } = await supabaseServer.auth.admin.getUserById(tcUserId);
+      await sendAgentKeyDateReminder({
+        toEmail: agent.email as string,
+        agentName: (agent.name as string) || '',
+        replyTo: tcData?.user?.email || undefined,
+        tcName: (tcData?.user?.user_metadata?.full_name as string | undefined) || '',
+        propertyAddress: transaction.property_address as string,
+        label: k.label as string,
+        dueDate: k.due_date as string,
+        daysUntil: daysUntilDue,
+      });
+      agentNotified += 1;
+    } catch (err) {
+      errors.push(`agent ${agent.id as string}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
   for (const [tcUserId, tcGroups] of groupsByTcUser) {
     try {
@@ -170,6 +233,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     notified,
+    agentNotified,
     tcCount: groupsByTcUser.size,
     errors: errors.length ? errors : undefined,
   });

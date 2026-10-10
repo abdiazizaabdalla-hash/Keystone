@@ -69,6 +69,11 @@ export default function NewTransactionPage() {
     escrowOfficerPhone: string;
   } | null>(null);
 
+  // The contract's own deadlines (earnest money, inspection, appraisal,
+  // financing, title). Shown for review/edit after extraction and saved as the
+  // new transaction's Critical dates.
+  const [extractedDates, setExtractedDates] = useState<{ kind: string; label: string; dueDate: string }[]>([]);
+
   useEffect(() => {
     fetchAgents();
     fetchTemplates();
@@ -201,6 +206,7 @@ export default function NewTransactionPage() {
     setExtractError(null);
     setExtractNotes(null);
     setExtractedParties(null);
+    setExtractedDates([]);
 
     try {
       const body = new FormData();
@@ -236,6 +242,18 @@ export default function NewTransactionPage() {
         escrowOfficerEmail: f.escrowOfficerEmail || '',
         escrowOfficerPhone: f.escrowOfficerPhone || '',
       });
+      const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+      const candidateDates: { kind: string; label: string; dueDate: unknown }[] = [
+        { kind: 'earnest_money', label: 'Earnest money due', dueDate: f.earnestMoneyDueDate },
+        { kind: 'inspection', label: 'Inspection deadline', dueDate: f.inspectionDeadline },
+        { kind: 'appraisal', label: 'Appraisal deadline', dueDate: f.appraisalDeadline },
+        { kind: 'financing', label: 'Financing contingency', dueDate: f.financingContingencyDeadline },
+        { kind: 'title_commitment', label: 'Title commitment due', dueDate: f.titleCommitmentDueDate },
+      ];
+      setExtractedDates(
+        candidateDates
+          .filter((d): d is { kind: string; label: string; dueDate: string } => typeof d.dueDate === 'string' && dateRe.test(d.dueDate))
+      );
       if (f.notes) setExtractNotes(f.notes);
     } catch (error) {
       if (error instanceof AuthRequiredError) {
@@ -335,6 +353,22 @@ export default function NewTransactionPage() {
           // Same reasoning as the document upload -- the transaction is
           // already saved, contacts can always be added by hand from the
           // transaction page if this quietly failed.
+        }
+      }
+
+      // Save the reviewed contract deadlines as this deal's Critical dates.
+      // Best effort, same as the document and contacts above.
+      if (extractedDates.some((d) => d.dueDate) && created?.id) {
+        try {
+          await authFetch(`/api/transactions/${created.id}/key-dates`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              dates: extractedDates.filter((d) => d.dueDate).map((d) => ({ kind: d.kind, label: d.label, dueDate: d.dueDate, source: 'contract' })),
+            }),
+          });
+        } catch {
+          // Dates can be added by hand from the transaction page.
         }
       }
 
@@ -452,6 +486,38 @@ export default function NewTransactionPage() {
                         .join(' · ')}
                     </p>
                   )}
+                {extractedDates.length > 0 && (
+                  <div className="mt-3 border border-slate-600 rounded-lg p-3 bg-slate-800/40">
+                    <p className="text-xs font-semibold text-slate-200 mb-2">
+                      Critical dates found in the contract -- check each one against the contract, then they&apos;ll be saved with this deal:
+                    </p>
+                    <ul className="space-y-2">
+                      {extractedDates.map((d, i) => (
+                        <li key={d.kind} className="flex items-center gap-2">
+                          <span className="text-xs text-slate-300 flex-1 min-w-0 truncate">{d.label}</span>
+                          <input
+                            type="date"
+                            value={d.dueDate}
+                            onChange={(e) =>
+                              setExtractedDates((prev) =>
+                                prev.map((x, idx) => (idx === i ? { ...x, dueDate: e.target.value } : x))
+                              )
+                            }
+                            className="px-2 py-1 bg-slate-700 border border-slate-500 rounded text-xs text-slate-100"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setExtractedDates((prev) => prev.filter((_, idx) => idx !== i))}
+                            className="text-xs text-slate-400 hover:text-red-300 transition"
+                            aria-label={`Remove ${d.label}`}
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {extractNotes && (
                   <p className="text-xs text-amber-400 mt-2">Heads up: {extractNotes}</p>
                 )}

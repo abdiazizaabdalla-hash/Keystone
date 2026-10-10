@@ -9,6 +9,7 @@ import { stagesForTaskNames } from '@/lib/transactionStages';
 import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categoryLabel, typesForCategory } from '@/lib/documentTaxonomy';
 import { DueDateSpec, formatDisplayDate } from '@/lib/dueDates';
 import DueDateControl from '@/components/DueDateControl';
+import KeyDatesPanel from '@/components/KeyDatesPanel';
 
 interface Transaction {
   id: string;
@@ -2244,6 +2245,12 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </>
           )}
         </div>
+        <KeyDatesPanel
+          transactionId={transaction.id}
+          propertyAddress={transaction.property_address}
+          closingDate={transaction.closing_date ?? null}
+          canEdit={true}
+        />
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6">
           <div className="mb-5">
             <div className="flex items-start justify-between gap-3">

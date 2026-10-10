@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
+import CriticalDatesCard from '@/components/CriticalDatesCard';
 
 interface Transaction {
   id: string;
@@ -402,6 +403,8 @@ export default function Dashboard() {
           + New Deal
         </Link>
       </div>
+
+      <CriticalDatesCard />
 
       {/* Needs Attention Today -- a cross-transaction triage view (fed by
           /api/dashboard/attention) so the first thing a TC sees is what

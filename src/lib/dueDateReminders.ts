@@ -108,3 +108,46 @@ export async function sendDueDateReminderDigest(params: {
     html,
   });
 }
+
+
+/**
+ * Opt-in heads-up to the deal's agent about one critical date (the TC ticked
+ * "Also email the agent" on it). Sent from Relay but replies go straight to
+ * the TC, so it reads as coming from the person managing the file.
+ */
+export async function sendAgentKeyDateReminder(params: {
+  toEmail: string;
+  agentName: string;
+  replyTo?: string;
+  tcName: string;
+  propertyAddress: string;
+  label: string;
+  dueDate: string;
+  daysUntil: number;
+}) {
+  const { toEmail, agentName, replyTo, tcName, propertyAddress, label, dueDate, daysUntil } = params;
+  const when = daysUntil === 0 ? 'today' : daysUntil === 1 ? 'tomorrow' : `in ${daysUntil} days`;
+  const pretty = new Date(`${dueDate}T00:00:00Z`).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  const greeting = agentName ? `Hi ${escapeHtml(agentName.split(' ')[0])},` : 'Hi,';
+  const html = wrapper(
+    `${label} is ${when}`,
+    `<p>${greeting}</p>
+     <p>A quick heads-up on <strong>${escapeHtml(propertyAddress)}</strong>: <strong>${escapeHtml(label)}</strong> is due <strong>${escapeHtml(when)}</strong> (${escapeHtml(pretty)}).</p>
+     <p>${tcName ? `${escapeHtml(tcName)} is` : 'Your transaction coordinator is'} tracking this on the file. Reply to this email if anything is holding it up.</p>`
+  );
+
+  const resend = getResendClient();
+  return resend.emails.send({
+    from: INVOICE_FROM_EMAIL,
+    to: toEmail,
+    replyTo,
+    subject: `${label} ${when} — ${propertyAddress}`,
+    html,
+  });
+}

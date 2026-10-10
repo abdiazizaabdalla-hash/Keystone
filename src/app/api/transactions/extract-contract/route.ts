@@ -47,6 +47,30 @@ const EXTRACTION_TOOL = {
       listingAgentName: { type: 'string', description: "The listing (seller's) agent's name, empty string if not found." },
       buyerAgentName: { type: 'string', description: "The buyer's agent's name, empty string if not found." },
       earnestMoneyAmount: { type: 'number', description: 'Earnest money deposit amount, 0 if not found.' },
+      earnestMoneyDueDate: {
+        type: 'string',
+        description:
+          "The date the earnest money deposit is due, as YYYY-MM-DD. If the contract states it as a number of days after the effective/acceptance date, work out the calendar date from acceptanceDate. Empty string if not stated.",
+      },
+      inspectionDeadline: {
+        type: 'string',
+        description:
+          "The deadline for the buyer's inspection / due diligence period or inspection objection, as YYYY-MM-DD. If stated as N days after the effective/acceptance date, work out the calendar date from acceptanceDate. Empty string if not stated.",
+      },
+      appraisalDeadline: {
+        type: 'string',
+        description:
+          'The appraisal contingency deadline, as YYYY-MM-DD (computed from acceptanceDate if stated in days). Empty string if there is no appraisal contingency date.',
+      },
+      financingContingencyDeadline: {
+        type: 'string',
+        description:
+          'The financing / loan approval contingency deadline, as YYYY-MM-DD (computed from acceptanceDate if stated in days). Empty string if not stated or if the purchase is cash.',
+      },
+      titleCommitmentDueDate: {
+        type: 'string',
+        description: 'The date the title commitment / title search is due, as YYYY-MM-DD. Empty string if not stated.',
+      },
       financingType: {
         type: 'string',
         description: 'e.g. Cash, Conventional, FHA, VA. Empty string if not found.',
@@ -106,7 +130,7 @@ export async function POST(request: NextRequest) {
     const anthropic = getAnthropicClient();
     const response = await anthropic.messages.create({
       model: CONTRACT_EXTRACTION_MODEL,
-      max_tokens: 1500,
+      max_tokens: 2000,
       tools: [EXTRACTION_TOOL],
       tool_choice: { type: 'auto' },
       messages: [
@@ -120,7 +144,7 @@ export async function POST(request: NextRequest) {
             {
               type: 'text',
               text:
-                'Extract the key fields from this real estate purchase contract. You must respond by calling the record_contract_fields tool with what you find -- do not reply in plain text.',
+                'Extract the key fields from this real estate purchase contract, including the contract\'s critical deadlines (earnest money due, inspection, appraisal, financing contingency, title commitment). When a deadline is written as a number of days after the effective date, convert it to a calendar date. Only fill a date that is actually stated or directly computable -- never guess. If any date is ambiguous, say so in notes. You must respond by calling the record_contract_fields tool with what you find -- do not reply in plain text.',
             },
           ],
         },
