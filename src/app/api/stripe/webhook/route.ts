@@ -9,6 +9,13 @@ import {
   setUserPlan,
 } from '@/lib/stripeCustomers';
 import { ensureTeamForOwner, dissolveTeamMembership } from '@/lib/team';
+import { supabaseServer } from '@/lib/supabase';
+import { isPlatformAdmin } from '@/lib/privileged';
+import { logAudit } from '@/lib/audit';
+
+// Same indefinite-suspension value the admin Suspend button uses
+// (see /api/admin/users/[id]); cleared with ban_duration: 'none'.
+const INDEFINITE_BAN = '876000h';
 
 // Stripe calls this directly (no user session), authenticating itself via
 // the signature header instead — so this route reads the RAW body rather
@@ -150,6 +157,70 @@ export async function POST(request: NextRequest) {
         });
         await setUserPlan(existing.user_id, DEFAULT_PLAN);
         await dissolveTeamMembership(existing.user_id, (memberId) => setUserPlan(memberId, DEFAULT_PLAN));
+        break;
+      }
+
+      case 'charge.refunded': {
+        // A subscription payment was refunded in Stripe. Everything charged
+        // on the platform account is a Relay subscription (agent invoice
+        // payments live on connected accounts and use the Connect webhook),
+        // so a FULL refund means "this person is no longer a paying
+        // customer": stop the subscription, drop them to Starter, and
+        // suspend sign-in until an admin reactivates them. Partial refunds
+        // (goodwill credits) leave the account alone.
+        const charge = event.data.object as Stripe.Charge;
+        const customerId = typeof charge.customer === 'string' ? charge.customer : charge.customer?.id;
+        if (!customerId) break;
+
+        if (!charge.refunded) {
+          console.warn(`charge.refunded: partial refund on ${charge.id}; account left active`);
+          break;
+        }
+
+        const existing = await getStripeCustomerByCustomerId(customerId);
+        if (!existing) {
+          console.error(`charge.refunded for unknown customer ${customerId}`);
+          break;
+        }
+
+        // Stop any live subscription so it can't renew (and charge again).
+        try {
+          const subs = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 20 });
+          for (const sub of subs.data) {
+            if (['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status)) {
+              await stripe.subscriptions.cancel(sub.id);
+            }
+          }
+        } catch (err) {
+          console.error('charge.refunded: could not cancel subscription(s) for', customerId, err);
+          return NextResponse.json({ error: 'Could not cancel subscription' }, { status: 500 });
+        }
+
+        await upsertStripeCustomer({
+          user_id: existing.user_id,
+          stripe_customer_id: customerId,
+          stripe_subscription_id: null,
+          subscription_status: 'refunded',
+          plan: DEFAULT_PLAN,
+        });
+        await setUserPlan(existing.user_id, DEFAULT_PLAN);
+        await dissolveTeamMembership(existing.user_id, (memberId) => setUserPlan(memberId, DEFAULT_PLAN));
+
+        // Suspend sign-in, but never lock out a platform admin by accident.
+        const { data: target } = await supabaseServer.auth.admin.getUserById(existing.user_id);
+        if (target?.user && !isPlatformAdmin(target.user)) {
+          const { error: banError } = await supabaseServer.auth.admin.updateUserById(existing.user_id, {
+            ban_duration: INDEFINITE_BAN,
+          });
+          if (banError) throw banError;
+          await logAudit(null, null, 'billing.refund_suspend_user', {
+            entityType: 'user',
+            entityId: existing.user_id,
+            metadata: { chargeId: charge.id },
+          });
+        } else {
+          console.warn(`charge.refunded: ${existing.user_id} is a platform admin or missing; not suspended`);
+        }
         break;
       }
 
