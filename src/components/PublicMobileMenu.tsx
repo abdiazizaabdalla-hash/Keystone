@@ -8,6 +8,8 @@ const LINKS = [
   { href: '/pricing', label: 'Pricing' },
   { href: '/faq', label: 'FAQ' },
   { href: '/for-agents', label: 'For Agents' },
+  { href: '/auth', label: 'Sign In' },
+  { href: '/agent/login', label: 'Agent Login' },
 ];
 
 // Mobile-only replacement for the public header's desktop nav (which is
@@ -43,7 +45,9 @@ export default function PublicMobileMenu() {
               key={link.href}
               href={link.href}
               onClick={() => setOpen(false)}
-              className="block px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-slate-100 transition"
+              className={`block px-4 py-3 text-sm text-slate-300 hover:bg-slate-700 hover:text-slate-100 transition ${
+                link.href === '/auth' ? 'border-t border-slate-700' : ''
+              }`}
             >
               {link.label}
             </Link>

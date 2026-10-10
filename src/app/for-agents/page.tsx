@@ -53,15 +53,14 @@ export default function ForAgentsPage() {
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
               href="/agent/login"
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
             >
               <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>
-              <span className="sm:hidden">Agent</span>
-              <span className="hidden sm:inline">Agent Login</span>
+              Agent Login
             </Link>
-            <Link href="/auth" className="text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
+            <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
             <Link
               href="/auth?mode=signup&plan=starter"
               className="px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
