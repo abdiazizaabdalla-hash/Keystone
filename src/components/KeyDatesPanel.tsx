@@ -11,7 +11,7 @@ interface KeyDate {
   due_date: string;
   completed: boolean;
   source: string;
-  notify_agent: boolean;
+  notify_agent?: boolean;
 }
 
 const PRESETS: { kind: string; label: string }[] = [
@@ -82,13 +82,17 @@ export default function KeyDatesPanel({
   propertyAddress,
   closingDate,
   canEdit,
+  readOnlyDates,
 }: {
   transactionId: string;
   propertyAddress: string;
   closingDate: string | null;
   canEdit: boolean;
+  // Agent portal: dates are handed in by the page (already loaded with the
+  // deal) and shown read-only, so the panel makes no requests of its own.
+  readOnlyDates?: KeyDate[];
 }) {
-  const [dates, setDates] = useState<KeyDate[] | null>(null);
+  const [dates, setDates] = useState<KeyDate[] | null>(readOnlyDates ?? null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [presetKind, setPresetKind] = useState('inspection');
@@ -112,10 +116,11 @@ export default function KeyDatesPanel({
   }, [transactionId]);
 
   useEffect(() => {
+    if (readOnlyDates) return;
     // Deferred so the initial fetch's setState isn't a synchronous effect update.
     const t = setTimeout(load, 0);
     return () => clearTimeout(t);
-  }, [load]);
+  }, [load, readOnlyDates]);
 
   const add = async () => {
     if (!newDate) return;
@@ -199,7 +204,9 @@ export default function KeyDatesPanel({
         )}
       </div>
       <p className="text-xs text-slate-500 mb-3">
-        Contract deadlines. You&apos;ll get a reminder 7, 3 and 1 days before, and daily once overdue.
+        {readOnlyDates
+          ? 'Contract deadlines for this deal, kept up to date by your transaction coordinator.'
+          : 'Contract deadlines. You\u2019ll get a reminder 7, 3 and 1 days before, and daily once overdue.'}
       </p>
 
       {error && <p className="text-xs text-red-300 mb-3">{error}</p>}

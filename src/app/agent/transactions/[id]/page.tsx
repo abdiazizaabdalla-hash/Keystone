@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
+import KeyDatesPanel from '@/components/KeyDatesPanel';
 import {
   DOCUMENT_CATEGORIES,
   DEFAULT_CATEGORY_KEY,
@@ -25,6 +26,7 @@ interface AgentTransactionDetail {
   agentEmail: string | null;
   agentPhone: string | null;
   tcLabel: string;
+  keyDates?: { id: string; kind: string; label: string; due_date: string; completed: boolean; source: string }[];
   tasks: { id: string; name: string; completed: boolean; sort_order: number; due_date: string | null }[];
 }
 
@@ -588,6 +590,14 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               {payLinkError && <p className="text-red-400 text-xs mt-2">{payLinkError}</p>}
             </div>
           )}
+
+          <KeyDatesPanel
+            transactionId={transaction.id}
+            propertyAddress={transaction.propertyAddress || transaction.fileNumber}
+            closingDate={transaction.closingDate}
+            canEdit={false}
+            readOnlyDates={transaction.keyDates ?? []}
+          />
         </div>
 
         {/* Same grid the TC page uses: Documents wide on the left,

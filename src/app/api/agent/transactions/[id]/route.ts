@@ -38,6 +38,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .order('sort_order', { ascending: true });
     if (tasksError) throw tasksError;
 
+    // Critical dates are read-only for agents. The "email the agent" flag
+    // is a TC-side setting and isn't exposed.
+    const { data: keyDates } = await supabaseServer
+      .from('transaction_key_dates')
+      .select('id, kind, label, due_date, completed, source')
+      .eq('transaction_id', transactionId)
+      .order('due_date', { ascending: true });
+
     let tcLabel = 'Transaction coordinator';
     let agentName = 'Unknown';
     const { data: agentRecord } = await supabaseServer
@@ -67,6 +75,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       agentPhone: agentRecord?.phone || null,
       tcLabel,
       tasks: tasks || [],
+      keyDates: keyDates || [],
     });
   } catch (error) {
     if (error instanceof AuthError) {
