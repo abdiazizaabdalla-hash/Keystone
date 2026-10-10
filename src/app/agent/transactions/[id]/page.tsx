@@ -27,7 +27,15 @@ interface AgentTransactionDetail {
   agentPhone: string | null;
   tcLabel: string;
   keyDates?: { id: string; kind: string; label: string; due_date: string; completed: boolean; source: string }[];
-  tasks: { id: string; name: string; completed: boolean; sort_order: number; due_date: string | null }[];
+  tasks: {
+    id: string;
+    name: string;
+    completed: boolean;
+    sort_order: number;
+    due_date: string | null;
+    waiting_on?: string | null;
+    waiting_on_since?: string | null;
+  }[];
 }
 
 interface Contact {
@@ -81,6 +89,14 @@ interface AgentInvoice {
 // conversation updating without a manual reload -- see the matching
 // effect on the TC side, dashboard/transactions/[id]/page.tsx.
 const MESSAGE_POLL_MS = 5000;
+
+// Whole days since a YYYY-MM-DD date (UTC), for the "Waiting on" badge.
+function daysSince(dateIso: string): number {
+  const start = new Date(`${dateIso}T00:00:00Z`).getTime();
+  const now = new Date();
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.max(0, Math.round((todayUtc - start) / 86400000));
+}
 
 // A near-exact mirror of the TC's own transaction page (info card,
 // Messages + Checklist + Contacts in the narrow column, the same
@@ -749,6 +765,14 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                           <span className="text-xs text-slate-600 flex-shrink-0">No due date</span>
                         ))}
                     </div>
+                    {!task.completed && task.waiting_on && (
+                      <div className="mt-1.5 pl-7">
+                        <span className="text-xs font-medium text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-full px-2 py-0.5">
+                          {'\u23F3'} Waiting on {task.waiting_on}
+                          {task.waiting_on_since ? ` \u00b7 ${daysSince(task.waiting_on_since)}d` : ''}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

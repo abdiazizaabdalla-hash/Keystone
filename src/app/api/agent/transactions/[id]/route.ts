@@ -33,7 +33,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data: tasks, error: tasksError } = await supabaseServer
       .from('tasks')
-      .select('id, name, completed, sort_order, due_date')
+      .select('id, name, completed, sort_order, due_date, waiting_on, waiting_on_since')
       .eq('transaction_id', transactionId)
       .order('sort_order', { ascending: true });
     if (tasksError) throw tasksError;
