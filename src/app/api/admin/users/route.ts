@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getTrialStatus } from '@/lib/trial';
-import { getUserPlan, isPlatformAdmin } from '@/lib/privileged';
+import { getUserPlan, isPlatformAdmin, hasAgentRole } from '@/lib/privileged';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -25,13 +25,17 @@ export async function GET(request: NextRequest) {
     // load this page.
     const { data: agents, error: agentsError } = await supabaseServer
       .from('agents')
-      .select('id, tc_user_id');
+      .select('id, tc_user_id, name, email');
 
     if (agentsError) throw agentsError;
 
+    const agentProfilesByTcUser = new Map<string, { id: string; name: string | null; email: string | null }[]>();
     const agentIdsByTcUser = new Map<string, string[]>();
     const tcUserByAgentId = new Map<string, string>();
-    (agents || []).forEach((a: { id: string; tc_user_id: string }) => {
+    (agents || []).forEach((a: { id: string; tc_user_id: string; name: string | null; email: string | null }) => {
+      const profiles = agentProfilesByTcUser.get(a.tc_user_id) || [];
+      profiles.push({ id: a.id, name: a.name, email: a.email });
+      agentProfilesByTcUser.set(a.tc_user_id, profiles);
       tcUserByAgentId.set(a.id, a.tc_user_id);
       const list = agentIdsByTcUser.get(a.tc_user_id) || [];
       list.push(a.id);
@@ -98,14 +102,58 @@ export async function GET(request: NextRequest) {
     // state up front with Promise.all rather than awaiting inside a
     // non-async .map() callback, which would silently return unresolved
     // Promises instead of the actual status.
+    // Agent-portal logins (people invited onto a deal as an agent) are listed
+    // under the TC who invited them, not as top-level users.
+    const agentAccounts = usersData.users.filter((u) => hasAgentRole(u) && !isPlatformAdmin(u));
+    const tcAuthUsers = usersData.users.filter((u) => !(hasAgentRole(u) && !isPlatformAdmin(u)));
+
+    const { data: portalLinks, error: portalError } = await supabaseServer
+      .from('transaction_agents')
+      .select('agent_user_id, invited_by, transaction_id');
+    if (portalError) throw portalError;
+    const dealsByAgentAndTc = new Map<string, Set<string>>(); // `${tc}|${agent}` -> deal ids
+    const linkedAgentIds = new Set<string>();
+    (portalLinks || []).forEach((l: { agent_user_id: string; invited_by: string; transaction_id: string }) => {
+      const key = `${l.invited_by}|${l.agent_user_id}`;
+      const set = dealsByAgentAndTc.get(key) || new Set<string>();
+      set.add(l.transaction_id);
+      dealsByAgentAndTc.set(key, set);
+      linkedAgentIds.add(l.agent_user_id);
+    });
+
+    const agentAccountView = (u: (typeof usersData.users)[number], deals: number) => {
+      const bannedUntil = (u as unknown as { banned_until?: string | null }).banned_until || null;
+      return {
+        id: u.id,
+        email: u.email,
+        created_at: u.created_at,
+        last_sign_in_at: u.last_sign_in_at || null,
+        suspended: !!bannedUntil && new Date(bannedUntil) > new Date(),
+        deals,
+      };
+    };
+    const agentAccountById = new Map(agentAccounts.map((u) => [u.id, u]));
+    const portalAgentsByTc = new Map<string, ReturnType<typeof agentAccountView>[]>();
+    dealsByAgentAndTc.forEach((dealSet, key) => {
+      const [tcId, agentId] = key.split('|');
+      const account = agentAccountById.get(agentId);
+      if (!account) return;
+      const list = portalAgentsByTc.get(tcId) || [];
+      list.push(agentAccountView(account, dealSet.size));
+      portalAgentsByTc.set(tcId, list);
+    });
+    const unlinkedAgents = agentAccounts
+      .filter((u) => !linkedAgentIds.has(u.id))
+      .map((u) => agentAccountView(u, 0));
+
     const trialEntries = await Promise.all(
-      usersData.users
+      tcAuthUsers
         .filter((u) => ((getUserPlan(u) as string | undefined) || DEFAULT_PLAN) === 'starter')
         .map(async (u) => [u.id, await getTrialStatus(u.id, u.created_at)] as const)
     );
     const trialByUser = new Map(trialEntries);
 
-    const users = usersData.users.map((u) => {
+    const users = tcAuthUsers.map((u) => {
       const stats = statsByTcUser.get(u.id);
       const plan = (getUserPlan(u) as string | undefined) || DEFAULT_PLAN;
       const stripeRow = stripeByUser.get(u.id) || null;
@@ -132,13 +180,15 @@ export async function GET(request: NextRequest) {
         stripe_subscription_id: stripeRow?.stripe_subscription_id || null,
         current_period_end: stripeRow?.current_period_end || null,
         agents_count: (agentIdsByTcUser.get(u.id) || []).length,
+        agent_profiles: agentProfilesByTcUser.get(u.id) || [],
+        portal_agents: portalAgentsByTc.get(u.id) || [],
         active_transactions: stats?.activeTransactions || 0,
         closed_transactions: stats?.closedTransactions || 0,
         revenue_collected: stats?.revenueCollected || 0,
       };
     });
 
-    return NextResponse.json(users);
+    return NextResponse.json({ users, unlinkedAgents });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

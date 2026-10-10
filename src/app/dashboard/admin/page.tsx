@@ -1,9 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { getPlan } from '@/lib/plans';
+
+interface AgentAccount {
+  id: string;
+  email: string;
+  created_at: string;
+  last_sign_in_at: string | null;
+  suspended: boolean;
+  deals: number;
+}
+
+interface AgentProfile {
+  id: string;
+  name: string | null;
+  email: string | null;
+}
 
 interface TCUser {
   id: string;
@@ -22,6 +37,8 @@ interface TCUser {
   active_transactions?: number;
   closed_transactions?: number;
   revenue_collected?: number;
+  agent_profiles?: AgentProfile[];
+  portal_agents?: AgentAccount[];
 }
 
 const SUBSCRIPTION_BADGE_STYLES: Record<string, string> = {
@@ -37,6 +54,8 @@ const SUBSCRIPTION_BADGE_STYLES: Record<string, string> = {
 export default function AdminPage() {
   const router = useRouter();
   const [users, setUsers] = useState<TCUser[]>([]);
+  const [unlinkedAgents, setUnlinkedAgents] = useState<AgentAccount[]>([]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -71,7 +90,8 @@ export default function AdminPage() {
       const response = await authFetch('/api/admin/users');
       if (response.ok) {
         const data = await response.json();
-        setUsers(data);
+        setUsers(Array.isArray(data) ? data : data.users || []);
+        setUnlinkedAgents(Array.isArray(data) ? [] : data.unlinkedAgents || []);
       }
     } catch (error) {
       if (error instanceof AuthRequiredError) {
@@ -84,7 +104,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleSuspendToggle = async (user: TCUser) => {
+  const handleSuspendToggle = async (user: { id: string; email: string; suspended?: boolean }) => {
     const action = user.suspended ? 'reactivate' : 'suspend';
     if (action === 'suspend' && !window.confirm(`Suspend ${user.email}? They will not be able to sign in until reactivated.`)) {
       return;
@@ -101,7 +121,12 @@ export default function AdminPage() {
       if (!response.ok) {
         throw new Error(data.error || 'Failed to update user');
       }
-      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, suspended: data.suspended } : u)));
+      const markSuspended = <T extends { id: string; suspended?: boolean }>(list: T[]) =>
+        list.map(u => (u.id === user.id ? { ...u, suspended: data.suspended } : u));
+      setUsers(prev =>
+        markSuspended(prev).map(u => ({ ...u, portal_agents: u.portal_agents ? markSuspended(u.portal_agents) : u.portal_agents }))
+      );
+      setUnlinkedAgents(prev => markSuspended(prev));
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
@@ -147,7 +172,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleDelete = async (user: TCUser) => {
+  const handleDelete = async (user: { id: string; email: string }) => {
     const typed = window.prompt(
       `PERMANENTLY delete ${user.email} and ALL of their data (deals, documents, agents, invoices, subscription)? This cannot be undone.\n\nType their email to confirm:`
     );
@@ -164,7 +189,12 @@ export default function AdminPage() {
       if (!response.ok) {
         throw new Error(data.error || 'Failed to delete user');
       }
-      setUsers(prev => prev.filter(u => u.id !== user.id));
+      setUsers(prev =>
+        prev
+          .filter(u => u.id !== user.id)
+          .map(u => ({ ...u, portal_agents: u.portal_agents?.filter(a => a.id !== user.id) }))
+      );
+      setUnlinkedAgents(prev => prev.filter(a => a.id !== user.id));
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
@@ -210,7 +240,7 @@ export default function AdminPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6">
-          <div className="text-sm text-slate-400 mb-2">Total Users</div>
+          <div className="text-sm text-slate-400 mb-2">TC Users</div>
           <div className="text-3xl font-bold text-blue-400">{users.length}</div>
         </div>
 
@@ -222,9 +252,9 @@ export default function AdminPage() {
         </div>
 
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6">
-          <div className="text-sm text-slate-400 mb-2">Regular Users</div>
+          <div className="text-sm text-slate-400 mb-2">Agent Logins</div>
           <div className="text-3xl font-bold text-green-400">
-            {users.filter(u => !u.is_admin).length}
+            {users.reduce((sum, u) => sum + (u.portal_agents?.length || 0), 0) + unlinkedAgents.length}
           </div>
         </div>
 
@@ -263,10 +293,31 @@ export default function AdminPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map(user => (
-                <tr key={user.id} className="border-b border-slate-600 hover:bg-slate-700/50 transition">
+              {users.map(user => {
+                const agentCount = (user.portal_agents?.length || 0) + (user.agent_profiles?.length || 0);
+                const isOpen = !!expanded[user.id];
+                return (
+                <Fragment key={user.id}>
+                <tr className="border-b border-slate-600 hover:bg-slate-700/50 transition">
                   <td className="px-6 py-4 text-slate-300">
-                    <div>{user.email}</div>
+                    <div className="flex items-center gap-2">
+                      {agentCount > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setExpanded(prev => ({ ...prev, [user.id]: !prev[user.id] }))}
+                          aria-expanded={isOpen}
+                          aria-label={`${isOpen ? 'Hide' : 'Show'} agents for ${user.email}`}
+                          className="shrink-0 w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-slate-100 hover:bg-slate-600 transition"
+                        >
+                          <svg className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M7 4l8 6-8 6V4z" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <span className="w-5 shrink-0" />
+                      )}
+                      <span>{user.email}</span>
+                    </div>
                     {user.suspended && (
                       <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/30 text-red-300">
                         Suspended
@@ -290,7 +341,7 @@ export default function AdminPage() {
                       aria-label={`Plan for ${user.email}`}
                       className="bg-slate-700 border border-slate-600 rounded-md px-2 py-1 text-sm text-slate-100 disabled:opacity-50"
                     >
-                      {(['starter', 'pro', 'team', 'brokerage'] as const).map((id) => (
+                      {(['starter', 'pro', 'team', ...(user.plan === 'brokerage' ? (['brokerage'] as const) : [])] as const).map((id) => (
                         <option key={id} value={id}>
                           {getPlan(id).name}
                         </option>
@@ -361,10 +412,125 @@ export default function AdminPage() {
                     )}
                   </td>
                 </tr>
-              ))}
+                {isOpen && (
+                  <tr className="border-b border-slate-600 bg-slate-800/60">
+                    <td colSpan={12} className="px-6 py-4">
+                      <div className="ml-7 space-y-4">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                            Agent logins ({user.portal_agents?.length || 0})
+                          </p>
+                          {(user.portal_agents?.length || 0) === 0 ? (
+                            <p className="text-sm text-slate-500">No agents have accepted a portal invite from this user.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {user.portal_agents!.map(agent => (
+                                <AgentRow
+                                  key={agent.id}
+                                  agent={agent}
+                                  busy={actionLoadingId === agent.id}
+                                  onSuspend={() => handleSuspendToggle(agent)}
+                                  onDelete={() => handleDelete(agent)}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                            Agent profiles ({user.agent_profiles?.length || 0})
+                          </p>
+                          {(user.agent_profiles?.length || 0) === 0 ? (
+                            <p className="text-sm text-slate-500">No agent profiles yet.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {user.agent_profiles!.map(profile => (
+                                <span key={profile.id} className="px-3 py-1.5 rounded-lg bg-slate-700/50 border border-slate-600 text-sm text-slate-300">
+                                  {profile.name || 'Unnamed'}
+                                  {profile.email ? <span className="text-slate-500"> · {profile.email}</span> : null}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
+      </div>
+
+      {unlinkedAgents.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-slate-100 mb-1">Agent logins not linked to a TC</h2>
+          <p className="text-sm text-slate-400 mb-3">Agent accounts that are not on any deal right now.</p>
+          <div className="space-y-1.5">
+            {unlinkedAgents.map(agent => (
+              <AgentRow
+                key={agent.id}
+                agent={agent}
+                busy={actionLoadingId === agent.id}
+                onSuspend={() => handleSuspendToggle(agent)}
+                onDelete={() => handleDelete(agent)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgentRow({
+  agent,
+  busy,
+  onSuspend,
+  onDelete,
+}: {
+  agent: AgentAccount;
+  busy: boolean;
+  onSuspend: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-slate-700/40 border border-slate-600 rounded-lg">
+      <div className="min-w-0">
+        <p className="text-sm text-slate-100 truncate">
+          {agent.email}
+          {agent.suspended && (
+            <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/30 text-red-300">Suspended</span>
+          )}
+        </p>
+        <p className="text-xs text-slate-500">
+          {agent.deals > 0 ? `${agent.deals} deal${agent.deals === 1 ? '' : 's'} · ` : ''}
+          joined {new Date(agent.created_at).toLocaleDateString()} · last active{' '}
+          {agent.last_sign_in_at ? new Date(agent.last_sign_in_at).toLocaleDateString() : 'never'}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={onSuspend}
+          disabled={busy}
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
+            agent.suspended
+              ? 'bg-green-900/30 text-green-300 hover:bg-green-900/50'
+              : 'bg-red-900/30 text-red-300 hover:bg-red-900/50'
+          }`}
+        >
+          {busy ? 'Working…' : agent.suspended ? 'Reactivate' : 'Suspend'}
+        </button>
+        <button
+          onClick={onDelete}
+          disabled={busy}
+          className="px-3 py-1.5 rounded-md text-xs font-medium transition bg-slate-700/60 text-slate-300 hover:bg-red-900/50 hover:text-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Delete
+        </button>
       </div>
     </div>
   );
