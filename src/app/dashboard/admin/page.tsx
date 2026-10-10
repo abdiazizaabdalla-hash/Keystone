@@ -114,6 +114,39 @@ export default function AdminPage() {
     }
   };
 
+  const handlePlanChange = async (user: TCUser, newPlan: string) => {
+    if (newPlan === (user.plan || 'starter')) return;
+    const billingNote = user.stripe_subscription_id
+      ? '\n\nNote: this user has a live Stripe subscription. Changing the plan here does NOT change or cancel their billing.'
+      : '';
+    if (!window.confirm(`Change ${user.email} from ${getPlan(user.plan).name} to ${getPlan(newPlan).name}?${billingNote}`)) {
+      return;
+    }
+    setActionError(null);
+    setActionLoadingId(user.id);
+    try {
+      const response = await authFetch(`/api/admin/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_plan', plan: newPlan }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to change plan');
+      }
+      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, plan: data.plan } : u)));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error changing plan:', error);
+      setActionError(error instanceof Error ? error.message : 'Failed to change plan');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const handleDelete = async (user: TCUser) => {
     const typed = window.prompt(
       `PERMANENTLY delete ${user.email} and ALL of their data (deals, documents, agents, invoices, subscription)? This cannot be undone.\n\nType their email to confirm:`
@@ -249,7 +282,21 @@ export default function AdminPage() {
                       {user.is_admin ? 'Admin' : 'User'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-300 text-sm">{getPlan(user.plan).name}</td>
+                  <td className="px-6 py-4 text-slate-300 text-sm">
+                    <select
+                      value={user.plan || 'starter'}
+                      onChange={(e) => handlePlanChange(user, e.target.value)}
+                      disabled={actionLoadingId === user.id}
+                      aria-label={`Plan for ${user.email}`}
+                      className="bg-slate-700 border border-slate-600 rounded-md px-2 py-1 text-sm text-slate-100 disabled:opacity-50"
+                    >
+                      {(['starter', 'pro', 'team', 'brokerage'] as const).map((id) => (
+                        <option key={id} value={id}>
+                          {getPlan(id).name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="px-6 py-4 text-sm">
                     {user.subscription_status ? (
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${

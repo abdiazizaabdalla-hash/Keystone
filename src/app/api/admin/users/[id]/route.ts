@@ -3,6 +3,9 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isPlatformAdmin } from '@/lib/privileged';
 import { logAudit } from '@/lib/audit';
+import { isValidPlan, isTeamPlan, DEFAULT_PLAN } from '@/lib/plans';
+import { setUserPlan } from '@/lib/stripeCustomers';
+import { ensureTeamForOwner, dissolveTeamMembership } from '@/lib/team';
 import { deleteUserCompletely, DeleteAccountError } from '@/lib/deleteAccount';
 
 // Indefinite suspension, Supabase-native: setting `banned_until` far in the
@@ -28,12 +31,42 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const { id: targetUserId } = await params;
+    const body = await request.json().catch(() => ({}));
+
+    // Change a user's plan by hand (comps, support fixes, testing). This
+    // only changes what Relay grants -- it does NOT touch Stripe billing, so
+    // a user with a live subscription is still billed for what they bought,
+    // and a later Stripe event for that subscription can set the plan again.
+    if (body?.action === 'set_plan') {
+      if (!isValidPlan(body.plan)) {
+        return NextResponse.json({ error: 'Unknown plan' }, { status: 400 });
+      }
+      const newPlan = body.plan;
+      const { data: planTarget, error: planTargetError } = await supabaseServer.auth.admin.getUserById(targetUserId);
+      if (planTargetError || !planTarget.user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      const oldPlan = (planTarget.user.app_metadata as { plan?: string } | null)?.plan || DEFAULT_PLAN;
+
+      if (isTeamPlan(oldPlan) && !isTeamPlan(newPlan)) {
+        await dissolveTeamMembership(targetUserId, (memberId) => setUserPlan(memberId, DEFAULT_PLAN));
+      }
+      if (isTeamPlan(newPlan)) {
+        await ensureTeamForOwner(targetUserId);
+      }
+      await setUserPlan(targetUserId, newPlan);
+      await logAudit(request, caller, 'admin.set_plan', {
+        entityType: 'user',
+        entityId: targetUserId,
+        metadata: { from: oldPlan, to: newPlan },
+      });
+      return NextResponse.json({ id: targetUserId, plan: newPlan });
+    }
 
     if (targetUserId === caller.id) {
       return NextResponse.json({ error: "You can't suspend your own account" }, { status: 400 });
     }
 
-    const body = await request.json().catch(() => ({}));
     const action = body?.action;
     if (!isAction(action)) {
       return NextResponse.json({ error: "action must be 'suspend' or 'reactivate'" }, { status: 400 });
