@@ -50,6 +50,15 @@ export async function getUserFromRequest(request: NextRequest, options: { allowA
     throw new AuthError('Unauthorized', 401);
   }
 
+  // A suspended account (admin Suspend, or an automatic suspension after a
+  // full refund) must lose access immediately, not whenever its access
+  // token happens to expire -- the ban only stops new sign-ins and token
+  // refreshes on Supabase's side.
+  const bannedUntil = (user as unknown as { banned_until?: string | null }).banned_until;
+  if (bannedUntil && new Date(bannedUntil) > new Date()) {
+    throw new AuthError('This account has been suspended. Contact support.', 401);
+  }
+
   if (!options.allowAal1) {
     const hasVerifiedFactor = (user.factors || []).some((f) => f.status === 'verified');
     const mfaEnabled = hasVerifiedFactor || (user.app_metadata as { mfa_enabled?: boolean } | null)?.mfa_enabled === true;

@@ -224,7 +224,17 @@ export default function DashboardLayout({
             <span className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1">
               <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
             </span>
-            <span className="text-white font-display font-semibold">Relay TC</span>
+            <span className="text-white font-display font-semibold">Relay TC{plan && (
+              <span
+                className={`ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${
+                  plan === 'starter'
+                    ? 'bg-slate-700/60 text-slate-300 border-slate-600'
+                    : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                }`}
+              >
+                {plan}
+              </span>
+            )}</span>
           </Link>
           <button
             type="button"
@@ -297,6 +307,17 @@ export default function DashboardLayout({
             {!collapsed && (
               <div className="min-w-0">
                 <h1 className="text-white font-display font-semibold text-lg truncate">Relay TC</h1>
+                {plan && (
+                  <span
+                    className={`inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${
+                      plan === 'starter'
+                        ? 'bg-slate-700/60 text-slate-300 border-slate-600'
+                        : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                    }`}
+                  >
+                    {plan}
+                  </span>
+                )}
               </div>
             )}
           </Link>

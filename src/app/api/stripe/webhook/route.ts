@@ -9,13 +9,7 @@ import {
   setUserPlan,
 } from '@/lib/stripeCustomers';
 import { ensureTeamForOwner, dissolveTeamMembership } from '@/lib/team';
-import { supabaseServer } from '@/lib/supabase';
-import { isPlatformAdmin } from '@/lib/privileged';
-import { logAudit } from '@/lib/audit';
-
-// Same indefinite-suspension value the admin Suspend button uses
-// (see /api/admin/users/[id]); cleared with ban_duration: 'none'.
-const INDEFINITE_BAN = '876000h';
+import { applyFullRefund, latestChargeFullyRefunded } from '@/lib/refundSuspend';
 
 // Stripe calls this directly (no user session), authenticating itself via
 // the signature header instead — so this route reads the RAW body rather
@@ -148,6 +142,20 @@ export async function POST(request: NextRequest) {
           break;
         }
 
+        // "Refund and cancel" in Stripe fires this event too -- if the
+        // last charge was refunded in full, treat it as a refund (suspend)
+        // rather than an ordinary cancellation, even if charge.refunded
+        // isn't subscribed on this webhook.
+        try {
+          const refundedChargeId = await latestChargeFullyRefunded(customerId);
+          if (refundedChargeId) {
+            await applyFullRefund(customerId, refundedChargeId);
+            break;
+          }
+        } catch (err) {
+          console.error('customer.subscription.deleted: refund check failed for', customerId, err);
+        }
+
         await upsertStripeCustomer({
           user_id: existing.user_id,
           stripe_customer_id: customerId,
@@ -177,49 +185,11 @@ export async function POST(request: NextRequest) {
           break;
         }
 
-        const existing = await getStripeCustomerByCustomerId(customerId);
-        if (!existing) {
-          console.error(`charge.refunded for unknown customer ${customerId}`);
-          break;
-        }
-
-        // Stop any live subscription so it can't renew (and charge again).
         try {
-          const subs = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 20 });
-          for (const sub of subs.data) {
-            if (['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status)) {
-              await stripe.subscriptions.cancel(sub.id);
-            }
-          }
+          await applyFullRefund(customerId, charge.id);
         } catch (err) {
-          console.error('charge.refunded: could not cancel subscription(s) for', customerId, err);
-          return NextResponse.json({ error: 'Could not cancel subscription' }, { status: 500 });
-        }
-
-        await upsertStripeCustomer({
-          user_id: existing.user_id,
-          stripe_customer_id: customerId,
-          stripe_subscription_id: null,
-          subscription_status: 'refunded',
-          plan: DEFAULT_PLAN,
-        });
-        await setUserPlan(existing.user_id, DEFAULT_PLAN);
-        await dissolveTeamMembership(existing.user_id, (memberId) => setUserPlan(memberId, DEFAULT_PLAN));
-
-        // Suspend sign-in, but never lock out a platform admin by accident.
-        const { data: target } = await supabaseServer.auth.admin.getUserById(existing.user_id);
-        if (target?.user && !isPlatformAdmin(target.user)) {
-          const { error: banError } = await supabaseServer.auth.admin.updateUserById(existing.user_id, {
-            ban_duration: INDEFINITE_BAN,
-          });
-          if (banError) throw banError;
-          await logAudit(null, null, 'billing.refund_suspend_user', {
-            entityType: 'user',
-            entityId: existing.user_id,
-            metadata: { chargeId: charge.id },
-          });
-        } else {
-          console.warn(`charge.refunded: ${existing.user_id} is a platform admin or missing; not suspended`);
+          console.error('charge.refunded: could not apply refund for', customerId, err);
+          return NextResponse.json({ error: 'Could not apply refund' }, { status: 500 });
         }
         break;
       }
