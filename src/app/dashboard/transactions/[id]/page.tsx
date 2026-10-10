@@ -2125,6 +2125,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </div>
             {inviteMessage && <p className="text-xs text-slate-400 mt-2">{inviteMessage}</p>}
           </div>
+
+          <KeyDatesPanel
+            transactionId={transaction.id}
+            propertyAddress={transaction.property_address}
+            closingDate={transaction.closing_date ?? null}
+            canEdit={true}
+          />
         </div>
 
         {/* Checklist + Documents, side by side on desktop: documents are
@@ -2245,12 +2252,6 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </>
           )}
         </div>
-        <KeyDatesPanel
-          transactionId={transaction.id}
-          propertyAddress={transaction.property_address}
-          closingDate={transaction.closing_date ?? null}
-          canEdit={true}
-        />
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6">
           <div className="mb-5">
             <div className="flex items-start justify-between gap-3">

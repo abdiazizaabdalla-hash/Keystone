@@ -185,94 +185,92 @@ export default function KeyDatesPanel({
   const openCount = (dates || []).filter((d) => !d.completed).length;
 
   return (
-    <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6">
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <div>
-          <h2 className="text-lg font-bold text-slate-100">Critical dates</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Contract deadlines. You&apos;ll get a reminder 7, 3 and 1 days before, and daily once overdue.</p>
-        </div>
+    <div className="pt-6 mt-6 border-t border-slate-600">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Critical Dates</p>
         {openCount > 0 && (
           <button
             type="button"
             onClick={downloadIcs}
-            className="text-xs text-blue-400 hover:text-blue-300 transition whitespace-nowrap shrink-0 mt-0.5"
+            className="text-xs text-blue-400 hover:text-blue-300 transition whitespace-nowrap shrink-0"
           >
             Add to calendar
           </button>
         )}
       </div>
+      <p className="text-xs text-slate-500 mb-3">
+        Contract deadlines. You&apos;ll get a reminder 7, 3 and 1 days before, and daily once overdue.
+      </p>
 
       {error && <p className="text-xs text-red-300 mb-3">{error}</p>}
 
       {dates === null ? (
         <p className="text-sm text-slate-400">Loading…</p>
       ) : (
-        <ul className="space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
           {closingDate && (
-            <li className="flex items-center justify-between gap-3 px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
-              <div className="min-w-0">
-                <p className="text-sm text-slate-100">Closing</p>
-                <p className="text-xs text-slate-400">{formatDisplayDate(closingDate)}</p>
+            <div className="flex flex-col gap-2 p-3 bg-slate-700/40 border border-slate-600 rounded-lg">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-medium text-slate-100">Closing</p>
+                <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${badge({ completed: false, due_date: closingDate } as KeyDate).cls}`}>
+                  {badge({ completed: false, due_date: closingDate } as KeyDate).text}
+                </span>
               </div>
-              <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${badge({ completed: false, due_date: closingDate } as KeyDate).cls}`}>
-                {badge({ completed: false, due_date: closingDate } as KeyDate).text}
-              </span>
-            </li>
+              <p className="text-xs text-slate-400">{formatDisplayDate(closingDate)}</p>
+            </div>
           )}
           {dates.length === 0 && !closingDate && (
-            <li className="text-sm text-slate-400">No critical dates yet. Upload a contract when creating a deal, or add them by hand.</li>
+            <p className="text-sm text-slate-400 col-span-full">No critical dates yet. Upload a contract when creating a deal, or add them by hand.</p>
           )}
           {dates.map((d) => {
             const b = badge(d);
             return (
-              <li key={d.id} className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
+              <div key={d.id} className="flex flex-col gap-2 p-3 bg-slate-700/40 border border-slate-600 rounded-lg">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2 min-w-0">
                     {canEdit && (
                       <input
                         type="checkbox"
                         checked={d.completed}
                         onChange={(e) => patch(d.id, { completed: e.target.checked })}
-                        className="shrink-0"
+                        className="shrink-0 mt-1"
                         aria-label={`Mark ${d.label} done`}
                       />
                     )}
-                    <div className="min-w-0">
-                      <p className={`text-sm truncate ${d.completed ? 'text-slate-500 line-through' : 'text-slate-100'}`}>{d.label}</p>
-                      {editingId === d.id ? (
-                        <div className="flex items-center gap-2 mt-1">
-                          <input
-                            type="date"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            className="px-2 py-1 bg-slate-700 border border-slate-500 rounded text-xs text-slate-100"
-                          />
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (editValue) await patch(d.id, { dueDate: editValue });
-                              setEditingId(null);
-                            }}
-                            className="text-xs text-emerald-300 hover:text-emerald-200"
-                          >
-                            Save
-                          </button>
-                          <button type="button" onClick={() => setEditingId(null)} className="text-xs text-slate-400 hover:text-slate-200">
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-400">
-                          {formatDisplayDate(d.due_date)}
-                          {d.source === 'contract' ? ' · from contract' : ''}
-                        </p>
-                      )}
-                    </div>
+                    <p className={`text-sm font-medium break-words ${d.completed ? 'text-slate-500 line-through' : 'text-slate-100'}`}>{d.label}</p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${b.cls}`}>{b.text}</span>
-                    {canEdit && editingId !== d.id && (
-                      <>
+                  <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${b.cls}`}>{b.text}</span>
+                </div>
+                {editingId === d.id ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="date"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      className="px-2 py-1 bg-slate-600 border border-slate-500 rounded text-xs text-slate-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (editValue) await patch(d.id, { dueDate: editValue });
+                        setEditingId(null);
+                      }}
+                      className="text-xs text-emerald-300 hover:text-emerald-200"
+                    >
+                      Save
+                    </button>
+                    <button type="button" onClick={() => setEditingId(null)} className="text-xs text-slate-400 hover:text-slate-200">
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-slate-400">
+                      {formatDisplayDate(d.due_date)}
+                      {d.source === 'contract' ? ' · from contract' : ''}
+                    </p>
+                    {canEdit && (
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
                           onClick={() => {
@@ -286,20 +284,14 @@ export default function KeyDatesPanel({
                         <button type="button" onClick={() => remove(d.id)} className="text-xs text-slate-400 hover:text-red-300" aria-label={`Delete ${d.label}`}>
                           Delete
                         </button>
-                      </>
+                      </div>
                     )}
                   </div>
-                </div>
-                {canEdit && (
-                  <label className="flex items-center gap-2 mt-2 text-xs text-slate-400 cursor-pointer">
-                    <input type="checkbox" checked={d.notify_agent} onChange={(e) => patch(d.id, { notifyAgent: e.target.checked })} />
-                    Also email the agent about this date
-                  </label>
                 )}
-              </li>
+              </div>
             );
           })}
-        </ul>
+        </div>
       )}
 
       {canEdit && (
