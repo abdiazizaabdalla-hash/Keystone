@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
+import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 
 interface Agent {
   name: string;
@@ -170,12 +171,16 @@ export default function InvoicesPage() {
   };
 
   const totalAmount = invoices.reduce((sum, inv) => sum + inv.amount_owed, 0);
-  const paidAmount = invoices
-    .filter((inv) => inv.paid)
-    .reduce((sum, inv) => sum + (inv.paid_amount || 0), 0);
-  const outstandingAmount = invoices
-    .filter((inv) => !inv.paid)
-    .reduce((sum, inv) => sum + inv.amount_owed, 0);
+  // Same definitions as the dashboard cards (see lib/invoiceMath.ts).
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const paidAmount = invoices.reduce((sum, inv) => sum + netReceived(inv), 0);
+  const paidThisMonth = invoices
+    .filter((inv) => paidInMonth(inv, monthStart, nextMonthStart))
+    .reduce((sum, inv) => sum + netReceived(inv), 0);
+  const unpaidInvoices = invoices.filter((inv) => !inv.paid && !inv.refunded);
+  const outstandingAmount = unpaidInvoices.reduce((sum, inv) => sum + inv.amount_owed, 0);
 
   if (loading) {
     return (
@@ -214,14 +219,16 @@ export default function InvoicesPage() {
           <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6">
             <div className="text-sm text-slate-400 mb-2">Outstanding</div>
             <div className="text-3xl font-bold text-red-400">${outstandingAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-            <div className="text-xs text-slate-500 mt-2">{invoices.filter((inv) => !inv.paid).length} unpaid</div>
+            <div className="text-xs text-slate-500 mt-2">{unpaidInvoices.length} unpaid</div>
           </div>
 
           {/* Received */}
           <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6">
             <div className="text-sm text-slate-400 mb-2">Received</div>
             <div className="text-3xl font-bold text-green-400">${paidAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-            <div className="text-xs text-slate-500 mt-2">{invoices.filter((inv) => inv.paid).length} paid</div>
+            <div className="text-xs text-slate-500 mt-2">
+              {invoices.filter((inv) => inv.paid).length} paid · ${paidThisMonth.toLocaleString(undefined, { maximumFractionDigits: 2 })} this month
+            </div>
           </div>
         </div>
 

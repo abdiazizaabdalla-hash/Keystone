@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
+import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 import CriticalDatesCard from '@/components/CriticalDatesCard';
 
 interface Transaction {
@@ -40,6 +41,7 @@ interface Invoice {
   due_date: string;
   paid: boolean;
   paid_at: string | null;
+  paid_amount?: number | null;
   refunded?: boolean;
   refunded_amount?: number | null;
 }
@@ -265,8 +267,9 @@ export default function Dashboard() {
     // Net of any refund -- a refunded payment isn't actually revenue
     // anymore, even though the invoice itself stays marked paid.
     const revenueThisMonth = invoices
-      .filter((inv) => inv.paid && isThisMonth(inv.paid_at))
-      .reduce((sum, inv) => sum + (inv.amount_owed || 0) - (inv.refunded_amount || 0), 0);
+      .filter((inv) => paidInMonth(inv, monthStart, nextMonthStart))
+      .reduce((sum, inv) => sum + netReceived(inv), 0);
+    const revenueAllTime = invoices.reduce((sum, inv) => sum + netReceived(inv), 0);
 
     // Average days from acceptance to closing, across every closed deal
     // that has both dates on file (all-time, not scoped to this month).
@@ -290,6 +293,7 @@ export default function Dashboard() {
       unpaidAmount,
       overdueUnpaidCount,
       revenueThisMonth,
+      revenueAllTime,
       avgDaysToClose,
       closedSampleSize: closedWithDates.length,
       totalAgents: agents.length,
@@ -572,6 +576,7 @@ export default function Dashboard() {
         <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4">
           <div className="text-xs text-slate-400 mb-1">Revenue This Month</div>
           <div className="text-2xl font-bold text-green-400">{formatCurrency(stats.revenueThisMonth)}</div>
+          <div className="text-xs text-slate-500 mt-1">{formatCurrency(stats.revenueAllTime)} received all time</div>
         </div>
 
         <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4">
