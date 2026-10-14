@@ -220,6 +220,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [signatureRequestError, setSignatureRequestError] = useState<string | null>(null);
   const [agentName, setAgentName] = useState('');
   const [agent, setAgent] = useState<Agent | null>(null);
+  // Every agent this TC has added -- feeds the "pick an agent" menu in Agent Portal Access.
+  const [allAgents, setAllAgents] = useState<Agent[]>([]);
 
   // Compliance/audit export -- a one-button, timestamped PDF snapshot
   // of this deal's documents, messages, and checklist (see
@@ -763,6 +765,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       // separately by the Add button appending more on top of this floor.
       const blankBoxesNeeded = Math.max(0, 3 - savedContacts.length);
       setDraftContacts(Array.from({ length: blankBoxesNeeded }, () => makeDraftContact()));
+
+      setAllAgents(agentsData);
 
       if (tx) {
         const matchedAgent = agentsData.find((a: Agent) => a.id === tx.agent_id);
@@ -2272,12 +2276,49 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               </div>
             )}
 
+            {allAgents.length > 0 && (() => {
+              // Emails that already have access or a pending invite --
+              // shown but not selectable, so nobody is invited twice.
+              const alreadyHave = new Set([
+                ...acceptedAgentUsers.map((a) => a.email.toLowerCase()),
+                ...agentInvites.map((i) => i.email.toLowerCase()),
+              ]);
+              // This deal's own agent first, then the rest alphabetically.
+              const sortedAgents = [...allAgents].sort((a, b) => {
+                if (a.id === transaction.agent_id) return -1;
+                if (b.id === transaction.agent_id) return 1;
+                return a.name.localeCompare(b.name);
+              });
+              return (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const picked = allAgents.find((a) => a.id === e.target.value);
+                    if (picked?.email) setInviteEmailDraft(picked.email);
+                  }}
+                  className="w-full mb-2 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">Choose from your agents…</option>
+                  {sortedAgents.map((a) => {
+                    const email = a.email?.trim();
+                    const invited = !!email && alreadyHave.has(email.toLowerCase());
+                    return (
+                      <option key={a.id} value={a.id} disabled={!email || invited}>
+                        {a.name}
+                        {a.id === transaction.agent_id ? ' (this deal)' : ''}
+                        {!email ? ' — no email on file' : invited ? ' — already invited' : ` — ${email}`}
+                      </option>
+                    );
+                  })}
+                </select>
+              );
+            })()}
             <div className="flex flex-wrap gap-2">
               <input
                 type="email"
                 value={inviteEmailDraft}
                 onChange={(e) => setInviteEmailDraft(e.target.value)}
-                placeholder="agent@example.com"
+                placeholder="or type any email address"
                 className="flex-1 min-w-[12rem] bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
               />
               <button
