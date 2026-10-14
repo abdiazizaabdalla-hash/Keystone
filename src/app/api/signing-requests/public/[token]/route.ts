@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
-import { stampSignatureCertificate } from '@/lib/signing';
+import { stampSignatureCertificate, stampSignatureFields } from '@/lib/signing';
+import { parseSigningFields } from '@/lib/signingFields';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { sendSignedCopies, parseRecipients } from '@/lib/signedCopies';
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const { data: signingRequest, error } = await supabaseServer
     .from('signing_requests')
-    .select('status, signer_name, source_file_name, source_storage_path, signed_at, expires_at, decline_reason')
+    .select('*')
     .eq('token', token)
     .single();
 
@@ -85,11 +86,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     .from(BUCKET)
     .createSignedUrl(signingRequest.source_storage_path, PREVIEW_URL_TTL_SECONDS);
 
+  // Placed signature spots, if the TC set any (else the signature goes on
+  // a certificate page, as before). Re-validated on the way out so a bad
+  // row can never break the signing page.
+  const placed = parseSigningFields(signingRequest.fields).fields;
+
   return NextResponse.json({
     status: 'pending',
     fileName: signingRequest.source_file_name,
     signerName: signingRequest.signer_name,
     previewUrl: signed?.signedUrl || null,
+    fields: placed,
   });
 }
 
@@ -111,7 +118,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const body = await request.json();
-    const { signatureType, signatureValue, consent, decline, reason } = body;
+    const { signatureType, signatureValue, consent, decline, reason, initials } = body;
 
     const { data: signingRequest, error: fetchError } = await supabaseServer
       .from('signing_requests')
@@ -213,8 +220,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const signerIp = getClientIp(request);
     const signerUserAgent = request.headers.get('user-agent');
 
+    // If the TC placed signature spots, stamp the signature / initials /
+    // date into them first; the certificate page is still appended after,
+    // so the audit trail is always part of the signed document.
+    const placedFields = parseSigningFields(signingRequest.fields).fields;
+    let pdfToCertify: Uint8Array = sourceBytes;
+    if (placedFields.length > 0) {
+      const needsInitials = placedFields.some((f) => f.type === 'initials');
+      const initialsText = typeof initials === 'string' ? initials.trim().slice(0, 6) : '';
+      if (needsInitials && !initialsText) {
+        return NextResponse.json({ error: 'Please enter your initials' }, { status: 400 });
+      }
+      pdfToCertify = await stampSignatureFields({
+        pdfBytes: sourceBytes,
+        fields: placedFields,
+        signatureType,
+        signatureValue,
+        initials: initialsText,
+        signedAtIso,
+      });
+    }
+
     const signedPdfBytes = await stampSignatureCertificate({
-      pdfBytes: sourceBytes,
+      pdfBytes: pdfToCertify,
       signerName: signingRequest.signer_name,
       signerEmail: signingRequest.signer_email,
       signedAtIso,

@@ -3,6 +3,8 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { generateSigningToken, hashDocumentBytes } from '@/lib/signing';
+import { PDFDocument } from 'pdf-lib';
+import { parseSigningFields, type SigningField } from '@/lib/signingFields';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { escapeHtml } from '@/lib/escapeHtml';
@@ -107,7 +109,7 @@ export async function POST(request: NextRequest) {
     await assertTrialActive(user);
 
     const body = await request.json();
-    const { documentId, signerName, signerEmail, sendCopyTo, copySubject, copyMessage } = body;
+    const { documentId, signerName, signerEmail, sendCopyTo, copySubject, copyMessage, fields: rawFields } = body;
 
     if (!documentId || typeof documentId !== 'string') {
       return NextResponse.json({ error: 'documentId is required' }, { status: 400 });
@@ -183,6 +185,40 @@ export async function POST(request: NextRequest) {
     const documentHash = hashDocumentBytes(sourceBytes);
     const token = generateSigningToken();
 
+    // Placed signature spots (optional). Checked against the real PDF so a
+    // spot can never point at a page that doesn't exist, and rotated pages
+    // are refused because spot coordinates assume an upright page.
+    let placedFields: SigningField[] = [];
+    if (rawFields !== undefined && rawFields !== null && !(Array.isArray(rawFields) && rawFields.length === 0)) {
+      let pageCount = 0;
+      let hasRotatedPage = false;
+      try {
+        const pdf = await PDFDocument.load(sourceBytes, { ignoreEncryption: false });
+        pageCount = pdf.getPageCount();
+        hasRotatedPage = pdf.getPages().some((p) => {
+          const mb = p.getMediaBox();
+          const cb = p.getCropBox();
+          const cropDiffers =
+            Math.abs(mb.x - cb.x) > 1 || Math.abs(mb.y - cb.y) > 1 ||
+            Math.abs(mb.width - cb.width) > 1 || Math.abs(mb.height - cb.height) > 1;
+          return p.getRotation().angle % 360 !== 0 || cropDiffers;
+        });
+      } catch {
+        return NextResponse.json({ error: 'Could not read this PDF to place signature spots' }, { status: 400 });
+      }
+      const parsedFields = parseSigningFields(rawFields, pageCount);
+      if (parsedFields.error) {
+        return NextResponse.json({ error: parsedFields.error }, { status: 400 });
+      }
+      if (parsedFields.fields.length > 0 && hasRotatedPage) {
+        return NextResponse.json(
+          { error: 'This PDF has rotated or cropped pages, so signature spots cannot be placed on it. Send it without spots (signature goes on a certificate page).' },
+          { status: 400 }
+        );
+      }
+      placedFields = parsedFields.fields;
+    }
+
     const expiresAt = new Date(Date.now() + SIGNING_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     const { data: signingRequest, error: insertError } = await supabaseServer
@@ -201,6 +237,7 @@ export async function POST(request: NextRequest) {
         expires_at: expiresAt,
         // Only sent when used, so signing requests keep working even
         // before add-signing-distribution.sql has been run.
+        ...(placedFields.length > 0 ? { fields: placedFields } : {}),
         ...(copyRecipients.recipients.length > 0
           ? {
               distribute_to: copyRecipients.recipients,
@@ -215,6 +252,13 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       // The "email a signed copy" columns come from add-signing-distribution.sql.
       // If it hasn't been run yet, say so instead of a generic failure.
+      if (placedFields.length > 0 && /fields/i.test(insertError.message || '') && /column|schema cache/i.test(insertError.message || '')) {
+        console.error('Signing request insert failed -- add-signing-fields.sql probably not run:', insertError);
+        return NextResponse.json(
+          { error: 'Placing signature spots is not set up yet. Run add-signing-fields.sql in the Supabase SQL editor, then try again.' },
+          { status: 500 }
+        );
+      }
       if (copyRecipients.recipients.length > 0 && /distribute|column|schema cache/i.test(insertError.message || '')) {
         console.error('Signing request insert failed -- add-signing-distribution.sql probably not run:', insertError);
         return NextResponse.json(
@@ -250,7 +294,7 @@ export async function POST(request: NextRequest) {
       console.error('Failed to email signing request (non-fatal):', emailError);
     }
 
-    await logAudit(request, user, 'signing.request', { entityType: 'signing_request', entityId: signingRequest.id, metadata: { signerEmail: signerEmail.trim(), copyRecipients: copyRecipients.recipients.length } });
+    await logAudit(request, user, 'signing.request', { entityType: 'signing_request', entityId: signingRequest.id, metadata: { signerEmail: signerEmail.trim(), copyRecipients: copyRecipients.recipients.length, placedFields: placedFields.length } });
     return NextResponse.json({ ...signingRequest, signUrl }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFImage } from 'pdf-lib';
+import type { SigningField } from '@/lib/signingFields';
 
 /** A long, random, unguessable opaque token -- this is the ONLY auth on the public /sign/[token] page and its API route, so treat it like a bearer credential. */
 export function generateSigningToken(): string {
@@ -91,6 +92,94 @@ export async function stampSignatureCertificate(input: SignatureCertificateInput
   for (const line of disclaimerLines) {
     page.drawText(line, { x: marginX, y, size: 8, font, color: rgb(0.5, 0.5, 0.5) });
     y -= 12;
+  }
+
+  return pdfDoc.save();
+}
+
+export interface StampFieldsInput {
+  pdfBytes: Uint8Array | Buffer;
+  fields: SigningField[];
+  signatureType: 'typed' | 'drawn';
+  /** Typed: the plain text. Drawn: a `data:image/png;base64,...` string. */
+  signatureValue: string;
+  initials: string;
+  signedAtIso: string;
+}
+
+// The standard PDF fonts only cover Latin-1; anything else would make
+// drawText throw and fail the whole signature, so unsupported characters
+// become "?" instead.
+function latin1Safe(text: string): string {
+  return text.replace(/[^\x20-\x7E\u00A0-\u00FF]/g, '?');
+}
+
+/**
+ * Stamps the signer's signature, initials and date onto the exact spots the
+ * TC placed (see SigningField). Positions are fractions of each page with a
+ * top-left origin; PDF user space is bottom-left in points, hence the flip.
+ * Pages with a non-zero /Rotate are rejected when the request is created,
+ * so everything here assumes an upright page.
+ */
+export async function stampSignatureFields(input: StampFieldsInput): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.load(input.pdfBytes);
+  const pages = pdfDoc.getPages();
+  const plain = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const script = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+
+  let sigImage: PDFImage | null = null;
+  if (input.signatureType === 'drawn' && input.signatureValue.startsWith('data:image/png')) {
+    sigImage = await pdfDoc.embedPng(Buffer.from(input.signatureValue.split(',')[1] || '', 'base64'));
+  }
+
+  const dateText = new Date(input.signedAtIso).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'America/Chicago',
+  });
+  const ink = rgb(0.1, 0.1, 0.45);
+
+  const drawFitted = (
+    page: ReturnType<PDFDocument['getPages']>[number],
+    text: string,
+    font: typeof plain,
+    box: { x: number; y: number; w: number; h: number },
+    color: ReturnType<typeof rgb>
+  ) => {
+    const safe = latin1Safe(text);
+    if (!safe.trim()) return;
+    const unit = font.widthOfTextAtSize(safe, 1) || 1;
+    const size = Math.max(6, Math.min(box.h * 0.78, (box.w - 4) / unit));
+    page.drawText(safe, {
+      x: box.x + 2,
+      y: box.y + (box.h - size) / 2 + size * 0.2,
+      size,
+      font,
+      color,
+    });
+  };
+
+  for (const f of input.fields) {
+    const page = pages[f.page];
+    if (!page) continue;
+    const { width, height } = page.getSize();
+    const box = { x: f.x * width, y: height - (f.y + f.h) * height, w: f.w * width, h: f.h * height };
+
+    if (f.type === 'signature') {
+      if (sigImage) {
+        const scale = Math.min(box.w / sigImage.width, box.h / sigImage.height);
+        const w = sigImage.width * scale;
+        const h = sigImage.height * scale;
+        page.drawImage(sigImage, { x: box.x, y: box.y + (box.h - h) / 2, width: w, height: h });
+      } else {
+        drawFitted(page, input.signatureValue, script, box, ink);
+      }
+    } else if (f.type === 'initials') {
+      drawFitted(page, input.initials, script, box, ink);
+    } else {
+      drawFitted(page, dateText, plain, box, rgb(0.15, 0.15, 0.15));
+    }
   }
 
   return pdfDoc.save();

@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState, use } from 'react';
+import PdfPages from '@/components/PdfPages';
+import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
 
 interface SigningStatus {
   status: 'pending' | 'signed' | 'voided' | 'declined';
   fileName: string;
   signerName: string;
   previewUrl?: string | null;
+  fields?: SigningField[];
   signedAt?: string | null;
   declineReason?: string | null;
 }
@@ -22,6 +25,8 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
 
   const [signatureTab, setSignatureTab] = useState<'draw' | 'type'>('draw');
   const [typedSignature, setTypedSignature] = useState('');
+  const [initials, setInitials] = useState('');
+  const [pdfFailed, setPdfFailed] = useState(false);
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -44,6 +49,15 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
         if (!res.ok) throw new Error(data.error || 'This signing link is invalid or has expired');
         setInfo(data);
         setTypedSignature(data.signerName || '');
+        setInitials(
+          String(data.signerName || '')
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((w: string) => w[0])
+            .join('')
+            .toUpperCase()
+            .slice(0, 4)
+        );
       })
       .catch((error) => setLoadError(error instanceof Error ? error.message : 'Failed to load'))
       .finally(() => setLoading(false));
@@ -120,12 +134,22 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
       signatureValue = canvasRef.current.toDataURL('image/png');
     }
 
+    if (needsInitials && !initials.trim()) {
+      setSubmitError('Please enter your initials.');
+      return;
+    }
+
     try {
       setSubmitting(true);
       const response = await fetch(`/api/signing-requests/public/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signatureType, signatureValue, consent: true }),
+        body: JSON.stringify({
+          signatureType,
+          signatureValue,
+          consent: true,
+          ...(needsInitials ? { initials: initials.trim() } : {}),
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to submit signature');
@@ -137,6 +161,10 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
       setSubmitting(false);
     }
   };
+
+  const placedFields = info?.fields ?? [];
+  const showPlaced = placedFields.length > 0 && !!info?.previewUrl && !pdfFailed;
+  const needsInitials = placedFields.some((f) => f.type === 'initials');
 
   const handleDecline = async () => {
     setDeclineError(null);
@@ -252,7 +280,71 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
           <p className="text-slate-400 text-sm">{info.fileName}</p>
         </div>
 
-        {info.previewUrl && (
+        {showPlaced && info.previewUrl && (
+          <div className="mb-8">
+            <div className="mb-3 bg-amber-500/10 border border-amber-500/40 rounded-lg px-4 py-3 text-sm text-amber-200">
+              This document has {placedFields.length} spot{placedFields.length === 1 ? '' : 's'} marked for you
+              {' '}({(['signature', 'initials', 'date'] as const)
+                .map((t) => [t, placedFields.filter((f) => f.type === t).length] as const)
+                .filter(([, n]) => n > 0)
+                .map(([t, n]) => `${n} ${FIELD_LABEL[t].toLowerCase()}`)
+                .join(', ')}).
+              Review it, then add your signature{needsInitials ? ' and initials' : ''} below &mdash; we&apos;ll place
+              {' '}{placedFields.length === 1 ? 'it' : 'them'} on the marked spots.
+            </div>
+            <div className="rounded-lg overflow-hidden bg-slate-300/20 p-2 sm:p-4">
+              <PdfPages
+                url={info.previewUrl}
+                onError={() => setPdfFailed(true)}
+                renderPageOverlay={(pageIndex) =>
+                  placedFields
+                    .filter((f) => f.page === pageIndex)
+                    .map((f) => (
+                      <div
+                        key={f.id}
+                        style={{
+                          position: 'absolute',
+                          left: `${f.x * 100}%`,
+                          top: `${f.y * 100}%`,
+                          width: `${f.w * 100}%`,
+                          height: `${f.h * 100}%`,
+                          border: '2px solid #f59e0b',
+                          background: 'rgba(251,191,36,0.28)',
+                          borderRadius: 3,
+                          boxSizing: 'border-box',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          overflow: 'hidden',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: '#92400e',
+                          fontFamily:
+                            f.type === 'signature' && signatureTab === 'type' && typedSignature.trim()
+                              ? 'Georgia, serif'
+                              : undefined,
+                          fontStyle:
+                            f.type === 'signature' && signatureTab === 'type' && typedSignature.trim()
+                              ? 'italic'
+                              : undefined,
+                        }}
+                      >
+                        {f.type === 'signature'
+                          ? signatureTab === 'type' && typedSignature.trim()
+                            ? typedSignature.trim()
+                            : 'Sign here'
+                          : f.type === 'initials'
+                            ? initials.trim() || 'Initial here'
+                            : new Date().toLocaleDateString('en-US', { timeZone: 'America/Chicago' })}
+                      </div>
+                    ))
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        {!showPlaced && info.previewUrl && (
           <div className="mb-8 bg-slate-800/50 border border-slate-600 rounded-lg overflow-hidden" style={{ height: '60vh' }}>
             <iframe src={info.previewUrl} title={info.fileName} className="w-full h-full" />
           </div>
@@ -310,6 +402,21 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
               className="w-full bg-white rounded-lg border border-slate-500 px-4 py-4 text-2xl italic text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
               style={{ fontFamily: 'Georgia, serif' }}
             />
+          )}
+
+          {needsInitials && (
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Your initials</label>
+              <input
+                type="text"
+                value={initials}
+                maxLength={6}
+                onChange={(e) => setInitials(e.target.value)}
+                placeholder="e.g. JS"
+                className="w-28 bg-white rounded-lg border border-slate-500 px-3 py-2 text-lg italic text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                style={{ fontFamily: 'Georgia, serif' }}
+              />
+            </div>
           )}
 
           <label className="flex items-start gap-3 text-sm text-slate-300 cursor-pointer">

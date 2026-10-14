@@ -10,6 +10,8 @@ import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categ
 import { DueDateSpec, formatDisplayDate } from '@/lib/dueDates';
 import DueDateControl from '@/components/DueDateControl';
 import KeyDatesPanel from '@/components/KeyDatesPanel';
+import SignatureFieldPlacer from '@/components/SignatureFieldPlacer';
+import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
 
 interface Transaction {
   id: string;
@@ -209,6 +211,9 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [requestingSignatureDocId, setRequestingSignatureDocId] = useState<string | null>(null);
   const [signerNameDraft, setSignerNameDraft] = useState('');
   const [signerEmailDraft, setSignerEmailDraft] = useState('');
+  // Signature spots the TC placed on the PDF for this request (empty = signature goes on a certificate page).
+  const [fieldsDraft, setFieldsDraft] = useState<SigningField[]>([]);
+  const [placerOpen, setPlacerOpen] = useState(false);
   // "Email a signed copy to others" -- optional, collapsed by default.
   const [copyEnabledDraft, setCopyEnabledDraft] = useState(false);
   const [copyRecipientsDraft, setCopyRecipientsDraft] = useState<{ email: string; name: string; title: string }[]>([]);
@@ -670,6 +675,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           documentId,
           signerName: signerNameDraft.trim(),
           signerEmail: signerEmailDraft.trim(),
+          ...(fieldsDraft.length > 0 ? { fields: fieldsDraft } : {}),
           ...(copyEnabledDraft
             ? {
                 sendCopyTo: copyRecipientsDraft.filter((r) => r.email.trim()),
@@ -685,6 +691,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setRequestingSignatureDocId(null);
       setSignerNameDraft('');
       setSignerEmailDraft('');
+      setFieldsDraft([]);
       setCopyEnabledDraft(false);
       setCopyRecipientsDraft([]);
     } catch (error) {
@@ -1783,6 +1790,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 setRequestingSignatureDocId(doc.id);
                 setSignerNameDraft('');
                 setSignerEmailDraft('');
+                setFieldsDraft([]);
                 setSignatureRequestError(null);
               }}
               className="text-xs px-2 py-1 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition flex-shrink-0"
@@ -1827,6 +1835,37 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setPlacerOpen(true)}
+                disabled={!doc.url}
+                className="px-3 py-1.5 border border-blue-500/60 text-blue-300 hover:bg-blue-500/10 disabled:opacity-50 rounded-lg transition"
+              >
+                {fieldsDraft.length > 0 ? 'Edit signature spots' : 'Place signature spots'}
+              </button>
+              <span className="text-slate-400">
+                {fieldsDraft.length > 0
+                  ? (['signature', 'initials', 'date'] as const)
+                      .map((t) => [t, fieldsDraft.filter((f) => f.type === t).length] as const)
+                      .filter(([, n]) => n > 0)
+                      .map(([t, n]) => `${n} ${FIELD_LABEL[t].toLowerCase()}`)
+                      .join(', ') + ' placed on the document'
+                  : 'Optional. Without spots, the signature goes on a certificate page at the end.'}
+              </span>
+            </div>
+            {placerOpen && doc.url && (
+              <SignatureFieldPlacer
+                documentUrl={doc.url}
+                fileName={doc.file_name}
+                initialFields={fieldsDraft}
+                onSave={(next) => {
+                  setFieldsDraft(next);
+                  setPlacerOpen(false);
+                }}
+                onCancel={() => setPlacerOpen(false)}
+              />
+            )}
             <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
               <input
                 type="checkbox"
@@ -1961,7 +2000,11 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 {isSendingSignatureRequest ? 'Sending…' : 'Send for Signature'}
               </button>
               <button
-                onClick={() => setRequestingSignatureDocId(null)}
+                onClick={() => {
+                  setRequestingSignatureDocId(null);
+                  setFieldsDraft([]);
+                  setPlacerOpen(false);
+                }}
                 className="text-xs px-3 py-1.5 border border-slate-600 text-slate-300 hover:text-slate-100 rounded-lg transition"
               >
                 Cancel
