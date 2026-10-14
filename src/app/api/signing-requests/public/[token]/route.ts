@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { stampSignatureCertificate } from '@/lib/signing';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { sendSignedCopies } from '@/lib/signedCopies';
 
 const BUCKET = 'transaction-documents';
 const PREVIEW_URL_TTL_SECONDS = 60 * 30; // 30 minutes -- plenty for one signing session
@@ -292,6 +293,47 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (signedDocRow?.id) await supabaseServer.from('documents').delete().eq('id', signedDocRow.id);
       await supabaseServer.storage.from(BUCKET).remove([signedStoragePath]);
       return NextResponse.json({ error: 'This document has already been signed' }, { status: 409 });
+    }
+
+    // Email the signed PDF to any extra recipients the TC listed when
+    // sending the request. Best-effort: a failed email never undoes the
+    // signature, but the outcome is recorded so the TC can see it.
+    const copyRecipients: string[] = Array.isArray(signingRequest.distribute_to) ? signingRequest.distribute_to : [];
+    if (copyRecipients.length > 0) {
+      try {
+        const { data: txRow } = await supabaseServer
+          .from('transactions')
+          .select('property_address, file_number')
+          .eq('id', signingRequest.transaction_id)
+          .maybeSingle();
+        const { data: tcUser } = await supabaseServer.auth.admin.getUserById(signingRequest.requested_by);
+
+        const { sent, failed } = await sendSignedCopies({
+          recipients: copyRecipients,
+          subjectTemplate: signingRequest.distribute_subject ?? null,
+          messageTemplate: signingRequest.distribute_message ?? null,
+          replyTo: tcUser?.user?.email ?? null,
+          signedPdf: signedPdfBytes,
+          signedFileName,
+          fields: {
+            document: signingRequest.source_file_name.replace(/\.pdf$/i, ''),
+            property: txRow?.property_address || 'the property',
+            file_number: txRow?.file_number || '',
+            signer: signingRequest.signer_name,
+            signed_date: new Date(signedAtIso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Chicago' }),
+          },
+        });
+
+        await supabaseServer
+          .from('signing_requests')
+          .update({
+            distributed_at: sent > 0 ? new Date().toISOString() : null,
+            distribution_error: failed.length > 0 ? `Could not send to: ${failed.join(', ')}` : null,
+          })
+          .eq('id', signingRequest.id);
+      } catch (copyError) {
+        console.error('Failed to distribute signed copies (non-fatal):', copyError);
+      }
     }
 
     const { data: downloadSigned } = await supabaseServer.storage

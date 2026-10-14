@@ -7,6 +7,7 @@ import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { escapeHtml } from '@/lib/escapeHtml';
 import { logAudit } from '@/lib/audit';
+import { parseRecipientList } from '@/lib/signedCopies';
 
 const BUCKET = 'transaction-documents';
 // Signing links used to never expire at all -- found during the 2026-09
@@ -56,12 +57,35 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabaseServer
       .from('signing_requests')
-      .select('id, document_id, signer_name, signer_email, source_file_name, status, signed_at, signed_document_id, created_at, expires_at, voided_at, declined_at, decline_reason')
+      .select('*')
       .eq('transaction_id', transactionId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return NextResponse.json(data || []);
+    // select('*') then pick the safe fields, so the optional "email a
+    // signed copy" columns (add-signing-distribution.sql) are returned
+    // when they exist without this route breaking before that migration
+    // runs. The signing token and storage paths are never returned.
+    return NextResponse.json(
+      (data || []).map((r) => ({
+        id: r.id,
+        document_id: r.document_id,
+        signer_name: r.signer_name,
+        signer_email: r.signer_email,
+        source_file_name: r.source_file_name,
+        status: r.status,
+        signed_at: r.signed_at,
+        signed_document_id: r.signed_document_id,
+        created_at: r.created_at,
+        expires_at: r.expires_at,
+        voided_at: r.voided_at,
+        declined_at: r.declined_at,
+        decline_reason: r.decline_reason,
+        distribute_to: r.distribute_to ?? [],
+        distributed_at: r.distributed_at ?? null,
+        distribution_error: r.distribution_error ?? null,
+      }))
+    );
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -83,7 +107,7 @@ export async function POST(request: NextRequest) {
     await assertTrialActive(user);
 
     const body = await request.json();
-    const { documentId, signerName, signerEmail } = body;
+    const { documentId, signerName, signerEmail, sendCopyTo, copySubject, copyMessage } = body;
 
     if (!documentId || typeof documentId !== 'string') {
       return NextResponse.json({ error: 'documentId is required' }, { status: 400 });
@@ -93,6 +117,17 @@ export async function POST(request: NextRequest) {
     }
     if (!signerEmail || typeof signerEmail !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail)) {
       return NextResponse.json({ error: 'A valid signer email is required' }, { status: 400 });
+    }
+
+    const copyRecipients = parseRecipientList(sendCopyTo);
+    if (copyRecipients.error) {
+      return NextResponse.json({ error: copyRecipients.error }, { status: 400 });
+    }
+    if (copySubject !== undefined && copySubject !== null && (typeof copySubject !== 'string' || copySubject.length > 200)) {
+      return NextResponse.json({ error: 'Email subject must be 200 characters or fewer' }, { status: 400 });
+    }
+    if (copyMessage !== undefined && copyMessage !== null && (typeof copyMessage !== 'string' || copyMessage.length > 3000)) {
+      return NextResponse.json({ error: 'Email message must be 3000 characters or fewer' }, { status: 400 });
     }
 
     const { data: document, error: docError } = await supabaseServer
@@ -164,6 +199,15 @@ export async function POST(request: NextRequest) {
         token,
         status: 'pending',
         expires_at: expiresAt,
+        // Only sent when used, so signing requests keep working even
+        // before add-signing-distribution.sql has been run.
+        ...(copyRecipients.emails.length > 0
+          ? {
+              distribute_to: copyRecipients.emails,
+              distribute_subject: typeof copySubject === 'string' && copySubject.trim() ? copySubject.trim() : null,
+              distribute_message: typeof copyMessage === 'string' && copyMessage.trim() ? copyMessage.trim() : null,
+            }
+          : {}),
       })
       .select()
       .single();
@@ -195,7 +239,7 @@ export async function POST(request: NextRequest) {
       console.error('Failed to email signing request (non-fatal):', emailError);
     }
 
-    await logAudit(request, user, 'signing.request', { entityType: 'signing_request', entityId: signingRequest.id, metadata: { signerEmail: signerEmail.trim() } });
+    await logAudit(request, user, 'signing.request', { entityType: 'signing_request', entityId: signingRequest.id, metadata: { signerEmail: signerEmail.trim(), copyRecipients: copyRecipients.emails.length } });
     return NextResponse.json({ ...signingRequest, signUrl }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

@@ -126,6 +126,9 @@ interface SigningRequestItem {
   signed_document_id: string | null;
   decline_reason?: string | null;
   created_at: string;
+  distribute_to?: string[];
+  distributed_at?: string | null;
+  distribution_error?: string | null;
 }
 
 interface ExternalLink {
@@ -206,6 +209,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [requestingSignatureDocId, setRequestingSignatureDocId] = useState<string | null>(null);
   const [signerNameDraft, setSignerNameDraft] = useState('');
   const [signerEmailDraft, setSignerEmailDraft] = useState('');
+  // "Email a signed copy to others" -- optional, collapsed by default.
+  const [copyEnabledDraft, setCopyEnabledDraft] = useState(false);
+  const [copyToDraft, setCopyToDraft] = useState('');
+  const [copySubjectDraft, setCopySubjectDraft] = useState('Signed: {{document}} - {{property}}');
+  const [copyMessageDraft, setCopyMessageDraft] = useState(
+    'Hi,\n\nAttached is the signed copy of {{document}} for {{property}} (file #{{file_number}}), signed by {{signer}} on {{signed_date}}.\n\nPlease let me know if you need anything else.'
+  );
   const [isSendingSignatureRequest, setIsSendingSignatureRequest] = useState(false);
   const [signatureRequestError, setSignatureRequestError] = useState<string | null>(null);
   const [agentName, setAgentName] = useState('');
@@ -654,6 +664,9 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           documentId,
           signerName: signerNameDraft.trim(),
           signerEmail: signerEmailDraft.trim(),
+          ...(copyEnabledDraft && copyToDraft.trim()
+            ? { sendCopyTo: copyToDraft, copySubject: copySubjectDraft, copyMessage: copyMessageDraft }
+            : {}),
         }),
       });
       const data = await response.json();
@@ -662,6 +675,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setRequestingSignatureDocId(null);
       setSignerNameDraft('');
       setSignerEmailDraft('');
+      setCopyEnabledDraft(false);
+      setCopyToDraft('');
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
@@ -1701,6 +1716,26 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               ✓ Signed
             </span>
           )}
+          {sigReq && (sigReq.distribute_to?.length ?? 0) > 0 && (
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${
+                sigReq.distribution_error
+                  ? 'bg-orange-900/30 border-orange-700/50 text-orange-300'
+                  : sigReq.distributed_at
+                    ? 'bg-green-900/30 border-green-700/50 text-green-300'
+                    : 'bg-slate-700/60 border-slate-600 text-slate-300'
+              }`}
+              title={`Signed copy goes to: ${(sigReq.distribute_to || []).join(', ')}${sigReq.distribution_error ? ` — ${sigReq.distribution_error}` : ''}`}
+            >
+              {sigReq.distribution_error
+                ? 'Some copies failed'
+                : sigReq.distributed_at
+                  ? `Copies sent (${sigReq.distribute_to?.length})`
+                  : sigReq.status === 'pending'
+                    ? `Copies after signing (${sigReq.distribute_to?.length})`
+                    : ''}
+            </span>
+          )}
           {requiresSignature && !isSignedOutput && !hasSigningActivity && sigReq?.status === 'declined' && (
             <span
               className="text-xs px-2 py-0.5 bg-orange-900/30 border border-orange-700/50 rounded-full text-orange-300 flex-shrink-0"
@@ -1780,6 +1815,43 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
+            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={copyEnabledDraft}
+                onChange={(e) => setCopyEnabledDraft(e.target.checked)}
+                className="accent-blue-500"
+              />
+              After it&apos;s signed, email the signed copy to others (lender, title, agent...)
+            </label>
+            {copyEnabledDraft && (
+              <div className="space-y-2 border-l-2 border-slate-600 pl-3">
+                <textarea
+                  value={copyToDraft}
+                  onChange={(e) => setCopyToDraft(e.target.value)}
+                  rows={2}
+                  placeholder="Email addresses, separated by commas or new lines (max 10)"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={copySubjectDraft}
+                  onChange={(e) => setCopySubjectDraft(e.target.value)}
+                  placeholder="Email subject"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                />
+                <textarea
+                  value={copyMessageDraft}
+                  onChange={(e) => setCopyMessageDraft(e.target.value)}
+                  rows={5}
+                  placeholder="Email message"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                />
+                <p className="text-xs text-slate-500">
+                  Fills in automatically: {'{{document}}'}, {'{{property}}'}, {'{{file_number}}'}, {'{{signer}}'}, {'{{signed_date}}'}. Replies go to you.
+                </p>
+              </div>
+            )}
             {signatureRequestError && (
               <p className="text-xs text-red-400">{signatureRequestError}</p>
             )}
