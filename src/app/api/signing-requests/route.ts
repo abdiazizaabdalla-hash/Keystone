@@ -288,12 +288,17 @@ export async function POST(request: NextRequest) {
         ...(spotsForSigner.length > 0 ? { fields: spotsForSigner } : {}),
         ...(isMulti ? { group_id: groupId, signing_order: i + 1, awaiting_turn: i > 0 } : {}),
         // The signed copy goes out once, after the LAST signer finishes.
-        ...(isLast && copyRecipients.recipients.length > 0
-          ? {
-              distribute_to: copyRecipients.recipients,
-              distribute_subject: typeof copySubject === 'string' && copySubject.trim() ? copySubject.trim() : null,
-              distribute_message: typeof copyMessage === 'string' && copyMessage.trim() ? copyMessage.trim() : null,
-            }
+        // (Every row in a bulk insert must carry the same columns -- a
+        // missing key becomes NULL, which distribute_to's NOT NULL rejects --
+        // so earlier signers get an explicit empty list.)
+        ...(copyRecipients.recipients.length > 0
+          ? isLast
+            ? {
+                distribute_to: copyRecipients.recipients,
+                distribute_subject: typeof copySubject === 'string' && copySubject.trim() ? copySubject.trim() : null,
+                distribute_message: typeof copyMessage === 'string' && copyMessage.trim() ? copyMessage.trim() : null,
+              }
+            : { distribute_to: [], distribute_subject: null, distribute_message: null }
           : {}),
       };
     });
@@ -322,13 +327,14 @@ export async function POST(request: NextRequest) {
       }
       // The "email a signed copy" columns come from add-signing-distribution.sql.
       // If it hasn't been run yet, say so instead of a generic failure.
-      if (copyRecipients.recipients.length > 0 && /distribute|column|schema cache/i.test(message)) {
+      if (copyRecipients.recipients.length > 0 && /could not find|schema cache|does not exist/i.test(message) && /distribute|distributed_at|distribution_error/i.test(message)) {
         console.error('Signing request insert failed -- add-signing-distribution.sql probably not run:', insertError);
         return NextResponse.json(
           { error: 'Emailing signed copies is not set up yet. Run add-signing-distribution.sql in the Supabase SQL editor, then try again.' },
           { status: 500 }
         );
       }
+      console.error('Signing request insert failed:', insertError);
       throw insertError || new Error('Signing request insert returned no rows');
     }
 
