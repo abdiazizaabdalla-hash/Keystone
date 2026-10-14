@@ -4,10 +4,9 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { generateSigningToken, hashDocumentBytes } from '@/lib/signing';
 import { PDFDocument } from 'pdf-lib';
-import { parseSigningFields, type SigningField } from '@/lib/signingFields';
-import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { parseSigningFields, MAX_SIGNERS, type SigningField } from '@/lib/signingFields';
+import { sendSigningRequestEmail } from '@/lib/signingEmails';
 import { getVisibleTcUserIds } from '@/lib/team';
-import { escapeHtml } from '@/lib/escapeHtml';
 import { logAudit } from '@/lib/audit';
 import { parseRecipients } from '@/lib/signedCopies';
 
@@ -68,8 +67,21 @@ export async function GET(request: NextRequest) {
     // signed copy" columns (add-signing-distribution.sql) are returned
     // when they exist without this route breaking before that migration
     // runs. The signing token and storage paths are never returned.
-    return NextResponse.json(
-      (data || []).map((r) => ({
+    return NextResponse.json((data || []).map(toSafeRequest));
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error('Error fetching signing requests:', error);
+    return NextResponse.json({ error: 'Failed to fetch signing requests' }, { status: 500 });
+  }
+}
+
+// The fields the TC's browser may see -- never the token or storage paths.
+// (Defined once and shared by the list and create responses.)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toSafeRequest(r: any) {
+  return {
         id: r.id,
         document_id: r.document_id,
         signer_name: r.signer_name,
@@ -86,15 +98,10 @@ export async function GET(request: NextRequest) {
         distribute_to: r.distribute_to ?? [],
         distributed_at: r.distributed_at ?? null,
         distribution_error: r.distribution_error ?? null,
-      }))
-    );
-  } catch (error) {
-    if (error instanceof AuthError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
-    console.error('Error fetching signing requests:', error);
-    return NextResponse.json({ error: 'Failed to fetch signing requests' }, { status: 500 });
-  }
+        group_id: r.group_id ?? null,
+        signing_order: r.signing_order ?? 1,
+        awaiting_turn: r.awaiting_turn ?? false,
+  };
 }
 
 // POST /api/signing-requests -- TC sends an existing PDF document out for
@@ -109,16 +116,33 @@ export async function POST(request: NextRequest) {
     await assertTrialActive(user);
 
     const body = await request.json();
-    const { documentId, signerName, signerEmail, sendCopyTo, copySubject, copyMessage, fields: rawFields } = body;
+    const { documentId, signers: rawSigners, signerName, signerEmail, sendCopyTo, copySubject, copyMessage, fields: rawFields } = body;
 
     if (!documentId || typeof documentId !== 'string') {
       return NextResponse.json({ error: 'documentId is required' }, { status: 400 });
     }
-    if (!signerName || typeof signerName !== 'string' || !signerName.trim()) {
-      return NextResponse.json({ error: 'Signer name is required' }, { status: 400 });
+    // One or more signers, in signing order. The old single-signer shape
+    // (signerName + signerEmail) still works and means a one-person list.
+    const signerInput: unknown[] = Array.isArray(rawSigners) ? rawSigners : [{ name: signerName, email: signerEmail }];
+    if (signerInput.length === 0) {
+      return NextResponse.json({ error: 'Add at least one signer' }, { status: 400 });
     }
-    if (!signerEmail || typeof signerEmail !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail)) {
-      return NextResponse.json({ error: 'A valid signer email is required' }, { status: 400 });
+    if (signerInput.length > MAX_SIGNERS) {
+      return NextResponse.json({ error: `You can add at most ${MAX_SIGNERS} signers` }, { status: 400 });
+    }
+    const signers: { name: string; email: string }[] = [];
+    for (let i = 0; i < signerInput.length; i++) {
+      const raw = signerInput[i] as { name?: unknown; email?: unknown } | null;
+      const label = signerInput.length > 1 ? `Signer ${i + 1}` : 'Signer';
+      const name = typeof raw?.name === 'string' ? raw.name.trim() : '';
+      const email = typeof raw?.email === 'string' ? raw.email.trim() : '';
+      if (!name || name.length > 200) {
+        return NextResponse.json({ error: `${label} name is required` }, { status: 400 });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320) {
+        return NextResponse.json({ error: `A valid email is required for ${label.toLowerCase()}` }, { status: 400 });
+      }
+      signers.push({ name, email });
     }
 
     const copyRecipients = parseRecipients(sendCopyTo);
@@ -217,75 +241,113 @@ export async function POST(request: NextRequest) {
         );
       }
       placedFields = parsedFields.fields;
+
+      // Every spot belongs to a real signer, and (with spots in use) every
+      // signer has at least one spot -- otherwise someone would be asked
+      // to sign a document with nowhere to sign.
+      if (placedFields.some((f) => f.signer >= signers.length)) {
+        return NextResponse.json({ error: 'A signature spot is assigned to a signer who was removed' }, { status: 400 });
+      }
+      if (placedFields.length > 0) {
+        for (let i = 0; i < signers.length; i++) {
+          if (!placedFields.some((f) => f.signer === i && f.type === 'signature')) {
+            return NextResponse.json(
+              { error: `${signers.length > 1 ? signers[i].name : 'The signer'} needs at least one signature spot. Add one, or remove all spots.` },
+              { status: 400 }
+            );
+          }
+        }
+      }
     }
 
     const expiresAt = new Date(Date.now() + SIGNING_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-    const { data: signingRequest, error: insertError } = await supabaseServer
-      .from('signing_requests')
-      .insert({
+    // One row per signer. Rows sent together share a group_id and a
+    // signing_order; everyone after the first waits (awaiting_turn) until
+    // the signer before them finishes -- see the public sign route.
+    const isMulti = signers.length > 1;
+    const groupId = isMulti ? crypto.randomUUID() : null;
+    const tokens = signers.map((_, i) => (i === 0 ? token : generateSigningToken()));
+    const rowsToInsert = signers.map((signer, i) => {
+      const spotsForSigner = placedFields.filter((f) => f.signer === i);
+      const isLast = i === signers.length - 1;
+      return {
         transaction_id: transaction.id,
         document_id: document.id,
         requested_by: user.id,
-        signer_name: signerName.trim(),
-        signer_email: signerEmail.trim(),
+        signer_name: signer.name,
+        signer_email: signer.email,
         source_storage_path: document.storage_path,
         source_file_name: document.file_name,
         document_hash: documentHash,
-        token,
+        token: tokens[i],
         status: 'pending',
         expires_at: expiresAt,
         // Only sent when used, so signing requests keep working even
-        // before add-signing-distribution.sql has been run.
-        ...(placedFields.length > 0 ? { fields: placedFields } : {}),
-        ...(copyRecipients.recipients.length > 0
+        // before the optional migrations have been run.
+        ...(spotsForSigner.length > 0 ? { fields: spotsForSigner } : {}),
+        ...(isMulti ? { group_id: groupId, signing_order: i + 1, awaiting_turn: i > 0 } : {}),
+        // The signed copy goes out once, after the LAST signer finishes.
+        ...(isLast && copyRecipients.recipients.length > 0
           ? {
               distribute_to: copyRecipients.recipients,
               distribute_subject: typeof copySubject === 'string' && copySubject.trim() ? copySubject.trim() : null,
               distribute_message: typeof copyMessage === 'string' && copyMessage.trim() ? copyMessage.trim() : null,
             }
           : {}),
-      })
-      .select()
-      .single();
+      };
+    });
 
-    if (insertError) {
-      // The "email a signed copy" columns come from add-signing-distribution.sql.
-      // If it hasn't been run yet, say so instead of a generic failure.
-      if (placedFields.length > 0 && /fields/i.test(insertError.message || '') && /column|schema cache/i.test(insertError.message || '')) {
+    // A single bulk insert is atomic: either every signer's row exists or none do.
+    const { data: insertedRows, error: insertError } = await supabaseServer
+      .from('signing_requests')
+      .insert(rowsToInsert)
+      .select();
+
+    if (insertError || !insertedRows || insertedRows.length === 0) {
+      const message = insertError?.message || '';
+      if (isMulti && /group_id|signing_order|awaiting_turn/i.test(message)) {
+        console.error('Signing request insert failed -- add-multiple-signers.sql probably not run:', insertError);
+        return NextResponse.json(
+          { error: 'Multiple signers is not set up yet. Run add-multiple-signers.sql in the Supabase SQL editor, then try again.' },
+          { status: 500 }
+        );
+      }
+      if (placedFields.length > 0 && /fields/i.test(message) && /column|schema cache/i.test(message)) {
         console.error('Signing request insert failed -- add-signing-fields.sql probably not run:', insertError);
         return NextResponse.json(
           { error: 'Placing signature spots is not set up yet. Run add-signing-fields.sql in the Supabase SQL editor, then try again.' },
           { status: 500 }
         );
       }
-      if (copyRecipients.recipients.length > 0 && /distribute|column|schema cache/i.test(insertError.message || '')) {
+      // The "email a signed copy" columns come from add-signing-distribution.sql.
+      // If it hasn't been run yet, say so instead of a generic failure.
+      if (copyRecipients.recipients.length > 0 && /distribute|column|schema cache/i.test(message)) {
         console.error('Signing request insert failed -- add-signing-distribution.sql probably not run:', insertError);
         return NextResponse.json(
           { error: 'Emailing signed copies is not set up yet. Run add-signing-distribution.sql in the Supabase SQL editor, then try again.' },
           { status: 500 }
         );
       }
-      throw insertError;
+      throw insertError || new Error('Signing request insert returned no rows');
     }
 
+    const orderedRows = [...insertedRows].sort((a, b) => (a.signing_order ?? 1) - (b.signing_order ?? 1));
+    const signingRequest = orderedRows[0];
     const origin = new URL(request.url).origin;
-    const signUrl = `${origin}/sign/${token}`;
+    const signUrl = `${origin}/sign/${signingRequest.token}`;
 
+    // Only the first signer is emailed now; the rest are emailed when it
+    // becomes their turn.
     try {
-      const resend = getResendClient();
-      await resend.emails.send({
-        from: INVOICE_FROM_EMAIL,
-        to: signerEmail.trim(),
-        subject: `Signature requested: ${document.file_name}`,
-        html: `
-          <div style="font-family: Georgia, serif; color: #1a1a1a; max-width: 560px; margin: 0 auto;">
-            <p>Hi ${escapeHtml(signerName.trim().split(' ')[0] || signerName.trim())},</p>
-            <p>You've been asked to sign <strong>${escapeHtml(document.file_name)}</strong> for ${escapeHtml(transaction.property_address)} (file #${escapeHtml(transaction.file_number)}).</p>
-            <p><a href="${signUrl}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px;">Review &amp; Sign</a></p>
-            <p style="font-size: 13px; color: #666;">Or paste this link into your browser: ${signUrl}</p>
-          </div>
-        `,
+      await sendSigningRequestEmail({
+        to: signers[0].email,
+        signerName: signers[0].name,
+        fileName: document.file_name,
+        propertyAddress: transaction.property_address,
+        fileNumber: transaction.file_number,
+        signUrl,
+        position: { index: 1, total: signers.length },
       });
     } catch (emailError) {
       // The signing request itself was created successfully -- a failed
@@ -294,8 +356,8 @@ export async function POST(request: NextRequest) {
       console.error('Failed to email signing request (non-fatal):', emailError);
     }
 
-    await logAudit(request, user, 'signing.request', { entityType: 'signing_request', entityId: signingRequest.id, metadata: { signerEmail: signerEmail.trim(), copyRecipients: copyRecipients.recipients.length, placedFields: placedFields.length } });
-    return NextResponse.json({ ...signingRequest, signUrl }, { status: 201 });
+    await logAudit(request, user, 'signing.request', { entityType: 'signing_request', entityId: signingRequest.id, metadata: { signerEmail: signers[0].email, signers: signers.length, copyRecipients: copyRecipients.recipients.length, placedFields: placedFields.length } });
+    return NextResponse.json({ ...toSafeRequest(signingRequest), signUrl, requests: orderedRows.map(toSafeRequest) }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

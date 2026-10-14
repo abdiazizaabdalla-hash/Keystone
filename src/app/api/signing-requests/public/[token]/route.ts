@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
-import { stampSignatureCertificate, stampSignatureFields } from '@/lib/signing';
+import { stampSignatureCertificate, stampSignatureFields, hashDocumentBytes } from '@/lib/signing';
+import { sendSigningRequestEmail } from '@/lib/signingEmails';
 import { parseSigningFields } from '@/lib/signingFields';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -8,6 +9,7 @@ import { sendSignedCopies, parseRecipients } from '@/lib/signedCopies';
 
 const BUCKET = 'transaction-documents';
 const PREVIEW_URL_TTL_SECONDS = 60 * 30; // 30 minutes -- plenty for one signing session
+const SIGNING_LINK_EXPIRY_DAYS = 14; // same window as when a request is created
 
 // Best-effort real client IP from standard proxy headers (Vercel sets
 // x-forwarded-for). Used for the audit trail on POST and as a rate-limit
@@ -82,6 +84,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     });
   }
 
+  // Multi-signer requests: later signers hold a valid link from the start
+  // but can't see or sign the document until the signer before them is done.
+  if (signingRequest.awaiting_turn) {
+    return NextResponse.json({
+      status: 'waiting',
+      fileName: signingRequest.source_file_name,
+      signerName: signingRequest.signer_name,
+    });
+  }
+
   const { data: signed } = await supabaseServer.storage
     .from(BUCKET)
     .createSignedUrl(signingRequest.source_storage_path, PREVIEW_URL_TTL_SECONDS);
@@ -143,6 +155,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'This document has already been signed' }, { status: 409 });
     }
 
+    if (signingRequest.awaiting_turn) {
+      return NextResponse.json({ error: "It isn't your turn to sign yet. We'll email you when it is." }, { status: 409 });
+    }
+
     // Decline branch -- the signer chose not to sign. No PDF stamping,
     // just a status change plus a best-effort email letting the TC know
     // (rather than leaving them staring at a silently-stuck "Awaiting
@@ -167,6 +183,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (declineError) throw declineError;
       if (!declinedRows || declinedRows.length === 0) {
         return NextResponse.json({ error: 'This document has already been signed' }, { status: 409 });
+      }
+
+      // Anyone still waiting behind this signer will never get their turn,
+      // so close those requests too (their links stop working).
+      if (signingRequest.group_id) {
+        await supabaseServer
+          .from('signing_requests')
+          .update({ status: 'voided', voided_at: declinedAtIso, updated_at: declinedAtIso })
+          .eq('group_id', signingRequest.group_id)
+          .eq('status', 'pending')
+          .neq('id', signingRequest.id);
       }
 
       try {
@@ -214,6 +241,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (downloadError || !fileBlob) {
       return NextResponse.json({ error: 'Could not read the source document from storage' }, { status: 500 });
     }
+
+    // Is someone still due to sign after this person? (Multi-signer
+    // requests only; everything else is its own final signer.)
+    let nextRequest: { id: string; signer_name: string; signer_email: string; token: string } | null = null;
+    if (signingRequest.group_id) {
+      const { data: laterRows } = await supabaseServer
+        .from('signing_requests')
+        .select('id, signer_name, signer_email, token')
+        .eq('group_id', signingRequest.group_id)
+        .eq('status', 'pending')
+        .gt('signing_order', signingRequest.signing_order ?? 1)
+        .order('signing_order', { ascending: true })
+        .limit(1);
+      nextRequest = laterRows?.[0] ?? null;
+    }
+    const isFinalSigner = !nextRequest;
 
     const sourceBytes = Buffer.from(await fileBlob.arrayBuffer());
     const signedAtIso = new Date().toISOString();
@@ -267,7 +310,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // still has its own snapshot of the file, independent of that row).
     let category = 'contract_disclosures';
     let documentType = 'Other Contract Documents';
-    if (signingRequest.document_id) {
+    if (isFinalSigner && signingRequest.document_id) {
       const { data: sourceDoc } = await supabaseServer
         .from('documents')
         .select('category, document_type')
@@ -277,7 +320,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (sourceDoc?.document_type) documentType = sourceDoc.document_type;
     }
 
-    const { data: signedDocRow, error: docInsertError } = await supabaseServer
+    // Only the final signer's output becomes a Document -- earlier
+    // signers' partially-signed PDFs are just handed to the next signer.
+    const { data: signedDocRow, error: docInsertError } = isFinalSigner ? await supabaseServer
       .from('documents')
       .insert({
         transaction_id: signingRequest.transaction_id,
@@ -290,7 +335,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         is_signed: true,
       })
       .select()
-      .single();
+      .single() : { data: null, error: null };
 
     if (docInsertError) {
       console.error('Signed PDF stored, but failed to add it to Documents (non-fatal):', docInsertError);
@@ -321,6 +366,47 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (signedDocRow?.id) await supabaseServer.from('documents').delete().eq('id', signedDocRow.id);
       await supabaseServer.storage.from(BUCKET).remove([signedStoragePath]);
       return NextResponse.json({ error: 'This document has already been signed' }, { status: 409 });
+    }
+
+    // Not the last signer: hand the partially-signed PDF to the next one
+    // and tell them it's their turn. The link was created with the
+    // original request; only now does it start working.
+    if (nextRequest) {
+      try {
+        const { data: txRow } = await supabaseServer
+          .from('transactions')
+          .select('property_address, file_number')
+          .eq('id', signingRequest.transaction_id)
+          .maybeSingle();
+
+        const { error: activateError } = await supabaseServer
+          .from('signing_requests')
+          .update({
+            awaiting_turn: false,
+            source_storage_path: signedStoragePath,
+            document_hash: hashDocumentBytes(Buffer.from(signedPdfBytes)),
+            expires_at: new Date(Date.now() + SIGNING_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', nextRequest.id)
+          .eq('status', 'pending');
+        if (activateError) throw activateError;
+
+        await sendSigningRequestEmail({
+          to: nextRequest.signer_email,
+          signerName: nextRequest.signer_name,
+          fileName: signingRequest.source_file_name,
+          propertyAddress: txRow?.property_address || 'the property',
+          fileNumber: txRow?.file_number || '',
+          signUrl: `${new URL(request.url).origin}/sign/${nextRequest.token}`,
+          previousSignerName: signingRequest.signer_name,
+        });
+      } catch (nextError) {
+        // The signature itself is saved. If the hand-off fails the TC can
+        // void and resend, so don't turn a recorded signature into an error.
+        console.error('Failed to activate/email the next signer (non-fatal):', nextError);
+      }
+      return NextResponse.json({ success: true, downloadUrl: null, waitingOnOthers: true });
     }
 
     // Email the signed PDF to any extra recipients the TC listed when

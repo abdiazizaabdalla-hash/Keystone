@@ -17,11 +17,19 @@ import {
 
 const TOOLS: SigningFieldType[] = ['signature', 'initials', 'date'];
 
-const COLORS: Record<SigningFieldType, { border: string; fill: string }> = {
-  signature: { border: '#2563eb', fill: 'rgba(37,99,235,0.14)' },
-  initials: { border: '#d97706', fill: 'rgba(217,119,6,0.16)' },
-  date: { border: '#059669', fill: 'rgba(5,150,105,0.14)' },
+// With several signers each one gets their own color so it's obvious whose
+// spot is whose; with a single signer, colors distinguish field types.
+const TYPE_COLORS: Record<SigningFieldType, string> = {
+  signature: '#2563eb',
+  initials: '#d97706',
+  date: '#059669',
 };
+const SIGNER_COLORS = ['#2563eb', '#db2777', '#059669', '#d97706', '#7c3aed', '#0891b2', '#dc2626', '#4d7c0f'];
+
+function withAlpha(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
@@ -29,11 +37,18 @@ interface Props {
   documentUrl: string;
   fileName: string;
   initialFields: SigningField[];
+  /** People signing, in order. Only their names are used here. */
+  signers: { name: string }[];
   onSave: (fields: SigningField[]) => void;
   onCancel: () => void;
 }
 
-export default function SignatureFieldPlacer({ documentUrl, fileName, initialFields, onSave, onCancel }: Props) {
+export default function SignatureFieldPlacer({ documentUrl, fileName, initialFields, signers, onSave, onCancel }: Props) {
+  const multi = signers.length > 1;
+  const [activeSigner, setActiveSigner] = useState(0);
+  const colorFor = (type: SigningFieldType, signer: number) =>
+    multi ? SIGNER_COLORS[signer % SIGNER_COLORS.length] : TYPE_COLORS[type];
+  const shortName = (i: number) => (signers[i]?.name || `Signer ${i + 1}`).trim().split(/\s+/)[0] || `Signer ${i + 1}`;
   const [fields, setFields] = useState<SigningField[]>(initialFields);
   const [tool, setTool] = useState<SigningFieldType | null>('signature');
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -48,7 +63,7 @@ export default function SignatureFieldPlacer({ documentUrl, fileName, initialFie
     moved: boolean;
   } | null>(null);
 
-  const counts = TOOLS.map((t) => ({ t, n: fields.filter((f) => f.type === t).length }));
+  const counts = TOOLS.map((t) => ({ t, n: fields.filter((f) => f.type === t && f.signer === activeSigner).length }));
 
   const placeAt = (e: React.MouseEvent<HTMLDivElement>, page: number) => {
     if (!tool) return;
@@ -72,6 +87,7 @@ export default function SignatureFieldPlacer({ documentUrl, fileName, initialFie
         y: clamp(cy - h / 2, 0, 1 - h),
         w,
         h,
+        signer: activeSigner,
       },
     ]);
   };
@@ -152,9 +168,9 @@ export default function SignatureFieldPlacer({ documentUrl, fileName, initialFie
                 borderRadius: 6,
                 fontSize: 13,
                 cursor: 'pointer',
-                border: `2px solid ${COLORS[t].border}`,
-                background: tool === t ? COLORS[t].border : '#fff',
-                color: tool === t ? '#fff' : COLORS[t].border,
+                border: `2px solid ${colorFor(t, activeSigner)}`,
+                background: tool === t ? colorFor(t, activeSigner) : '#fff',
+                color: tool === t ? '#fff' : colorFor(t, activeSigner),
                 fontWeight: 600,
               }}
             >
@@ -178,9 +194,38 @@ export default function SignatureFieldPlacer({ documentUrl, fileName, initialFie
             {fields.length > 0 ? `Done (${fields.length} spot${fields.length === 1 ? '' : 's'})` : 'Done'}
           </button>
         </div>
+        {multi && (
+          <div style={{ flexBasis: '100%', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: '#4b5563' }}>Placing spots for:</span>
+            {signers.map((_, i) => {
+              const color = SIGNER_COLORS[i % SIGNER_COLORS.length];
+              const active = activeSigner === i;
+              const n = fields.filter((f) => f.signer === i).length;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setActiveSigner(i)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 14,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    border: `2px solid ${color}`,
+                    background: active ? color : '#fff',
+                    color: active ? '#fff' : color,
+                  }}
+                >
+                  {i + 1}. {shortName(i)} ({n})
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div style={{ flexBasis: '100%', fontSize: 12, color: '#4b5563' }}>
           {tool
-            ? `Click on the page to drop a ${FIELD_LABEL[tool].toLowerCase()} spot. Drag a spot to move it, ✕ to remove it. Click the selected button again to stop placing.`
+            ? `Click on the page to drop a ${FIELD_LABEL[tool].toLowerCase()} spot${multi ? ` for ${shortName(activeSigner)}` : ''}. Drag a spot to move it, ✕ to remove it. Click the selected button again to stop placing.`
             : 'Pick Signature, Initials or Date above, then click on the page. Drag a spot to move it, ✕ to remove it.'}
           {loadError ? <span style={{ color: '#b91c1c', marginLeft: 6 }}>{loadError}</span> : null}
         </div>
@@ -212,8 +257,8 @@ export default function SignatureFieldPlacer({ documentUrl, fileName, initialFie
                         top: `${f.y * 100}%`,
                         width: `${f.w * 100}%`,
                         height: `${f.h * 100}%`,
-                        border: `2px dashed ${COLORS[f.type].border}`,
-                        background: COLORS[f.type].fill,
+                        border: `2px dashed ${colorFor(f.type, f.signer)}`,
+                        background: withAlpha(colorFor(f.type, f.signer), 0.15),
                         borderRadius: 3,
                         cursor: 'move',
                         touchAction: 'none',
@@ -222,11 +267,11 @@ export default function SignatureFieldPlacer({ documentUrl, fileName, initialFie
                         justifyContent: 'center',
                         fontSize: 11,
                         fontWeight: 700,
-                        color: COLORS[f.type].border,
+                        color: colorFor(f.type, f.signer),
                         boxSizing: 'border-box',
                       }}
                     >
-                      {FIELD_LABEL[f.type]}
+                      {multi ? `${shortName(f.signer)} · ${FIELD_LABEL[f.type]}` : FIELD_LABEL[f.type]}
                       <button
                         type="button"
                         aria-label={`Remove ${FIELD_LABEL[f.type]} spot`}

@@ -25,7 +25,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const { data: signingRequest, error: fetchError } = await supabaseServer
       .from('signing_requests')
-      .select('id, transaction_id, status')
+      .select('*')
       .eq('id', id)
       .single();
 
@@ -71,6 +71,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .single();
 
     if (updateError) throw updateError;
+
+    // Multi-signer request: voiding it cancels everyone who hasn't signed
+    // yet (people who already signed stay recorded as signed).
+    if (signingRequest.group_id) {
+      await supabaseServer
+        .from('signing_requests')
+        .update({ status: 'voided', voided_at: voidedAtIso, updated_at: voidedAtIso })
+        .eq('group_id', signingRequest.group_id)
+        .eq('status', 'pending');
+    }
 
     return NextResponse.json(updated);
   } catch (error) {

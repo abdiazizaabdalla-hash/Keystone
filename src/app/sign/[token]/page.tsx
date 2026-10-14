@@ -5,7 +5,7 @@ import PdfPages from '@/components/PdfPages';
 import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
 
 interface SigningStatus {
-  status: 'pending' | 'signed' | 'voided' | 'declined';
+  status: 'pending' | 'signed' | 'voided' | 'declined' | 'waiting';
   fileName: string;
   signerName: string;
   previewUrl?: string | null;
@@ -31,6 +31,7 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [waitingOnOthers, setWaitingOnOthers] = useState(false);
 
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
@@ -154,6 +155,7 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to submit signature');
       setDownloadUrl(data.downloadUrl || null);
+      setWaitingOnOthers(!!data.waitingOnOthers);
       setInfo((prev) => (prev ? { ...prev, status: 'signed' } : prev));
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Failed to submit signature');
@@ -210,7 +212,25 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
   // 'declined', which are not success states and need their own
   // messaging so a signer (or a TC checking the link later) isn't told
   // something was signed when it wasn't.
-  if (info.status !== 'pending' || downloadUrl || declined) {
+  if (info.status === 'waiting') {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6">
+        <div className="max-w-md text-center bg-slate-800/50 border border-slate-600 rounded-lg p-8">
+          <div className="w-12 h-12 rounded-full bg-blue-500/20 border border-blue-500/50 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-slate-100 mb-2">Not your turn yet</h1>
+          <p className="text-slate-400 text-sm">
+            {info.fileName} needs to be signed by someone else first. We&apos;ll email you at this address as soon as it&apos;s ready for you.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (info.status !== 'pending' || downloadUrl || declined || waitingOnOthers) {
     if (info.status === 'voided') {
       return (
         <div className="min-h-screen flex items-center justify-center px-6">
@@ -257,7 +277,9 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
           </div>
           <h1 className="text-xl font-bold text-slate-100 mb-2">Signed</h1>
           <p className="text-slate-400 text-sm mb-6">
-            {info.fileName} has been signed{info.signedAt ? ` on ${new Date(info.signedAt).toLocaleString()}` : ''}.
+            {waitingOnOthers
+              ? `Thanks, your signature on ${info.fileName} is recorded. The next person has been emailed to sign.`
+              : `${info.fileName} has been signed${info.signedAt ? ` on ${new Date(info.signedAt).toLocaleString()}` : ''}.`}
           </p>
           {downloadUrl && (
             <a

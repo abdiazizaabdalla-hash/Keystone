@@ -71,6 +71,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .select('document_id')
       .eq('transaction_id', transaction.id)
       .eq('status', 'signed')
+      // Multi-signer: only the last signer's row has the finished copy.
+      .not('signed_document_id', 'is', null)
       .not('document_id', 'is', null);
 
     if (signingRequestsError) throw signingRequestsError;

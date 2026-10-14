@@ -131,6 +131,9 @@ interface SigningRequestItem {
   distribute_to?: { email: string; name?: string; title?: string }[];
   distributed_at?: string | null;
   distribution_error?: string | null;
+  group_id?: string | null;
+  signing_order?: number;
+  awaiting_turn?: boolean;
 }
 
 interface ExternalLink {
@@ -212,6 +215,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [signerNameDraft, setSignerNameDraft] = useState('');
   const [signerEmailDraft, setSignerEmailDraft] = useState('');
   // Signature spots the TC placed on the PDF for this request (empty = signature goes on a certificate page).
+  // Additional signers after the first (who signs in the order listed).
+  const [extraSignersDraft, setExtraSignersDraft] = useState<{ name: string; email: string }[]>([]);
   const [fieldsDraft, setFieldsDraft] = useState<SigningField[]>([]);
   const [placerOpen, setPlacerOpen] = useState(false);
   // "Email a signed copy to others" -- optional, collapsed by default.
@@ -662,6 +667,11 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setSignatureRequestError("Enter the signer's name and email.");
       return;
     }
+    const extraIncomplete = extraSignersDraft.findIndex((x) => !x.name.trim() || !x.email.trim());
+    if (extraIncomplete >= 0) {
+      setSignatureRequestError(`Enter a name and email for signer ${extraIncomplete + 2}, or remove them.`);
+      return;
+    }
     if (copyEnabledDraft && !copyRecipientsDraft.some((r) => r.email.trim())) {
       setSignatureRequestError('Add at least one email to send the signed copy to, or untick that option.');
       return;
@@ -673,8 +683,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           documentId,
-          signerName: signerNameDraft.trim(),
-          signerEmail: signerEmailDraft.trim(),
+          ...(extraSignersDraft.length > 0
+            ? {
+                signers: [
+                  { name: signerNameDraft.trim(), email: signerEmailDraft.trim() },
+                  ...extraSignersDraft.map((x) => ({ name: x.name.trim(), email: x.email.trim() })),
+                ],
+              }
+            : { signerName: signerNameDraft.trim(), signerEmail: signerEmailDraft.trim() }),
           ...(fieldsDraft.length > 0 ? { fields: fieldsDraft } : {}),
           ...(copyEnabledDraft
             ? {
@@ -687,11 +703,12 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to send signature request');
-      setSigningRequests((prev) => [data, ...prev]);
+      setSigningRequests((prev) => [...(Array.isArray(data.requests) ? [...data.requests].reverse() : [data]), ...prev]);
       setRequestingSignatureDocId(null);
       setSignerNameDraft('');
       setSignerEmailDraft('');
       setFieldsDraft([]);
+      setExtraSignersDraft([]);
       setCopyEnabledDraft(false);
       setCopyRecipientsDraft([]);
     } catch (error) {
@@ -1639,6 +1656,39 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       latestSigningRequestByDocId.set(req.document_id, req);
     }
   }
+  // A multi-signer send is several rows (one per signer, sharing a
+  // group_id). Collapse each document's latest group into one summary row
+  // so everything below -- badges, void, toggle -- keeps working on a
+  // single "request" per document.
+  const signerProgressByDocId = new Map<string, { done: number; total: number; nextName: string | null; names: string[] }>();
+  for (const [docId, latest] of Array.from(latestSigningRequestByDocId.entries())) {
+    if (!latest.group_id) continue;
+    const group = signingRequests
+      .filter((r) => r.group_id === latest.group_id)
+      .sort((a, b) => (a.signing_order ?? 1) - (b.signing_order ?? 1));
+    const last = group[group.length - 1];
+    const declinedRow = group.find((r) => r.status === 'declined');
+    const status: SigningRequestItem['status'] = declinedRow
+      ? 'declined'
+      : group.some((r) => r.status === 'voided')
+        ? 'voided'
+        : group.every((r) => r.status === 'signed')
+          ? 'signed'
+          : 'pending';
+    const firstPending = group.find((r) => r.status === 'pending');
+    latestSigningRequestByDocId.set(docId, {
+      ...last,
+      id: firstPending?.id ?? last.id,
+      status,
+      decline_reason: declinedRow ? `${declinedRow.signer_name}: ${declinedRow.decline_reason || 'declined'}` : last.decline_reason,
+    });
+    signerProgressByDocId.set(docId, {
+      done: group.filter((r) => r.status === 'signed').length,
+      total: group.length,
+      nextName: firstPending?.signer_name ?? null,
+      names: group.map((r) => r.signer_name),
+    });
+  }
   // Documents that ARE a produced signed PDF (the output of some signing
   // request), as opposed to the original that was sent out -- the
   // original stays its own row even after it's been signed, it just picks
@@ -1671,6 +1721,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const renderDocRow = (doc: DocumentItem) => {
     const isPdf = doc.content_type === 'application/pdf' || doc.file_name.toLowerCase().endsWith('.pdf');
     const sigReq = latestSigningRequestByDocId.get(doc.id);
+    const signerProgress = signerProgressByDocId.get(doc.id);
     const isSignedOutput = signedDocumentIds.has(doc.id);
     // Once an in-house signing request exists for this document (pending
     // or completed), that flow is the source of truth for its signed
@@ -1718,7 +1769,9 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           {requiresSignature && !isSignedOutput && hasSigningActivity && sigReq?.status === 'pending' && (
             <>
               <span className="text-xs px-2 py-0.5 bg-blue-900/30 border border-blue-700/50 rounded-full text-blue-300 flex-shrink-0">
-                Awaiting signature
+                {signerProgress
+                  ? `Signed ${signerProgress.done} of ${signerProgress.total}${signerProgress.nextName ? ` · waiting on ${signerProgress.nextName}` : ''}`
+                  : 'Awaiting signature'}
               </span>
               <button
                 onClick={() => handleVoidSigningRequest(sigReq.id)}
@@ -1791,6 +1844,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 setSignerNameDraft('');
                 setSignerEmailDraft('');
                 setFieldsDraft([]);
+                setExtraSignersDraft([]);
                 setSignatureRequestError(null);
               }}
               className="text-xs px-2 py-1 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition flex-shrink-0"
@@ -1835,6 +1889,94 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
+            {extraSignersDraft.map((signer, i) => (
+              <div key={i} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                <input
+                  type="text"
+                  value={signer.name}
+                  onChange={(e) =>
+                    setExtraSignersDraft((prev) => prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))
+                  }
+                  placeholder={`Signer ${i + 2} name`}
+                  className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                />
+                <input
+                  type="email"
+                  value={signer.email}
+                  onChange={(e) =>
+                    setExtraSignersDraft((prev) => prev.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))
+                  }
+                  placeholder={`Signer ${i + 2} email`}
+                  className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const removed = i + 1; // signer index (0 = first signer)
+                    setExtraSignersDraft((prev) => prev.filter((_, j) => j !== i));
+                    // Drop their spots and shift later signers' spots up one.
+                    setFieldsDraft((prev) =>
+                      prev.filter((f) => f.signer !== removed).map((f) => (f.signer > removed ? { ...f, signer: f.signer - 1 } : f))
+                    );
+                  }}
+                  className="text-slate-500 hover:text-red-400 text-sm px-1"
+                  title="Remove signer"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            {extraSignersDraft.length < 7 && (() => {
+              const picks: { email: string; name: string }[] = [];
+              if (agent?.email) picks.push({ email: agent.email, name: agent.name });
+              for (const c of contacts) {
+                if (c.email) picks.push({ email: c.email, name: c.name || '' });
+              }
+              const taken = new Set(
+                [signerEmailDraft, ...extraSignersDraft.map((x) => x.email)].map((e) => e.trim().toLowerCase())
+              );
+              const available = picks.filter((p) => !taken.has(p.email.toLowerCase()));
+              return (
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setExtraSignersDraft((prev) => [...prev, { name: '', email: '' }])}
+                    className="text-blue-400 hover:text-blue-300"
+                  >
+                    + Add another signer
+                  </button>
+                  {available.length > 0 && (
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const pick = available[Number(e.target.value)];
+                        if (!pick) return;
+                        // Fill signer 1 if it's still empty, otherwise add a new row.
+                        if (!signerNameDraft.trim() && !signerEmailDraft.trim()) {
+                          setSignerNameDraft(pick.name);
+                          setSignerEmailDraft(pick.email);
+                        } else {
+                          setExtraSignersDraft((prev) => [...prev, { name: pick.name, email: pick.email }]);
+                        }
+                      }}
+                      className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">Add from this deal&apos;s contacts…</option>
+                      {available.map((p, idx) => (
+                        <option key={p.email} value={idx}>
+                          {p.name ? `${p.name} (${p.email})` : p.email}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {extraSignersDraft.length > 0 && (
+                    <span className="text-slate-400">
+                      They sign in this order. Each person is emailed after the one before them finishes.
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <button
                 type="button"
@@ -1859,6 +2001,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 documentUrl={doc.url}
                 fileName={doc.file_name}
                 initialFields={fieldsDraft}
+                signers={[{ name: signerNameDraft }, ...extraSignersDraft]}
                 onSave={(next) => {
                   setFieldsDraft(next);
                   setPlacerOpen(false);
@@ -2003,6 +2146,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 onClick={() => {
                   setRequestingSignatureDocId(null);
                   setFieldsDraft([]);
+                  setExtraSignersDraft([]);
                   setPlacerOpen(false);
                 }}
                 className="text-xs px-3 py-1.5 border border-slate-600 text-slate-300 hover:text-slate-100 rounded-lg transition"

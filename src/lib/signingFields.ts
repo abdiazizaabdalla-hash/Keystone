@@ -14,9 +14,15 @@ export interface SigningField {
   y: number;
   w: number;
   h: number;
+  /**
+   * Which signer fills this spot: 0-based index in the signing order.
+   * Always 0 for single-signer requests.
+   */
+  signer: number;
 }
 
 export const MAX_SIGNING_FIELDS = 40;
+export const MAX_SIGNERS = 8;
 
 export const FIELD_LABEL: Record<SigningFieldType, string> = {
   signature: 'Signature',
@@ -74,11 +80,16 @@ export function parseSigningFields(
     const x = clamp(nums[0], 0, 1 - w);
     const y = clamp(nums[1], 0, 1 - h);
 
+    const signerRaw = r.signer === undefined || r.signer === null ? 0 : Number(r.signer);
+    if (!Number.isInteger(signerRaw) || signerRaw < 0 || signerRaw >= MAX_SIGNERS) {
+      return { fields: [], error: 'A signature spot is assigned to an invalid signer' };
+    }
+
     let id = typeof r.id === 'string' && r.id.length > 0 ? r.id.slice(0, 40) : `f${fields.length + 1}`;
     while (seenIds.has(id)) id = `${id}_`;
     seenIds.add(id);
 
-    fields.push({ id, type: r.type as SigningFieldType, page, x, y, w, h });
+    fields.push({ id, type: r.type as SigningFieldType, page, x, y, w, h, signer: signerRaw });
   }
 
   return { fields };
