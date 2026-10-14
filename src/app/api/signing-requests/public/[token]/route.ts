@@ -3,7 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { stampSignatureCertificate } from '@/lib/signing';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { sendSignedCopies } from '@/lib/signedCopies';
+import { sendSignedCopies, parseRecipients } from '@/lib/signedCopies';
 
 const BUCKET = 'transaction-documents';
 const PREVIEW_URL_TTL_SECONDS = 60 * 30; // 30 minutes -- plenty for one signing session
@@ -298,7 +298,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Email the signed PDF to any extra recipients the TC listed when
     // sending the request. Best-effort: a failed email never undoes the
     // signature, but the outcome is recorded so the TC can see it.
-    const copyRecipients: string[] = Array.isArray(signingRequest.distribute_to) ? signingRequest.distribute_to : [];
+    const copyRecipients = parseRecipients(signingRequest.distribute_to).recipients;
     if (copyRecipients.length > 0) {
       try {
         const { data: txRow } = await supabaseServer

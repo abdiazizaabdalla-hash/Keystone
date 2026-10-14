@@ -126,7 +126,7 @@ interface SigningRequestItem {
   signed_document_id: string | null;
   decline_reason?: string | null;
   created_at: string;
-  distribute_to?: string[];
+  distribute_to?: { email: string; name?: string; title?: string }[];
   distributed_at?: string | null;
   distribution_error?: string | null;
 }
@@ -211,10 +211,10 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [signerEmailDraft, setSignerEmailDraft] = useState('');
   // "Email a signed copy to others" -- optional, collapsed by default.
   const [copyEnabledDraft, setCopyEnabledDraft] = useState(false);
-  const [copyToDraft, setCopyToDraft] = useState('');
+  const [copyRecipientsDraft, setCopyRecipientsDraft] = useState<{ email: string; name: string; title: string }[]>([]);
   const [copySubjectDraft, setCopySubjectDraft] = useState('Signed: {{document}} - {{property}}');
   const [copyMessageDraft, setCopyMessageDraft] = useState(
-    'Hi,\n\nAttached is the signed copy of {{document}} for {{property}} (file #{{file_number}}), signed by {{signer}} on {{signed_date}}.\n\nPlease let me know if you need anything else.'
+    'Hi {{recipient_name}},\n\nAttached is the signed copy of {{document}} for {{property}} (file #{{file_number}}), signed by {{signer}} on {{signed_date}}.\n\nPlease let me know if you need anything else.'
   );
   const [isSendingSignatureRequest, setIsSendingSignatureRequest] = useState(false);
   const [signatureRequestError, setSignatureRequestError] = useState<string | null>(null);
@@ -655,6 +655,10 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setSignatureRequestError("Enter the signer's name and email.");
       return;
     }
+    if (copyEnabledDraft && !copyRecipientsDraft.some((r) => r.email.trim())) {
+      setSignatureRequestError('Add at least one email to send the signed copy to, or untick that option.');
+      return;
+    }
     try {
       setIsSendingSignatureRequest(true);
       const response = await authFetch('/api/signing-requests', {
@@ -664,8 +668,12 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           documentId,
           signerName: signerNameDraft.trim(),
           signerEmail: signerEmailDraft.trim(),
-          ...(copyEnabledDraft && copyToDraft.trim()
-            ? { sendCopyTo: copyToDraft, copySubject: copySubjectDraft, copyMessage: copyMessageDraft }
+          ...(copyEnabledDraft
+            ? {
+                sendCopyTo: copyRecipientsDraft.filter((r) => r.email.trim()),
+                copySubject: copySubjectDraft,
+                copyMessage: copyMessageDraft,
+              }
             : {}),
         }),
       });
@@ -676,7 +684,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setSignerNameDraft('');
       setSignerEmailDraft('');
       setCopyEnabledDraft(false);
-      setCopyToDraft('');
+      setCopyRecipientsDraft([]);
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
@@ -1725,7 +1733,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     ? 'bg-green-900/30 border-green-700/50 text-green-300'
                     : 'bg-slate-700/60 border-slate-600 text-slate-300'
               }`}
-              title={`Signed copy goes to: ${(sigReq.distribute_to || []).join(', ')}${sigReq.distribution_error ? ` — ${sigReq.distribution_error}` : ''}`}
+              title={`Signed copy goes to: ${(sigReq.distribute_to || []).map((r) => (r.title ? `${r.title} (${r.email})` : r.email)).join(', ')}${sigReq.distribution_error ? ` — ${sigReq.distribution_error}` : ''}`}
             >
               {sigReq.distribution_error
                 ? 'Some copies failed'
@@ -1826,13 +1834,98 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </label>
             {copyEnabledDraft && (
               <div className="space-y-2 border-l-2 border-slate-600 pl-3">
-                <textarea
-                  value={copyToDraft}
-                  onChange={(e) => setCopyToDraft(e.target.value)}
-                  rows={2}
-                  placeholder="Email addresses, separated by commas or new lines (max 10)"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                />
+                {(() => {
+                  const quickPicks: { email: string; name: string; title: string }[] = [];
+                  if (agent?.email) quickPicks.push({ email: agent.email, name: agent.name, title: 'Agent' });
+                  for (const c of contacts) {
+                    if (c.email) quickPicks.push({ email: c.email, name: c.name || '', title: c.role || '' });
+                  }
+                  const selected = new Set(copyRecipientsDraft.map((r) => r.email.trim().toLowerCase()));
+                  return (
+                    <>
+                      {quickPicks.length > 0 && (
+                        <div>
+                          <p className="text-xs text-slate-400 mb-1">Add from this deal&apos;s contacts:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {quickPicks.map((pick) => {
+                              const isOn = selected.has(pick.email.trim().toLowerCase());
+                              return (
+                                <button
+                                  key={pick.email}
+                                  type="button"
+                                  onClick={() =>
+                                    setCopyRecipientsDraft((prev) =>
+                                      isOn
+                                        ? prev.filter((r) => r.email.trim().toLowerCase() !== pick.email.trim().toLowerCase())
+                                        : [...prev, pick]
+                                    )
+                                  }
+                                  className={`text-xs px-2 py-1 rounded-full border transition ${
+                                    isOn
+                                      ? 'bg-blue-500/20 border-blue-500 text-blue-200'
+                                      : 'bg-slate-700/60 border-slate-600 text-slate-300 hover:border-slate-400'
+                                  }`}
+                                >
+                                  {isOn ? '✓ ' : '+ '}
+                                  {pick.title ? `${pick.title}: ` : ''}
+                                  {pick.name || pick.email}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+                {copyRecipientsDraft.map((r, i) => (
+                  <div key={i} className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr_1fr_auto] gap-2 items-center">
+                    <input
+                      type="text"
+                      value={r.name}
+                      onChange={(e) =>
+                        setCopyRecipientsDraft((prev) => prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))
+                      }
+                      placeholder="Name"
+                      className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    <input
+                      type="email"
+                      value={r.email}
+                      onChange={(e) =>
+                        setCopyRecipientsDraft((prev) => prev.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))
+                      }
+                      placeholder="Email"
+                      className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={r.title}
+                      onChange={(e) =>
+                        setCopyRecipientsDraft((prev) => prev.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))
+                      }
+                      placeholder="Title (e.g. Lender)"
+                      className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCopyRecipientsDraft((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-slate-500 hover:text-red-400 text-sm px-1"
+                      title="Remove"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                {copyRecipientsDraft.length < 10 && (
+                  <button
+                    type="button"
+                    onClick={() => setCopyRecipientsDraft((prev) => [...prev, { email: '', name: '', title: '' }])}
+                    className="text-xs text-blue-400 hover:text-blue-300"
+                  >
+                    + Add someone else
+                  </button>
+                )}
                 <input
                   type="text"
                   value={copySubjectDraft}
@@ -1848,7 +1941,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 <p className="text-xs text-slate-500">
-                  Fills in automatically: {'{{document}}'}, {'{{property}}'}, {'{{file_number}}'}, {'{{signer}}'}, {'{{signed_date}}'}. Replies go to you.
+                  Fills in automatically: {'{{recipient_name}}'}, {'{{recipient_title}}'}, {'{{document}}'}, {'{{property}}'}, {'{{file_number}}'}, {'{{signer}}'}, {'{{signed_date}}'}. Max 10 people. Replies go to you.
                 </p>
               </div>
             )}

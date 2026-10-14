@@ -7,7 +7,7 @@ import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { escapeHtml } from '@/lib/escapeHtml';
 import { logAudit } from '@/lib/audit';
-import { parseRecipientList } from '@/lib/signedCopies';
+import { parseRecipients } from '@/lib/signedCopies';
 
 const BUCKET = 'transaction-documents';
 // Signing links used to never expire at all -- found during the 2026-09
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'A valid signer email is required' }, { status: 400 });
     }
 
-    const copyRecipients = parseRecipientList(sendCopyTo);
+    const copyRecipients = parseRecipients(sendCopyTo);
     if (copyRecipients.error) {
       return NextResponse.json({ error: copyRecipients.error }, { status: 400 });
     }
@@ -201,9 +201,9 @@ export async function POST(request: NextRequest) {
         expires_at: expiresAt,
         // Only sent when used, so signing requests keep working even
         // before add-signing-distribution.sql has been run.
-        ...(copyRecipients.emails.length > 0
+        ...(copyRecipients.recipients.length > 0
           ? {
-              distribute_to: copyRecipients.emails,
+              distribute_to: copyRecipients.recipients,
               distribute_subject: typeof copySubject === 'string' && copySubject.trim() ? copySubject.trim() : null,
               distribute_message: typeof copyMessage === 'string' && copyMessage.trim() ? copyMessage.trim() : null,
             }
@@ -212,7 +212,18 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (insertError) throw insertError;
+    if (insertError) {
+      // The "email a signed copy" columns come from add-signing-distribution.sql.
+      // If it hasn't been run yet, say so instead of a generic failure.
+      if (copyRecipients.recipients.length > 0 && /distribute|column|schema cache/i.test(insertError.message || '')) {
+        console.error('Signing request insert failed -- add-signing-distribution.sql probably not run:', insertError);
+        return NextResponse.json(
+          { error: 'Emailing signed copies is not set up yet. Run add-signing-distribution.sql in the Supabase SQL editor, then try again.' },
+          { status: 500 }
+        );
+      }
+      throw insertError;
+    }
 
     const origin = new URL(request.url).origin;
     const signUrl = `${origin}/sign/${token}`;
@@ -239,7 +250,7 @@ export async function POST(request: NextRequest) {
       console.error('Failed to email signing request (non-fatal):', emailError);
     }
 
-    await logAudit(request, user, 'signing.request', { entityType: 'signing_request', entityId: signingRequest.id, metadata: { signerEmail: signerEmail.trim(), copyRecipients: copyRecipients.emails.length } });
+    await logAudit(request, user, 'signing.request', { entityType: 'signing_request', entityId: signingRequest.id, metadata: { signerEmail: signerEmail.trim(), copyRecipients: copyRecipients.recipients.length } });
     return NextResponse.json({ ...signingRequest, signUrl }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
