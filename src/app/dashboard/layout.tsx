@@ -60,7 +60,7 @@ export default function DashboardLayout({
     applies: boolean;
     trialEndsAt: string | null;
     expired: boolean;
-    endedBy: 'time' | 'first_paid_deal' | null;
+    endedBy: 'time' | null;
     daysLeft: number | null;
   } | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);

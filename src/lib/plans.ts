@@ -12,7 +12,7 @@
 // overrides — it is no longer just Pro with a different label.
 //
 // Starter is no longer free indefinitely: new signups (see
-// src/lib/trial.ts for the exact cutoff) get a 30-day-or-first-paid-deal
+// src/lib/trial.ts for the exact cutoff) get a 30-day
 // trial, then have to add payment to keep using it at $10/month, through
 // the same Stripe Checkout flow as Pro/Team (see src/lib/stripe.ts). The
 // `limits` below (unlimited transactions, up to 3 agents, no custom
@@ -65,8 +65,7 @@ export interface Plan {
    */
   hidden?: boolean;
   /**
-   * Starter-only: describes its free trial (30 days, or the user's first
-   * paid-and-closed deal, whichever happens first -- see src/lib/trial.ts
+   * Starter-only: describes its free trial (30 days -- see src/lib/trial.ts
    * for the actual enforcement logic). Undefined for Pro/Team, which have
    * no trial -- they're paid from checkout.
    */
@@ -96,11 +95,11 @@ export const PLANS: Plan[] = [
     period: '/month',
     trial: {
       days: 30,
-      description: 'Free for 30 days or until your first paid deal closes, whichever comes first.',
+      description: 'Free for 30 days. Then $10/month.',
     },
     description: 'Free to try, then $10/month. Unlimited transactions.',
     features: [
-      'Free for 30 days or your first paid deal',
+      'Free for 30 days',
       'Then $10/month',
       'Unlimited transactions',
       'Up to 3 agent profiles',

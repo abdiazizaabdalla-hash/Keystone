@@ -108,7 +108,7 @@ export default function Home() {
               See how it works
             </a>
           </div>
-          <p className="text-xs text-slate-500 mt-4">Free for 30 days, or until your first paid deal closes. No credit card required.</p>
+          <p className="text-xs text-slate-500 mt-4">Free for 30 days. No credit card required.</p>
         </div>
 
         {/* Mock product preview */}

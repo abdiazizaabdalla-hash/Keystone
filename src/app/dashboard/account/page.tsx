@@ -31,7 +31,7 @@ interface AccountSummary {
     applies: boolean;
     trialEndsAt: string | null;
     expired: boolean;
-    endedBy: 'time' | 'first_paid_deal' | null;
+    endedBy: 'time' | null;
     daysLeft: number | null;
   } | null;
 }
@@ -227,7 +227,7 @@ function AccountContent() {
                   : `${summary.trial.daysLeft} day${summary.trial.daysLeft === 1 ? '' : 's'} left in your free trial`}
               </p>
               <p className="text-sm text-blue-200/80 mb-4">
-                Free for 30 days or until your first paid deal closes, whichever comes first. Then it&apos;s $10/month.
+                Free for 30 days. Then it&apos;s $10/month.
               </p>
             </>
           )}

@@ -40,7 +40,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Pricing & billing',
     q: 'What happens when my trial ends?',
-    a: 'Starter includes a free trial that lasts 30 days or until your first paid deal closes, whichever comes first. Once the trial ends, Starter continues at $10/month — you’ll need to add a payment method to keep creating and editing transactions, agents, documents, and invoices. Nothing is deleted if you don’t upgrade right away; you just can’t make new changes until you do.',
+    a: 'Starter includes a free trial that lasts 30 days. Once the trial ends, Starter continues at $10/month — you’ll need to add a payment method to keep creating and editing transactions, agents, documents, and invoices. Nothing is deleted if you don’t upgrade right away; you just can’t make new changes until you do.',
   },
   {
     category: 'Pricing & billing',
