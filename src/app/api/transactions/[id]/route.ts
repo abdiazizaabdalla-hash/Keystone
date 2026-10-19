@@ -5,6 +5,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { syncTasksToStatus } from '@/lib/closeTransaction';
 import { computeDueDates, normalizeDueDateSpec, dueDaysToSpec } from '@/lib/dueDates';
 import { getVisibleTcUserIds, getTeamForUser } from '@/lib/team';
+import { queueCalendarSync } from '@/lib/calendarSync';
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
@@ -121,6 +122,10 @@ export async function PATCH(request: NextRequest) {
         responseTasks = updatedTasks;
       }
     }
+
+    // Status or date changes can add, move, or remove calendar events
+    // (no-op if nobody on the deal has connected a calendar).
+    queueCalendarSync(transactionId);
 
     return NextResponse.json({ ...transaction, tasks: responseTasks ?? undefined });
   } catch (error) {

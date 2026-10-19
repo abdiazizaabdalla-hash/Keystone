@@ -7,6 +7,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { DueDateSpec, normalizeDueDateSpec } from '@/lib/dueDates';
 import { TASK_TEMPLATE } from '@/lib/transactionStages';
 import DueDateControl from '@/components/DueDateControl';
+import CalendarConnectCard from '@/components/CalendarConnectCard';
 
 function SettingsContent() {
   const router = useRouter();
@@ -851,6 +852,9 @@ function SettingsContent() {
             </div>
           </div>
         </div>
+
+
+        <CalendarConnectCard audience="tc" />
 
 
         <div className="flex gap-3">

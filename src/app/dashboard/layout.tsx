@@ -260,6 +260,7 @@ export default function DashboardLayout({
               { href: '/dashboard/search', label: 'Search' },
               { href: '/dashboard/transactions', label: 'Transactions' },
               { href: '/dashboard/agents', label: 'Agents' },
+              { href: '/dashboard/contacts', label: 'Contacts' },
               { href: '/dashboard/invoices', label: 'Invoices' },
               { href: '/dashboard/settings', label: 'Settings' },
               ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: teamUnread > 0 ? `Collaborate (${teamUnread})` : 'Collaborate' }] : []),
@@ -418,6 +419,17 @@ export default function DashboardLayout({
             icon={
               <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+              </svg>
+            }
+          />
+
+          <NavLink
+            href="/dashboard/contacts"
+            label="Contacts"
+            collapsed={collapsed}
+            icon={
+              <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zm8 0a3 3 0 11-6 0 3 3 0 016 0zM1.5 17a5.5 5.5 0 0111 0v.5h-11V17zm9.5.5V17a7 7 0 00-.8-3.2A5.5 5.5 0 0118.5 17v.5H11z" />
               </svg>
             }
           />

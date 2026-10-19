@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { statusFromTasks } from '@/lib/transactionStages';
 import { getVisibleTcUserIds } from '@/lib/team';
+import { queueCalendarSync } from '@/lib/calendarSync';
 
 export async function GET(request: NextRequest) {
   try {
@@ -171,6 +172,10 @@ export async function PATCH(request: NextRequest) {
       }
 
     }
+
+    // A toggled task changes whether it should still have a calendar event.
+    // Best-effort and after the response (no-op if nobody connected a calendar).
+    queueCalendarSync(task.transaction_id as string);
 
     // Return the up-to-date task list too, so the frontend can update its
     // local state directly instead of re-fetching everything after a toggle.

@@ -9,6 +9,7 @@ import { stagesForTaskNames } from '@/lib/transactionStages';
 import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categoryLabel, typesForCategory } from '@/lib/documentTaxonomy';
 import { DueDateSpec, formatDisplayDate } from '@/lib/dueDates';
 import DueDateControl from '@/components/DueDateControl';
+import StepEmailModal from '@/components/StepEmailModal';
 import KeyDatesPanel from '@/components/KeyDatesPanel';
 import SignatureFieldPlacer from '@/components/SignatureFieldPlacer';
 import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
@@ -267,6 +268,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   // `editingContactId`, so the section stays readable once it's filled in
   // instead of showing a wall of input boxes.
   const [contacts, setContacts] = useState<Contact[]>([]);
+  // Checklist step whose email template is open (see StepEmailModal).
+  const [emailTask, setEmailTask] = useState<Task | null>(null);
   const [draftContacts, setDraftContacts] = useState<DraftContact[]>([]);
   const [savingContactId, setSavingContactId] = useState<string | null>(null);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
@@ -2752,6 +2755,17 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   >
                     {task.name}
                   </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEmailTask(task);
+                    }}
+                    className="text-xs text-blue-400 hover:text-blue-300 font-medium flex-shrink-0 opacity-60 group-hover:opacity-100 transition"
+                    title="Open an email for this step"
+                  >
+                    Email
+                  </button>
                   {!task.completed && editingDueDateTaskId !== task.id && (
                     <>
                       {task.due_date ? (
@@ -3503,6 +3517,23 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             {isDeletingTransaction ? 'Deleting...' : 'Delete Transaction'}
           </button>
         </div>
+
+        {emailTask && transaction && (
+          <StepEmailModal
+            key={emailTask.id}
+            transactionId={transaction.id}
+            taskId={emailTask.id}
+            stepName={emailTask.name}
+            stepDueDate={emailTask.due_date}
+            fileNumber={transaction.file_number}
+            propertyAddress={transaction.property_address}
+            acceptanceDate={transaction.acceptance_date}
+            closingDate={transaction.closing_date}
+            agent={agent ? { name: agent.name, email: agent.email } : null}
+            contacts={contacts.map((c) => ({ role: c.role, name: c.name, email: c.email }))}
+            onClose={() => setEmailTask(null)}
+          />
+        )}
       </div>
     </div>
   );

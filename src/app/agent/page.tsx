@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
+import AgentCalendarPrompt from '@/components/AgentCalendarPrompt';
 
 interface AgentTransaction {
   id: string;
@@ -192,6 +193,8 @@ export default function AgentHubPage() {
             </div>
           </div>
         </div>
+
+        <AgentCalendarPrompt />
 
         {pendingInvites.length > 0 && (
           <div className="mb-8">

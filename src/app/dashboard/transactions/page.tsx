@@ -191,12 +191,20 @@ export default function TransactionsPage() {
               <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">Transactions</h1>
               <p className="text-slate-400 text-sm md:text-base">Manage and track all your active and closed deals</p>
             </div>
-            <Link
-              href="/dashboard/transactions/new"
-              className="shrink-0 px-4 py-2.5 md:px-6 md:py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-blue-500/50 whitespace-nowrap"
-            >
-              + New Deal
-            </Link>
+            <div className="flex items-center gap-3 shrink-0">
+              <Link
+                href="/dashboard/transactions/import"
+                className="hidden sm:inline-block text-sm text-slate-300 hover:text-slate-100 border border-slate-600 hover:border-slate-500 rounded-lg px-4 py-2.5 transition whitespace-nowrap"
+              >
+                Import CSV
+              </Link>
+              <Link
+                href="/dashboard/transactions/new"
+                className="shrink-0 px-4 py-2.5 md:px-6 md:py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-blue-500/50 whitespace-nowrap"
+              >
+                + New Deal
+              </Link>
+            </div>
           </div>
         </div>
 

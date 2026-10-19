@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
+import { queueCalendarSync, removeKeyDateCalendarEvents } from '@/lib/calendarSync';
 import {
   canAccessTransactionDates,
   cleanLabel,
@@ -91,6 +92,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // A re-upload of a contract replaces the dates it produced earlier.
     const contractKinds = rows.filter((r) => r.source === 'contract' && r.kind !== 'custom').map((r) => r.kind);
     if (contractKinds.length > 0) {
+      // Take the replaced dates off connected calendars first (their event records go with the rows).
+      const { data: replaced } = await supabaseServer
+        .from('transaction_key_dates')
+        .select('id')
+        .eq('transaction_id', transactionId)
+        .eq('source', 'contract')
+        .in('kind', contractKinds);
+      for (const r of replaced || []) await removeKeyDateCalendarEvents(r.id as string);
       await supabaseServer
         .from('transaction_key_dates')
         .delete()
@@ -101,6 +110,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { data, error } = await supabaseServer.from('transaction_key_dates').insert(rows).select('*');
     if (error) throw error;
+    queueCalendarSync(transactionId);
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

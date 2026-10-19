@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { canAccessTransactionDates, cleanLabel, isValidIsoDate } from '@/lib/keyDates';
+import { queueCalendarSync, removeKeyDateCalendarEvents } from '@/lib/calendarSync';
 
 // PATCH: edit a critical date ({ dueDate?, label?, completed?, notifyAgent? }).
 // DELETE: remove one.
@@ -63,6 +64,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .select('*')
       .single();
     if (error) throw error;
+    queueCalendarSync(auth.row!.transaction_id as string);
     return NextResponse.json(data);
   } catch (error) {
     return handleError(error, 'update');
@@ -75,6 +77,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const auth = await loadAndAuthorize(request, id);
     if (auth.error) return auth.error;
 
+    // Remove it from connected calendars first (the event records are deleted with the row).
+    await removeKeyDateCalendarEvents(id);
     const { error } = await supabaseServer.from('transaction_key_dates').delete().eq('id', id);
     if (error) throw error;
     return NextResponse.json({ success: true });

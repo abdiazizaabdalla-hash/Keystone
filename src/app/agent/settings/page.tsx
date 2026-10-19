@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import CalendarConnectCard from '@/components/CalendarConnectCard';
 
 export default function AgentSettingsPage() {
   const router = useRouter();
@@ -128,6 +129,9 @@ export default function AgentSettingsPage() {
           <p className="text-slate-500 text-sm">Loading…</p>
         ) : (
           <div className="space-y-6">
+            {/* One-time calendar setup: Google Calendar or a subscribe link. */}
+            <CalendarConnectCard audience="agent" />
+
             {/* Profile: name + read-only email. The name shown here is the
                 same user_metadata.full_name every TC's message thread and
                 invite list already reads (see api/messages, api/agent-invites,

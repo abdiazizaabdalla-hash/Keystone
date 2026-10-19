@@ -14,6 +14,7 @@ import {
 import { computeDueDates, NO_DUE_DATE, DueDateSpec } from '@/lib/dueDates';
 import crypto from 'crypto';
 import { getUserPlan } from '@/lib/privileged';
+import { queueCalendarSync, removeTransactionCalendarEvents } from '@/lib/calendarSync';
 import { logAudit } from '@/lib/audit';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
@@ -297,6 +298,10 @@ export async function POST(request: NextRequest) {
 
     if (tasksError) throw tasksError;
 
+    // Put the new checklist's due dates on a connected calendar (after the
+    // response; a no-op if the TC hasn't connected one).
+    queueCalendarSync(transaction.id);
+
 
     await logAudit(request, user, 'transaction.create', { entityType: 'transaction', entityId: transaction.id });
     return NextResponse.json(transaction, { status: 201 });
@@ -365,6 +370,9 @@ export async function DELETE(request: NextRequest) {
         console.warn('Warning: failed to remove some document files from storage', storageError);
       }
     }
+
+    // Take this deal's events off connected calendars before its rows disappear.
+    await removeTransactionCalendarEvents(id);
 
     await supabaseServer.from('documents').delete().eq('transaction_id', id);
     await supabaseServer.from('tasks').delete().eq('transaction_id', id);

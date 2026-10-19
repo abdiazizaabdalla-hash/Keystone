@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { queueCalendarSync } from '@/lib/calendarSync';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { hasAgentRole, mergeAppMetadata } from '@/lib/privileged';
 
@@ -51,6 +52,9 @@ export async function POST(request: NextRequest) {
         { onConflict: 'transaction_id,agent_user_id', ignoreDuplicates: true }
       );
     if (grantError) throw grantError;
+
+    // If this agent already connected a calendar (e.g. through another TC), put this deal's dates on it.
+    queueCalendarSync(transactionId);
 
     if (invite.status !== 'accepted') {
       await supabaseServer
