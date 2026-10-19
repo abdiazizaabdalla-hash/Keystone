@@ -78,6 +78,8 @@ create table if not exists public.step_email_templates (
 );
 create index if not exists idx_step_email_templates_user on public.step_email_templates (tc_user_id);
 
+alter table public.step_email_templates add column if not exists name text;
+
 alter table public.step_email_templates enable row level security;
 revoke all on table public.step_email_templates from anon, authenticated;
 grant select, insert, update, delete on table public.step_email_templates to service_role;

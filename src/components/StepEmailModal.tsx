@@ -24,6 +24,13 @@ interface Recipient {
   label: string;
 }
 
+interface CustomTemplate {
+  key: string;
+  name: string;
+  subject: string;
+  body: string;
+}
+
 interface Props {
   transactionId: string;
   taskId: string;
@@ -47,6 +54,12 @@ export default function StepEmailModal(props: Props) {
   const [tcName, setTcName] = useState('');
   const [saved, setSaved] = useState<StepEmailTemplate | null>(null);
   const [mode, setMode] = useState<'send' | 'template'>('send');
+  // 'step' = this step's own template; otherwise the key of one of my custom templates.
+  const [choice, setChoice] = useState<string>('step');
+  const [customs, setCustoms] = useState<CustomTemplate[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [logToDeal, setLogToDeal] = useState(true);
 
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -99,12 +112,18 @@ export default function StepEmailModal(props: Props) {
     (async () => {
       let name = '';
       let mine: StepEmailTemplate | null = null;
+      let loadedCustoms: CustomTemplate[] = [];
       try {
         const [tplRes, meRes] = await Promise.all([authFetch('/api/step-email-templates'), authFetch('/api/auth/me')]);
         if (meRes.ok) name = (await meRes.json()).fullName || '';
         if (tplRes.ok) {
-          const found = (await tplRes.json()).templates?.[stepKey(stepName)];
+          const all = (await tplRes.json()).templates || {};
+          const found = all[stepKey(stepName)];
           if (found) mine = { subject: found.subject, body: found.body, suggestedRecipients: defaults.suggestedRecipients };
+          loadedCustoms = Object.entries(all as Record<string, { subject: string; body: string; name?: string }>)
+            .filter(([k]) => k.startsWith('custom:'))
+            .map(([k, v]) => ({ key: k, name: v.name || k.slice(7), subject: v.subject, body: v.body }))
+            .sort((a, b) => a.name.localeCompare(b.name));
         }
       } catch {
         // Fall back to the built-in template.
@@ -114,6 +133,7 @@ export default function StepEmailModal(props: Props) {
       const filledVars = { ...vars, tc_name: name || vars.tc_name };
       setTcName(name);
       setSaved(mine);
+      setCustoms(loadedCustoms);
       setRawSubject(tpl.subject);
       setRawBody(tpl.body);
       setSubject(fillTemplate(tpl.subject, filledVars));
@@ -160,7 +180,7 @@ export default function StepEmailModal(props: Props) {
       const res = await authFetch(`/api/transactions/${transactionId}/send-step-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: recipientsNow, subject, body, taskId }),
+        body: JSON.stringify({ to: recipientsNow, subject, body, taskId, logToDeal }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send');
@@ -192,21 +212,49 @@ export default function StepEmailModal(props: Props) {
     setBody(fillTemplate(b, vars));
   };
 
+  const currentCustom = customs.find((c) => c.key === choice) || null;
+
+  const chooseTemplate = (value: string) => {
+    setChoice(value);
+    setError('');
+    const c = customs.find((x) => x.key === value);
+    const tpl = c ? { subject: c.subject, body: c.body } : saved ?? defaults;
+    setRawSubject(tpl.subject);
+    setRawBody(tpl.body);
+    refill(tpl.subject, tpl.body);
+  };
+
+  const startNewTemplate = () => {
+    setError('');
+    setCreating(true);
+    setNewName('');
+    setMode('template');
+  };
+
   const saveTemplate = async () => {
     setError('');
     setBusy('save');
     try {
+      const customName = creating ? newName.trim() : currentCustom?.name;
+      if (creating && !customName) throw new Error('Give the template a name');
       const res = await authFetch('/api/step-email-templates', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stepName, subject: rawSubject, body: rawBody }),
+        body: JSON.stringify(customName ? { name: customName, subject: rawSubject, body: rawBody } : { stepName, subject: rawSubject, body: rawBody }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save template');
-      setSaved({ subject: rawSubject, body: rawBody, suggestedRecipients: defaults.suggestedRecipients });
+      if (customName) {
+        const entry: CustomTemplate = { key: data.key as string, name: customName, subject: rawSubject, body: rawBody };
+        setCustoms((prev) => [...prev.filter((c) => c.key !== entry.key), entry].sort((a, b) => a.name.localeCompare(b.name)));
+        setChoice(entry.key);
+      } else {
+        setSaved({ subject: rawSubject, body: rawBody, suggestedRecipients: defaults.suggestedRecipients });
+      }
+      setCreating(false);
       refill(rawSubject, rawBody);
       setMode('send');
-      setNotice('Template saved for this step.');
+      setNotice(customName ? `Saved “${customName}”.` : 'Template saved for this step.');
       setTimeout(() => setNotice(''), 2500);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save template');
@@ -219,14 +267,23 @@ export default function StepEmailModal(props: Props) {
     setError('');
     setBusy('reset');
     try {
-      const res = await authFetch(`/api/step-email-templates?stepName=${encodeURIComponent(stepName)}`, { method: 'DELETE' });
+      const url = currentCustom
+        ? `/api/step-email-templates?key=${encodeURIComponent(currentCustom.key)}`
+        : `/api/step-email-templates?stepName=${encodeURIComponent(stepName)}`;
+      const res = await authFetch(url, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to reset template');
-      setSaved(null);
-      setRawSubject(defaults.subject);
-      setRawBody(defaults.body);
-      refill(defaults.subject, defaults.body);
+      const tpl = saved && currentCustom ? saved : defaults;
+      if (currentCustom) {
+        setCustoms((prev) => prev.filter((c) => c.key !== currentCustom.key));
+        setChoice('step');
+      } else {
+        setSaved(null);
+      }
+      setRawSubject(tpl.subject);
+      setRawBody(tpl.body);
+      refill(tpl.subject, tpl.body);
       setMode('send');
-      setNotice('Back to the default template.');
+      setNotice(currentCustom ? 'Template deleted.' : 'Back to the default template.');
       setTimeout(() => setNotice(''), 2500);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset template');
@@ -268,9 +325,26 @@ export default function StepEmailModal(props: Props) {
         ) : mode === 'template' ? (
           <div className="px-6 py-5 space-y-4">
             <p className="text-sm text-slate-400">
-              This is the template for every deal&rsquo;s &ldquo;{stepName}&rdquo; step. Use merge fields in double curly braces and
-              Relay fills them in per deal. Anything in [square brackets] is left for you to fill in each time.
+              {creating
+                ? 'A new template you can use on any step of any deal. '
+                : currentCustom
+                  ? `Editing your “${currentCustom.name}” template. `
+                  : `This is the template for every deal’s “${stepName}” step. `}
+              Use merge fields in double curly braces and Relay fills them in per deal. Anything in [square brackets] is left for you to
+              fill in each time.
             </p>
+            {creating && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Template name</label>
+                <input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  maxLength={60}
+                  placeholder="e.g. Weekly update to agent"
+                  className={inputCls}
+                />
+              </div>
+            )}
             <div className="flex flex-wrap gap-1.5">
               {MERGE_FIELDS.map((f) => (
                 <button
@@ -297,23 +371,48 @@ export default function StepEmailModal(props: Props) {
               <button
                 type="button"
                 onClick={saveTemplate}
-                disabled={busy !== null || !rawSubject.trim() || !rawBody.trim()}
+                disabled={busy !== null || !rawSubject.trim() || !rawBody.trim() || (creating && !newName.trim())}
                 className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
               >
-                {busy === 'save' ? 'Saving…' : 'Save template'}
+                {busy === 'save' ? 'Saving…' : creating ? 'Save new template' : 'Save template'}
               </button>
-              {saved && (
+              {!creating && (saved || currentCustom) && (
                 <button type="button" onClick={resetTemplate} disabled={busy !== null} className="text-sm text-slate-400 hover:text-slate-200 disabled:opacity-50">
-                  {busy === 'reset' ? 'Resetting…' : 'Reset to default'}
+                  {busy === 'reset' ? 'Working…' : currentCustom ? 'Delete this template' : 'Reset to default'}
                 </button>
               )}
-              <button type="button" onClick={() => setMode('send')} className="text-sm text-slate-400 hover:text-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('send');
+                  setCreating(false);
+                  setError('');
+                  if (creating) chooseTemplate(choice);
+                }}
+                className="text-sm text-slate-400 hover:text-slate-200"
+              >
                 Back
               </button>
             </div>
           </div>
         ) : (
           <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Template</label>
+              <div className="flex flex-wrap items-center gap-3">
+                <select value={choice} onChange={(e) => chooseTemplate(e.target.value)} className={`${inputCls} sm:w-auto sm:min-w-[16rem]`}>
+                  <option value="step">{stepName} (this step)</option>
+                  {customs.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" onClick={startNewTemplate} className="text-sm text-blue-400 hover:text-blue-300">
+                  + New template
+                </button>
+              </div>
+            </div>
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">To</p>
               {recipients.length === 0 ? (
@@ -374,9 +473,13 @@ export default function StepEmailModal(props: Props) {
                 }}
                 className="text-sm text-slate-400 hover:text-slate-200 ml-auto"
               >
-                Edit this step&rsquo;s template
+                {currentCustom ? 'Edit this template' : 'Edit this step’s template'}
               </button>
             </div>
+            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={logToDeal} onChange={(e) => setLogToDeal(e.target.checked)} className="accent-blue-500" />
+              Save a copy on this deal&rsquo;s Communication log (blind copy, others won&rsquo;t see it)
+            </label>
             <p className="text-xs text-slate-500">
               Sent from Relay with your name. You are copied, and replies go straight to you.
             </p>

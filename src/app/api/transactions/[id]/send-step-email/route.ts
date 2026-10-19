@@ -8,6 +8,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { escapeHtml } from '@/lib/escapeHtml';
 import { logAudit } from '@/lib/audit';
 import { EMAIL_RE, LIMITS } from '@/lib/stepEmailTemplates';
+import { supabaseServer } from '@/lib/supabase';
 
 // Sends the email a TC wrote (usually from a checklist step's template) to the
 // people they picked on a deal. It goes out from Relay's sending address with the
@@ -67,6 +68,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const tcName = (meta.full_name || '').trim() || user.email || 'Your transaction coordinator';
     const tcEmail = user.email || null;
 
+    // Blind-copy the deal's own inbound address so the email is filed on the
+    // transaction's Communication card automatically (on unless the TC unticks it).
+    const logToDeal = body.logToDeal !== false;
+    let dealAddress: string | null = null;
+    const inboundDomain = process.env.NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN;
+    if (logToDeal && inboundDomain) {
+      const { data: tx } = await supabaseServer.from('transactions').select('inbound_token').eq('id', transactionId).maybeSingle();
+      if (tx?.inbound_token) dealAddress = `deal-${tx.inbound_token}@${inboundDomain}`;
+    }
+
     const fromAddress = INVOICE_FROM_EMAIL.match(/<([^>]+)>/)?.[1] ?? INVOICE_FROM_EMAIL;
     const safeName = tcName.replace(/["<>\r\n,;]/g, '').slice(0, 60);
     const from = `${safeName} via Relay TC <${fromAddress}>`;
@@ -75,6 +86,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       from,
       to,
       ...(tcEmail ? { cc: [tcEmail], replyTo: tcEmail } : {}),
+      ...(dealAddress ? { bcc: [dealAddress] } : {}),
       subject,
       html: plainToHtml(message, `Sent by ${tcName} using Relay TC. Reply to this email to reach them directly.`),
       text: `${message}\n\n-- Sent by ${tcName} using Relay TC. Reply to this email to reach them directly.`,
@@ -87,10 +99,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await logAudit(request, { id: user.id, email: user.email }, 'transaction.step_email_sent', {
       entityType: 'transaction',
       entityId: transactionId,
-      metadata: { recipients: to.length, taskId: typeof body.taskId === 'string' ? body.taskId : null },
+      metadata: { recipients: to.length, loggedToDeal: Boolean(dealAddress), taskId: typeof body.taskId === 'string' ? body.taskId : null },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, loggedToDeal: Boolean(dealAddress) });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TrialExpiredError) {

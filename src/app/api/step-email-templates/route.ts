@@ -8,6 +8,8 @@ import { LIMITS, stepKey } from '@/lib/stepEmailTemplates';
 // GET: all of mine ({ templates: { [stepKey]: { subject, body } } }).
 // PUT: save/replace one ({ stepName, subject, body }).
 // DELETE: ?stepName=... resets that step back to Relay's default.
+// Custom templates (not tied to a step) are saved with a `name` and live under the
+// key "custom:<name>"; DELETE ?key=custom:... removes one.
 
 async function requireTc(request: NextRequest) {
   const { user } = await getUserFromRequest(request);
@@ -26,11 +28,17 @@ export async function GET(request: NextRequest) {
     const user = await requireTc(request);
     const { data, error } = await supabaseServer
       .from('step_email_templates')
-      .select('step_key, subject, body')
+      .select('step_key, subject, body, name')
       .eq('tc_user_id', user.id);
     if (error) throw error;
-    const templates: Record<string, { subject: string; body: string }> = {};
-    for (const row of data || []) templates[row.step_key as string] = { subject: row.subject as string, body: row.body as string };
+    const templates: Record<string, { subject: string; body: string; name?: string }> = {};
+    for (const row of data || []) {
+      templates[row.step_key as string] = {
+        subject: row.subject as string,
+        body: row.body as string,
+        ...(row.name ? { name: row.name as string } : {}),
+      };
+    }
     return NextResponse.json({ templates });
   } catch (error) {
     return fail(error, 'load');
@@ -41,7 +49,18 @@ export async function PUT(request: NextRequest) {
   try {
     const user = await requireTc(request);
     const body = await request.json().catch(() => ({}));
-    const key = typeof body.stepName === 'string' ? stepKey(body.stepName) : '';
+    const customName = typeof body.name === 'string' ? body.name.trim().slice(0, 60) : '';
+    if (body.name !== undefined && !customName) {
+      return NextResponse.json({ error: 'Give the template a name' }, { status: 400 });
+    }
+    const key = customName
+      ? `custom:${stepKey(customName)}`
+      : typeof body.stepName === 'string'
+        ? stepKey(body.stepName)
+        : '';
+    if (customName && key === 'custom:') {
+      return NextResponse.json({ error: 'Template name needs letters or numbers' }, { status: 400 });
+    }
     const subject = typeof body.subject === 'string' ? body.subject.trim() : '';
     const text = typeof body.body === 'string' ? body.body.trim() : '';
     if (!key) return NextResponse.json({ error: 'stepName is required' }, { status: 400 });
@@ -51,14 +70,32 @@ export async function PUT(request: NextRequest) {
     if (!text || text.length > LIMITS.body) {
       return NextResponse.json({ error: `Message must be 1-${LIMITS.body} characters` }, { status: 400 });
     }
+    if (customName) {
+      const { count } = await supabaseServer
+        .from('step_email_templates')
+        .select('id', { count: 'exact', head: true })
+        .eq('tc_user_id', user.id)
+        .like('step_key', 'custom:%')
+        .neq('step_key', key);
+      if ((count ?? 0) >= 30) {
+        return NextResponse.json({ error: 'You can keep up to 30 custom templates. Delete one first.' }, { status: 400 });
+      }
+    }
     const { error } = await supabaseServer
       .from('step_email_templates')
       .upsert(
-        { tc_user_id: user.id, step_key: key, subject, body: text, updated_at: new Date().toISOString() },
+        {
+          tc_user_id: user.id,
+          step_key: key,
+          subject,
+          body: text,
+          name: customName || null,
+          updated_at: new Date().toISOString(),
+        },
         { onConflict: 'tc_user_id,step_key' }
       );
     if (error) throw error;
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, key });
   } catch (error) {
     return fail(error, 'save');
   }
@@ -67,8 +104,9 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const user = await requireTc(request);
-    const name = new URL(request.url).searchParams.get('stepName') || '';
-    const key = stepKey(name);
+    const params = new URL(request.url).searchParams;
+    const rawKey = params.get('key') || '';
+    const key = rawKey.startsWith('custom:') ? rawKey.slice(0, 100) : stepKey(params.get('stepName') || '');
     if (!key) return NextResponse.json({ error: 'stepName is required' }, { status: 400 });
     const { error } = await supabaseServer.from('step_email_templates').delete().eq('tc_user_id', user.id).eq('step_key', key);
     if (error) throw error;
