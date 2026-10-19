@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: 'Privacy Policy | Relay TC' };
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" updated="October 7, 2026">
+    <LegalPage title="Privacy Policy" updated="October 19, 2026">
       <section>
         <p>
           This policy explains what information Relay TC (&ldquo;Relay,&rdquo; &ldquo;we&rdquo;) collects, how we use it, who we share it
@@ -47,6 +47,7 @@ export default function PrivacyPage() {
           <li><strong>Stripe</strong> &mdash; payments and subscriptions;</li>
           <li><strong>Resend</strong> &mdash; sending and receiving email;</li>
           <li><strong>Sentry</strong> &mdash; error monitoring;</li>
+          <li><strong>Google</strong> &mdash; only if you choose to connect your Google Calendar (see &ldquo;Google Calendar data&rdquo; below);</li>
           <li><strong>Anthropic</strong> &mdash; when you upload a contract for automatic reading, the document is sent to Anthropic to extract the details. It is used to return the result to you.</li>
         </ul>
         <p>
@@ -54,6 +55,29 @@ export default function PrivacyPage() {
           owner sees their team&rsquo;s transactions, and a person you send a signature request to sees the document they are
           asked to sign. We may also disclose information when the law requires it or to protect people&rsquo;s safety and our
           rights, or as part of a merger or sale of the business (with notice to you).
+        </p>
+      </section>
+
+      <section>
+        <h2>Google Calendar data</h2>
+        <p>
+          Connecting a Google Calendar is optional. If you do, Relay asks Google for two permissions: to see and edit events on
+          your calendars (the <code>calendar.events</code> scope) and to see your Google Account email address (the{' '}
+          <code>userinfo.email</code> scope).
+        </p>
+        <ul>
+          <li><strong>What we access:</strong> your Google Account email address, and the calendar events that Relay itself creates for your transactions. We do not read, copy, or store your other calendar events.</li>
+          <li><strong>What we do with it:</strong> add, update, and remove transaction key dates (for example inspection, appraisal, and closing deadlines) on the calendar you connected, so they appear alongside your other appointments. Nothing else.</li>
+          <li><strong>What we store:</strong> your Google email address and an encrypted token that lets Relay keep those events up to date, plus the ID of each event we created. The token is encrypted before it is saved.</li>
+          <li><strong>Who sees it:</strong> we do not sell or share Google user data, and we do not use it for advertising. It is not used to build or train AI or machine-learning models.</li>
+          <li><strong>Disconnecting:</strong> you can disconnect your calendar in Relay at any time, which stops syncing and deletes the stored token. You can also revoke Relay&rsquo;s access from your Google Account&rsquo;s security settings. To delete the events Relay created, remove them in Google Calendar or contact us.</li>
+        </ul>
+        <p>
+          Relay&rsquo;s use and transfer to any other app of information received from Google APIs will adhere to the{' '}
+          <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">
+            Google API Services User Data Policy
+          </a>
+          , including the Limited Use requirements.
         </p>
       </section>
 
