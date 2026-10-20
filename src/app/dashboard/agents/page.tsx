@@ -1,5 +1,6 @@
 'use client';
 
+import MoneyInput from '@/components/MoneyInput';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
@@ -360,15 +361,12 @@ export default function AgentsPage() {
                 <label className="text-sm text-slate-400 block mb-2">
                   Flat Fee per Deal ($)
                 </label>
-                <input
-                  type="number"
+                <MoneyInput
                   name="flatFee"
                   value={formData.flatFee}
-                  onChange={handleInputChange}
-                  onWheel={blurOnWheel}
+                  onValueChange={(v) => setFormData((prev) => ({ ...prev, flatFee: v }))}
                   placeholder="400"
-                  step="0.01"
-                  min="0"
+                  aria-label="Flat fee per deal"
                   className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 <p className="text-xs text-slate-500 mt-1">Fixed fee per transaction closed</p>

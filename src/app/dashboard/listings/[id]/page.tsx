@@ -1,5 +1,6 @@
 'use client';
 
+import MoneyInput from '@/components/MoneyInput';
 import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -824,7 +825,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             >
               <input className={inputCls} placeholder="Buyer name" value={newOffer.buyerName} onChange={(e) => setNewOffer({ ...newOffer, buyerName: e.target.value })} />
               <input className={inputCls} placeholder="Buyer's agent" value={newOffer.buyerAgent} onChange={(e) => setNewOffer({ ...newOffer, buyerAgent: e.target.value })} />
-              <input className={inputCls} placeholder="Offer price" inputMode="decimal" value={newOffer.offerPrice} onChange={(e) => setNewOffer({ ...newOffer, offerPrice: e.target.value })} />
+              <MoneyInput className={inputCls} placeholder="Offer price" aria-label="Offer price" value={newOffer.offerPrice} onValueChange={(v) => setNewOffer({ ...newOffer, offerPrice: v })} />
               <input className={inputCls} type="date" value={newOffer.receivedOn} onChange={(e) => setNewOffer({ ...newOffer, receivedOn: e.target.value })} aria-label="Date received" />
               <select className={inputCls} value={newOffer.financing} onChange={(e) => setNewOffer({ ...newOffer, financing: e.target.value })} aria-label="Financing">
                 <option value="">Financing (optional)</option>
@@ -834,9 +835,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                   </option>
                 ))}
               </select>
-              <input className={inputCls} placeholder="Earnest money" inputMode="decimal" value={newOffer.earnestMoney} onChange={(e) => setNewOffer({ ...newOffer, earnestMoney: e.target.value })} />
+              <MoneyInput className={inputCls} placeholder="Earnest money" aria-label="Earnest money" value={newOffer.earnestMoney} onValueChange={(v) => setNewOffer({ ...newOffer, earnestMoney: v })} />
               <input className={inputCls} placeholder="Option period (days)" inputMode="numeric" value={newOffer.optionDays} onChange={(e) => setNewOffer({ ...newOffer, optionDays: e.target.value })} />
-              <input className={inputCls} placeholder="Seller pays (concessions)" inputMode="decimal" value={newOffer.sellerConcessions} onChange={(e) => setNewOffer({ ...newOffer, sellerConcessions: e.target.value })} />
+              <MoneyInput className={inputCls} placeholder="Seller pays (concessions)" aria-label="Seller pays (concessions)" value={newOffer.sellerConcessions} onValueChange={(v) => setNewOffer({ ...newOffer, sellerConcessions: v })} />
               <div className="sm:col-span-2">
                 <label className={labelCls}>Proposed closing date</label>
                 <input className={inputCls} type="date" value={newOffer.closingDate} onChange={(e) => setNewOffer({ ...newOffer, closingDate: e.target.value })} />
@@ -935,7 +936,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>List price</label>
-                <input className={inputCls} inputMode="decimal" value={det.listPrice} onChange={(e) => setDet({ ...det, listPrice: e.target.value })} />
+                <MoneyInput className={inputCls} aria-label="List price" value={det.listPrice} onValueChange={(v) => setDet({ ...det, listPrice: v })} />
               </div>
               <div>
                 <label className={labelCls}>Planned list date</label>
@@ -1197,7 +1198,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 if (ok) setPriceForm({ price: '', note: '' });
               }}
             >
-              <input className={inputCls} placeholder="New price" inputMode="decimal" value={priceForm.price} onChange={(e) => setPriceForm({ ...priceForm, price: e.target.value })} />
+              <MoneyInput className={inputCls} placeholder="New price" aria-label="New price" value={priceForm.price} onValueChange={(v) => setPriceForm({ ...priceForm, price: v })} />
               <input className={inputCls} placeholder="Reason (optional)" value={priceForm.note} onChange={(e) => setPriceForm({ ...priceForm, note: e.target.value })} maxLength={500} />
               <button type="submit" className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg">
                 Change price
@@ -1259,7 +1260,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             </div>
             <div>
               <label className={labelCls}>List price</label>
-              <input className={inputCls} inputMode="decimal" value={relistForm.listPrice} onChange={(e) => setRelistForm({ ...relistForm, listPrice: e.target.value })} />
+              <MoneyInput className={inputCls} aria-label="List price" value={relistForm.listPrice} onValueChange={(v) => setRelistForm({ ...relistForm, listPrice: v })} />
             </div>
             {templateNames.length > 1 && (
               <div>
@@ -1351,7 +1352,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             </div>
             <div>
               <label className={labelCls}>Sale price</label>
-              <input className={inputCls} inputMode="decimal" value={conv.price} onChange={(e) => setConv({ ...conv, price: e.target.value })} />
+              <MoneyInput className={inputCls} aria-label="Sale price" value={conv.price} onValueChange={(v) => setConv({ ...conv, price: v })} />
             </div>
             {convertError && <p className="text-sm text-red-400">{convertError}</p>}
             <div className="flex items-center gap-3 pt-1">

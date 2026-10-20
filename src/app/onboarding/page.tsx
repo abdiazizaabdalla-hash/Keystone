@@ -1,5 +1,6 @@
 'use client';
 
+import MoneyInput from '@/components/MoneyInput';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
@@ -620,14 +621,11 @@ function OnboardingContent() {
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <label className="text-sm text-slate-400 block mb-2">Default Flat Fee per Deal ($)</label>
-                <input
-                  type="number"
+                <MoneyInput
                   value={defaultFlatFee}
-                  onChange={handleNumberChange(setDefaultFlatFee)}
-                  onWheel={blurOnWheel}
+                  onValueChange={setDefaultFlatFee}
                   placeholder="400"
-                  step="0.01"
-                  min="0"
+                  aria-label="Default flat fee per deal"
                   className={inputClass}
                 />
               </div>

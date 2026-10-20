@@ -1,5 +1,6 @@
 'use client';
 
+import MoneyInput from '@/components/MoneyInput';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -393,7 +394,7 @@ export default function ListingsPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">List price</label>
-                <input className={inputCls} placeholder="450000" inputMode="decimal" value={form.listPrice} onChange={(e) => setForm({ ...form, listPrice: e.target.value })} />
+                <MoneyInput className={inputCls} placeholder="450,000" aria-label="List price" value={form.listPrice} onValueChange={(v) => setForm({ ...form, listPrice: v })} />
               </div>
             </div>
             <div>

@@ -1,5 +1,6 @@
 'use client';
 
+import MoneyInput from '@/components/MoneyInput';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import { uploadIncoming, type UploadedFile } from '@/lib/incomingUploadClient';
@@ -356,13 +357,15 @@ export default function OfferIntakeModal({ listingId, offer, initial, onClose, o
                         <textarea className={cls} rows={2} value={terms[f.key]} onChange={(e) => setTerm(f.key, e.target.value)} />
                       ) : f.kind === 'date' ? (
                         <input className={cls} type="date" value={terms[f.key]} onChange={(e) => setTerm(f.key, e.target.value)} />
+                      ) : f.kind === 'money' ? (
+                        <MoneyInput className={cls} aria-label={f.label} placeholder="0" value={terms[f.key]} onValueChange={(v) => setTerm(f.key, v)} />
                       ) : (
                         <input
                           className={cls}
-                          inputMode={f.kind === 'money' || f.kind === 'int' ? 'decimal' : undefined}
+                          inputMode={f.kind === 'int' ? 'decimal' : undefined}
                           value={terms[f.key]}
                           onChange={(e) => setTerm(f.key, e.target.value)}
-                          placeholder={f.kind === 'money' ? '0' : ''}
+                          placeholder=""
                         />
                       )}
                       {warn && <p className="text-xs text-amber-300 mt-1">Check this: {warn}</p>}
