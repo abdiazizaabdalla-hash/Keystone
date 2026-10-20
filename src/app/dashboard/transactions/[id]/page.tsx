@@ -5,6 +5,7 @@ import { use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import MoveMenu from '@/components/MoveMenu';
 import { isDocDrag, isFileDrag, readDocDrag, startDocDrag } from '@/lib/docDrag';
 import { stagesForTaskNames } from '@/lib/transactionStages';
 import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categoryLabel, typesForCategory } from '@/lib/documentTaxonomy';
@@ -1919,23 +1920,12 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               {isTogglingRequiresSignature ? '...' : requiresSignature ? 'No sig needed' : 'Needs sig'}
             </button>
           )}
-          <select
-            value=""
+          <MoveMenu
             disabled={movingDocId === doc.id}
-            onChange={(e) => {
-              if (e.target.value) void handleMoveDocument(doc.id, e.target.value);
-            }}
-            className="bg-slate-800 border border-slate-600 rounded-lg text-xs text-slate-400 px-1.5 py-1 flex-shrink-0 max-w-[7.5rem] disabled:opacity-50"
-            aria-label={`Move ${doc.file_name} to another category`}
-            title="Move to another category (or drag the row onto one)"
-          >
-            <option value="">{movingDocId === doc.id ? 'Moving…' : 'Move to…'}</option>
-            {DOCUMENT_CATEGORIES.filter((c) => c.key !== (doc.category || DEFAULT_CATEGORY_KEY)).map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+            onMove={(categoryKey) => void handleMoveDocument(doc.id, categoryKey)}
+            label={`Move ${doc.file_name} to another category`}
+            options={DOCUMENT_CATEGORIES.filter((c) => c.key !== (doc.category || DEFAULT_CATEGORY_KEY)).map((c) => ({ value: c.key, label: c.label }))}
+          />
           <button
             onClick={() => handleDeleteDocument(doc.id)}
             disabled={deletingDocId === doc.id}
