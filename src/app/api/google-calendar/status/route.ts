@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { googleCalendarAvailableFor } from '@/lib/googleCalendarAccess';
 
 // Lets the settings cards show whether Google Calendar is connected, and as
 // whom, without ever handing the refresh_token itself to the client.
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       connected: Boolean(data),
       email: data?.google_email || null,
+      available: Boolean(data) || googleCalendarAvailableFor(user.email),
       lastSyncedAt: (data as { last_synced_at?: string | null } | null)?.last_synced_at || null,
     });
   } catch (error) {

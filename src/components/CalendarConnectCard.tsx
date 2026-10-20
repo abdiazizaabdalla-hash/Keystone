@@ -18,6 +18,7 @@ interface GoogleStatus {
   connected: boolean;
   email: string | null;
   lastSyncedAt?: string | null;
+  available?: boolean;
 }
 interface FeedLinks {
   url: string;
@@ -70,7 +71,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
         const [statusRes, feedRes] = await Promise.all([authFetch('/api/google-calendar/status'), authFetch('/api/calendar/feed')]);
         if (statusRes.ok) {
           const data = await statusRes.json();
-          setStatus({ connected: Boolean(data.connected), email: data.email || null, lastSyncedAt: data.lastSyncedAt || null });
+          setStatus({ connected: Boolean(data.connected), email: data.email || null, lastSyncedAt: data.lastSyncedAt || null, available: data.available !== false });
         }
         if (feedRes.ok) setFeed(await feedRes.json());
       } catch (err) {
@@ -108,7 +109,9 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
       const res = await authFetch('/api/google-calendar/disconnect', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to disconnect Google Calendar');
-      setStatus({ connected: false, email: null });
+      // Re-read the status so the card reflects whether the connect button is open to this user.
+      const fresh = await authFetch('/api/google-calendar/status').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      setStatus({ connected: false, email: null, available: fresh ? fresh.available !== false : true });
       setMessage('Google Calendar disconnected.');
     } catch (err) {
       if (handleAuthError(err)) return;
@@ -181,6 +184,8 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
             >
               {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
             </button>
+          ) : status && status.available === false ? (
+            <p className="text-xs text-slate-400">Direct Google Calendar sync is coming soon. Use the calendar link next to this for now. It works with Google Calendar too.</p>
           ) : (
             <button
               type="button"
