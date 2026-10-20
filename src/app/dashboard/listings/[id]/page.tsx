@@ -142,6 +142,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [priceForm, setPriceForm] = useState({ price: '', note: '' });
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
   const [showPriceHistory, setShowPriceHistory] = useState(false);
   const [newDate, setNewDate] = useState({ label: '', dueDate: '' });
   const [newContact, setNewContact] = useState({ role: '', name: '', email: '', phone: '' });
@@ -710,6 +711,16 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             )}
             {offers.length === 0 && <p className="text-sm text-slate-500 mb-3">No offers logged yet.</p>}
             {comparable.length >= 2 && (
+              <button
+                type="button"
+                onClick={() => setShowCompare(!showCompare)}
+                aria-expanded={showCompare}
+                className="mb-3 px-3 py-1.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg"
+              >
+                {showCompare ? 'Hide comparison' : `Compare offers (${comparable.length})`}
+              </button>
+            )}
+            {comparable.length >= 2 && showCompare && (
               <div className="mb-4 overflow-x-auto border border-slate-700 rounded-lg">
                 <table className="w-full text-xs">
                   <thead>
