@@ -3,7 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { exchangeCodeForTokens, getGoogleUserEmail } from '@/lib/googleCalendar';
 import { verifyOAuthState } from '@/lib/oauthState';
 import { encryptSecret } from '@/lib/encryption';
-import { queueBackfillUserCalendar } from '@/lib/calendarSync';
+import { queueBackfillUserCalendar, recordAgentLoginEmail } from '@/lib/calendarSync';
 
 // Where Google's consent screen sends the user back to. A plain browser
 // redirect with no Authorization header, so the user is identified via the
@@ -47,6 +47,9 @@ export async function GET(request: NextRequest) {
     );
 
     if (upsertError) throw upsertError;
+
+    // For an agent: remember the sign-in email so listings shared with them can find this connection.
+    await recordAgentLoginEmail(state.userId);
 
     // Put the dates that already exist on their calendar (runs after this redirect is sent).
     queueBackfillUserCalendar(state.userId);

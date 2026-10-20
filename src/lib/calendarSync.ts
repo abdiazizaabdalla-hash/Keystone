@@ -11,6 +11,7 @@ import {
   CalendarEventNotFoundError,
   type CalendarEventInput,
 } from './googleCalendar';
+import { getAgentListingRows } from './agentListings';
 
 // Google Calendar sync for BOTH sides of a deal:
 //   - the TC who owns the transaction: checklist task due dates (tasks.google_event_id)
@@ -91,6 +92,7 @@ async function getAccessTokenFor(userId: string): Promise<string | null> {
     if (message.includes('invalid_grant')) {
       await supabaseServer.from('calendar_connections').delete().eq('tc_user_id', userId).eq('provider', 'google');
       await supabaseServer.from('key_date_calendar_events').delete().eq('user_id', userId);
+      await supabaseServer.from('listing_agent_calendar_events').delete().eq('user_id', userId); // ignored if the table is not there yet
       await notifyCalendarDisconnected(userId);
     }
     console.error('Calendar token refresh failed (non-fatal):', message);
@@ -208,6 +210,7 @@ export async function backfillUserCalendar(userId: string): Promise<void> {
       .in('status', ['preparing', 'active', 'under_offer'])
       .limit(300);
     for (const row of ownedListings || []) await syncListingCalendar(row.id as string);
+    await backfillAgentListings(userId);
   } catch (error) {
     console.error('Calendar back-fill failed (non-fatal):', error);
   }
@@ -377,7 +380,7 @@ export async function removeTransactionCalendarEvents(transactionId: string): Pr
 
 const OPEN_LISTING = ['preparing', 'active', 'under_offer'];
 
-export async function syncListingCalendar(listingId: string): Promise<void> {
+async function syncListingOwnerCalendar(listingId: string): Promise<void> {
   try {
     const { data: listing } = await supabaseServer
       .from('listings')
@@ -500,6 +503,12 @@ export async function syncListingCalendar(listingId: string): Promise<void> {
   }
 }
 
+/** Brings the listing's owner (checklist, dates, expiration) and the shared agent (dates only) up to date. */
+export async function syncListingCalendar(listingId: string): Promise<void> {
+  await syncListingOwnerCalendar(listingId);
+  await syncListingAgentCalendar(listingId);
+}
+
 export function queueListingCalendarSync(listingId: string): void {
   try {
     after(() => syncListingCalendar(listingId));
@@ -510,6 +519,7 @@ export function queueListingCalendarSync(listingId: string): void {
 
 /** Deletes every Google event for a listing. Call BEFORE deleting the listing. */
 export async function removeListingCalendarEvents(listingId: string): Promise<void> {
+  await removeListingAgentEvents(listingId);
   try {
     const { data: listing } = await supabaseServer
       .from('listings')
@@ -548,5 +558,180 @@ export async function removeListingEvent(listingId: string, eventId: string): Pr
     await deleteCalendarEvent(accessToken, eventId);
   } catch (error) {
     console.error('Failed to delete listing calendar event (non-fatal):', error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Listing agent (read-only). An agent who connected their own Google Calendar gets the listing's
+// dates that the portal already shows them: go-live day, agreement expiration and the extra dates
+// (open house, price review...). Never the TC's checklist, notes or documents. Only while the TC
+// has "Share with the agent" on and the listing is open. Same contract as everywhere: Relay only
+// touches events it created itself (recorded in listing_agent_calendar_events).
+// ---------------------------------------------------------------------------
+
+const escapeLikeText = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+/** Connected agent accounts whose sign-in email matches the listing agent's email. */
+async function connectedAgentUserIds(agentEmail: string): Promise<string[]> {
+  const e = agentEmail.trim().toLowerCase();
+  if (!e) return [];
+  const { data, error } = await supabaseServer
+    .from('calendar_connections')
+    .select('tc_user_id')
+    .eq('provider', 'google')
+    .ilike('login_email', escapeLikeText(e))
+    .limit(20);
+  if (error) return []; // add-listing-agent-calendar.sql not run yet
+  return (data || []).map((r) => r.tc_user_id as string);
+}
+
+export async function syncListingAgentCalendar(listingId: string, options: { onlyUserId?: string } = {}): Promise<void> {
+  try {
+    const { data: listing } = await supabaseServer
+      .from('listings')
+      .select('id, tc_user_id, agent_id, property_address, status, share_with_agent, planned_list_date, expiration_date')
+      .eq('id', listingId)
+      .maybeSingle();
+    if (!listing) return;
+    const { data: existingRows, error: existingError } = await supabaseServer
+      .from('listing_agent_calendar_events')
+      .select('id, user_id, item_key, google_event_id')
+      .eq('listing_id', listingId);
+    if (existingError) return; // table not created yet
+    const existing = existingRows || [];
+
+    const wanted = listing.share_with_agent === true && OPEN_LISTING.includes(listing.status as string);
+    let recipients: string[] = [];
+    if (wanted && listing.agent_id) {
+      const { data: agent } = await supabaseServer.from('agents').select('email').eq('id', listing.agent_id).maybeSingle();
+      recipients = (await connectedAgentUserIds((agent?.email as string | undefined) || '')).filter((id) => id !== listing.tc_user_id);
+    }
+
+    // What the agent should have on their calendar.
+    const desired = new Map<string, CalendarEventInput>();
+    if (wanted) {
+      const today = todayIso();
+      const address = listing.property_address as string;
+      if (listing.planned_list_date && (listing.planned_list_date as string) >= today) {
+        desired.set('planned', { summary: `Listing goes live — ${address}`, description: `Planned go-live day for ${address}, from Relay TC.`, dueDate: listing.planned_list_date as string });
+      }
+      if (listing.expiration_date && (listing.expiration_date as string) >= today) {
+        desired.set('expiration', { summary: `Listing expires — ${address}`, description: `The listing agreement for ${address} expires. From Relay TC.`, dueDate: listing.expiration_date as string });
+      }
+      const { data: dates } = await supabaseServer.from('listing_dates').select('id, label, due_date').eq('listing_id', listingId);
+      for (const d of dates || []) {
+        if (d.due_date && (d.due_date as string) >= today) {
+          desired.set(`date:${d.id}`, { summary: `${d.label} — Listing · ${address}`, description: `Listing date for ${address}, from Relay TC.`, dueDate: d.due_date as string });
+        }
+      }
+    }
+
+    const users = new Set<string>([...recipients, ...existing.map((r) => r.user_id as string)]);
+    if (options.onlyUserId) {
+      if (!users.has(options.onlyUserId)) return;
+      users.clear();
+      users.add(options.onlyUserId);
+    }
+
+    for (const userId of users) {
+      const accessToken = await getAccessTokenFor(userId);
+      if (!accessToken) continue;
+      const isRecipient = recipients.includes(userId);
+      const mine = existing.filter((r) => r.user_id === userId);
+
+      // Remove events that are no longer wanted (unshared, closed, date changed away or passed).
+      for (const row of mine) {
+        if (isRecipient && desired.has(row.item_key as string)) continue;
+        try {
+          await deleteCalendarEvent(accessToken, row.google_event_id as string);
+        } catch (error) {
+          console.error('Failed to delete listing agent calendar event (non-fatal):', error);
+        }
+        await supabaseServer.from('listing_agent_calendar_events').delete().eq('id', row.id);
+      }
+      if (!isRecipient) continue;
+
+      for (const [key, input] of desired) {
+        const row = mine.find((r) => r.item_key === key);
+        try {
+          if (row) {
+            try {
+              await updateCalendarEvent(accessToken, row.google_event_id as string, input);
+              continue;
+            } catch (error) {
+              if (!(error instanceof CalendarEventNotFoundError)) throw error;
+            }
+          }
+          const eventId = await createCalendarEvent(accessToken, input);
+          await supabaseServer
+            .from('listing_agent_calendar_events')
+            .upsert({ listing_id: listingId, user_id: userId, item_key: key, google_event_id: eventId }, { onConflict: 'listing_id,user_id,item_key' });
+        } catch (error) {
+          console.error(`Failed to sync listing item ${key} for agent ${userId} (non-fatal):`, error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Listing agent calendar sync failed (non-fatal):', error);
+  }
+}
+
+/** Deletes the agent-side Google events for a listing. Call BEFORE deleting the listing (the records go with it). */
+async function removeListingAgentEvents(listingId: string): Promise<void> {
+  try {
+    const { data: rows, error } = await supabaseServer.from('listing_agent_calendar_events').select('user_id, google_event_id').eq('listing_id', listingId);
+    if (error || !rows) return;
+    const tokens = new Map<string, string | null>();
+    for (const row of rows) {
+      const userId = row.user_id as string;
+      if (!tokens.has(userId)) tokens.set(userId, await getAccessTokenFor(userId));
+      const token = tokens.get(userId);
+      if (!token) continue;
+      try {
+        await deleteCalendarEvent(token, row.google_event_id as string);
+      } catch (e) {
+        console.error('Failed to delete listing agent calendar event (non-fatal):', e);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to remove listing agent calendar events (non-fatal):', error);
+  }
+}
+
+/** For an agent who just connected: put the shared listings' dates on their calendar. */
+async function backfillAgentListings(userId: string): Promise<void> {
+  const { data } = await supabaseServer.auth.admin.getUserById(userId);
+  const user = data?.user;
+  if (!user || user.app_metadata?.role !== 'agent' || !user.email) return;
+  const rows = await getAgentListingRows(user.email);
+  for (const row of rows) {
+    if (OPEN_LISTING.includes(row.status as string)) await syncListingAgentCalendar(row.id as string, { onlyUserId: userId });
+  }
+}
+
+/**
+ * Saves an agent's sign-in email on their calendar connection (coordinators are left empty). With
+ * `thenBackfill`, also puts their shared listings' dates on the calendar.
+ */
+export async function recordAgentLoginEmail(userId: string, thenBackfill = false): Promise<void> {
+  try {
+    const { data } = await supabaseServer.auth.admin.getUserById(userId);
+    const user = data?.user;
+    if (!user || user.app_metadata?.role !== 'agent' || !user.email) return;
+    const { error } = await supabaseServer
+      .from('calendar_connections')
+      .update({ login_email: user.email.toLowerCase() })
+      .eq('tc_user_id', userId)
+      .eq('provider', 'google');
+    if (error) return; // add-listing-agent-calendar.sql not run yet
+    if (thenBackfill) {
+      try {
+        after(() => backfillAgentListings(userId));
+      } catch {
+        void backfillAgentListings(userId);
+      }
+    }
+  } catch (error) {
+    console.error('Recording the agent sign-in email failed (non-fatal):', error);
   }
 }

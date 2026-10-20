@@ -154,7 +154,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
       <h2 className="text-lg font-bold text-slate-100 mb-1">Calendar</h2>
       <p className="text-sm text-slate-400 mb-5">
         {audience === 'agent'
-          ? 'Set this up once and every important date on your deals (inspection, appraisal, closing and more) shows up on your calendar by itself, and moves if your TC changes it.'
+          ? 'Set this up once and every important date on your deals (inspection, appraisal, closing and more) and on listings your TC shares with you (go-live day, open houses, expiration) shows up on your calendar by itself, and moves if your TC changes it.'
           : 'Set this up once and your deals’ critical dates and checklist due dates show up on your calendar by themselves, and move when you change them.'}
       </p>
 

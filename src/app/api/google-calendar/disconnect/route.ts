@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
 
     await supabaseServer.from('key_date_calendar_events').delete().eq('user_id', user.id);
+    await supabaseServer.from('listing_agent_calendar_events').delete().eq('user_id', user.id); // ignored if the table is not there yet
 
     return NextResponse.json({ success: true });
   } catch (error) {
