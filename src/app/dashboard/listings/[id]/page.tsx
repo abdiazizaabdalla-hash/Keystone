@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { uploadIncoming } from '@/lib/incomingUploadClient';
 import DragHandle from '@/components/DragHandle';
+import MoveMenu from '@/components/MoveMenu';
 import { isDocDrag, isFileDrag, readDocDrag, startDocDrag } from '@/lib/docDrag';
 import { formatDisplayDate } from '@/lib/dueDates';
 import ContactPicker from '@/components/ContactPicker';
@@ -1140,6 +1141,11 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                             </p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
+                            <MoveMenu
+                              onMove={(t) => void moveDoc(d.id, t)}
+                              label={`Move ${d.file_name} to another area`}
+                              options={LISTING_DOC_TYPES.filter((t) => t !== type).map((t) => ({ value: t, label: t }))}
+                            />
                             <button
                               type="button"
                               onClick={async () => {

@@ -17,7 +17,7 @@ import {
   type InboundAttachment,
 } from '@/lib/listingInbound';
 import { OFFER_FILE_TYPES } from '@/lib/listingOfferFiles';
-import { extensionOf } from '@/lib/incomingUploads';
+import { LISTING_FILE_TYPES, MAX_INCOMING_SIZE, extensionOf } from '@/lib/incomingUploads';
 import { queueTcInboundNotice } from '@/lib/listingNotify';
 
 /**
@@ -43,6 +43,7 @@ import { queueTcInboundNotice } from '@/lib/listingNotify';
 
 const RESEND_API_BASE = 'https://api.resend.com';
 const BUCKET = 'transaction-documents';
+const MAX_DEAL_EMAIL_ATTACHMENTS = 15;
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour, matching GET /api/documents
 
 // Resend signs webhooks the same way Svix does, but the installed
@@ -309,13 +310,32 @@ export async function POST(request: NextRequest) {
     .single();
   const uploadedBy = agentRow?.tc_user_id ?? null;
 
+  // Same rules as the listing inbox and the upload button: only document and
+  // image types, at most 25MB each, and a sensible number per email. The
+  // stored content type comes from the extension, never from the sender.
+  const allAttachments = full.attachments || [];
+  const usableAttachments = allAttachments
+    .filter((a) => {
+      const ext = extensionOf(a.filename || '');
+      const size = Number(a.size) || 0;
+      return Boolean(LISTING_FILE_TYPES[ext]) && size > 0 && size <= MAX_INCOMING_SIZE;
+    })
+    .slice(0, MAX_DEAL_EMAIL_ATTACHMENTS);
+  const skippedCount = allAttachments.length - usableAttachments.length;
+  if (skippedCount > 0) {
+    console.warn('email/inbound: skipped attachments (type, size or count)', { transactionId: transaction.id, skipped: skippedCount });
+  }
+
   let filedCount = 0;
-  for (const attachment of full.attachments || []) {
+  for (const attachment of usableAttachments) {
     try {
       const downloadUrl = await fetchAttachmentDownloadUrl(full.id, attachment.id);
       const fileRes = await fetch(downloadUrl);
       if (!fileRes.ok) throw new Error(`download failed: ${fileRes.status}`);
       const buffer = await fileRes.arrayBuffer();
+      // The declared size can be wrong; check what actually arrived.
+      if (buffer.byteLength === 0 || buffer.byteLength > MAX_INCOMING_SIZE) throw new Error('attachment size out of range');
+      const attachmentContentType = LISTING_FILE_TYPES[extensionOf(attachment.filename || '')];
 
       const safeName = attachment.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
       const storagePath = `${transaction.id}/${crypto.randomUUID()}-${safeName}`;
@@ -323,7 +343,7 @@ export async function POST(request: NextRequest) {
       const { error: uploadError } = await supabaseServer.storage
         .from(BUCKET)
         .upload(storagePath, buffer, {
-          contentType: attachment.content_type || 'application/octet-stream',
+          contentType: attachmentContentType,
           upsert: false,
         });
       if (uploadError) throw uploadError;
@@ -334,8 +354,8 @@ export async function POST(request: NextRequest) {
         document_type: 'General',
         file_name: attachment.filename,
         storage_path: storagePath,
-        content_type: attachment.content_type || null,
-        file_size: attachment.size,
+        content_type: attachmentContentType,
+        file_size: buffer.byteLength,
         uploaded_by: uploadedBy,
         requires_signature: false,
         source: 'email',
@@ -348,7 +368,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ matched: true, emailId: emailRow.id, attachmentsFiled: filedCount });
+  return NextResponse.json({ matched: true, emailId: emailRow.id, attachmentsFiled: filedCount, attachmentsSkipped: skippedCount });
 }
 
 // Lets a TC remove a forwarded email from the Communication card -- e.g.

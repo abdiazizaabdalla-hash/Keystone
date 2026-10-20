@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import DragHandle from '@/components/DragHandle';
+import MoveMenu from '@/components/MoveMenu';
 import { isDocDrag, isFileDrag, readDocDrag, startDocDrag } from '@/lib/docDrag';
 import { stagesForTaskNames } from '@/lib/transactionStages';
 import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categoryLabel, typesForCategory, isValidDocumentType } from '@/lib/documentTaxonomy';
@@ -1496,7 +1497,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   // attachment) onto a category box, or the "Move to…" menu on the row for
   // phones and keyboards. Moving only changes where the file is filed; the
   // file itself and any email it came with are untouched.
-  const [, setMovingDocId] = useState<string | null>(null);
+  const [movingDocId, setMovingDocId] = useState<string | null>(null);
   const handleMoveDocument = async (docId: string, categoryKey: string) => {
     const current = documents.find((d) => d.id === docId);
     if (!current || (current.category || DEFAULT_CATEGORY_KEY) === categoryKey) return;
@@ -1928,6 +1929,12 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               {isTogglingRequiresSignature ? '...' : requiresSignature ? 'No sig needed' : 'Needs sig'}
             </button>
           )}
+          <MoveMenu
+            disabled={movingDocId === doc.id}
+            onMove={(categoryKey) => void handleMoveDocument(doc.id, categoryKey)}
+            label={`Move ${doc.file_name} to another category`}
+            options={DOCUMENT_CATEGORIES.filter((c) => c.key !== (doc.category || DEFAULT_CATEGORY_KEY)).map((c) => ({ value: c.key, label: c.label }))}
+          />
           <button
             onClick={() => handleDeleteDocument(doc.id)}
             disabled={deletingDocId === doc.id}
@@ -3598,6 +3605,11 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                                       {att.fileSize ? `${(att.fileSize / 1024).toFixed(0)} KB` : ''}
                                     </span>
                                   </a>
+                                  <MoveMenu
+                                    onMove={(categoryKey) => void handleMoveDocument(att.id, categoryKey)}
+                                    label={`Move ${att.fileName} to a Documents category`}
+                                    options={DOCUMENT_CATEGORIES.filter((c) => c.key !== (documents.find((d) => d.id === att.id)?.category || DEFAULT_CATEGORY_KEY)).map((c) => ({ value: c.key, label: c.label }))}
+                                  />
                                 </div>
                               ))}
                             </div>
