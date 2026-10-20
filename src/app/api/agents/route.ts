@@ -5,6 +5,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getPlanLimits } from '@/lib/plans';
 import { getVisibleTcUserIds, getTeamIdForUser } from '@/lib/team';
 import { getUserPlan } from '@/lib/privileged';
+import { autoAddContact } from '@/lib/contactsAuto';
 import { logAudit } from '@/lib/audit';
 
 export async function GET(request: NextRequest) {
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     await logAudit(request, user, 'agent.create', { entityType: 'agent', entityId: agent.id });
+    await autoAddContact(user.id, { name, email, phone, company: brokerage, role: 'Agent' });
     return NextResponse.json(agent, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

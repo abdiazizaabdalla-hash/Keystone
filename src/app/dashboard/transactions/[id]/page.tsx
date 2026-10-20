@@ -3531,6 +3531,10 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             closingDate={transaction.closing_date}
             agent={agent ? { name: agent.name, email: agent.email } : null}
             contacts={contacts.map((c) => ({ role: c.role, name: c.name, email: c.email }))}
+            currentWaitingOn={emailTask.waiting_on ?? null}
+            onWaitingSet={(id, waitingOn, since) =>
+              setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, waiting_on: waitingOn, waiting_on_since: since } : t)))
+            }
             onClose={() => setEmailTask(null)}
           />
         )}

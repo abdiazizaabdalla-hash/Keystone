@@ -17,6 +17,7 @@ type Audience = 'tc' | 'agent';
 interface GoogleStatus {
   connected: boolean;
   email: string | null;
+  lastSyncedAt?: string | null;
 }
 interface FeedLinks {
   url: string;
@@ -69,7 +70,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
         const [statusRes, feedRes] = await Promise.all([authFetch('/api/google-calendar/status'), authFetch('/api/calendar/feed')]);
         if (statusRes.ok) {
           const data = await statusRes.json();
-          setStatus({ connected: Boolean(data.connected), email: data.email || null });
+          setStatus({ connected: Boolean(data.connected), email: data.email || null, lastSyncedAt: data.lastSyncedAt || null });
         }
         if (feedRes.ok) setFeed(await feedRes.json());
       } catch (err) {
@@ -168,7 +169,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
           </div>
           <p className="text-xs text-slate-500 mb-4">
             {status?.connected
-              ? `Connected as ${status.email || 'your Google account'}.`
+              ? `Connected as ${status.email || 'your Google account'}.${status.lastSyncedAt ? ` Last updated ${new Date(status.lastSyncedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.` : ''}`
               : 'Relay adds, updates and removes its own events on your primary calendar. It never reads your other events.'}
           </p>
           {status?.connected ? (

@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { parseCsv } from '@/lib/csvImport';
+import Link from 'next/link';
 import type { ContactRow } from '@/lib/contactsCrm';
 
 // Contacts: the TC's address book. Everyone in their business in one place, with
@@ -43,6 +45,8 @@ export default function ContactsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [working, setWorking] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [dealsFor, setDealsFor] = useState<{ id: string; property_address: string; file_number: string | null; status: string | null; as: string }[] | null>(null);
 
   const handleAuth = useCallback(
     (err: unknown) => {
@@ -121,6 +125,81 @@ export default function ContactsPage() {
       else visible.forEach((c) => next.add(c.id));
       return next;
     });
+
+  // When a saved contact's form is open, list the deals that person is on.
+  const editingId = form?.id;
+  useEffect(() => {
+    if (!editingId) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setDealsFor(null);
+      try {
+        const res = await authFetch(`/api/contacts/${editingId}/deals`);
+        const data = await res.json();
+        if (!cancelled && res.ok) setDealsFor(data.deals || []);
+      } catch {
+        // The list is a nicety; the form works without it.
+      }
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [editingId]);
+
+  const importCsv = async (file: File | undefined) => {
+    if (!file) return;
+    setError('');
+    try {
+      if (file.size > 5 * 1024 * 1024) throw new Error('That file is over 5 MB.');
+      const parsed = parseCsv(await file.text());
+      if (parsed.length < 2) throw new Error('Could not find any rows. The first row should have column names like Name and Email.');
+      const head = parsed[0].map((h) => h.trim().toLowerCase());
+      const find = (...names: string[]) => head.findIndex((h) => names.some((n) => h === n || h.includes(n)));
+      const iName = find('full name', 'name', 'contact');
+      const iFirst = find('first name', 'first');
+      const iLast = find('last name', 'last', 'surname');
+      const iEmail = find('email', 'e-mail');
+      const iPhone = find('mobile', 'phone', 'cell');
+      const iCompany = find('company', 'brokerage', 'organization');
+      const iRole = find('role', 'type', 'category', 'title');
+      const iTags = find('tags', 'groups', 'labels');
+      if (iEmail < 0 && iName < 0 && iFirst < 0) throw new Error('Could not find a Name or Email column.');
+      const get = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
+      const rows = parsed.slice(1).map((r) => ({
+        name: get(r, iName) || [get(r, iFirst), get(r, iLast)].filter(Boolean).join(' '),
+        email: get(r, iEmail),
+        phone: get(r, iPhone),
+        company: get(r, iCompany),
+        role: get(r, iRole),
+        tags: get(r, iTags),
+      }));
+      setWorking(true);
+      let added = 0;
+      let dup = 0;
+      let bad = 0;
+      for (let i = 0; i < rows.length; i += 500) {
+        const res = await authFetch('/api/contacts/import-csv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: rows.slice(i, i + 500) }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Import failed');
+        added += data.added;
+        dup += data.skippedDuplicate;
+        bad += data.skippedInvalid;
+      }
+      flash(`Added ${added} contact${added === 1 ? '' : 's'}. ${dup} already in your list, ${bad} skipped (no usable name or email). Nobody was added to your newsletter.`);
+      await load();
+    } catch (err) {
+      if (handleAuth(err)) return;
+      setError(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setWorking(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
 
   const openEdit = (c: ContactRow) =>
     setForm({
@@ -243,6 +322,16 @@ export default function ContactsPage() {
           >
             Import from my deals
           </button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={working}
+            className="px-4 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg transition disabled:opacity-50"
+            title="Columns it looks for: Name (or First/Last), Email, Phone, Company, Role, Tags"
+          >
+            Import CSV
+          </button>
+          <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => importCsv(e.target.files?.[0])} />
           <button
             type="button"
             onClick={() => {
@@ -449,6 +538,25 @@ export default function ContactsPage() {
               />
               Agreed to receive my newsletter {!form.email.trim() && <span className="text-slate-500">(needs an email)</span>}
             </label>
+            {form.id && dealsFor && (
+              <div className="pt-1">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                  On {dealsFor.length} deal{dealsFor.length === 1 ? '' : 's'}
+                </p>
+                {dealsFor.length > 0 && (
+                  <ul className="space-y-1 max-h-32 overflow-y-auto text-sm">
+                    {dealsFor.map((d) => (
+                      <li key={d.id}>
+                        <Link href={`/dashboard/transactions/${d.id}`} className="text-blue-400 hover:text-blue-300 break-words">
+                          {d.property_address}
+                        </Link>{' '}
+                        <span className="text-slate-500">as {d.as}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             {formError && <p className="text-sm text-red-400">{formError}</p>}
             <div className="flex items-center gap-3 pt-1">
               <button type="submit" disabled={saving} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">

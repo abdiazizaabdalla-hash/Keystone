@@ -25,6 +25,7 @@ create table if not exists public.calendar_connections (
 create index if not exists idx_calendar_connections_tc_user_id on public.calendar_connections (tc_user_id);
 
 alter table public.tasks add column if not exists google_event_id text;
+alter table public.calendar_connections add column if not exists last_synced_at timestamptz;
 
 create table if not exists public.key_date_calendar_events (
   id              uuid primary key default gen_random_uuid(),

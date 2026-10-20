@@ -10,14 +10,18 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabaseServer
       .from('calendar_connections')
-      .select('google_email')
+      .select('*')
       .eq('tc_user_id', user.id)
       .eq('provider', 'google')
       .maybeSingle();
 
     if (error) throw error;
 
-    return NextResponse.json({ connected: Boolean(data), email: data?.google_email || null });
+    return NextResponse.json({
+      connected: Boolean(data),
+      email: data?.google_email || null,
+      lastSyncedAt: (data as { last_synced_at?: string | null } | null)?.last_synced_at || null,
+    });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

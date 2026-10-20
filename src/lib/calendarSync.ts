@@ -1,6 +1,8 @@
 import { after } from 'next/server';
 import { supabaseServer } from './supabase';
 import { decryptSecret } from './encryption';
+import { getResendClient, INVOICE_FROM_EMAIL } from './resendClient';
+import { escapeHtml } from './escapeHtml';
 import {
   refreshAccessToken,
   createCalendarEvent,
@@ -47,6 +49,31 @@ const todayIso = () => new Date().toISOString().split('T')[0];
  * connection. A revoked/expired grant (Google answers `invalid_grant`) deletes
  * the dead connection row so the Settings card correctly shows "not connected".
  */
+/** One email, sent when Google cancels a connection (the row is deleted right after, so this can't repeat). */
+async function notifyCalendarDisconnected(userId: string): Promise<void> {
+  try {
+    const { data } = await supabaseServer.auth.admin.getUserById(userId);
+    const email = data?.user?.email;
+    if (!email) return;
+    const isAgent = data.user?.app_metadata?.role === 'agent';
+    const link = `https://www.relaytc.com/${isAgent ? 'agent' : 'dashboard'}/settings`;
+    const name = escapeHtml(String((data.user?.user_metadata as { full_name?: string } | undefined)?.full_name || '').split(' ')[0] || 'there');
+    await getResendClient().emails.send({
+      from: INVOICE_FROM_EMAIL,
+      to: [email],
+      subject: 'Reconnect your Google Calendar in Relay TC',
+      html:
+        `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1f;">` +
+        `<p>Hi ${name},</p>` +
+        `<p>Google ended the connection between your calendar and Relay TC (this happens when access is revoked or expires), so new dates are no longer being added. Nothing was lost: the events already on your calendar are still there.</p>` +
+        `<p><a href="${link}">Open Settings to reconnect</a> — it takes a few seconds.</p></div>`,
+      text: `Google ended the connection between your calendar and Relay TC, so new dates are no longer being added. Reconnect in Settings: ${link}`,
+    });
+  } catch (error) {
+    console.error('Calendar disconnect notice failed (ignored):', error);
+  }
+}
+
 async function getAccessTokenFor(userId: string): Promise<string | null> {
   const { data: connection } = await supabaseServer
     .from('calendar_connections')
@@ -64,6 +91,7 @@ async function getAccessTokenFor(userId: string): Promise<string | null> {
     if (message.includes('invalid_grant')) {
       await supabaseServer.from('calendar_connections').delete().eq('tc_user_id', userId).eq('provider', 'google');
       await supabaseServer.from('key_date_calendar_events').delete().eq('user_id', userId);
+      await notifyCalendarDisconnected(userId);
     }
     console.error('Calendar token refresh failed (non-fatal):', message);
     return null;
@@ -127,6 +155,12 @@ export async function syncTransactionCalendar(transactionId: string, options: { 
       if (!accessToken) continue;
 
       await syncKeyDatesForUser(accessToken, userId, label, dates, mappings);
+      // Best effort: the column comes from add-calendar-sync.sql; an error here (not run yet) is ignored.
+      await supabaseServer
+        .from('calendar_connections')
+        .update({ last_synced_at: new Date().toISOString() })
+        .eq('tc_user_id', userId)
+        .eq('provider', 'google');
 
       if (userId === ownerId) {
         const { data: tasks } = await supabaseServer

@@ -34,6 +34,40 @@ interface RowResult {
   note?: string;
 }
 
+const PRESET_KEY = 'relay_import_mapping_v1';
+
+// The column match from the last import of a file with these exact column names,
+// so the next export from the same tool needs no fixing. Stored in this browser only.
+function loadPreset(headers: string[]): Record<ImportFieldKey, number> | null {
+  try {
+    const raw = window.localStorage.getItem(PRESET_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as { signature: string; byHeader: Record<string, string> };
+    if (saved.signature !== headers.map((h) => h.toLowerCase()).join('|')) return null;
+    const mapping = {} as Record<ImportFieldKey, number>;
+    for (const f of IMPORT_FIELDS) {
+      const name = saved.byHeader[f.key];
+      mapping[f.key] = name ? headers.findIndex((h) => h.toLowerCase() === name) : -1;
+    }
+    return mapping;
+  } catch {
+    return null;
+  }
+}
+
+function savePreset(headers: string[], mapping: Record<ImportFieldKey, number>) {
+  try {
+    const byHeader: Record<string, string> = {};
+    for (const f of IMPORT_FIELDS) if (mapping[f.key] >= 0) byHeader[f.key] = headers[mapping[f.key]].toLowerCase();
+    window.localStorage.setItem(
+      PRESET_KEY,
+      JSON.stringify({ signature: headers.map((h) => h.toLowerCase()).join('|'), byHeader })
+    );
+  } catch {
+    // Storage can be blocked; the import still works.
+  }
+}
+
 const selectCls = 'bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none w-full';
 
 export default function ImportTransactionsPage() {
@@ -50,6 +84,11 @@ export default function ImportTransactionsPage() {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<RowResult[] | null>(null);
+  const [usedPreset, setUsedPreset] = useState(false);
+  const [createdTxIds, setCreatedTxIds] = useState<string[]>([]);
+  const [createdAgentIds, setCreatedAgentIds] = useState<string[]>([]);
+  const [undoing, setUndoing] = useState(false);
+  const [undoNote, setUndoNote] = useState('');
 
   const onFile = async (file: File | undefined) => {
     setError('');
@@ -72,7 +111,10 @@ export default function ImportTransactionsPage() {
     setFileName(file.name);
     setHeaders(head.map((h) => h.trim()));
     setRows(body);
-    setMapping(autoMap(head));
+    const trimmed = head.map((h) => h.trim());
+    const preset = loadPreset(trimmed);
+    setUsedPreset(Boolean(preset));
+    setMapping(preset ?? autoMap(head));
   };
 
   const cell = (r: string[], key: ImportFieldKey): string => {
@@ -108,7 +150,11 @@ export default function ImportTransactionsPage() {
     setRunning(true);
     setError('');
     setProgress(0);
+    setUndoNote('');
     const out: RowResult[] = [];
+    const madeTx: string[] = [];
+    const madeAgents: string[] = [];
+    savePreset(headers, mapping);
     try {
       const [agentsRes, txRes] = await Promise.all([authFetch('/api/agents'), authFetch('/api/transactions')]);
       if (!agentsRes.ok || !txRes.ok) throw new Error('Could not load your existing agents and deals');
@@ -164,6 +210,7 @@ export default function ImportTransactionsPage() {
               continue;
             }
             agent = { id: data.id, name: data.name, email: data.email ?? null };
+            madeAgents.push(data.id);
             agents.push(agent);
           }
 
@@ -186,6 +233,7 @@ export default function ImportTransactionsPage() {
             continue;
           }
           existingAddresses.add(normalizeAddress(p.address));
+          madeTx.push(tx.id);
 
           // Other people on the deal, when the file had them.
           const parties: { role: string; name: string; email: string }[] = [
@@ -215,8 +263,36 @@ export default function ImportTransactionsPage() {
       }
       setError(err instanceof Error ? err.message : 'Import failed');
     } finally {
+      setCreatedTxIds(madeTx);
+      setCreatedAgentIds(madeAgents);
       setResults(out);
       setRunning(false);
+    }
+  };
+
+  const undoImport = async () => {
+    if (!window.confirm(`Delete the ${createdTxIds.length} deal${createdTxIds.length === 1 ? '' : 's'} this import created${createdAgentIds.length ? ` and ${createdAgentIds.length} new agent${createdAgentIds.length === 1 ? '' : 's'}` : ''}? Anything you added to them since will be lost.`)) return;
+    setUndoing(true);
+    let removed = 0;
+    try {
+      for (const id of createdTxIds) {
+        const res = await authFetch(`/api/transactions?id=${id}`, { method: 'DELETE' });
+        if (res.ok) removed += 1;
+      }
+      for (const id of createdAgentIds) {
+        await authFetch(`/api/agents?id=${id}`, { method: 'DELETE' });
+      }
+      setUndoNote(`Removed ${removed} of ${createdTxIds.length} imported deals.`);
+      setCreatedTxIds([]);
+      setCreatedAgentIds([]);
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setUndoNote('Undo did not finish. Check your deals list and remove any leftovers by hand.');
+    } finally {
+      setUndoing(false);
     }
   };
 
@@ -280,7 +356,10 @@ export default function ImportTransactionsPage() {
 
           <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-5">
             <h2 className="text-lg font-bold text-slate-100 mb-1">1. Match your columns</h2>
-            <p className="text-sm text-slate-400 mb-4">We guessed from the column names. Fix anything that looks off.</p>
+            <p className="text-sm text-slate-400 mb-4">
+              {usedPreset ? 'Using the column match you saved from your last import of this kind of file. ' : 'We guessed from the column names. '}
+              Fix anything that looks off.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
               {IMPORT_FIELDS.map((f) => (
                 <div key={f.key}>
@@ -404,12 +483,19 @@ export default function ImportTransactionsPage() {
                 setResults(null);
                 setMapping(null);
                 setRows([]);
+                setUndoNote('');
               }}
               className="text-sm text-slate-400 hover:text-slate-200"
             >
               Import another file
             </button>
+            {createdTxIds.length > 0 && (
+              <button type="button" onClick={undoImport} disabled={undoing} className="text-sm text-red-300 hover:text-red-200 disabled:opacity-50 ml-auto">
+                {undoing ? 'Removing…' : 'Undo this import'}
+              </button>
+            )}
           </div>
+          {undoNote && <p className="text-sm text-slate-300 mt-3">{undoNote}</p>}
         </div>
       )}
     </div>

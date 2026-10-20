@@ -42,6 +42,10 @@ interface Props {
   closingDate?: string | null;
   agent: { name: string; email?: string | null } | null;
   contacts: { role: string | null; name: string | null; email: string | null }[];
+  /** What the step is already marked "waiting on", if anything. */
+  currentWaitingOn?: string | null;
+  /** Called after a send marked the step as waiting on someone, so the page can show it. */
+  onWaitingSet?: (taskId: string, waitingOn: string | null, waitingOnSince: string | null) => void;
   onClose: () => void;
 }
 
@@ -60,6 +64,7 @@ export default function StepEmailModal(props: Props) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [logToDeal, setLogToDeal] = useState(true);
+  const [markWaiting, setMarkWaiting] = useState(true);
 
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -184,6 +189,26 @@ export default function StepEmailModal(props: Props) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to send');
+
+      // Optionally mark the step "waiting on" the first person emailed. The email
+      // already went out, so a failure here is ignored rather than shown as a send error.
+      if (markWaiting && !props.currentWaitingOn) {
+        const target = recipients.find((r) => selected.has(r.email) && !r.label.endsWith('(agent)')) || recipients.find((r) => selected.has(r.email));
+        const who = (target ? target.label : recipientsNow[0]).slice(0, 100);
+        try {
+          const wRes = await authFetch(`/api/tasks/${taskId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ waitingOn: who }),
+          });
+          if (wRes.ok) {
+            const w = await wRes.json();
+            props.onWaitingSet?.(taskId, w.waiting_on ?? who, w.waiting_on_since ?? null);
+          }
+        } catch {
+          // best effort
+        }
+      }
       setSentTo(recipientsNow);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send');
@@ -222,6 +247,29 @@ export default function StepEmailModal(props: Props) {
     setRawSubject(tpl.subject);
     setRawBody(tpl.body);
     refill(tpl.subject, tpl.body);
+  };
+
+  // Copies the chosen custom template onto this step, so this step opens with it from now on.
+  const useForThisStep = async () => {
+    if (!currentCustom) return;
+    setError('');
+    setBusy('save');
+    try {
+      const res = await authFetch('/api/step-email-templates', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stepName, subject: currentCustom.subject, body: currentCustom.body }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save');
+      setSaved({ subject: currentCustom.subject, body: currentCustom.body, suggestedRecipients: defaults.suggestedRecipients });
+      setNotice(`“${currentCustom.name}” will open by default for “${stepName}”.`);
+      setTimeout(() => setNotice(''), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setBusy(null);
+    }
   };
 
   const startNewTemplate = () => {
@@ -411,6 +459,11 @@ export default function StepEmailModal(props: Props) {
                 <button type="button" onClick={startNewTemplate} className="text-sm text-blue-400 hover:text-blue-300">
                   + New template
                 </button>
+                {currentCustom && (
+                  <button type="button" onClick={useForThisStep} disabled={busy !== null} className="text-sm text-slate-400 hover:text-slate-200 disabled:opacity-50">
+                    Use for this step from now on
+                  </button>
+                )}
               </div>
             </div>
             <div>
@@ -476,6 +529,12 @@ export default function StepEmailModal(props: Props) {
                 {currentCustom ? 'Edit this template' : 'Edit this step’s template'}
               </button>
             </div>
+            {!props.currentWaitingOn && (
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={markWaiting} onChange={(e) => setMarkWaiting(e.target.checked)} className="accent-blue-500" />
+                Mark this step &ldquo;waiting on&rdquo; the person I email
+              </label>
+            )}
             <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
               <input type="checkbox" checked={logToDeal} onChange={(e) => setLogToDeal(e.target.checked)} className="accent-blue-500" />
               Save a copy on this deal&rsquo;s Communication log (blind copy, others won&rsquo;t see it)

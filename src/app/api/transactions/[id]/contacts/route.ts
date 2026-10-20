@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
+import { autoAddContact } from '@/lib/contactsAuto';
 
 // The "Deal Contacts" list shown right under the Checklist card on the
 // transaction detail page -- buyer, seller, lender, title/escrow, etc.
@@ -125,6 +126,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .single();
 
     if (error) throw error;
+
+    // Save the person to the deal owner's Contacts directory too (skips duplicates).
+    if (email) {
+      const { data: owner } = await supabaseServer
+        .from('transactions')
+        .select('agents(tc_user_id)')
+        .eq('id', transactionId)
+        .maybeSingle();
+      const agentRel = (owner as { agents?: { tc_user_id?: string } | { tc_user_id?: string }[] | null } | null)?.agents;
+      const ownerId = Array.isArray(agentRel) ? agentRel[0]?.tc_user_id : agentRel?.tc_user_id;
+      if (ownerId) await autoAddContact(ownerId, { name, email, phone, role });
+    }
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
