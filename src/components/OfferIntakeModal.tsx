@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
+import { uploadIncoming, type UploadedFile } from '@/lib/incomingUploadClient';
 import { FINANCING_TYPES } from '@/lib/listingsShared';
 import {
   EMPTY_TERMS,
@@ -38,6 +39,8 @@ interface Props {
   listingId: string;
   /** An offer already on file: the documents are a counteroffer, amendment or revised offer for it. */
   offer?: Record<string, unknown> | null;
+  /** Files from an offer email held for review: already in storage, opened here instead of picked. */
+  initial?: { inboundId: string; files: { name: string; path: string; url: string | null }[] };
   onClose: () => void;
   onSaved: (message: string) => void;
 }
@@ -47,7 +50,7 @@ const inputCls =
 const labelCls = 'block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1';
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function OfferIntakeModal({ listingId, offer, onClose, onSaved }: Props) {
+export default function OfferIntakeModal({ listingId, offer, initial, onClose, onSaved }: Props) {
   const revision = Boolean(offer);
   const current = useMemo(() => (offer ? rowToTerms(offer) : null), [offer]);
 
@@ -71,6 +74,50 @@ export default function OfferIntakeModal({ listingId, offer, onClose, onSaved }:
   const urls = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
   useEffect(() => () => urls.forEach((u) => URL.revokeObjectURL(u)), [urls]);
 
+  // Files go straight to private storage (no size limit from the app server), once; reading and saving both reuse them.
+  const uploadedRef = useRef(new Map<File, UploadedFile>());
+  const ensureUploaded = async (list: File[]): Promise<UploadedFile[]> => {
+    const missing = list.filter((f) => !uploadedRef.current.has(f));
+    if (missing.length) {
+      const up = await uploadIncoming(missing);
+      missing.forEach((f, i) => uploadedRef.current.set(f, up[i]));
+    }
+    return list.map((f) => uploadedRef.current.get(f) as UploadedFile);
+  };
+
+  // Opening a held offer email: fetch its files so they can be shown next to the terms. They are already in
+  // storage, so they count as uploaded and are not sent again.
+  const [opening, setOpening] = useState(Boolean(initial));
+  useEffect(() => {
+    if (!initial) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const loaded: File[] = [];
+        for (const f of initial.files) {
+          if (!f.url) continue;
+          const res = await fetch(f.url);
+          if (!res.ok) throw new Error('open failed');
+          const blob = await res.blob();
+          const file = new File([blob], f.name, { type: blob.type });
+          uploadedRef.current.set(file, { name: f.name, path: f.path });
+          loaded.push(file);
+        }
+        if (cancelled) return;
+        if (loaded.length === 0) throw new Error('no files');
+        setFiles(loaded);
+        setKinds(loaded.map((_, i) => (i === 0 ? 'purchase_contract' : 'addendum')));
+      } catch {
+        if (!cancelled) setError('Could not open the files from that email. Close this window and try again.');
+      } finally {
+        if (!cancelled) setOpening(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initial]);
+
   const pickFiles = (list: FileList | null) => {
     if (!list) return;
     const picked = Array.from(list).slice(0, 8);
@@ -89,11 +136,13 @@ export default function OfferIntakeModal({ listingId, offer, onClose, onSaved }:
     setStage('reading');
     setError('');
     try {
-      const fd = new FormData();
       // The reader sees PDFs only; keep indexes aligned with the full list for the page links.
-      pdfs.forEach((f) => fd.append('files', f));
-      if (current) fd.append('currentTerms', JSON.stringify(current));
-      const res = await authFetch(`/api/listings/${listingId}/offers/extract`, { method: 'POST', body: fd });
+      const uploads = await ensureUploaded(pdfs);
+      const res = await authFetch(`/api/listings/${listingId}/offers/extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploads, ...(current ? { currentTerms: current } : {}) }),
+      });
       const data = await res.json();
       if (!res.ok) {
         setReadMsg(data.error || 'Could not read the documents. You can enter the terms yourself.');
@@ -122,8 +171,8 @@ export default function OfferIntakeModal({ listingId, offer, onClose, onSaved }:
           : `Read ${pdfs.length} document${pdfs.length === 1 ? '' : 's'}. Check each term against the document before saving.`
       );
       setStage('review');
-    } catch {
-      setReadMsg('Could not read the documents. You can enter the terms yourself.');
+    } catch (err) {
+      setReadMsg(err instanceof Error && /upload/i.test(err.message) ? err.message : 'Could not read the documents. You can enter the terms yourself.');
       setStage('review');
     }
   };
@@ -138,9 +187,9 @@ export default function OfferIntakeModal({ listingId, offer, onClose, onSaved }:
     setSaving(true);
     setError('');
     try {
-      const fd = new FormData();
-      files.forEach((f) => fd.append('files', f));
+      const uploads = await ensureUploaded(files);
       const payload: Record<string, unknown> = { terms, docKinds: kinds, summary };
+      if (initial && !revision) payload.inboundId = initial.inboundId;
       if (revision) {
         payload.kind = kind;
         payload.label = label;
@@ -148,9 +197,8 @@ export default function OfferIntakeModal({ listingId, offer, onClose, onSaved }:
         payload.receivedOn = receivedOn;
         if (ai?.original && keepTwo && twoVersionChanges.length > 0) payload.originalTerms = ai.original;
       }
-      fd.append('payload', JSON.stringify(payload));
       const url = revision ? `/api/listings/${listingId}/offers/${offer!.id}/versions` : `/api/listings/${listingId}/offers/intake`;
-      const res = await authFetch(url, { method: 'POST', body: fd });
+      const res = await authFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uploads, payload }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not save');
       onSaved(revision ? 'Saved as a new version. The earlier terms are kept in the history.' : 'Offer saved.');
@@ -195,10 +243,11 @@ export default function OfferIntakeModal({ listingId, offer, onClose, onSaved }:
               type="file"
               multiple
               accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.tif,.tiff"
-              disabled={stage === 'reading'}
+              disabled={stage === 'reading' || opening}
               onChange={(e) => pickFiles(e.target.files)}
               className="block w-full text-xs text-slate-300 file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-slate-700 file:text-slate-100 file:text-xs"
             />
+            {opening && <p className="text-sm text-blue-300">Opening the files from the email…</p>}
             {files.length > 0 && (
               <ul className="space-y-2">
                 {files.map((f, i) => (

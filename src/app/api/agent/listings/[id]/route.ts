@@ -35,6 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         mlsUrl: listing.mls_url,
         sellerName: listing.seller_name,
         convertedTransactionId: listing.converted_transaction_id,
+        listedOn: listing.listed_on ?? null,
       },
       tcLabel: (tc.data.user?.user_metadata?.full_name as string | undefined) || tc.data.user?.email || 'Transaction coordinator',
       dates: dates.data || [],

@@ -5,6 +5,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { autoAddContact } from '@/lib/contactsAuto';
 import { logListingActivity, requireListingAccess } from '@/lib/listings';
 import { queueListingCalendarSync } from '@/lib/calendarSync';
+import { queueAgentNotice } from '@/lib/listingNotify';
 import { CHILD_TABLE, MAX_PER_LISTING, cleanChild, isChildKind } from '@/lib/listingChildren';
 
 // POST /api/listings/:id/(tasks|offers|contacts|dates): add one.
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await logListingActivity(id, user, `Date added: ${row.label} on ${row.due_date}`);
     }
     if (kind === 'tasks' || kind === 'dates') queueListingCalendarSync(id);
+    if (kind === 'offers' || kind === 'showings') queueAgentNotice({ listingId: id, what: kind === 'offers' ? 'offer' : 'showing', appUrl: request.nextUrl.origin });
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });

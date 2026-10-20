@@ -7,7 +7,7 @@ import { getVisibleTcUserIds } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
 import { autoAddContact } from '@/lib/contactsAuto';
 import { queueListingCalendarSync } from '@/lib/calendarSync';
-import { logListingActivity, cleanMoney, cleanText, dueFromOffset, isIsoDate, loadTemplateSteps } from '@/lib/listings';
+import { logListingActivity, cleanMoney, cleanTemplateName, cleanText, dueFromOffset, isIsoDate, loadTemplateSteps } from '@/lib/listings';
 
 function fail(error: unknown, what: string) {
   if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
       .single();
     if (error) throw error;
 
-    const steps = await loadTemplateSteps(user.id);
+    const steps = await loadTemplateSteps(user.id, cleanTemplateName(body.templateName));
     const rows = steps.map((s, i) => ({
       listing_id: listing.id,
       name: s.name,

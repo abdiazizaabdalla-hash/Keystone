@@ -6,6 +6,8 @@ import { getVisibleTcUserIds } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
 import { offerDocPaths } from '@/lib/listingOfferFiles';
 import { queueListingCalendarSync, removeListingCalendarEvents } from '@/lib/calendarSync';
+import { isAgentUser } from '@/lib/agentPortal';
+import { removeInboundFiles } from '@/lib/listingInbound';
 import {
   LISTING_STATUSES,
   cleanMoney,
@@ -24,10 +26,16 @@ function fail(error: unknown, what: string) {
   return NextResponse.json({ error: `Failed to ${what} listing` }, { status: 500 });
 }
 
+async function userLabel(userId: string): Promise<string> {
+  const { data } = await supabaseServer.auth.admin.getUserById(userId);
+  const name = typeof data.user?.user_metadata?.full_name === 'string' ? data.user.user_metadata.full_name.trim() : '';
+  return name || data.user?.email || 'Team member';
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { listing } = await requireListingAccess(request, id);
+    const { user, isAdmin, listing } = await requireListingAccess(request, id);
     const [tasks, offers, contacts, dates, agent, showings, priceChanges, activity] = await Promise.all([
       supabaseServer.from('listing_tasks').select('*').eq('listing_id', id).order('sort_order', { ascending: true }),
       supabaseServer.from('listing_offers').select('*').eq('listing_id', id).order('created_at', { ascending: false }),
@@ -38,8 +46,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       supabaseServer.from('listing_price_changes').select('*').eq('listing_id', id).order('changed_on', { ascending: true }).order('created_at', { ascending: true }),
       supabaseServer.from('listing_activity').select('*').eq('listing_id', id).order('created_at', { ascending: false }).limit(60),
     ]);
+    // Who this listing can be handed to: only the owner of a team sees more than themselves.
+    let assignees: { id: string; label: string }[] = [];
+    if (!isAdmin) {
+      const visible = await getVisibleTcUserIds(user.id);
+      if (visible.length > 1) assignees = await Promise.all(visible.map(async (uid) => ({ id: uid, label: await userLabel(uid) })));
+    }
     return NextResponse.json({
       listing,
+      assignees,
       agent: agent.data,
       tasks: tasks.data || [],
       offers: offers.data || [],
@@ -85,6 +100,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       updates.status = body.status;
     }
     if ('shareWithAgent' in body) updates.share_with_agent = body.shareWithAgent === true;
+    if ('notifyAgent' in body) updates.notify_agent = body.notifyAgent === true;
+    if ('listedOn' in body) updates.listed_on = isIsoDate(body.listedOn) ? body.listedOn : null;
+    // The first time a listing goes live starts its days-on-market clock (a typed date above wins).
+    if ((updates.status === 'active' || updates.status === 'under_offer') && !listing.listed_on && !('listed_on' in updates)) {
+      updates.listed_on = new Date().toISOString().slice(0, 10);
+    }
+
+    // Hand the listing to another TC on the same team. Only a team owner can (everyone else sees only themselves),
+    // and the new owner must be a real, non-agent member of that team.
+    let reassignedTo: string | null = null;
+    if (typeof body.tcUserId === 'string' && body.tcUserId && body.tcUserId !== listing.tc_user_id) {
+      const visible = await getVisibleTcUserIds(user.id);
+      if (!isAdmin && !visible.includes(body.tcUserId)) return NextResponse.json({ error: 'You can only hand a listing to someone on your team' }, { status: 403 });
+      const { data: target } = await supabaseServer.auth.admin.getUserById(body.tcUserId);
+      if (!target.user || isAgentUser(target.user)) return NextResponse.json({ error: 'That person cannot be assigned listings' }, { status: 400 });
+      reassignedTo = await userLabel(body.tcUserId);
+      updates.tc_user_id = body.tcUserId;
+    }
 
     if ('agentId' in body) {
       if (!body.agentId) updates.agent_id = null;
@@ -114,8 +147,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const newPlanned = 'plannedListDate' in body ? (isIsoDate(body.plannedListDate) ? body.plannedListDate : null) : undefined;
     if (newPlanned !== undefined) updates.planned_list_date = newPlanned;
 
-    const { data, error } = await supabaseServer.from('listings').update(updates).eq('id', id).select('*').single();
+    // Calendar events live on the old owner's Google calendar; remove them before the listing moves.
+    if (reassignedTo) await removeListingCalendarEvents(id);
+    let { data, error } = await supabaseServer.from('listings').update(updates).eq('id', id).select('*').single();
+    if (error && /listed_on|notify_agent/.test(error.message || '')) {
+      // add-listing-round3.sql has not been run yet: save everything else.
+      delete updates.listed_on;
+      delete updates.notify_agent;
+      ({ data, error } = await supabaseServer.from('listings').update(updates).eq('id', id).select('*').single());
+    }
     if (error) throw error;
+    if (reassignedTo) {
+      await supabaseServer.from('listing_tasks').update({ google_event_id: null }).eq('listing_id', id);
+      await supabaseServer.from('listing_dates').update({ google_event_id: null }).eq('listing_id', id);
+      await supabaseServer.from('listings').update({ google_expiration_event_id: null }).eq('id', id);
+      await logListingActivity(id, user, `Listing handed to ${reassignedTo}`);
+    }
 
     // History: status moves, price changes (also kept as a price history), key date changes.
     const fmt = (n: unknown) => `$${Number(n).toLocaleString('en-US')}`;
@@ -167,8 +214,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     // Remove the stored files too; the document rows go with the listing, but storage objects would be orphaned.
     const offerPathsToRemove = await offerDocPaths({ listingId: id });
     const { data: docs } = await supabaseServer.from('listing_documents').select('storage_path').eq('listing_id', id);
+    // Offer emails held for review keep their files in storage; collect them before the rows cascade away.
+    const { data: held } = await supabaseServer.from('listing_inbound_offers').select('attachments').eq('listing_id', id);
     const { error } = await supabaseServer.from('listings').delete().eq('id', id);
     if (error) throw error;
+    for (const h of held || []) await removeInboundFiles(h.attachments);
     const paths = [...(docs || []).map((d) => d.storage_path as string).filter(Boolean), ...offerPathsToRemove];
     if (paths.length > 0) await supabaseServer.storage.from('transaction-documents').remove(paths).catch(() => undefined);
     await logAudit(request, user, 'listing.delete', { entityType: 'listing', entityId: id });

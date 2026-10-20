@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
-import { LISTING_STATUS_LABEL, SHOWING_INTEREST_LABEL, SHOWING_KIND_LABEL, type ListingStatus } from '@/lib/listingsShared';
+import ListingThread from '@/components/ListingThread';
+import { LISTING_STATUS_LABEL, daysOnMarket, SHOWING_INTEREST_LABEL, SHOWING_KIND_LABEL, type ListingStatus } from '@/lib/listingsShared';
 
 interface Detail {
   listing: {
@@ -18,6 +19,7 @@ interface Detail {
     mlsNumber: string | null;
     mlsUrl: string | null;
     sellerName: string | null;
+    listedOn?: string | null;
   };
   tcLabel: string;
   dates: { id: string; label: string; due_date: string }[];
@@ -98,6 +100,7 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
           <h1 className="text-2xl font-display font-semibold text-slate-100 break-words">{listing.propertyAddress}</h1>
           <p className="text-sm text-slate-400 mt-1">
             {LISTING_STATUS_LABEL[listing.status]} · {money(listing.listPrice)}
+            {(listing.status === 'active' || listing.status === 'under_offer') && daysOnMarket(listing.listedOn) !== null ? ` · ${daysOnMarket(listing.listedOn)} days on market` : ''}
             {listing.sellerName ? ` · Seller: ${listing.sellerName}` : ''} · Managed by {data.tcLabel}
           </p>
           {(listing.mlsUrl || listing.mlsNumber) && (
@@ -205,6 +208,8 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
             </ul>
           </div>
         )}
+
+        <ListingThread endpoint={`/api/agent/listings/${id}/comments`} self="agent" otherLabel={data.tcLabel} />
       </div>
     </div>
   );

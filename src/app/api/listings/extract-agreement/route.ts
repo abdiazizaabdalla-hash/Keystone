@@ -4,8 +4,11 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getAnthropicClient, CONTRACT_EXTRACTION_MODEL } from '@/lib/anthropic';
+import { IncomingError, parseUploadRequest } from '@/lib/incomingUploads';
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024;
+export const maxDuration = 60;
+
+const PDF_ONLY = { pdf: 'application/pdf' };
 
 // Reads a listing agreement PDF so a new listing can start pre-filled. Same approach as the purchase
 // contract reader: one forced tool call, "" / 0 / [] for anything not actually in the document.
@@ -64,13 +67,11 @@ export async function POST(request: NextRequest) {
     const rateOk = await checkRateLimit(`extract-listing:${user.id}`, 20, 60 * 60);
     if (!rateOk) return NextResponse.json({ error: 'Too many uploads in a short time. Please wait a bit and try again.' }, { status: 429 });
 
-    const formData = await request.formData();
-    const file = formData.get('file');
-    if (!(file instanceof File)) return NextResponse.json({ error: 'file is required' }, { status: 400 });
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      return NextResponse.json({ error: 'Please upload a PDF file' }, { status: 400 });
-    }
-    if (file.size > MAX_FILE_SIZE) return NextResponse.json({ error: 'File exceeds the 25MB limit' }, { status: 400 });
+    // The agreement arrives either as { uploads: [{ path, name }] } (already in private storage, any size up to
+    // 25MB) or as a small multipart file. It is NOT deleted here: saving it as the listing's document uses it next.
+    const { files } = await parseUploadRequest(request, user.id, PDF_ONLY, 1);
+    const file = files[0];
+    if (!file) return NextResponse.json({ error: 'file is required' }, { status: 400 });
 
     const base64 = Buffer.from(await file.arrayBuffer()).toString('base64');
     const response = await getAnthropicClient().messages.create({
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ fields });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof IncomingError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
     if (error instanceof Error && error.message.includes('ANTHROPIC_API_KEY')) {
       return NextResponse.json({ error: 'Reading agreements is not set up yet. Enter the details yourself.' }, { status: 503 });

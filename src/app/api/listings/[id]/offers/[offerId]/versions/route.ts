@@ -4,7 +4,8 @@ import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { logListingActivity, requireListingAccess } from '@/lib/listings';
 import { cleanChild } from '@/lib/listingChildren';
-import { MAX_OFFER_FILES, MAX_OFFER_FILE_SIZE, OFFER_BUCKET, cleanDocKind, offerFileType, storeOfferFiles } from '@/lib/listingOfferFiles';
+import { MAX_OFFER_FILES, MAX_OFFER_FILE_SIZE, OFFER_BUCKET, OFFER_FILE_TYPES, cleanDocKind, offerFileType, storeOfferFiles } from '@/lib/listingOfferFiles';
+import { IncomingError, parseUploadRequest, removeIncoming } from '@/lib/incomingUploads';
 import { VERSION_KINDS, VERSION_KIND_LABEL, diffTerms, normalizeTerms, rowToTerms, termsToBody, type VersionKind } from '@/lib/offerTerms';
 
 export const maxDuration = 60;
@@ -46,8 +47,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { data: offer } = await supabaseServer.from('listing_offers').select('*').eq('id', offerId).eq('listing_id', id).maybeSingle();
     if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
 
-    const form = await request.formData();
-    const files = form.getAll('files').filter((f): f is File => f instanceof File);
+    // JSON { uploads: [{ path, name }], payload } (files already in private storage) or small multipart.
+    const parsed = await parseUploadRequest(request, user.id, OFFER_FILE_TYPES, MAX_OFFER_FILES);
+    const files = parsed.files;
     if (files.length > MAX_OFFER_FILES) return NextResponse.json({ error: `Attach up to ${MAX_OFFER_FILES} files` }, { status: 400 });
     for (const f of files) {
       if (!offerFileType(f.name)) return NextResponse.json({ error: `${f.name}: use PDF, Word or an image` }, { status: 400 });
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     let payload: Record<string, unknown>;
     try {
-      payload = JSON.parse(String(form.get('payload') || '{}'));
+      payload = JSON.parse(String(parsed.field('payload') || '{}'));
     } catch {
       return NextResponse.json({ error: 'Could not read the details' }, { status: 400 });
     }
@@ -94,6 +96,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { data: updated, error: uErr } = await supabaseServer.from('listing_offers').update(update).eq('id', offerId).select('*').single();
     if (uErr) throw uErr;
 
+    await removeIncoming(parsed.incomingPaths);
     await logListingActivity(id, user, `${VERSION_KIND_LABEL[kind]} recorded for offer${offer.buyer_name ? ` from ${offer.buyer_name}` : ''}${changes.length ? ` (${changes.length} term${changes.length === 1 ? '' : 's'} changed)` : ''}`);
     return NextResponse.json({ offer: updated, changes });
   } catch (error) {
@@ -106,6 +109,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await supabaseServer.from('listing_offer_versions').delete().eq('id', versionId);
     }
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof IncomingError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
     console.error('Error recording offer version:', error);
     return NextResponse.json({ error: 'Failed to save this change' }, { status: 500 });

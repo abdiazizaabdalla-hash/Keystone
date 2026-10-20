@@ -41,7 +41,7 @@ async function getVisibleTransactionIds(
   return (transactions || []).map((t) => t.id as string);
 }
 
-export type SearchResultType = 'transaction' | 'message' | 'document' | 'task';
+export type SearchResultType = 'transaction' | 'message' | 'document' | 'task' | 'listing';
 
 export interface SearchResult {
   type: SearchResultType;
@@ -52,9 +52,49 @@ export interface SearchResult {
   title: string;
   snippet: string | null;
   createdAt: string | null;
+  /** Where the result card links to. Set for listings; transaction hits link by transactionId. */
+  href?: string;
 }
 
 const RESULTS_PER_TYPE = 25;
+
+// Listings are searched by address, seller name and MLS number with plain case-insensitive matching.
+// The words typed are escaped so `%`, `_` and `\` are matched as themselves, never as wildcards.
+async function searchListings(userId: string, isAdmin: boolean, q: string): Promise<SearchResult[]> {
+  const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const scope = isAdmin ? null : await getVisibleTcUserIds(userId);
+  const runs = ['property_address', 'seller_name', 'mls_number'].map(async (column) => {
+    let query = supabaseServer
+      .from('listings')
+      .select('id, property_address, seller_name, mls_number, status, created_at')
+      .ilike(column, pattern)
+      .order('created_at', { ascending: false })
+      .limit(RESULTS_PER_TYPE);
+    if (scope) query = query.in('tc_user_id', scope);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  });
+  const seen = new Set<string>();
+  const out: SearchResult[] = [];
+  for (const row of (await Promise.all(runs)).flat()) {
+    const id = row.id as string;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      type: 'listing',
+      id,
+      transactionId: id,
+      propertyAddress: row.property_address as string | null,
+      fileNumber: null,
+      title: (row.property_address as string) || 'Listing',
+      snippet: [row.seller_name, row.mls_number ? `MLS ${row.mls_number}` : null, String(row.status || '').replace('_', ' ')].filter(Boolean).join(' · ') || null,
+      createdAt: row.created_at as string | null,
+      href: `/dashboard/listings/${id}`,
+    });
+  }
+  return out.slice(0, RESULTS_PER_TYPE);
+}
 
 // GET /api/search?q=...
 //
@@ -77,9 +117,11 @@ export async function GET(request: NextRequest) {
 
     const callerIsAgent = isAgentUser(user);
     const transactionIds = await getVisibleTransactionIds(user.id, isAdmin, callerIsAgent);
+    // Agents never see listings here (their own portal view is separate).
+    const listingResults = callerIsAgent ? [] : await searchListings(user.id, isAdmin, q);
 
     if (transactionIds.length === 0) {
-      return NextResponse.json({ results: [] });
+      return NextResponse.json({ results: listingResults });
     }
 
     const searchOpts = { type: 'websearch' as const, config: 'english' };
@@ -206,6 +248,7 @@ export async function GET(request: NextRequest) {
       });
     });
 
+    results.push(...listingResults);
     return NextResponse.json({ results });
   } catch (error) {
     if (error instanceof AuthError) {

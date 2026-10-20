@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { purgeStaleIncoming } from '@/lib/incomingUploads';
+import { purgeStaleInbound } from '@/lib/listingInbound';
 
 const BUCKET = 'transaction-documents';
 const EXPORT_PREFIX = 'invoice-exports';
@@ -43,7 +45,11 @@ export async function GET(request: NextRequest) {
       removed += stale.length;
       if (files.length < 100) break;
     }
-    return NextResponse.json({ removed });
+    // Files sent straight to storage for listings (agreements, offers) that were never used are cleared after a day.
+    const incomingRemoved = await purgeStaleIncoming();
+    // Offer emails held for review for 30 days with no action are dismissed and their files deleted.
+    const inboundDismissed = await purgeStaleInbound();
+    return NextResponse.json({ removed, incomingRemoved, inboundDismissed });
   } catch (error) {
     console.error('Cleanup cron failed:', error);
     return NextResponse.json({ error: 'Cleanup failed' }, { status: 500 });

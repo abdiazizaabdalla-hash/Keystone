@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 
-type SearchResultType = 'transaction' | 'message' | 'document' | 'task';
+type SearchResultType = 'transaction' | 'listing' | 'message' | 'document' | 'task';
 
 interface SearchResult {
   type: SearchResultType;
@@ -16,21 +16,24 @@ interface SearchResult {
   title: string;
   snippet: string | null;
   createdAt: string | null;
+  href?: string;
 }
 
 const TYPE_LABELS: Record<SearchResultType, string> = {
   transaction: 'Transactions',
+  listing: 'Listings',
   message: 'Messages',
   document: 'Documents',
   task: 'Tasks',
 };
 
-const TYPE_ORDER: SearchResultType[] = ['transaction', 'message', 'document', 'task'];
+const TYPE_ORDER: SearchResultType[] = ['transaction', 'listing', 'message', 'document', 'task'];
 
 function dealLabel(result: SearchResult): string | null {
   // A transaction hit's title is already its address (or file number) --
   // repeating the address underneath just duplicates it, so only show the
   // file number when it isn't what the title already says.
+  if (result.type === 'listing') return null;
   if (result.type === 'transaction') {
     return result.fileNumber && result.fileNumber !== result.title ? result.fileNumber : null;
   }
@@ -267,7 +270,7 @@ export default function SearchPage() {
                 {group.items.map((item) => (
                   <Link
                     key={`${item.type}-${item.id}`}
-                    href={`/dashboard/transactions/${item.transactionId}`}
+                    href={item.href || `/dashboard/transactions/${item.transactionId}`}
                     className="block px-5 py-4 hover:bg-slate-600/30 transition"
                   >
                     <div className="flex items-start justify-between gap-4">

@@ -4,7 +4,10 @@ import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { logListingActivity, requireListingAccess } from '@/lib/listings';
 import { MAX_PER_LISTING, cleanChild } from '@/lib/listingChildren';
-import { MAX_OFFER_FILES, MAX_OFFER_FILE_SIZE, OFFER_BUCKET, cleanDocKind, offerDocPaths, offerFileType, storeOfferFiles } from '@/lib/listingOfferFiles';
+import { MAX_OFFER_FILES, MAX_OFFER_FILE_SIZE, OFFER_BUCKET, OFFER_FILE_TYPES, cleanDocKind, offerDocPaths, offerFileType, storeOfferFiles } from '@/lib/listingOfferFiles';
+import { IncomingError, parseUploadRequest, removeIncoming } from '@/lib/incomingUploads';
+import { queueAgentNotice } from '@/lib/listingNotify';
+import { closeInbound, isUuid } from '@/lib/listingInbound';
 import { normalizeTerms, termsToBody } from '@/lib/offerTerms';
 
 export const maxDuration = 60;
@@ -20,8 +23,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { user, listing } = await requireListingAccess(request, id);
     await assertTrialActive(user);
 
-    const form = await request.formData();
-    const files = form.getAll('files').filter((f): f is File => f instanceof File);
+    // JSON { uploads: [{ path, name }], payload } (files already in private storage) or small multipart.
+    const parsed = await parseUploadRequest(request, user.id, OFFER_FILE_TYPES, MAX_OFFER_FILES);
+    const files = parsed.files;
     if (files.length > MAX_OFFER_FILES) return NextResponse.json({ error: `Attach up to ${MAX_OFFER_FILES} files` }, { status: 400 });
     for (const f of files) {
       if (!offerFileType(f.name)) return NextResponse.json({ error: `${f.name}: use PDF, Word or an image` }, { status: 400 });
@@ -29,7 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     let payload: Record<string, unknown>;
     try {
-      payload = JSON.parse(String(form.get('payload') || '{}'));
+      payload = JSON.parse(String(parsed.field('payload') || '{}'));
     } catch {
       return NextResponse.json({ error: 'Could not read the offer details' }, { status: 400 });
     }
@@ -74,8 +78,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const versionIds = kinds.map((k) => (twoVersions && k !== 'purchase_contract' ? idOf(2) : idOf(1)) ?? null);
     if (files.length) await storeOfferFiles({ listingId: id, offerId, files, kinds, versionIds, receivedAt: new Date().toISOString() });
 
+    await removeIncoming(parsed.incomingPaths);
+    // An offer that came from a held email: that email is now done.
+    if (isUuid(payload.inboundId)) await closeInbound(id, payload.inboundId, 'imported');
+
     const price = cleaned.value.offer_price ? ` for $${Number(cleaned.value.offer_price).toLocaleString('en-US')}` : '';
     await logListingActivity(id, user, `Offer received${cleaned.value.buyer_name ? ` from ${cleaned.value.buyer_name}` : ''}${price}${files.length ? ` (${files.length} document${files.length === 1 ? '' : 's'} attached)` : ''}`);
+    queueAgentNotice({ listingId: id, what: 'offer', appUrl: request.nextUrl.origin });
     return NextResponse.json(offer, { status: 201 });
   } catch (error) {
     // Nothing half-saved: if the offer row was created before something failed, remove it (children cascade).
@@ -85,6 +94,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await supabaseServer.from('listing_offers').delete().eq('id', offerId);
     }
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof IncomingError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
     console.error('Error saving offer from documents:', error);
     return NextResponse.json({ error: 'Failed to save the offer' }, { status: 500 });

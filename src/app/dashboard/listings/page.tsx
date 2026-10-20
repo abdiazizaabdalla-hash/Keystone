@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { uploadIncoming, type UploadedFile } from '@/lib/incomingUploadClient';
 import { formatDisplayDate } from '@/lib/dueDates';
-import { LISTING_STATUS_LABEL, type ListingStatus } from '@/lib/listingsShared';
+import { LISTING_STATUS_LABEL, daysOnMarket, type ListingStatus } from '@/lib/listingsShared';
 
 interface ListingRow {
   id: string;
@@ -20,6 +21,7 @@ interface ListingRow {
   overdue_count: number;
   next_due_date: string | null;
   open_offers: number;
+  listed_on?: string | null;
 }
 interface AgentOption {
   id: string;
@@ -70,10 +72,13 @@ export default function ListingsPage() {
     listPrice: '',
     plannedListDate: '',
     notes: '',
+    templateName: 'Standard',
   });
+  const [templateNames, setTemplateNames] = useState<string[]>(['Standard']);
   // Starting from an uploaded listing agreement
   const [aiAvailable, setAiAvailable] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const agreementUpload = useRef<UploadedFile | null>(null);
   const [reading, setReading] = useState(false);
   const [readMsg, setReadMsg] = useState('');
   const [found, setFound] = useState<FoundPerson[]>([]);
@@ -91,11 +96,16 @@ export default function ListingsPage() {
 
   const load = useCallback(async () => {
     try {
-      const [lRes, aRes, xRes] = await Promise.all([
+      const [lRes, aRes, xRes, tRes] = await Promise.all([
         authFetch('/api/listings'),
         authFetch('/api/agents'),
         authFetch('/api/listings/extract-agreement').catch(() => null),
+        authFetch('/api/listing-template').catch(() => null),
       ]);
+      if (tRes && tRes.ok) {
+        const t = await tRes.json().catch(() => ({}));
+        if (Array.isArray(t.names) && t.names.length) setTemplateNames(t.names);
+      }
       const l = await lRes.json();
       const a = await aRes.json();
       if (xRes && xRes.ok) setAiAvailable(Boolean((await xRes.json()).available));
@@ -122,8 +132,9 @@ export default function ListingsPage() {
   );
 
   const resetNew = () => {
-    setForm({ propertyAddress: '', agentId: '', sellerName: '', sellerEmail: '', sellerPhone: '', listPrice: '', plannedListDate: '', notes: '' });
+    setForm({ propertyAddress: '', agentId: '', sellerName: '', sellerEmail: '', sellerPhone: '', listPrice: '', plannedListDate: '', notes: '', templateName: 'Standard' });
     setPdfFile(null);
+    agreementUpload.current = null;
     setFound([]);
     setReadMsg('');
     setFormError('');
@@ -135,9 +146,14 @@ export default function ListingsPage() {
     setReadMsg('');
     setFormError('');
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await authFetch('/api/listings/extract-agreement', { method: 'POST', body: fd });
+      // Straight to private storage first (large agreements are fine), then Relay reads it from there.
+      const [uploaded] = await uploadIncoming([file]);
+      agreementUpload.current = uploaded;
+      const res = await authFetch('/api/listings/extract-agreement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploads: [uploaded] }),
+      });
       const data = await res.json();
       if (!res.ok) {
         setReadMsg(data.error || 'Could not read the agreement.');
@@ -209,10 +225,12 @@ export default function ListingsPage() {
       // Keep the agreement itself on the listing (best effort — the listing already exists)
       if (pdfFile) {
         try {
-          const fd = new FormData();
-          fd.append('file', pdfFile);
-          fd.append('documentType', 'Listing Agreement');
-          await authFetch(`/api/listings/${data.id}/documents`, { method: 'POST', body: fd });
+          const uploaded = agreementUpload.current ?? (await uploadIncoming([pdfFile]))[0];
+          await authFetch(`/api/listings/${data.id}/documents`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uploads: [uploaded], documentType: 'Listing Agreement' }),
+          });
         } catch {
           /* the listing page lets them upload it again */
         }
@@ -304,6 +322,7 @@ export default function ListingsPage() {
                     <span className="block h-full bg-blue-500" style={{ width: `${pct}%` }} />
                   </span>
                   {l.planned_list_date && <span>List date {formatDisplayDate(l.planned_list_date)}</span>}
+                  {(l.status === 'active' || l.status === 'under_offer') && daysOnMarket(l.listed_on) !== null && <span>{daysOnMarket(l.listed_on)} days on market</span>}
                   {l.overdue_count > 0 && <span className="text-red-300">{l.overdue_count} overdue</span>}
                   {l.open_offers > 0 && (
                     <span className="text-blue-300">
@@ -382,6 +401,18 @@ export default function ListingsPage() {
               <input className={inputCls} type="date" value={form.plannedListDate} onChange={(e) => setForm({ ...form, plannedListDate: e.target.value })} />
               <p className="text-xs text-slate-500 mt-1">Checklist due dates count back and forward from this day, and move if you change it.</p>
             </div>
+            {templateNames.length > 1 && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Checklist to start with</label>
+                <select className={inputCls} value={form.templateName} onChange={(e) => setForm({ ...form, templateName: e.target.value })}>
+                  {templateNames.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {form.notes && (
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Notes</label>

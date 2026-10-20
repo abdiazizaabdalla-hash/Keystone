@@ -4,11 +4,14 @@ import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { uploadIncoming } from '@/lib/incomingUploadClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import ContactPicker from '@/components/ContactPicker';
 import StepEmailModal from '@/components/StepEmailModal';
 import OfferIntakeModal from '@/components/OfferIntakeModal';
 import OfferHistory from '@/components/OfferHistory';
+import ListingThread from '@/components/ListingThread';
+import SellerUpdateModal from '@/components/SellerUpdateModal';
 import {
   FINANCING_TYPES,
   LISTING_STATUS_LABEL,
@@ -16,6 +19,9 @@ import {
   LISTING_DOC_TYPES,
   SHOWING_INTEREST_LABEL,
   SHOWING_KIND_LABEL,
+  daysBetween,
+  daysOnMarket,
+  mentionsEscalation,
   type ListingStatus,
 } from '@/lib/listingsShared';
 
@@ -35,6 +41,10 @@ interface Listing {
   notes: string | null;
   converted_transaction_id: string | null;
   share_with_agent?: boolean | null;
+  notify_agent?: boolean | null;
+  inbound_token?: string | null;
+  listed_on?: string | null;
+  tc_user_id?: string;
 }
 interface Task { id: string; name: string; due_date: string | null; completed: boolean }
 interface Offer {
@@ -60,8 +70,18 @@ interface PriceChange { id: string; old_price: number | null; new_price: number;
 interface ActivityRow { id: string; actor_label: string | null; summary: string; created_at: string }
 interface Contact { id: string; role: string | null; name: string | null; email: string | null; phone: string | null }
 interface DateRow { id: string; label: string; due_date: string }
+interface InboundItem {
+  id: string;
+  fromEmail: string;
+  fromName: string | null;
+  subject: string | null;
+  snippet: string | null;
+  receivedAt: string;
+  files: { name: string; size: number }[];
+}
 interface Detail {
   listing: Listing;
+  assignees?: { id: string; label: string }[];
   agent: { id: string; name: string; email?: string | null } | null;
   tasks: Task[];
   offers: Offer[];
@@ -99,7 +119,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [notice, setNotice] = useState('');
 
   // Details form
-  const [det, setDet] = useState({ propertyAddress: '', agentId: '', sellerName: '', sellerEmail: '', sellerPhone: '', listPrice: '', plannedListDate: '', expirationDate: '', mlsNumber: '', mlsUrl: '', notes: '', shareWithAgent: true });
+  const [det, setDet] = useState({ propertyAddress: '', agentId: '', sellerName: '', sellerEmail: '', sellerPhone: '', listPrice: '', plannedListDate: '', expirationDate: '', mlsNumber: '', mlsUrl: '', notes: '', shareWithAgent: true, notifyAgent: false, listedOn: '', tcUserId: '' });
   const [savingDetails, setSavingDetails] = useState(false);
 
   // Add forms
@@ -122,6 +142,20 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [docType, setDocType] = useState('General');
   const [uploading, setUploading] = useState(false);
   const [docError, setDocError] = useState('');
+
+  // Offer emails held for review, seller update, relist
+  const [inbound, setInbound] = useState<InboundItem[]>([]);
+  const [intakeInitial, setIntakeInitial] = useState<{ inboundId: string; files: { name: string; path: string; url: string | null }[] } | undefined>(undefined);
+  const [openingInbound, setOpeningInbound] = useState<string | null>(null);
+  const [sellerUpdate, setSellerUpdate] = useState(false);
+  const [relistOpen, setRelistOpen] = useState(false);
+  const [relistForm, setRelistForm] = useState({ plannedListDate: '', listPrice: '', templateName: 'Standard' });
+  const [templateNames, setTemplateNames] = useState<string[]>(['Standard']);
+  const [relisting, setRelisting] = useState(false);
+  const [relistError, setRelistError] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [copiedAddr, setCopiedAddr] = useState(false);
+  const [tcName, setTcName] = useState('');
 
   // Convert modal
   const [convertOffer, setConvertOffer] = useState<Offer | 'none' | null>(null);
@@ -174,6 +208,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       mlsUrl: l.mls_url || '',
       notes: l.notes || '',
       shareWithAgent: l.share_with_agent !== false,
+      notifyAgent: l.notify_agent === true,
+      listedOn: l.listed_on || '',
+      tcUserId: l.tc_user_id || '',
     });
   }, []);
 
@@ -200,13 +237,85 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     }
   }, [id, call]);
 
+  const loadInbound = useCallback(async () => {
+    try {
+      const r = await call('GET', `/api/listings/${id}/inbound-offers`);
+      setInbound(Array.isArray(r.items) ? r.items : []);
+    } catch {
+      // The table may not exist yet on a fresh setup; the banner then simply stays hidden.
+    }
+  }, [id, call]);
+
   useEffect(() => {
     const t = setTimeout(() => {
       load();
       loadDocs();
+      loadInbound();
     }, 0);
     return () => clearTimeout(t);
-  }, [load, loadDocs]);
+  }, [load, loadDocs, loadInbound]);
+
+  const reviewInbound = async (item: InboundItem) => {
+    setOpeningInbound(item.id);
+    setError('');
+    try {
+      const r = await call('POST', `/api/listings/${id}/inbound-offers/${item.id}/stage`);
+      setIntakeInitial({ inboundId: item.id, files: r.files });
+      setIntake('new');
+    } catch (err) {
+      if (!handleAuth(err)) setError(err instanceof Error ? err.message : 'Could not open that email');
+    } finally {
+      setOpeningInbound(null);
+    }
+  };
+
+  const dismissInbound = async (item: InboundItem) => {
+    if (!confirm('Dismiss this email? Its attachments are deleted from Relay.')) return;
+    try {
+      await call('DELETE', `/api/listings/${id}/inbound-offers/${item.id}`);
+      await loadInbound();
+    } catch (err) {
+      if (!handleAuth(err)) setError(err instanceof Error ? err.message : 'Could not dismiss');
+    }
+  };
+
+  const openSellerUpdate = async () => {
+    // The draft is signed with the coordinator's name, so fetch it before the window opens.
+    if (!tcName) {
+      try {
+        const me = await authFetch('/api/auth/me');
+        if (me.ok) setTcName((await me.json()).fullName || '');
+      } catch {
+        /* the draft is signed generically */
+      }
+    }
+    setSellerUpdate(true);
+  };
+
+  const openRelist = async () => {
+    setRelistError('');
+    setRelistForm({ plannedListDate: '', listPrice: data?.listing.list_price ? String(data.listing.list_price) : '', templateName: 'Standard' });
+    setRelistOpen(true);
+    try {
+      const t = await call('GET', '/api/listing-template');
+      if (Array.isArray(t.names) && t.names.length) setTemplateNames(t.names);
+    } catch {
+      /* the default checklist is used */
+    }
+  };
+
+  const relist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRelisting(true);
+    setRelistError('');
+    try {
+      const created = await call('POST', `/api/listings/${id}/relist`, { ...relistForm, plannedListDate: relistForm.plannedListDate || null });
+      router.push(`/dashboard/listings/${created.id}`);
+    } catch (err) {
+      if (!handleAuth(err)) setRelistError(err instanceof Error ? err.message : 'Could not relist');
+      setRelisting(false);
+    }
+  };
 
   const uploadDocs = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -214,10 +323,12 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     setDocError('');
     try {
       for (const file of Array.from(files)) {
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('documentType', docType);
-        const res = await authFetch(`/api/listings/${id}/documents`, { method: 'POST', body: fd });
+        const [uploaded] = await uploadIncoming([file]);
+        const res = await authFetch(`/api/listings/${id}/documents`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploads: [uploaded], documentType: docType }),
+        });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(`${file.name}: ${json.error || 'upload failed'}`);
       }
@@ -280,6 +391,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       ? [{ role: 'Seller', name: listing.seller_name, email: listing.seller_email }]
       : []),
   ];
+  const offerDeadline = dates.find((d) => /^offers?\s+due/i.test(d.label)) || null;
+  const inboundDomain = process.env.NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN;
+  const inboundAddress = inboundDomain && listing.inbound_token ? `listing-${listing.inbound_token}@${inboundDomain}` : null;
   const converted = listing.status === 'converted' && listing.converted_transaction_id;
   const done = tasks.filter((t) => t.completed).length;
   const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
@@ -304,6 +418,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           mlsUrl: det.mlsUrl,
           notes: det.notes,
           shareWithAgent: det.shareWithAgent,
+          notifyAgent: det.notifyAgent,
+          listedOn: det.listedOn || null,
+          ...(det.tcUserId && det.tcUserId !== listing.tc_user_id ? { tcUserId: det.tcUserId } : {}),
         }),
       'Details saved.',
       true
@@ -394,6 +511,12 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             {[listing.seller_name && `Seller: ${listing.seller_name}`, data.agent && `Agent: ${data.agent.name}`, money(listing.list_price)].filter(Boolean).join(' · ')}
           </p>
           <p className="text-sm text-slate-400 mt-1">
+            {(listing.status === 'active' || listing.status === 'under_offer') && daysOnMarket(listing.listed_on) !== null && (
+              <span>
+                {daysOnMarket(listing.listed_on)} day{daysOnMarket(listing.listed_on) === 1 ? '' : 's'} on market
+                {listing.mls_url || listing.mls_number ? ' · ' : ''}
+              </span>
+            )}
             {daysToGoLive !== null && listing.status === 'preparing' && (daysToGoLive >= 0 ? `${daysToGoLive} day${daysToGoLive === 1 ? '' : 's'} to go live` : `${-daysToGoLive} day${daysToGoLive === -1 ? '' : 's'} past the planned list date`)}
             {listing.mls_url ? (
               <>
@@ -426,6 +549,14 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                   </option>
                 ))}
               </select>
+              {(listing.status === 'expired' || listing.status === 'withdrawn') && (
+                <button type="button" onClick={openRelist} className="px-4 py-2.5 border border-blue-500/60 text-blue-300 hover:bg-blue-500/10 text-sm font-semibold rounded-lg">
+                  Relist
+                </button>
+              )}
+              <button type="button" onClick={openSellerUpdate} className="px-4 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg">
+                Update seller
+              </button>
               <button type="button" onClick={() => openConvert('none')} className="px-4 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg">
                 Convert to deal
               </button>
@@ -497,6 +628,83 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 Add offer from PDF
               </button>
             </div>
+            {inboundAddress && (
+              <p className="text-xs text-slate-500 mb-3">
+                Buyer’s agents can email offers to <span className="text-slate-300 break-all">{inboundAddress}</span> and they will wait here for you to review. Nothing is added as an offer until you do it.{' '}
+                <button
+                  type="button"
+                  className="text-blue-400 hover:text-blue-300"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(inboundAddress);
+                      setCopiedAddr(true);
+                      setTimeout(() => setCopiedAddr(false), 2000);
+                    } catch {
+                      /* it is on screen to copy by hand */
+                    }
+                  }}
+                >
+                  {copiedAddr ? 'Copied' : 'Copy address'}
+                </button>
+              </p>
+            )}
+            {inbound.length > 0 && (
+              <div className="mb-4 rounded-lg border border-blue-500/40 bg-blue-500/10 p-3 space-y-2">
+                <p className="text-sm font-semibold text-blue-200">
+                  {inbound.length} offer email{inbound.length === 1 ? '' : 's'} waiting for review
+                </p>
+                <p className="text-[11px] text-slate-400">The sender name is read from the email and is not verified. Check the documents before you rely on them.</p>
+                {inbound.map((item) => (
+                  <div key={item.id} className="text-sm text-slate-200">
+                    <p className="break-words">
+                      <span className="font-medium">{item.fromName || item.fromEmail}</span>
+                      {item.subject ? <span className="text-slate-400"> · {item.subject}</span> : null}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {item.files.length} file{item.files.length === 1 ? '' : 's'} · {new Date(item.receivedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {item.snippet ? ` · ${item.snippet.slice(0, 140)}` : ''}
+                    </p>
+                    <div className="mt-1 flex items-center gap-4 text-sm">
+                      <button type="button" disabled={openingInbound === item.id} onClick={() => reviewInbound(item)} className="text-blue-300 hover:text-blue-200 disabled:opacity-50">
+                        {openingInbound === item.id ? 'Opening…' : 'Review and add'}
+                      </button>
+                      <button type="button" onClick={() => dismissInbound(item)} className="text-slate-400 hover:text-slate-200">
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {offerDeadline ? (
+              <p className={`text-sm mb-3 ${offerDeadline.due_date < today ? 'text-slate-400' : 'text-amber-300'}`}>
+                {offerDeadline.label}: {formatDisplayDate(offerDeadline.due_date)}
+                {offerDeadline.due_date >= today ? ` (${daysBetween(today, offerDeadline.due_date) === 0 ? 'today' : `in ${daysBetween(today, offerDeadline.due_date)} day${daysBetween(today, offerDeadline.due_date) === 1 ? '' : 's'}`})` : ' (passed)'}
+                {' · '}
+                <button type="button" onClick={() => act(() => call('DELETE', `/api/listings/${id}/dates/${offerDeadline.id}`))} className="text-slate-500 hover:text-red-300">
+                  Clear
+                </button>
+              </p>
+            ) : (
+              !converted && (
+                <form
+                  className="flex flex-wrap items-center gap-2 mb-3"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!deadline) return;
+                    if (await act(() => call('POST', `/api/listings/${id}/dates`, { label: 'Offers due', dueDate: deadline }), 'Offer deadline set.')) setDeadline('');
+                  }}
+                >
+                  <label className="text-xs text-slate-500" htmlFor="offer-deadline">
+                    Reviewing offers on a set day?
+                  </label>
+                  <input id="offer-deadline" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={`${inputCls} !w-auto`} />
+                  <button type="submit" disabled={!deadline} className="text-sm text-blue-400 hover:text-blue-300 disabled:opacity-40">
+                    Set offer deadline
+                  </button>
+                </form>
+              )
+            )}
             {offers.length === 0 && <p className="text-sm text-slate-500 mb-3">No offers logged yet.</p>}
             {comparable.length >= 2 && (
               <div className="mb-4 overflow-x-auto border border-slate-700 rounded-lg">
@@ -545,6 +753,11 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                     <div className="min-w-0">
                       <p className="text-slate-100 font-medium break-words">
                         {o.buyer_name || 'Buyer'} {o.offer_price ? <span className="text-slate-300">· {money(o.offer_price)}</span> : null}
+                        {mentionsEscalation(o.terms) && (
+                          <span className="ml-2 align-middle text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30" title="The terms mention an escalation clause. Read the contract for the cap.">
+                            Escalation clause
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-slate-500">
                         {[o.buyer_agent && `Agent: ${o.buyer_agent}`, o.received_on && `Received ${formatDisplayDate(o.received_on)}`].filter(Boolean).join(' · ')}
@@ -736,6 +949,11 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 <label className={labelCls}>MLS number</label>
                 <input className={inputCls} value={det.mlsNumber} onChange={(e) => setDet({ ...det, mlsNumber: e.target.value })} />
               </div>
+              <div>
+                <label className={labelCls}>On the market since</label>
+                <input className={inputCls} type="date" value={det.listedOn} onChange={(e) => setDet({ ...det, listedOn: e.target.value })} />
+                <p className="text-[11px] text-slate-500 mt-1">Set automatically when the listing goes active. Change it if it went live earlier.</p>
+              </div>
             </div>
             <div>
               <label className={labelCls}>Listing link</label>
@@ -766,11 +984,33 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 <span className="block text-xs text-slate-500">Read-only: key dates, offers, showings and price history. They never see your checklist, notes or documents.</span>
               </span>
             </label>
+            <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={det.notifyAgent} disabled={!det.shareWithAgent || !det.agentId} onChange={(e) => setDet({ ...det, notifyAgent: e.target.checked })} className="accent-blue-500 mt-1" />
+              <span>
+                Email the listing agent when an offer or showing is logged
+                <span className="block text-xs text-slate-500">The email only says something new is waiting and links to their portal. It never contains offer terms. Needs the agent to have an email and the setting above on.</span>
+              </span>
+            </label>
+            {(data.assignees?.length ?? 0) > 1 && (
+              <div>
+                <label className={labelCls}>Handled by</label>
+                <select className={inputCls} value={det.tcUserId} onChange={(e) => setDet({ ...det, tcUserId: e.target.value })}>
+                  {data.assignees!.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">Handing it over moves the listing to that teammate (and its calendar reminders to their calendar).</p>
+              </div>
+            )}
             <button type="submit" disabled={savingDetails} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
               {savingDetails ? 'Saving…' : 'Save details'}
             </button>
             <p className="text-xs text-slate-500">Changing the planned list date moves every unfinished checklist step with it.</p>
           </form>
+
+          {data.agent && listing.share_with_agent !== false && <ListingThread endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} />}
 
           {/* Key dates */}
           <div className={cardCls}>
@@ -990,15 +1230,77 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {sellerUpdate && (
+        <SellerUpdateModal
+          listingId={id}
+          tcName={tcName}
+          listing={listing}
+          showings={showings}
+          offers={offers}
+          priceChanges={priceChanges}
+          dates={dates}
+          contacts={contacts}
+          onClose={() => setSellerUpdate(false)}
+          onSent={async () => {
+            setSellerUpdate(false);
+            await act(async () => undefined, 'Update sent to the seller.');
+          }}
+        />
+      )}
+
+      {relistOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
+          <form onSubmit={relist} className="w-full max-w-md bg-slate-800 border border-slate-600 rounded-xl p-6 space-y-3">
+            <h2 className="text-lg font-bold text-slate-100">Relist this property</h2>
+            <p className="text-sm text-slate-400">Starts a new listing for {listing.property_address} with the same seller, agent and people, and a fresh checklist. This listing stays as it is, with its offers and history.</p>
+            <div>
+              <label className={labelCls}>New planned list date</label>
+              <input className={inputCls} type="date" value={relistForm.plannedListDate} onChange={(e) => setRelistForm({ ...relistForm, plannedListDate: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelCls}>List price</label>
+              <input className={inputCls} inputMode="decimal" value={relistForm.listPrice} onChange={(e) => setRelistForm({ ...relistForm, listPrice: e.target.value })} />
+            </div>
+            {templateNames.length > 1 && (
+              <div>
+                <label className={labelCls}>Checklist</label>
+                <select className={inputCls} value={relistForm.templateName} onChange={(e) => setRelistForm({ ...relistForm, templateName: e.target.value })}>
+                  {templateNames.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {relistError && <p className="text-sm text-red-400">{relistError}</p>}
+            <div className="flex items-center gap-3 pt-1">
+              <button type="submit" disabled={relisting} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+                {relisting ? 'Creating…' : 'Create new listing'}
+              </button>
+              <button type="button" onClick={() => setRelistOpen(false)} disabled={relisting} className="text-sm text-slate-400 hover:text-slate-200">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {intake && (
         <OfferIntakeModal
-          key={intake === 'new' ? 'new' : intake.id}
+          key={intake === 'new' ? `new-${intakeInitial?.inboundId ?? ''}` : intake.id}
           listingId={id}
           offer={intake === 'new' ? null : (intake as unknown as Record<string, unknown>)}
-          onClose={() => setIntake(null)}
+          initial={intake === 'new' ? intakeInitial : undefined}
+          onClose={() => {
+            setIntake(null);
+            setIntakeInitial(undefined);
+          }}
           onSaved={async (message) => {
             const wasRevision = intake !== 'new';
             setIntake(null);
+            setIntakeInitial(undefined);
+            loadInbound();
             setHistoryKey((k) => k + 1);
             if (wasRevision) setHistoryOpen((intake as Offer).id);
             await act(async () => undefined, message);

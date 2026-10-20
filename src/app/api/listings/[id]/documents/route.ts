@@ -5,33 +5,15 @@ import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { logListingActivity, requireListingAccess } from '@/lib/listings';
 import { LISTING_DOC_TYPES } from '@/lib/listingsShared';
+import { IncomingError, LISTING_FILE_TYPES, parseUploadRequest, removeIncoming } from '@/lib/incomingUploads';
 
 const BUCKET = 'transaction-documents';
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const MAX_DOCS = 100;
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
-// Same allowlist as transaction documents: no scripts, HTML/SVG or archives. Content type comes from the extension.
-const ALLOWED: Record<string, string> = {
-  pdf: 'application/pdf',
-  doc: 'application/msword',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  xls: 'application/vnd.ms-excel',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  csv: 'text/csv',
-  txt: 'text/plain',
-  rtf: 'application/rtf',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  heic: 'image/heic',
-  tif: 'image/tiff',
-  tiff: 'image/tiff',
-};
-
 function fail(error: unknown, what: string) {
+  if (error instanceof IncomingError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
   console.error(`Error ${what} listing documents:`, error);
@@ -62,13 +44,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { user } = await requireListingAccess(request, id);
     await assertTrialActive(user);
 
-    const form = await request.formData();
-    const file = form.get('file');
-    const typeRaw = form.get('documentType');
-    if (!(file instanceof File)) return NextResponse.json({ error: 'file is required' }, { status: 400 });
+    // JSON { uploads: [{ path, name }], documentType } (file already in private storage) or small multipart.
+    const parsed = await parseUploadRequest(request, user.id, LISTING_FILE_TYPES, 1);
+    const file = parsed.files[0];
+    const typeRaw = parsed.field('documentType');
+    if (!file) return NextResponse.json({ error: 'file is required' }, { status: 400 });
     if (file.size > MAX_FILE_SIZE) return NextResponse.json({ error: 'File exceeds the 25MB limit' }, { status: 400 });
     const ext = file.name.toLowerCase().split('.').pop() || '';
-    const contentType = ALLOWED[ext];
+    const contentType = LISTING_FILE_TYPES[ext];
     if (!contentType) return NextResponse.json({ error: 'That file type is not allowed. Use PDF, Word, Excel, text or an image.' }, { status: 400 });
     const documentType = typeof typeRaw === 'string' && LISTING_DOC_TYPES.includes(typeRaw) ? typeRaw : 'General';
 
@@ -89,6 +72,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await supabaseServer.storage.from(BUCKET).remove([storagePath]); // don't leave an orphaned file behind
       throw error;
     }
+    await removeIncoming(parsed.incomingPaths);
     await logListingActivity(id, user, `Document uploaded: ${file.name.slice(0, 120)} (${documentType})`);
     return NextResponse.json(data, { status: 201 });
   } catch (error) {

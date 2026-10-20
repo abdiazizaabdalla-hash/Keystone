@@ -5,6 +5,7 @@ import { checkRateLimit } from '@/lib/rateLimit';
 import { getAnthropicClient, CONTRACT_EXTRACTION_MODEL } from '@/lib/anthropic';
 import { requireListingAccess } from '@/lib/listings';
 import { MAX_OFFER_FILES, MAX_OFFER_FILE_SIZE } from '@/lib/listingOfferFiles';
+import { IncomingError, parseUploadRequest } from '@/lib/incomingUploads';
 import { OFFER_DOC_KINDS, TERM_FIELDS, normalizeTerms, type OfferTerms, VERSION_KINDS } from '@/lib/offerTerms';
 
 export const maxDuration = 60;
@@ -102,8 +103,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const ok = await checkRateLimit(`extract-offer:${user.id}`, 40, 60 * 60);
     if (!ok) return NextResponse.json({ error: 'Too many uploads in a short time. Please wait a bit and try again.' }, { status: 429 });
 
-    const form = await request.formData();
-    const files = form.getAll('files').filter((f): f is File => f instanceof File);
+    // JSON { uploads: [{ path, name }], currentTerms } (files already in private storage; they stay there for the
+    // save step that follows) or small multipart. Reading works on PDFs only.
+    const parsed = await parseUploadRequest(request, user.id, { pdf: 'application/pdf' }, MAX_OFFER_FILES);
+    const files = parsed.files;
     if (files.length === 0) return NextResponse.json({ error: 'Add at least one PDF' }, { status: 400 });
     if (files.length > MAX_OFFER_FILES) return NextResponse.json({ error: `Add up to ${MAX_OFFER_FILES} files at a time` }, { status: 400 });
     let total = 0;
@@ -118,7 +121,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Revision mode: the offer already on file (sent by the page as JSON of its current terms)
     let current: OfferTerms | null = null;
-    const currentRaw = form.get('currentTerms');
+    const currentRaw = parsed.field('currentTerms');
     if (typeof currentRaw === 'string' && currentRaw) {
       try {
         current = normalizeTerms(JSON.parse(currentRaw));
@@ -198,6 +201,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof IncomingError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
     if (error instanceof Error && error.message.includes('ANTHROPIC_API_KEY')) {
       return NextResponse.json({ error: 'Reading offers is not set up yet. Enter the terms yourself.' }, { status: 503 });

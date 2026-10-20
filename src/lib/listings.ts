@@ -7,7 +7,7 @@ import { getVisibleTcUserIds } from '@/lib/team';
 // Shared pieces of the Listings feature (see add-listings.sql).
 
 export * from './listingsShared';
-import { DEFAULT_LISTING_STEPS, type TemplateStep } from './listingsShared';
+import { DEFAULT_LISTING_STEPS, DEFAULT_TEMPLATE_NAME, type TemplateStep } from './listingsShared';
 
 /** A TC (or their team) is signed in and may see this listing. Agents never reach these routes. */
 export async function requireListingAccess(request: NextRequest, listingId: string) {
@@ -22,15 +22,29 @@ export async function requireListingAccess(request: NextRequest, listingId: stri
   return { user, isAdmin, listing };
 }
 
-/** The checklist a new listing starts with: this TC's saved steps, else the starter set. */
-export async function loadTemplateSteps(tcUserId: string): Promise<TemplateStep[]> {
-  const { data } = await supabaseServer
+/** The checklist a new listing starts with: this TC's saved template of that name, else (for "Standard") the starter set. */
+export async function loadTemplateSteps(tcUserId: string, templateName: string = DEFAULT_TEMPLATE_NAME): Promise<TemplateStep[]> {
+  const named = await supabaseServer
     .from('listing_template_steps')
     .select('name, offset_days')
     .eq('tc_user_id', tcUserId)
+    .eq('template_name', templateName)
     .order('sort_order', { ascending: true });
+  let data = named.data;
+  if (named.error && templateName === DEFAULT_TEMPLATE_NAME) {
+    // add-listing-round3.sql (template_name) not run yet: every saved step belongs to the one default template.
+    data = (await supabaseServer.from('listing_template_steps').select('name, offset_days').eq('tc_user_id', tcUserId).order('sort_order', { ascending: true })).data;
+  }
   if (data && data.length > 0) return data.map((r) => ({ name: r.name as string, offsetDays: Number(r.offset_days) || 0 }));
   return DEFAULT_LISTING_STEPS;
+}
+
+/** Names of this TC's saved templates ("Standard" is always offered). */
+export async function listTemplateNames(tcUserId: string): Promise<string[]> {
+  const { data, error } = await supabaseServer.from('listing_template_steps').select('template_name').eq('tc_user_id', tcUserId).limit(2000);
+  const names = new Set<string>([DEFAULT_TEMPLATE_NAME]);
+  if (!error) for (const r of data || []) names.add(String(r.template_name || DEFAULT_TEMPLATE_NAME));
+  return [...names];
 }
 
 /** One line in the listing's history. Best effort: never blocks or fails the action it describes. */

@@ -4,6 +4,21 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { sanitizeEmailHtml } from '@/lib/emailHtml';
+import {
+  MAX_INBOUND_FILES,
+  MAX_PENDING_BYTES,
+  MAX_PENDING_PER_LISTING,
+  extractListingToken,
+  inboundFileAllowed,
+  inboundStoragePath,
+  previewOf,
+  removeInboundFiles,
+  senderOf,
+  type InboundAttachment,
+} from '@/lib/listingInbound';
+import { OFFER_FILE_TYPES } from '@/lib/listingOfferFiles';
+import { extensionOf } from '@/lib/incomingUploads';
+import { queueTcInboundNotice } from '@/lib/listingNotify';
 
 /**
  * Per-transaction email ingestion (Phase 2, Section 21 of the roadmap).
@@ -104,6 +119,90 @@ function extractToken(address: string): string | null {
   return match ? match[1] : null;
 }
 
+async function handleListingEmail(token: string, emailId: string, appUrl: string) {
+  const { data: listing, error } = await supabaseServer.from('listings').select('id, status').eq('inbound_token', token).maybeSingle();
+  if (error) {
+    console.error('email/inbound: listing lookup failed', error);
+    return NextResponse.json({ error: 'Lookup failed' }, { status: 500 });
+  }
+  if (!listing) return NextResponse.json({ matched: false });
+
+  // Already seen (Resend redelivers) or the queue is full: stop before fetching anything.
+  const { data: seen } = await supabaseServer.from('listing_inbound_offers').select('id').eq('resend_email_id', emailId).maybeSingle();
+  if (seen) return NextResponse.json({ matched: true, duplicate: true });
+  const { data: pending } = await supabaseServer
+    .from('listing_inbound_offers')
+    .select('attachments')
+    .eq('listing_id', listing.id)
+    .eq('status', 'pending')
+    .limit(100);
+  const heldBytes = (pending || []).reduce((n, r) => n + ((r.attachments as InboundAttachment[]) || []).reduce((m, a) => m + (Number(a.size) || 0), 0), 0);
+  if ((pending || []).length >= MAX_PENDING_PER_LISTING || heldBytes >= MAX_PENDING_BYTES) {
+    console.warn('email/inbound: listing inbox full, message dropped', { listingId: listing.id });
+    // Tell the coordinator once a day, in the listing's history, so a full inbox is never silent.
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const { data: recent } = await supabaseServer.from('listing_activity').select('id').eq('listing_id', listing.id).eq('actor_label', 'Email').gte('created_at', since).like('summary', 'An offer email was not saved%').limit(1);
+    if (!recent || recent.length === 0) {
+      await supabaseServer.from('listing_activity').insert({
+        listing_id: listing.id,
+        actor_label: 'Email',
+        summary: 'An offer email was not saved because too many emails are waiting for review. Add or dismiss the waiting ones to make room.',
+      });
+    }
+    return NextResponse.json({ matched: true, stored: false, reason: 'inbox full' });
+  }
+  const full = await fetchReceivedEmail(emailId);
+  const wanted = (full.attachments || []).filter((a) => inboundFileAllowed(a.filename || '', Number(a.size) || 0)).slice(0, MAX_INBOUND_FILES);
+  // An email with nothing we can read is not an offer package: ignore it rather than clutter the queue.
+  if (wanted.length === 0) return NextResponse.json({ matched: true, stored: false, reason: 'no usable attachments' });
+
+  const stored: InboundAttachment[] = [];
+  for (const attachment of wanted) {
+    try {
+      const downloadUrl = await fetchAttachmentDownloadUrl(full.id, attachment.id);
+      if (!/^https:\/\//i.test(downloadUrl)) throw new Error('unexpected download url');
+      const fileRes = await fetch(downloadUrl);
+      if (!fileRes.ok) throw new Error(`download failed: ${fileRes.status}`);
+      const buffer = await fileRes.arrayBuffer();
+      if (!inboundFileAllowed(attachment.filename, buffer.byteLength)) throw new Error('file not allowed after download');
+      const path = inboundStoragePath(listing.id as string, attachment.filename);
+      const { error: uploadError } = await supabaseServer.storage
+        .from(BUCKET)
+        .upload(path, buffer, { contentType: OFFER_FILE_TYPES[extensionOf(attachment.filename)], upsert: false });
+      if (uploadError) throw uploadError;
+      stored.push({ name: attachment.filename.slice(0, 200), path, size: buffer.byteLength });
+    } catch (err) {
+      console.error('email/inbound: failed to store listing attachment', attachment.filename, err);
+    }
+  }
+  if (stored.length === 0) return NextResponse.json({ matched: true, stored: false, reason: 'attachments failed' });
+
+  const sender = senderOf(full.from);
+  const { error: insertError } = await supabaseServer.from('listing_inbound_offers').insert({
+    listing_id: listing.id,
+    resend_email_id: full.id,
+    from_email: sender.email,
+    from_name: sender.name,
+    subject: (full.subject || '').slice(0, 300) || null,
+    snippet: previewOf(full.text),
+    attachments: stored,
+  });
+  if (insertError) {
+    await removeInboundFiles(stored);
+    if ((insertError as { code?: string }).code === '23505') return NextResponse.json({ matched: true, duplicate: true });
+    console.error('email/inbound: failed to store listing email', insertError);
+    return NextResponse.json({ error: 'Failed to store email' }, { status: 500 });
+  }
+
+  await supabaseServer.from('listing_activity').insert({
+    listing_id: listing.id,
+    actor_label: 'Email',
+    summary: `Offer email received from ${sender.name || sender.email} (${stored.length} file${stored.length === 1 ? '' : 's'}), waiting for review`,
+  });
+  queueTcInboundNotice({ listingId: listing.id as string, appUrl, fromLabel: sender.name || sender.email, fileCount: stored.length });
+  return NextResponse.json({ matched: true, stored: true, files: stored.length });
+}
+
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
@@ -140,6 +239,11 @@ export async function POST(request: NextRequest) {
   // received_for), not just the first "to" -- a TC may have CC'd the
   // transaction address while someone else was the primary recipient.
   const candidates = [...(data.to || []), ...(data.received_for || [])];
+
+  // Offers forwarded to a listing's own address are held for review and never imported automatically.
+  const listingToken = candidates.map(extractListingToken).find(Boolean);
+  if (listingToken) return handleListingEmail(listingToken, data.email_id, request.nextUrl.origin);
+
   const token = candidates.map(extractToken).find(Boolean);
 
   if (!token) {

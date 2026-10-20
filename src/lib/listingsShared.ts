@@ -74,3 +74,27 @@ export const SHOWING_KIND_LABEL: Record<ShowingKind, string> = { showing: 'Showi
 export const SHOWING_INTEREST = ['hot', 'warm', 'cold'] as const;
 export const SHOWING_INTEREST_LABEL: Record<string, string> = { hot: 'Very interested', warm: 'Somewhat interested', cold: 'Not interested' };
 export const FINANCING_TYPES = ['Cash', 'Conventional', 'FHA', 'VA', 'USDA', 'Other'];
+
+// ── Days on market, template names, offer flags ─────────────────────────────
+
+/** Whole days between two YYYY-MM-DD dates (b - a). */
+export function daysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+}
+
+/** Days a listing has been on the market, or null when it never went live. Counted to today (a day-one listing is day 0). */
+export function daysOnMarket(listedOn: string | null | undefined, today: string = new Date().toISOString().slice(0, 10)): number | null {
+  if (!listedOn || !isIsoDate(listedOn)) return null;
+  return Math.max(0, daysBetween(listedOn, today));
+}
+
+export const DEFAULT_TEMPLATE_NAME = 'Standard';
+export const MAX_TEMPLATES = 10;
+
+export function cleanTemplateName(v: unknown): string {
+  const t = typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 40) : '';
+  return t || DEFAULT_TEMPLATE_NAME;
+}
+
+/** An offer whose written terms mention an escalation clause (a heads-up chip, never a decision). */
+export const mentionsEscalation = (text: unknown): boolean => typeof text === 'string' && /escalat/i.test(text);

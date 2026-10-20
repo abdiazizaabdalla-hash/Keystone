@@ -7,6 +7,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 import CriticalDatesCard from '@/components/CriticalDatesCard';
+import ListingsOverviewCard from '@/components/ListingsOverviewCard';
 
 interface Transaction {
   id: string;
@@ -411,6 +412,8 @@ export default function Dashboard() {
       </div>
 
       <CriticalDatesCard />
+
+      <ListingsOverviewCard />
 
       {/* Needs Attention Today -- a cross-transaction triage view (fed by
           /api/dashboard/attention) so the first thing a TC sees is what
