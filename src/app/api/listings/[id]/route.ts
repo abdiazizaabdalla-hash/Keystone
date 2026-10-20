@@ -4,12 +4,14 @@ import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
+import { queueListingCalendarSync, removeListingCalendarEvents } from '@/lib/calendarSync';
 import {
   LISTING_STATUSES,
   cleanMoney,
   cleanText,
   dueFromOffset,
   isIsoDate,
+  logListingActivity,
   requireListingAccess,
   type ListingStatus,
 } from '@/lib/listings';
@@ -25,12 +27,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const { listing } = await requireListingAccess(request, id);
-    const [tasks, offers, contacts, dates, agent] = await Promise.all([
+    const [tasks, offers, contacts, dates, agent, showings, priceChanges, activity] = await Promise.all([
       supabaseServer.from('listing_tasks').select('*').eq('listing_id', id).order('sort_order', { ascending: true }),
       supabaseServer.from('listing_offers').select('*').eq('listing_id', id).order('created_at', { ascending: false }),
       supabaseServer.from('listing_contacts').select('*').eq('listing_id', id).order('position', { ascending: true }),
       supabaseServer.from('listing_dates').select('*').eq('listing_id', id).order('due_date', { ascending: true }),
       listing.agent_id ? supabaseServer.from('agents').select('id, name, email, phone').eq('id', listing.agent_id).maybeSingle() : Promise.resolve({ data: null }),
+      supabaseServer.from('listing_showings').select('*').eq('listing_id', id).order('showing_date', { ascending: false }),
+      supabaseServer.from('listing_price_changes').select('*').eq('listing_id', id).order('changed_on', { ascending: true }).order('created_at', { ascending: true }),
+      supabaseServer.from('listing_activity').select('*').eq('listing_id', id).order('created_at', { ascending: false }).limit(60),
     ]);
     return NextResponse.json({
       listing,
@@ -39,6 +44,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       offers: offers.data || [],
       contacts: contacts.data || [],
       dates: dates.data || [],
+      // These come from add-listing-extras.sql; before it is run they are simply empty.
+      showings: showings.data || [],
+      priceChanges: priceChanges.data || [],
+      activity: activity.data || [],
     });
   } catch (error) {
     return fail(error, 'load');
@@ -74,6 +83,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (!LISTING_STATUSES.includes(body.status as ListingStatus)) return NextResponse.json({ error: 'Unknown status' }, { status: 400 });
       updates.status = body.status;
     }
+    if ('shareWithAgent' in body) updates.share_with_agent = body.shareWithAgent === true;
 
     if ('agentId' in body) {
       if (!body.agentId) updates.agent_id = null;
@@ -106,6 +116,29 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { data, error } = await supabaseServer.from('listings').update(updates).eq('id', id).select('*').single();
     if (error) throw error;
 
+    // History: status moves, price changes (also kept as a price history), key date changes.
+    const fmt = (n: unknown) => `$${Number(n).toLocaleString('en-US')}`;
+    if (updates.status && updates.status !== listing.status) {
+      await logListingActivity(id, user, `Status changed from ${listing.status} to ${updates.status}`);
+    }
+    if ('list_price' in updates && updates.list_price !== null && Number(updates.list_price) !== Number(listing.list_price)) {
+      const priceNote = typeof body.priceNote === 'string' ? cleanText(body.priceNote, 500) : null;
+      if (listing.list_price) {
+        await supabaseServer
+          .from('listing_price_changes')
+          .insert({ listing_id: id, old_price: listing.list_price, new_price: updates.list_price, changed_on: new Date().toISOString().split('T')[0], note: priceNote });
+        await logListingActivity(id, user, `List price changed from ${fmt(listing.list_price)} to ${fmt(updates.list_price)}${priceNote ? ` (${priceNote})` : ''}`);
+      } else {
+        await logListingActivity(id, user, `List price set to ${fmt(updates.list_price)}`);
+      }
+    }
+    if ('expiration_date' in updates && updates.expiration_date !== listing.expiration_date) {
+      await logListingActivity(id, user, updates.expiration_date ? `Listing expiration set to ${updates.expiration_date}` : 'Listing expiration cleared');
+    }
+    if (newPlanned !== undefined && newPlanned !== listing.planned_list_date) {
+      await logListingActivity(id, user, newPlanned ? `Planned list date set to ${newPlanned}` : 'Planned list date cleared');
+    }
+
     // Moving the planned list date moves every unfinished step that is tied to it.
     if (newPlanned !== undefined && newPlanned !== listing.planned_list_date) {
       const { data: tasks } = await supabaseServer.from('listing_tasks').select('id, offset_days').eq('listing_id', id).eq('completed', false);
@@ -115,6 +148,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
     }
 
+    queueListingCalendarSync(id);
     return NextResponse.json(data);
   } catch (error) {
     return fail(error, 'update');
@@ -128,6 +162,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (listing.tc_user_id !== user.id) {
       return NextResponse.json({ error: 'Only the person who created this listing can delete it' }, { status: 403 });
     }
+    await removeListingCalendarEvents(id);
     // Remove the stored files too; the document rows go with the listing, but storage objects would be orphaned.
     const { data: docs } = await supabaseServer.from('listing_documents').select('storage_path').eq('listing_id', id);
     const { error } = await supabaseServer.from('listings').delete().eq('id', id);

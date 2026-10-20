@@ -32,3 +32,17 @@ export async function loadTemplateSteps(tcUserId: string): Promise<TemplateStep[
   if (data && data.length > 0) return data.map((r) => ({ name: r.name as string, offsetDays: Number(r.offset_days) || 0 }));
   return DEFAULT_LISTING_STEPS;
 }
+
+/** One line in the listing's history. Best effort: never blocks or fails the action it describes. */
+export async function logListingActivity(
+  listingId: string,
+  actor: { email?: string | null; user_metadata?: Record<string, unknown> | null } | null,
+  summary: string
+): Promise<void> {
+  try {
+    const name = (actor?.user_metadata?.full_name as string | undefined)?.trim() || actor?.email || null;
+    await supabaseServer.from('listing_activity').insert({ listing_id: listingId, actor_label: name, summary: summary.slice(0, 500) });
+  } catch (error) {
+    console.error('logListingActivity failed (ignored):', error);
+  }
+}

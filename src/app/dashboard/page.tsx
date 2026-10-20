@@ -47,6 +47,8 @@ interface Invoice {
 }
 
 interface AttentionDueItem {
+  // Set for listing items, which don't live under /transactions.
+  href?: string;
   taskId: string;
   taskName: string;
   transactionId: string;
@@ -440,7 +442,7 @@ export default function Dashboard() {
                   {attention.overdue.slice(0, 5).map((item) => (
                     <li key={item.taskId}>
                       <Link
-                        href={`/dashboard/transactions/${item.transactionId}`}
+                        href={item.href || `/dashboard/transactions/${item.transactionId}`}
                         className="block text-xs text-slate-300 hover:text-slate-100 transition"
                       >
                         <span className="text-slate-400">{item.label}</span>
@@ -470,7 +472,7 @@ export default function Dashboard() {
                   {attention.dueToday.slice(0, 5).map((item) => (
                     <li key={item.taskId}>
                       <Link
-                        href={`/dashboard/transactions/${item.transactionId}`}
+                        href={item.href || `/dashboard/transactions/${item.transactionId}`}
                         className="block text-xs text-slate-300 hover:text-slate-100 transition"
                       >
                         <span className="text-slate-400">{item.label}</span>
@@ -497,7 +499,7 @@ export default function Dashboard() {
                   {attention.waitingOn.slice(0, 5).map((item) => (
                     <li key={item.taskId}>
                       <Link
-                        href={`/dashboard/transactions/${item.transactionId}`}
+                        href={item.href || `/dashboard/transactions/${item.transactionId}`}
                         className="block text-xs text-slate-300 hover:text-slate-100 transition"
                       >
                         <span className="text-slate-400">{item.label}</span>
@@ -539,7 +541,7 @@ export default function Dashboard() {
                   {attention.dueSoon.slice(0, 4).map((item) => (
                     <li key={item.taskId}>
                       <Link
-                        href={`/dashboard/transactions/${item.transactionId}`}
+                        href={item.href || `/dashboard/transactions/${item.transactionId}`}
                         className="block text-xs text-slate-400 hover:text-slate-200 transition"
                       >
                         {item.label} — {item.taskName} <span className="text-blue-400">· {item.dueInDays}d</span>

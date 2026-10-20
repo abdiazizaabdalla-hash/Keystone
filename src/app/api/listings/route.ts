@@ -6,7 +6,8 @@ import { isAgentUser } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
 import { autoAddContact } from '@/lib/contactsAuto';
-import { cleanMoney, cleanText, dueFromOffset, isIsoDate, loadTemplateSteps } from '@/lib/listings';
+import { queueListingCalendarSync } from '@/lib/calendarSync';
+import { logListingActivity, cleanMoney, cleanText, dueFromOffset, isIsoDate, loadTemplateSteps } from '@/lib/listings';
 
 function fail(error: unknown, what: string) {
   if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
@@ -137,6 +138,8 @@ export async function POST(request: NextRequest) {
       for (const p of people) await autoAddContact(user.id, p);
     }
 
+    await logListingActivity(listing.id as string, user, 'Listing created');
+    queueListingCalendarSync(listing.id as string);
     await logAudit(request, user, 'listing.create', { entityType: 'listing', entityId: listing.id });
     return NextResponse.json(listing, { status: 201 });
   } catch (error) {

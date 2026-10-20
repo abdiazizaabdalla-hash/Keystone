@@ -6,7 +6,16 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import ContactPicker from '@/components/ContactPicker';
-import { LISTING_STATUS_LABEL, LISTING_STATUSES, LISTING_DOC_TYPES, type ListingStatus } from '@/lib/listingsShared';
+import StepEmailModal from '@/components/StepEmailModal';
+import {
+  FINANCING_TYPES,
+  LISTING_STATUS_LABEL,
+  LISTING_STATUSES,
+  LISTING_DOC_TYPES,
+  SHOWING_INTEREST_LABEL,
+  SHOWING_KIND_LABEL,
+  type ListingStatus,
+} from '@/lib/listingsShared';
 
 interface Listing {
   id: string;
@@ -23,12 +32,39 @@ interface Listing {
   status: ListingStatus;
   notes: string | null;
   converted_transaction_id: string | null;
+  share_with_agent?: boolean | null;
 }
 interface Task { id: string; name: string; due_date: string | null; completed: boolean }
-interface Offer { id: string; buyer_name: string | null; buyer_agent: string | null; offer_price: number | null; terms: string | null; status: string; received_on: string | null }
+interface Offer {
+  id: string;
+  buyer_name: string | null;
+  buyer_agent: string | null;
+  offer_price: number | null;
+  terms: string | null;
+  status: string;
+  received_on: string | null;
+  financing?: string | null;
+  earnest_money?: number | null;
+  option_days?: number | null;
+  closing_date?: string | null;
+  seller_concessions?: number | null;
+}
+interface Showing { id: string; showing_date: string; kind: string; visitor: string | null; interest: string | null; feedback: string | null }
+interface PriceChange { id: string; old_price: number | null; new_price: number; changed_on: string; note: string | null }
+interface ActivityRow { id: string; actor_label: string | null; summary: string; created_at: string }
 interface Contact { id: string; role: string | null; name: string | null; email: string | null; phone: string | null }
 interface DateRow { id: string; label: string; due_date: string }
-interface Detail { listing: Listing; agent: { id: string; name: string } | null; tasks: Task[]; offers: Offer[]; contacts: Contact[]; dates: DateRow[] }
+interface Detail {
+  listing: Listing;
+  agent: { id: string; name: string; email?: string | null } | null;
+  tasks: Task[];
+  offers: Offer[];
+  contacts: Contact[];
+  dates: DateRow[];
+  showings?: Showing[];
+  priceChanges?: PriceChange[];
+  activity?: ActivityRow[];
+}
 
 const inputCls =
   'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
@@ -51,18 +87,23 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const router = useRouter();
   const [data, setData] = useState<Detail | null>(null);
-  const [agents, setAgents] = useState<{ id: string; name: string }[]>([]);
+  const [agents, setAgents] = useState<{ id: string; name: string; email?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   // Details form
-  const [det, setDet] = useState({ propertyAddress: '', agentId: '', sellerName: '', sellerEmail: '', sellerPhone: '', listPrice: '', plannedListDate: '', expirationDate: '', mlsNumber: '', mlsUrl: '', notes: '' });
+  const [det, setDet] = useState({ propertyAddress: '', agentId: '', sellerName: '', sellerEmail: '', sellerPhone: '', listPrice: '', plannedListDate: '', expirationDate: '', mlsNumber: '', mlsUrl: '', notes: '', shareWithAgent: true });
   const [savingDetails, setSavingDetails] = useState(false);
 
   // Add forms
   const [newStep, setNewStep] = useState('');
-  const [newOffer, setNewOffer] = useState({ buyerName: '', buyerAgent: '', offerPrice: '', receivedOn: '', terms: '' });
+  const EMPTY_OFFER = { buyerName: '', buyerAgent: '', offerPrice: '', receivedOn: '', terms: '', financing: '', earnestMoney: '', optionDays: '', closingDate: '', sellerConcessions: '' };
+  const [newOffer, setNewOffer] = useState(EMPTY_OFFER);
+  const [emailTask, setEmailTask] = useState<Task | null>(null);
+  const [newShowing, setNewShowing] = useState({ showingDate: '', kind: 'showing', visitor: '', interest: '', feedback: '' });
+  const [priceForm, setPriceForm] = useState({ price: '', note: '' });
+  const [showAllActivity, setShowAllActivity] = useState(false);
   const [newDate, setNewDate] = useState({ label: '', dueDate: '' });
   const [newContact, setNewContact] = useState({ role: '', name: '', email: '', phone: '' });
 
@@ -122,6 +163,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       mlsNumber: l.mls_number || '',
       mlsUrl: l.mls_url || '',
       notes: l.notes || '',
+      shareWithAgent: l.share_with_agent !== false,
     });
   }, []);
 
@@ -129,7 +171,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     try {
       const [d, a] = await Promise.all([call('GET', `/api/listings/${id}`), authFetch('/api/agents').then((r) => r.json()).catch(() => [])]);
       applyDetail(d, true);
-      if (Array.isArray(a)) setAgents(a.map((x: { id: string; name: string }) => ({ id: x.id, name: x.name })));
+      if (Array.isArray(a)) setAgents(a.map((x: { id: string; name: string; email?: string | null }) => ({ id: x.id, name: x.name, email: x.email ?? null })));
       setError('');
     } catch (err) {
       if (handleAuth(err)) return;
@@ -212,6 +254,22 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const { listing, tasks, offers, contacts, dates } = data;
+  const showings = data.showings || [];
+  const priceChanges = data.priceChanges || [];
+  const activity = data.activity || [];
+  const hotCount = showings.filter((sh) => sh.interest === 'hot').length;
+  // Offers still in play, compared side by side (net = price minus what the seller pays toward the buyer's costs)
+  const comparable = offers.filter((o) => o.status === 'received' || o.status === 'countered' || o.status === 'accepted');
+  const netOf = (o: Offer) => (o.offer_price ? Number(o.offer_price) - Number(o.seller_concessions || 0) : null);
+  const nets = comparable.map(netOf).filter((n): n is number => n !== null);
+  const bestNet = nets.length ? Math.max(...nets) : null;
+  // People the step email can go to: everyone on the listing, plus the seller if only entered in Details
+  const emailContacts = [
+    ...contacts.map((c) => ({ role: c.role, name: c.name, email: c.email })),
+    ...(listing.seller_email && !contacts.some((c) => (c.email || '').toLowerCase() === listing.seller_email!.toLowerCase())
+      ? [{ role: 'Seller', name: listing.seller_name, email: listing.seller_email }]
+      : []),
+  ];
   const converted = listing.status === 'converted' && listing.converted_transaction_id;
   const done = tasks.filter((t) => t.completed).length;
   const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
@@ -235,6 +293,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           mlsNumber: det.mlsNumber,
           mlsUrl: det.mlsUrl,
           notes: det.notes,
+          shareWithAgent: det.shareWithAgent,
         }),
       'Details saved.',
       true
@@ -249,7 +308,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     setConv({
       fileNumber: `FL-${stamp}`,
       acceptanceDate: todayIso(),
-      closingDate: '',
+      closingDate: offer !== 'none' && offer.closing_date ? offer.closing_date : '',
       price: offer !== 'none' && offer.offer_price ? String(offer.offer_price) : listing.list_price ? String(listing.list_price) : '',
     });
     setConvertOffer(offer);
@@ -395,6 +454,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                       className={`bg-transparent border border-slate-700 rounded px-2 py-1 text-xs ${overdue ? 'text-red-300 border-red-700/60' : 'text-slate-400'}`}
                       aria-label={`Due date for ${t.name}`}
                     />
+                    <button type="button" onClick={() => setEmailTask(t)} className="text-xs text-blue-400 hover:text-blue-300" aria-label={`Email about ${t.name}`}>
+                      Email
+                    </button>
                     <button type="button" onClick={() => act(() => call('DELETE', `/api/listings/${id}/tasks/${t.id}`))} className="text-slate-600 hover:text-red-300 text-sm" aria-label={`Remove ${t.name}`}>
                       ✕
                     </button>
@@ -421,6 +483,44 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           <div className={cardCls}>
             <h2 className="text-lg font-bold text-slate-100 mb-3">Offers</h2>
             {offers.length === 0 && <p className="text-sm text-slate-500 mb-3">No offers logged yet.</p>}
+            {comparable.length >= 2 && (
+              <div className="mb-4 overflow-x-auto border border-slate-700 rounded-lg">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-slate-500 uppercase tracking-wider border-b border-slate-700">
+                      <th className="px-3 py-2">Buyer</th>
+                      <th className="px-3 py-2">Price</th>
+                      <th className="px-3 py-2">vs list</th>
+                      <th className="px-3 py-2">Net*</th>
+                      <th className="px-3 py-2">Financing</th>
+                      <th className="px-3 py-2">Earnest</th>
+                      <th className="px-3 py-2">Option</th>
+                      <th className="px-3 py-2">Closing</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparable.map((o) => {
+                      const net = netOf(o);
+                      const best = net !== null && net === bestNet;
+                      const vs = o.offer_price && listing.list_price ? ((Number(o.offer_price) - Number(listing.list_price)) / Number(listing.list_price)) * 100 : null;
+                      return (
+                        <tr key={o.id} className="border-b border-slate-700/50 last:border-0 text-slate-300">
+                          <td className="px-3 py-2">{o.buyer_name || 'Buyer'}</td>
+                          <td className="px-3 py-2">{money(o.offer_price) || '—'}</td>
+                          <td className={`px-3 py-2 ${vs === null ? '' : vs >= 0 ? 'text-green-300' : 'text-amber-300'}`}>{vs === null ? '—' : `${vs >= 0 ? '+' : ''}${vs.toFixed(1)}%`}</td>
+                          <td className={`px-3 py-2 ${best ? 'text-green-300 font-semibold' : ''}`}>{net !== null ? money(net) : '—'}{best ? ' ★' : ''}</td>
+                          <td className="px-3 py-2">{o.financing || '—'}</td>
+                          <td className="px-3 py-2">{o.earnest_money ? money(o.earnest_money) : '—'}</td>
+                          <td className="px-3 py-2">{o.option_days != null ? `${o.option_days}d` : '—'}</td>
+                          <td className="px-3 py-2">{o.closing_date ? formatDisplayDate(o.closing_date) : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <p className="px-3 py-2 text-[11px] text-slate-500">*Net is the offer price minus any seller-paid concessions. It does not include commissions or other closing costs.</p>
+              </div>
+            )}
             <div className="space-y-3">
               {offers.map((o) => (
                 <div key={o.id} className="border border-slate-700 rounded-lg p-3">
@@ -446,6 +546,19 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                       ))}
                     </select>
                   </div>
+                  {(o.financing || o.earnest_money || o.option_days != null || o.closing_date || o.seller_concessions) && (
+                    <p className="text-xs text-slate-400 mt-2">
+                      {[
+                        o.financing,
+                        o.earnest_money ? `Earnest ${money(o.earnest_money)}` : '',
+                        o.option_days != null ? `${o.option_days}-day option` : '',
+                        o.closing_date ? `Closing ${formatDisplayDate(o.closing_date)}` : '',
+                        o.seller_concessions ? `Seller pays ${money(o.seller_concessions)}` : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  )}
                   {o.terms && <p className="text-sm text-slate-400 mt-2 whitespace-pre-wrap break-words">{o.terms}</p>}
                   <div className="mt-2 flex items-center gap-4 text-sm">
                     {!converted && (o.status === 'received' || o.status === 'countered') && (
@@ -464,17 +577,94 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2"
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (await act(() => call('POST', `/api/listings/${id}/offers`, newOffer), 'Offer logged.')) setNewOffer({ buyerName: '', buyerAgent: '', offerPrice: '', receivedOn: '', terms: '' });
+                if (await act(() => call('POST', `/api/listings/${id}/offers`, newOffer), 'Offer logged.')) setNewOffer(EMPTY_OFFER);
               }}
             >
               <input className={inputCls} placeholder="Buyer name" value={newOffer.buyerName} onChange={(e) => setNewOffer({ ...newOffer, buyerName: e.target.value })} />
               <input className={inputCls} placeholder="Buyer's agent" value={newOffer.buyerAgent} onChange={(e) => setNewOffer({ ...newOffer, buyerAgent: e.target.value })} />
               <input className={inputCls} placeholder="Offer price" inputMode="decimal" value={newOffer.offerPrice} onChange={(e) => setNewOffer({ ...newOffer, offerPrice: e.target.value })} />
               <input className={inputCls} type="date" value={newOffer.receivedOn} onChange={(e) => setNewOffer({ ...newOffer, receivedOn: e.target.value })} aria-label="Date received" />
-              <textarea className={`${inputCls} sm:col-span-2`} rows={2} placeholder="Terms (financing, contingencies, closing date…)" value={newOffer.terms} onChange={(e) => setNewOffer({ ...newOffer, terms: e.target.value })} />
+              <select className={inputCls} value={newOffer.financing} onChange={(e) => setNewOffer({ ...newOffer, financing: e.target.value })} aria-label="Financing">
+                <option value="">Financing (optional)</option>
+                {FINANCING_TYPES.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+              <input className={inputCls} placeholder="Earnest money" inputMode="decimal" value={newOffer.earnestMoney} onChange={(e) => setNewOffer({ ...newOffer, earnestMoney: e.target.value })} />
+              <input className={inputCls} placeholder="Option period (days)" inputMode="numeric" value={newOffer.optionDays} onChange={(e) => setNewOffer({ ...newOffer, optionDays: e.target.value })} />
+              <input className={inputCls} placeholder="Seller pays (concessions)" inputMode="decimal" value={newOffer.sellerConcessions} onChange={(e) => setNewOffer({ ...newOffer, sellerConcessions: e.target.value })} />
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Proposed closing date</label>
+                <input className={inputCls} type="date" value={newOffer.closingDate} onChange={(e) => setNewOffer({ ...newOffer, closingDate: e.target.value })} />
+              </div>
+              <textarea className={`${inputCls} sm:col-span-2`} rows={2} placeholder="Other terms and contingencies" value={newOffer.terms} onChange={(e) => setNewOffer({ ...newOffer, terms: e.target.value })} />
               <div className="sm:col-span-2">
                 <button type="submit" className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg">
                   Log offer
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Showings */}
+          <div className={cardCls}>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+              <h2 className="text-lg font-bold text-slate-100">Showings and feedback</h2>
+              <span className="text-xs text-slate-400">
+                {showings.length} logged{hotCount > 0 ? ` · ${hotCount} very interested` : ''}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mb-3">Log each showing, open house and broker tour with what the visitor said. Use it in your seller updates and price reviews.</p>
+            {showings.length === 0 && <p className="text-sm text-slate-500 mb-3">Nothing logged yet.</p>}
+            <ul className="space-y-2 mb-4">
+              {showings.map((sh) => (
+                <li key={sh.id} className="border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-slate-200 min-w-0 break-words">
+                      <span className="font-medium">{formatDisplayDate(sh.showing_date)}</span>
+                      <span className="text-slate-500"> · {SHOWING_KIND_LABEL[sh.kind as keyof typeof SHOWING_KIND_LABEL] || 'Showing'}</span>
+                      {sh.visitor ? <span className="text-slate-400"> · {sh.visitor}</span> : null}
+                      {sh.interest ? <span className={sh.interest === 'hot' ? 'text-green-300' : 'text-slate-400'}> · {SHOWING_INTEREST_LABEL[sh.interest]}</span> : null}
+                    </p>
+                    <button type="button" onClick={() => act(() => call('DELETE', `/api/listings/${id}/showings/${sh.id}`))} className="text-slate-600 hover:text-red-300 shrink-0" aria-label="Remove showing">
+                      ✕
+                    </button>
+                  </div>
+                  {sh.feedback && <p className="text-slate-400 mt-1 whitespace-pre-wrap break-words">{sh.feedback}</p>}
+                </li>
+              ))}
+            </ul>
+            <form
+              className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const ok = await act(() => call('POST', `/api/listings/${id}/showings`, { ...newShowing, showingDate: newShowing.showingDate || todayIso() }), 'Logged.');
+                if (ok) setNewShowing({ showingDate: '', kind: 'showing', visitor: '', interest: '', feedback: '' });
+              }}
+            >
+              <input className={inputCls} type="date" value={newShowing.showingDate} onChange={(e) => setNewShowing({ ...newShowing, showingDate: e.target.value })} aria-label="Date" />
+              <select className={inputCls} value={newShowing.kind} onChange={(e) => setNewShowing({ ...newShowing, kind: e.target.value })} aria-label="Type">
+                {Object.entries(SHOWING_KIND_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+              <input className={inputCls} placeholder="Visitor or buyer's agent" value={newShowing.visitor} onChange={(e) => setNewShowing({ ...newShowing, visitor: e.target.value })} />
+              <select className={inputCls} value={newShowing.interest} onChange={(e) => setNewShowing({ ...newShowing, interest: e.target.value })} aria-label="Interest">
+                <option value="">Interest (optional)</option>
+                {Object.entries(SHOWING_INTEREST_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+              <textarea className={`${inputCls} sm:col-span-2`} rows={2} placeholder="Feedback (price, condition, what they liked)" value={newShowing.feedback} onChange={(e) => setNewShowing({ ...newShowing, feedback: e.target.value })} />
+              <div className="sm:col-span-2">
+                <button type="submit" className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg">
+                  Log showing
                 </button>
               </div>
             </form>
@@ -540,6 +730,13 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <label className={labelCls}>Notes</label>
               <textarea className={inputCls} rows={3} value={det.notes} onChange={(e) => setDet({ ...det, notes: e.target.value })} />
             </div>
+            <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={det.shareWithAgent} onChange={(e) => setDet({ ...det, shareWithAgent: e.target.checked })} className="accent-blue-500 mt-1" />
+              <span>
+                Show this listing to the listing agent in their Relay agent portal
+                <span className="block text-xs text-slate-500">Read-only: key dates, offers, showings and price history. They never see your checklist, notes or documents.</span>
+              </span>
+            </label>
             <button type="submit" disabled={savingDetails} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
               {savingDetails ? 'Saving…' : 'Save details'}
             </button>
@@ -702,11 +899,86 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             </form>
           </div>
 
+          {/* Price history */}
+          <div className={cardCls}>
+            <h2 className="text-lg font-bold text-slate-100 mb-3">Price history</h2>
+            <ul className="space-y-1 text-sm mb-3">
+              {priceChanges.length === 0 && <li className="text-slate-500">No price changes yet. {listing.list_price ? `Listed at ${money(listing.list_price)}.` : ''}</li>}
+              {priceChanges.map((pc) => (
+                <li key={pc.id} className="text-slate-300">
+                  <span className="text-slate-500">{formatDisplayDate(pc.changed_on)}</span> · {pc.old_price ? `${money(pc.old_price)} → ` : ''}
+                  <span className="font-medium text-slate-100">{money(pc.new_price)}</span>
+                  {pc.old_price ? (
+                    <span className={Number(pc.new_price) < Number(pc.old_price) ? 'text-amber-300' : 'text-green-300'}>
+                      {' '}
+                      ({Number(pc.new_price) < Number(pc.old_price) ? '−' : '+'}
+                      {money(Math.abs(Number(pc.new_price) - Number(pc.old_price)))})
+                    </span>
+                  ) : null}
+                  {pc.note ? <span className="text-slate-500"> — {pc.note}</span> : null}
+                </li>
+              ))}
+            </ul>
+            <form
+              className="grid grid-cols-1 sm:grid-cols-[8rem_1fr_auto] gap-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!priceForm.price.trim()) return;
+                const ok = await act(() => call('PATCH', `/api/listings/${id}`, { listPrice: priceForm.price, priceNote: priceForm.note }), 'Price updated.', true);
+                if (ok) setPriceForm({ price: '', note: '' });
+              }}
+            >
+              <input className={inputCls} placeholder="New price" inputMode="decimal" value={priceForm.price} onChange={(e) => setPriceForm({ ...priceForm, price: e.target.value })} />
+              <input className={inputCls} placeholder="Reason (optional)" value={priceForm.note} onChange={(e) => setPriceForm({ ...priceForm, note: e.target.value })} maxLength={500} />
+              <button type="submit" className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg">
+                Change price
+              </button>
+            </form>
+          </div>
+
+          {/* History */}
+          <div className={cardCls}>
+            <h2 className="text-lg font-bold text-slate-100 mb-3">History</h2>
+            {activity.length === 0 && <p className="text-sm text-slate-500">Changes to this listing will show up here.</p>}
+            <ul className="space-y-1.5 text-sm">
+              {(showAllActivity ? activity : activity.slice(0, 8)).map((a) => (
+                <li key={a.id} className="text-slate-300 break-words">
+                  <span className="text-slate-500 text-xs">{new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span> · {a.summary}
+                  {a.actor_label ? <span className="text-slate-600"> ({a.actor_label})</span> : null}
+                </li>
+              ))}
+            </ul>
+            {activity.length > 8 && (
+              <button type="button" onClick={() => setShowAllActivity(!showAllActivity)} className="mt-2 text-xs text-blue-400 hover:text-blue-300">
+                {showAllActivity ? 'Show less' : `Show all ${activity.length}`}
+              </button>
+            )}
+          </div>
+
           <button type="button" onClick={deleteListing} className="text-sm text-slate-500 hover:text-red-300">
             Delete this listing
           </button>
         </div>
       </div>
+
+      {emailTask && (
+        <StepEmailModal
+          key={emailTask.id}
+          listingId={id}
+          taskId={emailTask.id}
+          stepName={emailTask.name}
+          stepDueDate={emailTask.due_date}
+          propertyAddress={listing.property_address}
+          agent={data.agent ? { name: data.agent.name, email: data.agent.email ?? agents.find((a) => a.id === data.agent!.id)?.email ?? null } : null}
+          contacts={emailContacts}
+          extraVars={{
+            seller_name: listing.seller_name || '',
+            seller_first_name: (listing.seller_name || '').trim().split(/\s+/)[0] || '',
+            list_price: money(listing.list_price),
+          }}
+          onClose={() => setEmailTask(null)}
+        />
+      )}
 
       {convertOffer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">

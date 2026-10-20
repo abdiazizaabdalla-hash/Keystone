@@ -32,11 +32,16 @@ interface CustomTemplate {
 }
 
 interface Props {
-  transactionId: string;
+  /** A deal's email. Give either this or `listingId`. */
+  transactionId?: string;
+  /** A listing's email (before there is a contract). */
+  listingId?: string;
+  /** Extra merge values (seller name, list price...) for listing emails. */
+  extraVars?: Record<string, string>;
   taskId: string;
   stepName: string;
   stepDueDate?: string | null;
-  fileNumber: string;
+  fileNumber?: string;
   propertyAddress: string;
   acceptanceDate?: string | null;
   closingDate?: string | null;
@@ -52,7 +57,8 @@ interface Props {
 const longDate = (iso?: string | null) => (iso ? formatDisplayDate(iso, { month: 'long', day: 'numeric', year: 'numeric' }) : '');
 
 export default function StepEmailModal(props: Props) {
-  const { transactionId, taskId, stepName, agent, contacts, onClose } = props;
+  const { transactionId, listingId, taskId, stepName, agent, contacts, onClose } = props;
+  const isListing = Boolean(listingId);
 
   const [loading, setLoading] = useState(true);
   const [tcName, setTcName] = useState('');
@@ -78,7 +84,7 @@ export default function StepEmailModal(props: Props) {
   const [notice, setNotice] = useState('');
   const [sentTo, setSentTo] = useState<string[] | null>(null);
 
-  const defaults = useMemo(() => defaultTemplateFor(stepName), [stepName]);
+  const defaults = useMemo(() => defaultTemplateFor(stepName, isListing), [stepName, isListing]);
 
   const recipients: Recipient[] = useMemo(() => {
     const list: Recipient[] = [];
@@ -99,7 +105,7 @@ export default function StepEmailModal(props: Props) {
   const vars: MergeVars = useMemo(
     () => ({
       property_address: props.propertyAddress,
-      file_number: props.fileNumber,
+      file_number: props.fileNumber || '',
       agent_name: agent?.name || '',
       agent_first_name: (agent?.name || '').trim().split(/\s+/)[0] || '',
       acceptance_date: longDate(props.acceptanceDate),
@@ -107,8 +113,9 @@ export default function StepEmailModal(props: Props) {
       step_name: stepName,
       due_date: longDate(props.stepDueDate),
       tc_name: tcName,
+      ...(props.extraVars || {}),
     }),
-    [props.propertyAddress, props.fileNumber, props.acceptanceDate, props.closingDate, props.stepDueDate, agent, stepName, tcName]
+    [props.extraVars, props.propertyAddress, props.fileNumber, props.acceptanceDate, props.closingDate, props.stepDueDate, agent, stepName, tcName]
   );
 
   // Load my saved template for this step + my name, then fill the email in.
@@ -182,7 +189,7 @@ export default function StepEmailModal(props: Props) {
     setError('');
     setBusy('send');
     try {
-      const res = await authFetch(`/api/transactions/${transactionId}/send-step-email`, {
+      const res = await authFetch(isListing ? `/api/listings/${listingId}/send-step-email` : `/api/transactions/${transactionId}/send-step-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: recipientsNow, subject, body, taskId, logToDeal }),
@@ -192,7 +199,7 @@ export default function StepEmailModal(props: Props) {
 
       // Optionally mark the step "waiting on" the first person emailed. The email
       // already went out, so a failure here is ignored rather than shown as a send error.
-      if (markWaiting && !props.currentWaitingOn) {
+      if (!isListing && markWaiting && !props.currentWaitingOn) {
         const target = recipients.find((r) => selected.has(r.email) && !r.label.endsWith('(agent)')) || recipients.find((r) => selected.has(r.email));
         const who = (target ? target.label : recipientsNow[0]).slice(0, 100);
         try {
@@ -529,16 +536,20 @@ export default function StepEmailModal(props: Props) {
                 {currentCustom ? 'Edit this template' : 'Edit this step’s template'}
               </button>
             </div>
-            {!props.currentWaitingOn && (
+            {!isListing && !props.currentWaitingOn && (
               <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
                 <input type="checkbox" checked={markWaiting} onChange={(e) => setMarkWaiting(e.target.checked)} className="accent-blue-500" />
                 Mark this step &ldquo;waiting on&rdquo; the person I email
               </label>
             )}
-            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-              <input type="checkbox" checked={logToDeal} onChange={(e) => setLogToDeal(e.target.checked)} className="accent-blue-500" />
-              Save a copy on this deal&rsquo;s Communication log (blind copy, others won&rsquo;t see it)
-            </label>
+            {!isListing ? (
+              <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={logToDeal} onChange={(e) => setLogToDeal(e.target.checked)} className="accent-blue-500" />
+                Save a copy on this deal&rsquo;s Communication log (blind copy, others won&rsquo;t see it)
+              </label>
+            ) : (
+              <p className="text-xs text-slate-500">A note that this email went out is added to the listing&rsquo;s history.</p>
+            )}
             <p className="text-xs text-slate-500">
               Sent from Relay with your name. You are copied, and replies go straight to you.
             </p>

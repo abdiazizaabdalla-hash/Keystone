@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { collectListingReminders } from '@/lib/listingReminders';
 import { sendDueDateReminderDigest, sendAgentKeyDateReminder, ReminderTransactionGroup } from '@/lib/dueDateReminders';
 
 /**
@@ -39,6 +40,9 @@ export async function GET(request: NextRequest) {
   const furthestMilestone = Math.max(...ADVANCE_MILESTONE_DAYS);
   const windowEndStr = addDays(todayStr, furthestMilestone);
 
+  // Listings: checklist steps, dates and expiration (also flips lapsed listings to Expired).
+  const listingGroups = await collectListingReminders(todayStr);
+
   // Single range query covers everything we could need: every
   // overdue/due-today task (due_date <= today) plus every task that
   // could land on an advance milestone (due_date <= today + furthest
@@ -68,7 +72,7 @@ export async function GET(request: NextRequest) {
   }
   const keyDates = keyDatesError ? [] : keyDateRows || [];
 
-  if ((!tasks || tasks.length === 0) && keyDates.length === 0) {
+  if ((!tasks || tasks.length === 0) && keyDates.length === 0 && listingGroups.size === 0) {
     return NextResponse.json({ notified: 0, reason: 'no tasks due' });
   }
 
@@ -104,7 +108,7 @@ export async function GET(request: NextRequest) {
   }
 
   const openTransactionsById = new Map((transactions || []).map((t) => [t.id as string, t]));
-  if (openTransactionsById.size === 0) {
+  if (openTransactionsById.size === 0 && listingGroups.size === 0) {
     return NextResponse.json({ notified: 0, reason: 'no open transactions with due tasks' });
   }
 
@@ -175,6 +179,16 @@ export async function GET(request: NextRequest) {
     } else if (milestone === 7) {
       group.dueIn7DaysTasks.push(task.name);
     }
+  }
+
+  // Listing items join the same email as the deals.
+  for (const [tcUserId, groups] of listingGroups) {
+    let tcGroups = groupsByTcUser.get(tcUserId);
+    if (!tcGroups) {
+      tcGroups = new Map();
+      groupsByTcUser.set(tcUserId, tcGroups);
+    }
+    for (const g of groups) tcGroups.set(`listing-${g.transactionId}`, g);
   }
 
   const appUrl = new URL(request.url).origin;

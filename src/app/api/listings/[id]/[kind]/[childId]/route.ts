@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { requireListingAccess } from '@/lib/listings';
+import { logListingActivity, requireListingAccess } from '@/lib/listings';
+import { queueListingCalendarSync, removeListingEvent } from '@/lib/calendarSync';
 import { CHILD_TABLE, cleanChild, isChildKind } from '@/lib/listingChildren';
 
 function fail(error: unknown, what: string) {
@@ -31,6 +32,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const row = data as Record<string, unknown>;
+    if (kind === 'tasks' && 'completed' in cleaned.value) {
+      await logListingActivity(id, user, `${cleaned.value.completed ? 'Completed' : 'Reopened'}: ${row.name}`);
+    } else if (kind === 'offers' && 'status' in cleaned.value) {
+      await logListingActivity(id, user, `Offer${row.buyer_name ? ` from ${row.buyer_name}` : ''} marked ${cleaned.value.status}`);
+    }
+    if (kind === 'tasks' || kind === 'dates') queueListingCalendarSync(id);
     return NextResponse.json(data);
   } catch (error) {
     return fail(error, 'update');
@@ -43,7 +51,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!isChildKind(kind)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const { user } = await requireListingAccess(request, id);
     await assertTrialActive(user);
-    const { error } = await supabaseServer.from(CHILD_TABLE[kind]).delete().eq('id', childId).eq('listing_id', id);
+    // Remove the Google event first; once the row is gone its event id is too.
+    const table = CHILD_TABLE[kind];
+    if (kind === 'tasks' || kind === 'dates') {
+      const { data: gone } = await supabaseServer.from(table).select('google_event_id').eq('id', childId).eq('listing_id', id).maybeSingle();
+      const eventId = (gone as { google_event_id?: string | null } | null)?.google_event_id;
+      if (eventId) await removeListingEvent(id, eventId);
+    }
+    const { error } = await supabaseServer.from(table).delete().eq('id', childId).eq('listing_id', id);
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (error) {

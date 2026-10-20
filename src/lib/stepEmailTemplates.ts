@@ -25,6 +25,9 @@ export const MERGE_FIELDS: { key: string; label: string }[] = [
   { key: 'step_name', label: 'Checklist step' },
   { key: 'due_date', label: 'Step due date' },
   { key: 'tc_name', label: 'Your name' },
+  { key: 'seller_name', label: 'Seller full name' },
+  { key: 'seller_first_name', label: 'Seller first name' },
+  { key: 'list_price', label: 'List price' },
 ];
 
 export type MergeVars = Record<string, string>;
@@ -114,7 +117,99 @@ const GENERIC_TEMPLATE: StepEmailTemplate = {
   suggestedRecipients: ['any'],
 };
 
-export function defaultTemplateFor(stepName: string): StepEmailTemplate {
+// Listing steps (before there is a contract): no file number, acceptance or closing date.
+const LISTING_GENERIC_TEMPLATE: StepEmailTemplate = {
+  subject: '{{step_name}}: {{property_address}}',
+  body:
+    'Hello,\n\nA quick update on the listing at {{property_address}} for the step "{{step_name}}":\n\n[what you need to say or ask]' +
+    SIGNOFF,
+  suggestedRecipients: ['any'],
+};
+
+export const DEFAULT_LISTING_STEP_TEMPLATES: Record<string, StepEmailTemplate> = {
+  [stepKey('Listing agreement signed and filed')]: {
+    subject: 'Listing agreement: {{property_address}}',
+    body:
+      'Hi {{agent_first_name}},\n\nI am opening the listing file for {{property_address}} and need the fully signed listing agreement (every page, every signer) for the file.\n\n' +
+      'Once I have it I will start the prep checklist and the dates will follow from the list date.' +
+      SIGNOFF,
+    suggestedRecipients: ['agent'],
+  },
+  [stepKey('Seller disclosures and required forms collected')]: {
+    subject: 'Forms we need from you: {{property_address}}',
+    body:
+      'Hi {{seller_first_name}},\n\nTo get {{property_address}} ready to list we need a few things from you: [seller disclosure, HOA details, any other forms].\n\n' +
+      'You can reply to this email with them attached or send them to me directly. Let me know if anything is unclear.' +
+      SIGNOFF,
+    suggestedRecipients: ['client', 'agent'],
+  },
+  [stepKey('Photographer scheduled')]: {
+    subject: 'Photo shoot: {{property_address}}',
+    body:
+      'Hello,\n\nWe would like to schedule photos for {{property_address}}. [Preferred day and time, access instructions, and whether you need video, drone or a floor plan.]\n\n' +
+      'Please confirm what works and your turnaround time.' +
+      SIGNOFF,
+    suggestedRecipients: ['any'],
+  },
+  [stepKey('Staging or declutter walkthrough')]: {
+    subject: 'Getting {{property_address}} ready',
+    body:
+      'Hi {{seller_first_name}},\n\nBefore photos, we plan a walkthrough of {{property_address}} on [day and time] to talk through decluttering and staging.\n\n' +
+      'A few things that help most: clear counters, put away personal photos, and make sure every light works.' +
+      SIGNOFF,
+    suggestedRecipients: ['client', 'agent'],
+  },
+  [stepKey('Review price and launch plan with seller')]: {
+    subject: 'Launch plan for {{property_address}}',
+    body:
+      'Hi {{seller_first_name}},\n\nWe are close to going live with {{property_address}}. The agreed list price is {{list_price}}. ' +
+      'Let us confirm the price, the go-live day and showing instructions before it launches. [Proposed call time or questions.]' +
+      SIGNOFF,
+    suggestedRecipients: ['client', 'agent'],
+  },
+  [stepKey('Listing entered in MLS')]: {
+    subject: 'Listing entered: {{property_address}}',
+    body:
+      'Hi {{agent_first_name}},\n\nThe listing for {{property_address}} has been entered in the MLS. MLS number: [MLS number]. Please review it for accuracy and let me know about any changes.' +
+      SIGNOFF,
+    suggestedRecipients: ['agent'],
+  },
+  [stepKey('Confirm listing is live and syndicated')]: {
+    subject: '{{property_address}} is live',
+    body:
+      'Hi {{seller_first_name}},\n\nGood news: {{property_address}} is live. You can see it here: [listing link]. It will appear on the major sites over the next day or so.\n\n' +
+      'We will send showing feedback and updates as they come in.' +
+      SIGNOFF,
+    suggestedRecipients: ['client', 'agent'],
+  },
+  [stepKey('Open house or broker tour scheduled')]: {
+    subject: 'Open house for {{property_address}}',
+    body:
+      'Hi {{agent_first_name}},\n\nFor {{property_address}} we have an open house or broker tour planned for [date and time]. ' +
+      'I will take care of [signs, MLS entry, flyers]. Please confirm you can host.' +
+      SIGNOFF,
+    suggestedRecipients: ['agent'],
+  },
+  [stepKey('First weekly update to seller')]: {
+    subject: 'Weekly update: {{property_address}}',
+    body:
+      'Hi {{seller_first_name}},\n\nHere is your update on {{property_address}} for the week: [showings, feedback and online activity].\n\n' +
+      'Next steps: [what happens next]. Let me know if you want to talk anything through.' +
+      SIGNOFF,
+    suggestedRecipients: ['client', 'agent'],
+  },
+  [stepKey('Review showing feedback and price')]: {
+    subject: 'Showing feedback and pricing: {{property_address}}',
+    body:
+      'Hi {{seller_first_name}},\n\nWe have had [number] showings on {{property_address}} so far. The feedback is: [summary].\n\n' +
+      'The current list price is {{list_price}}. Let us talk about whether to hold or adjust. [Proposed call time.]' +
+      SIGNOFF,
+    suggestedRecipients: ['client', 'agent'],
+  },
+};
+
+export function defaultTemplateFor(stepName: string, isListing = false): StepEmailTemplate {
+  if (isListing) return DEFAULT_LISTING_STEP_TEMPLATES[stepKey(stepName)] ?? LISTING_GENERIC_TEMPLATE;
   return DEFAULT_STEP_TEMPLATES[stepKey(stepName)] ?? GENERIC_TEMPLATE;
 }
 

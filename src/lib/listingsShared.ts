@@ -67,3 +67,10 @@ export function cleanMoney(v: unknown): number | null {
 
 
 export const LISTING_DOC_TYPES = ['General', 'Listing Agreement', 'Seller Disclosure', 'Other Contract Documents'];
+
+export const SHOWING_KINDS = ['showing', 'open_house', 'broker_tour'] as const;
+export type ShowingKind = (typeof SHOWING_KINDS)[number];
+export const SHOWING_KIND_LABEL: Record<ShowingKind, string> = { showing: 'Showing', open_house: 'Open house', broker_tour: 'Broker tour' };
+export const SHOWING_INTEREST = ['hot', 'warm', 'cold'] as const;
+export const SHOWING_INTEREST_LABEL: Record<string, string> = { hot: 'Very interested', warm: 'Somewhat interested', cold: 'Not interested' };
+export const FINANCING_TYPES = ['Cash', 'Conventional', 'FHA', 'VA', 'USDA', 'Other'];

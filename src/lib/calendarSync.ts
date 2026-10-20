@@ -200,6 +200,14 @@ export async function backfillUserCalendar(userId: string): Promise<void> {
     for (const id of ids) {
       await syncTransactionCalendar(id, { onlyUserId: userId });
     }
+    // Listings the TC owns (checklist steps, key dates, expiration)
+    const { data: ownedListings } = await supabaseServer
+      .from('listings')
+      .select('id')
+      .eq('tc_user_id', userId)
+      .in('status', ['preparing', 'active', 'under_offer'])
+      .limit(300);
+    for (const row of ownedListings || []) await syncListingCalendar(row.id as string);
   } catch (error) {
     console.error('Calendar back-fill failed (non-fatal):', error);
   }
@@ -356,5 +364,189 @@ export async function removeTransactionCalendarEvents(transactionId: string): Pr
     }
   } catch (error) {
     console.error('Failed to remove transaction calendar events (non-fatal):', error);
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Listings (pre-contract). Only the TC who owns the listing syncs: unfinished checklist steps,
+// the listing's own dates (open house, price review...), the planned go-live day is already a
+// step, and the agreement's expiration date. Same contract as deals: Relay only touches events
+// it created itself, and every failure is swallowed.
+// ---------------------------------------------------------------------------
+
+const OPEN_LISTING = ['preparing', 'active', 'under_offer'];
+
+export async function syncListingCalendar(listingId: string): Promise<void> {
+  try {
+    const { data: listing } = await supabaseServer
+      .from('listings')
+      .select('id, tc_user_id, property_address, status, expiration_date, google_expiration_event_id')
+      .eq('id', listingId)
+      .maybeSingle();
+    if (!listing) return;
+    const ownerId = listing.tc_user_id as string;
+    const accessToken = await getAccessTokenFor(ownerId);
+    if (!accessToken) return;
+
+    const label = `Listing · ${listing.property_address}`;
+    const isOpen = OPEN_LISTING.includes(listing.status as string);
+    const today = todayIso();
+
+    // Expiration date
+    const expiration = isOpen ? (listing.expiration_date as string | null) : null;
+    const wantExp = Boolean(expiration) && (expiration as string) >= today;
+    const expEventId = listing.google_expiration_event_id as string | null;
+    if (!wantExp) {
+      if (expEventId) {
+        try {
+          await deleteCalendarEvent(accessToken, expEventId);
+        } catch (error) {
+          console.error('Failed to delete listing expiration event (non-fatal):', error);
+        }
+        await supabaseServer.from('listings').update({ google_expiration_event_id: null }).eq('id', listingId);
+      }
+    } else {
+      const input: CalendarEventInput = {
+        summary: `Listing expires — ${listing.property_address}`,
+        description: `The listing agreement for ${listing.property_address} expires. From Relay TC.`,
+        dueDate: expiration as string,
+      };
+      try {
+        let done = false;
+        if (expEventId) {
+          try {
+            await updateCalendarEvent(accessToken, expEventId, input);
+            done = true;
+          } catch (error) {
+            if (!(error instanceof CalendarEventNotFoundError)) throw error;
+          }
+        }
+        if (!done) {
+          const id = await createCalendarEvent(accessToken, input);
+          await supabaseServer.from('listings').update({ google_expiration_event_id: id }).eq('id', listingId);
+        }
+      } catch (error) {
+        console.error('Failed to sync listing expiration (non-fatal):', error);
+      }
+    }
+
+    // Steps and extra dates share one routine: an item has an event when it is open, in the future-or-today and the listing is open.
+    const syncItems = async (
+      table: 'listing_tasks' | 'listing_dates',
+      rows: { id: string; title: string; due_date: string | null; google_event_id: string | null; active: boolean }[]
+    ) => {
+      for (const row of rows) {
+        const want = isOpen && row.active && Boolean(row.due_date);
+        if (!want) {
+          if (row.google_event_id) {
+            try {
+              await deleteCalendarEvent(accessToken, row.google_event_id);
+            } catch (error) {
+              console.error(`Failed to delete ${table} event ${row.id} (non-fatal):`, error);
+            }
+            await supabaseServer.from(table).update({ google_event_id: null }).eq('id', row.id);
+          }
+          continue;
+        }
+        const input: CalendarEventInput = {
+          summary: `${row.title} — ${label}`,
+          description: `Relay TC listing item for ${listing.property_address}.`,
+          dueDate: row.due_date as string,
+        };
+        try {
+          if (row.google_event_id) {
+            try {
+              await updateCalendarEvent(accessToken, row.google_event_id, input);
+              continue;
+            } catch (error) {
+              if (!(error instanceof CalendarEventNotFoundError)) throw error;
+            }
+          }
+          const id = await createCalendarEvent(accessToken, input);
+          await supabaseServer.from(table).update({ google_event_id: id }).eq('id', row.id);
+        } catch (error) {
+          console.error(`Failed to sync ${table} ${row.id} (non-fatal):`, error);
+        }
+      }
+    };
+
+    const [{ data: tasks }, { data: dates }] = await Promise.all([
+      supabaseServer.from('listing_tasks').select('id, name, due_date, completed, google_event_id').eq('listing_id', listingId),
+      supabaseServer.from('listing_dates').select('id, label, due_date, google_event_id').eq('listing_id', listingId),
+    ]);
+    await syncItems(
+      'listing_tasks',
+      (tasks || []).map((t) => ({ id: t.id as string, title: t.name as string, due_date: t.due_date as string | null, google_event_id: (t.google_event_id as string | null) ?? null, active: !t.completed }))
+    );
+    await syncItems(
+      'listing_dates',
+      (dates || []).map((d) => ({
+        id: d.id as string,
+        title: d.label as string,
+        due_date: d.due_date as string | null,
+        google_event_id: (d.google_event_id as string | null) ?? null,
+        active: (d.due_date as string) >= today, // past dates simply drop off
+      }))
+    );
+
+    await supabaseServer
+      .from('calendar_connections')
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq('tc_user_id', ownerId)
+      .eq('provider', 'google');
+  } catch (error) {
+    console.error('Listing calendar sync failed (non-fatal):', error);
+  }
+}
+
+export function queueListingCalendarSync(listingId: string): void {
+  try {
+    after(() => syncListingCalendar(listingId));
+  } catch {
+    void syncListingCalendar(listingId);
+  }
+}
+
+/** Deletes every Google event for a listing. Call BEFORE deleting the listing. */
+export async function removeListingCalendarEvents(listingId: string): Promise<void> {
+  try {
+    const { data: listing } = await supabaseServer
+      .from('listings')
+      .select('tc_user_id, google_expiration_event_id')
+      .eq('id', listingId)
+      .maybeSingle();
+    if (!listing) return;
+    const accessToken = await getAccessTokenFor(listing.tc_user_id as string);
+    if (!accessToken) return;
+    const ids: string[] = [];
+    if (listing.google_expiration_event_id) ids.push(listing.google_expiration_event_id as string);
+    const [{ data: tasks }, { data: dates }] = await Promise.all([
+      supabaseServer.from('listing_tasks').select('google_event_id').eq('listing_id', listingId).not('google_event_id', 'is', null),
+      supabaseServer.from('listing_dates').select('google_event_id').eq('listing_id', listingId).not('google_event_id', 'is', null),
+    ]);
+    for (const r of [...(tasks || []), ...(dates || [])]) ids.push(r.google_event_id as string);
+    for (const id of ids) {
+      try {
+        await deleteCalendarEvent(accessToken, id);
+      } catch (error) {
+        console.error('Failed to delete listing calendar event (non-fatal):', error);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to remove listing calendar events (non-fatal):', error);
+  }
+}
+
+/** Deletes one Google event belonging to a listing's owner (used when a step or date is deleted). */
+export async function removeListingEvent(listingId: string, eventId: string): Promise<void> {
+  try {
+    const { data: listing } = await supabaseServer.from('listings').select('tc_user_id').eq('id', listingId).maybeSingle();
+    if (!listing) return;
+    const accessToken = await getAccessTokenFor(listing.tc_user_id as string);
+    if (!accessToken) return;
+    await deleteCalendarEvent(accessToken, eventId);
+  } catch (error) {
+    console.error('Failed to delete listing calendar event (non-fatal):', error);
   }
 }

@@ -17,6 +17,18 @@ interface AgentTransaction {
   overdueCount: number;
 }
 
+interface AgentListing {
+  id: string;
+  propertyAddress: string;
+  status: string;
+  listPrice: number | null;
+  plannedListDate: string | null;
+  expirationDate: string | null;
+  openOffers: number;
+  showings: number;
+  tcLabel: string;
+}
+
 interface TcGroup {
   tcUserId: string;
   tcLabel: string;
@@ -95,6 +107,7 @@ export default function AgentHubPage() {
   const router = useRouter();
   const [transactions, setTransactions] = useState<AgentTransaction[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [listings, setListings] = useState<AgentListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [accepting, setAccepting] = useState<string | null>(null);
@@ -109,13 +122,20 @@ export default function AgentHubPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [txRes, invitesRes] = await Promise.all([
+        const [txRes, invitesRes, listingsRes] = await Promise.all([
           authFetch('/api/agent/transactions'),
           authFetch('/api/agent/invites'),
+          authFetch('/api/agent/listings').catch(() => null),
         ]);
         if (!txRes.ok) throw new Error('Failed to load your transactions');
         const txData = await txRes.json();
         setTransactions(Array.isArray(txData) ? txData : []);
+
+        // Listings shared by the TC (read-only). Non-fatal like the invites.
+        if (listingsRes && listingsRes.ok) {
+          const l = await listingsRes.json();
+          setListings(Array.isArray(l) ? l : []);
+        }
 
         // Non-fatal if this one fails -- the transactions list is the
         // part that matters most, and an agent can still open a deal
@@ -228,11 +248,42 @@ export default function AgentHubPage() {
           </div>
         )}
 
+        {listings.length > 0 && (
+          <div className="mb-8">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Your listings</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              {listings.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  onClick={() => router.push(`/agent/listings/${l.id}`)}
+                  className="text-left bg-slate-700/30 border border-slate-600 rounded-lg p-4 hover:bg-slate-600/30 transition"
+                >
+                  <p className="text-slate-100 font-semibold leading-snug break-words">{l.propertyAddress}</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {l.status.replace('_', ' ')}
+                    {l.listPrice ? ` · $${Number(l.listPrice).toLocaleString('en-US')}` : ''}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-2">
+                    {[
+                      l.openOffers > 0 ? `${l.openOffers} open offer${l.openOffers === 1 ? '' : 's'}` : '',
+                      `${l.showings} showing${l.showings === 1 ? '' : 's'}`,
+                      l.expirationDate ? `expires ${formatDisplayDate(l.expirationDate)}` : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <p className="text-slate-400 text-sm">Loading…</p>
         ) : error ? (
           <p className="text-red-400 text-sm">{error}</p>
-        ) : transactions.length === 0 ? (
+        ) : transactions.length === 0 && listings.length === 0 ? (
           <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 text-center">
             <p className="text-slate-300">You don&apos;t have access to any deals yet.</p>
             <p className="text-slate-500 text-sm mt-1">
@@ -241,7 +292,7 @@ export default function AgentHubPage() {
                 : "Once a transaction coordinator adds you to one, it'll show up here."}
             </p>
           </div>
-        ) : (
+        ) : transactions.length === 0 ? null : (
           <>
             {/* Your TCs -- most agents only ever see one card here. */}
             <div className="mb-8">

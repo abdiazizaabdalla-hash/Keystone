@@ -3,7 +3,8 @@ import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { autoAddContact } from '@/lib/contactsAuto';
-import { requireListingAccess } from '@/lib/listings';
+import { logListingActivity, requireListingAccess } from '@/lib/listings';
+import { queueListingCalendarSync } from '@/lib/calendarSync';
 import { CHILD_TABLE, MAX_PER_LISTING, cleanChild, isChildKind } from '@/lib/listingChildren';
 
 // POST /api/listings/:id/(tasks|offers|contacts|dates): add one.
@@ -31,6 +32,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const c = data as { name?: string | null; email?: string | null; phone?: string | null; role?: string | null };
       if (owner) await autoAddContact(owner, c);
     }
+    const row = data as Record<string, unknown>;
+    if (kind === 'offers') {
+      const price = row.offer_price ? ` for $${Number(row.offer_price).toLocaleString('en-US')}` : '';
+      await logListingActivity(id, user, `Offer received${row.buyer_name ? ` from ${row.buyer_name}` : ''}${price}`);
+    } else if (kind === 'showings') {
+      const label = row.kind === 'open_house' ? 'Open house' : row.kind === 'broker_tour' ? 'Broker tour' : 'Showing';
+      await logListingActivity(id, user, `${label} logged for ${row.showing_date}${row.visitor ? ` (${row.visitor})` : ''}`);
+    } else if (kind === 'dates') {
+      await logListingActivity(id, user, `Date added: ${row.label} on ${row.due_date}`);
+    }
+    if (kind === 'tasks' || kind === 'dates') queueListingCalendarSync(id);
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });

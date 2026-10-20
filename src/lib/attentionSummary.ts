@@ -15,6 +15,8 @@ import { supabaseServer } from './supabase';
 // which the old agent-based lookup never could.
 
 export interface AttentionDueItem {
+  /** Where the item lives when it isn't a deal (a listing). Deals leave this out. */
+  href?: string;
   taskId: string;
   taskName: string;
   transactionId: string;
@@ -73,7 +75,7 @@ const EMPTY: AttentionSummary = {
   byTc: [],
 };
 
-export async function computeAttentionSummary(tcUserIds: string[]): Promise<AttentionSummary> {
+async function computeDealAttention(tcUserIds: string[]): Promise<AttentionSummary> {
   if (tcUserIds.length === 0) return EMPTY;
 
   const { data: transactions, error: txError } = await supabaseServer
@@ -181,6 +183,88 @@ export async function computeAttentionSummary(tcUserIds: string[]): Promise<Atte
     // are useful lookahead but deliberately excluded from this count,
     // same split as the original mockup this was built from.
     totalNeedsAttention: overdue.length + dueToday.length + waitingOn.length,
+    byTc,
+  };
+}
+
+
+const OPEN_LISTING_STATUSES = ['preparing', 'active', 'under_offer'];
+
+/**
+ * Listings ride the same triage list as deals: unfinished checklist steps that are overdue, due
+ * today or due within 3 days, plus the listing's own dates (open house...) and its expiration
+ * date when they are today or coming up. Needs add-listings.sql; if the tables are missing it
+ * quietly contributes nothing.
+ */
+async function computeListingAttention(tcUserIds: string[]) {
+  const overdue: AttentionOverdueItem[] = [];
+  const dueToday: AttentionDueItem[] = [];
+  const dueSoon: AttentionDueSoonItem[] = [];
+  try {
+    const { data: listings, error } = await supabaseServer
+      .from('listings')
+      .select('id, property_address, tc_user_id, expiration_date')
+      .in('tc_user_id', tcUserIds)
+      .in('status', OPEN_LISTING_STATUSES)
+      .limit(1000);
+    if (error || !listings || listings.length === 0) return { overdue, dueToday, dueSoon };
+
+    const ids = listings.map((l) => l.id as string);
+    const byId = new Map(listings.map((l) => [l.id as string, l]));
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayMs = new Date(`${todayStr}T00:00:00Z`).getTime();
+    const dayDiff = (d: string) => Math.round((new Date(`${d}T00:00:00Z`).getTime() - todayMs) / 86400000);
+
+    const push = (listingId: string, key: string, name: string, due: string, allowOverdue: boolean) => {
+      const l = byId.get(listingId);
+      if (!l) return;
+      const base = {
+        href: `/dashboard/listings/${listingId}`,
+        taskId: key,
+        taskName: name,
+        transactionId: listingId,
+        label: `Listing · ${l.property_address as string}`,
+        tcUserId: l.tc_user_id as string,
+      };
+      const diff = dayDiff(due);
+      if (diff < 0) {
+        if (allowOverdue) overdue.push({ ...base, daysOverdue: -diff });
+      } else if (diff === 0) dueToday.push(base);
+      else if (diff <= 3) dueSoon.push({ ...base, dueInDays: diff });
+    };
+
+    const [{ data: tasks }, { data: dates }] = await Promise.all([
+      supabaseServer.from('listing_tasks').select('id, listing_id, name, due_date').in('listing_id', ids).eq('completed', false).not('due_date', 'is', null),
+      supabaseServer.from('listing_dates').select('id, listing_id, label, due_date').in('listing_id', ids).gte('due_date', todayStr),
+    ]);
+    for (const t of tasks || []) push(t.listing_id as string, `lt-${t.id}`, t.name as string, t.due_date as string, true);
+    for (const d of dates || []) push(d.listing_id as string, `ld-${d.id}`, d.label as string, d.due_date as string, false);
+    for (const l of listings) {
+      if (l.expiration_date) push(l.id as string, `lx-${l.id}`, 'Listing agreement expires', l.expiration_date as string, false);
+    }
+  } catch (error) {
+    console.error('Listing attention summary failed (ignored):', error);
+  }
+  return { overdue, dueToday, dueSoon };
+}
+
+export async function computeAttentionSummary(tcUserIds: string[]): Promise<AttentionSummary> {
+  const [deals, listings] = await Promise.all([computeDealAttention(tcUserIds), tcUserIds.length ? computeListingAttention(tcUserIds) : Promise.resolve(null)]);
+  if (!listings) return deals;
+  const overdue = [...deals.overdue, ...listings.overdue].sort((a, b) => b.daysOverdue - a.daysOverdue);
+  const dueToday = [...deals.dueToday, ...listings.dueToday];
+  const dueSoon = [...deals.dueSoon, ...listings.dueSoon].sort((a, b) => a.dueInDays - b.dueInDays);
+  const count = (items: { tcUserId: string }[], id: string) => items.filter((i) => i.tcUserId === id).length;
+  const byTc = tcUserIds.map((id) => {
+    const base = deals.byTc.find((b) => b.tcUserId === id) || { tcUserId: id, activeTransactions: 0, overdueCount: 0, dueTodayCount: 0, waitingOnCount: 0, closingSoonCount: 0 };
+    return { ...base, overdueCount: base.overdueCount + count(listings.overdue, id), dueTodayCount: base.dueTodayCount + count(listings.dueToday, id) };
+  });
+  return {
+    ...deals,
+    overdue,
+    dueToday,
+    dueSoon,
+    totalNeedsAttention: overdue.length + dueToday.length + deals.waitingOn.length,
     byTc,
   };
 }

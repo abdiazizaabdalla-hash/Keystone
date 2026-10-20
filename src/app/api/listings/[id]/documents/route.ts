@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { requireListingAccess } from '@/lib/listings';
+import { logListingActivity, requireListingAccess } from '@/lib/listings';
 import { LISTING_DOC_TYPES } from '@/lib/listingsShared';
 
 const BUCKET = 'transaction-documents';
@@ -89,6 +89,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await supabaseServer.storage.from(BUCKET).remove([storagePath]); // don't leave an orphaned file behind
       throw error;
     }
+    await logListingActivity(id, user, `Document uploaded: ${file.name.slice(0, 120)} (${documentType})`);
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     return fail(error, 'upload');

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getVisibleTcUserIds } from '@/lib/team';
+import { getAgentListingRows } from '@/lib/agentListings';
 
 // The public (token-authenticated) calendar feed behind the "subscribe" link
 // in Settings. Calendar apps fetch this URL on a schedule, with no login, so
@@ -142,6 +143,54 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
           description: `Checklist task for ${labelFor(task.transaction_id as string)}, from Relay TC.`,
         });
       }
+    }
+
+    // Listings: a TC gets steps, dates, the go-live day and expiration; an agent gets the dates and expiration
+    // of the listings shared with them.
+    try {
+      const { data: userData } = await supabaseServer.auth.admin.getUserById(userId);
+      const email = userData?.user?.email;
+      const { data: tcListings } = await supabaseServer
+        .from('listings')
+        .select('id, property_address, planned_list_date, expiration_date, status')
+        .in('tc_user_id', visibleTcIds.length ? visibleTcIds : [userId])
+        .in('status', ['preparing', 'active', 'under_offer'])
+        .limit(500);
+      const agentListings = (await getAgentListingRows(email)).filter((l) => ['preparing', 'active', 'under_offer'].includes(l.status as string));
+      type L = { id: string; property_address: string; planned_list_date: string | null; expiration_date: string | null };
+      const tcIds = new Set((tcListings || []).map((l) => l.id as string));
+      const all: L[] = [...((tcListings || []) as L[]), ...(agentListings as L[]).filter((l) => !tcIds.has(l.id))];
+      const addr = new Map(all.map((l) => [l.id, l.property_address]));
+      for (const l of all) {
+        if (l.planned_list_date && l.planned_list_date >= since) {
+          events.push({ uid: `listing-go-${l.id}@relaytc.com`, date: l.planned_list_date, summary: `List date — ${l.property_address}`, description: `Planned go-live for the listing at ${l.property_address}.` });
+        }
+        if (l.expiration_date && l.expiration_date >= since) {
+          events.push({ uid: `listing-exp-${l.id}@relaytc.com`, date: l.expiration_date, summary: `Listing expires — ${l.property_address}`, description: `The listing agreement for ${l.property_address} expires.` });
+        }
+      }
+      const allIds = all.map((l) => l.id);
+      if (allIds.length) {
+        const { data: ld } = await supabaseServer.from('listing_dates').select('id, listing_id, label, due_date').in('listing_id', allIds).gte('due_date', since);
+        for (const d of ld || []) {
+          events.push({ uid: `listing-date-${d.id}@relaytc.com`, date: d.due_date as string, summary: `${d.label} — ${addr.get(d.listing_id as string)}`, description: `Listing date for ${addr.get(d.listing_id as string)}, from Relay TC.` });
+        }
+      }
+      const tcIdList = [...tcIds];
+      if (tcIdList.length) {
+        const { data: lt } = await supabaseServer
+          .from('listing_tasks')
+          .select('id, listing_id, name, due_date')
+          .in('listing_id', tcIdList)
+          .eq('completed', false)
+          .not('due_date', 'is', null)
+          .gte('due_date', since);
+        for (const t of lt || []) {
+          events.push({ uid: `listing-task-${t.id}@relaytc.com`, date: t.due_date as string, summary: `${t.name} — Listing · ${addr.get(t.listing_id as string)}`, description: `Listing checklist step for ${addr.get(t.listing_id as string)}, from Relay TC.` });
+        }
+      }
+    } catch (error) {
+      console.error('Listings in calendar feed failed (ignored):', error);
     }
 
     const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');

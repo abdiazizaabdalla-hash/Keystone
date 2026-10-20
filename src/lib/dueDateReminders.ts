@@ -3,6 +3,10 @@ import { escapeHtml } from '@/lib/escapeHtml';
 
 export interface ReminderTransactionGroup {
   transactionId: string;
+  /** Link path for items that aren't deals (listings). Deals leave it out. */
+  href?: string;
+  /** Plain heads-up lines (no overdue/due-today wording), e.g. "listing expires in 30 days". */
+  notes?: string[];
   label: string;
   overdueTasks: string[];
   dueTodayTasks: string[];
@@ -53,6 +57,7 @@ export async function sendDueDateReminderDigest(params: {
   const totalDueIn1Day = groups.reduce((sum, g) => sum + g.dueIn1DayTasks.length, 0);
   const totalDueIn3Days = groups.reduce((sum, g) => sum + g.dueIn3DaysTasks.length, 0);
   const totalDueIn7Days = groups.reduce((sum, g) => sum + g.dueIn7DaysTasks.length, 0);
+  const totalNotes = groups.reduce((sum, g) => sum + (g.notes?.length || 0), 0);
 
   const subjectParts: string[] = [];
   if (totalOverdue > 0) subjectParts.push(`${totalOverdue} overdue`);
@@ -60,6 +65,7 @@ export async function sendDueDateReminderDigest(params: {
   if (totalDueIn1Day > 0) subjectParts.push(`${totalDueIn1Day} due tomorrow`);
   if (totalDueIn3Days > 0) subjectParts.push(`${totalDueIn3Days} due in 3 days`);
   if (totalDueIn7Days > 0) subjectParts.push(`${totalDueIn7Days} due in 7 days`);
+  if (totalNotes > 0) subjectParts.push(`${totalNotes} heads-up${totalNotes === 1 ? '' : 's'}`);
   const subject = `${subjectParts.join(', ')} — Relay TC checklist reminder`;
 
   const rows = groups
@@ -81,12 +87,13 @@ export async function sendDueDateReminderDigest(params: {
         ...g.dueIn7DaysTasks.map(
           (t) => `<li style="color:#1e3a8a;">${escapeHtml(t)} <span style="font-weight:600;">(due in 7 days)</span></li>`
         ),
+        ...(g.notes || []).map((t) => `<li style="color:#1e3a8a;">${escapeHtml(t)}</li>`),
       ];
       if (items.length === 0) return '';
       return `
         <div style="margin-bottom:16px;">
           <p style="margin:0 0 4px;">
-            <a href="${appUrl}/dashboard/transactions/${g.transactionId}" style="color:#2563eb;font-weight:600;text-decoration:none;">${escapeHtml(g.label)}</a>
+            <a href="${appUrl}${g.href ?? `/dashboard/transactions/${g.transactionId}`}" style="color:#2563eb;font-weight:600;text-decoration:none;">${escapeHtml(g.label)}</a>
           </p>
           <ul style="margin:4px 0 0;padding-left:20px;">${items.join('')}</ul>
         </div>`;
@@ -95,7 +102,7 @@ export async function sendDueDateReminderDigest(params: {
 
   const html = wrapper(
     'Checklist deadlines need your attention',
-    `<p>Here's what needs attention across your active deals:</p>
+    `<p>Here's what needs attention across your active deals and listings:</p>
      ${rows}
      <p><a href="${appUrl}/dashboard/transactions" style="color: #2563eb;">View all transactions</a></p>`
   );
