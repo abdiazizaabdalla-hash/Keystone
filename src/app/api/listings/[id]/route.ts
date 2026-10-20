@@ -222,10 +222,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { data: docs } = await supabaseServer.from('listing_documents').select('storage_path').eq('listing_id', id);
     // Offer emails held for review keep their files in storage; collect them before the rows cascade away.
     const { data: held } = await supabaseServer.from('listing_inbound_offers').select('attachments').eq('listing_id', id);
+    // Signing requests go with the listing; collect their stored PDFs (partly-signed copies included) first.
+    const { data: signingFiles } = await supabaseServer.from('signing_requests').select('signed_storage_path').eq('listing_id', id);
     const { error } = await supabaseServer.from('listings').delete().eq('id', id);
     if (error) throw error;
     for (const h of held || []) await removeInboundFiles(h.attachments);
-    const paths = [...(docs || []).map((d) => d.storage_path as string).filter(Boolean), ...offerPathsToRemove];
+    const paths = [
+      ...(docs || []).map((d) => d.storage_path as string).filter(Boolean),
+      ...(signingFiles || []).map((r) => r.signed_storage_path as string).filter(Boolean),
+      ...offerPathsToRemove,
+    ];
     if (paths.length > 0) await supabaseServer.storage.from('transaction-documents').remove(paths).catch(() => undefined);
     await logAudit(request, user, 'listing.delete', { entityType: 'listing', entityId: id });
     return NextResponse.json({ success: true });

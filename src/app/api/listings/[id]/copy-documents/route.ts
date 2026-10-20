@@ -46,6 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         file_size: d.file_size,
         uploaded_by: user.id,
         requires_signature: false,
+        is_signed: d.is_signed === true,
       });
       if (insertError) {
         await supabaseServer.storage.from(BUCKET).remove([dest]);

@@ -34,6 +34,26 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
+// Where the document lives: a deal (transactions) or a listing. Gives the address/file number for emails.
+async function signingContext(r: { transaction_id?: string | null; listing_id?: string | null }) {
+  if (r.listing_id) {
+    const { data } = await supabaseServer.from('listings').select('property_address').eq('id', r.listing_id).maybeSingle();
+    return { address: (data?.property_address as string | undefined) || 'the property', fileNumber: '' };
+  }
+  const { data } = await supabaseServer.from('transactions').select('property_address, file_number').eq('id', r.transaction_id as string).maybeSingle();
+  return { address: (data?.property_address as string | undefined) || 'the property', fileNumber: (data?.file_number as string | undefined) || '' };
+}
+
+// Listing history entry for a signing event (the signer is not a Relay user, so the signer's name is the actor).
+async function logListingSigning(listingId: string | null | undefined, signerName: string, summary: string) {
+  if (!listingId) return;
+  try {
+    await supabaseServer.from('listing_activity').insert({ listing_id: listingId, actor_label: signerName.slice(0, 200), summary: summary.slice(0, 500) });
+  } catch (error) {
+    console.error('Listing signing activity failed (ignored):', error);
+  }
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
@@ -196,6 +216,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           .neq('id', signingRequest.id);
       }
 
+      await logListingSigning(signingRequest.listing_id, signingRequest.signer_name, `Declined to sign ${signingRequest.source_file_name}`);
+
       try {
         const { data: tcUserData } = await supabaseServer.auth.admin.getUserById(signingRequest.requested_by);
         const tcEmail = tcUserData?.user?.email;
@@ -296,7 +318,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     const signedFileName = signingRequest.source_file_name.replace(/\.pdf$/i, '') + ' (Signed).pdf';
-    const signedStoragePath = `${signingRequest.transaction_id}/${crypto.randomUUID()}-${signedFileName.replace(/[^a-zA-Z0-9._() -]/g, '_')}`;
+    const signedStoragePath = `${signingRequest.listing_id ? `listings/${signingRequest.listing_id}` : signingRequest.transaction_id}/${crypto.randomUUID()}-${signedFileName.replace(/[^a-zA-Z0-9._() -]/g, '_')}`;
 
     const { error: uploadError } = await supabaseServer.storage
       .from(BUCKET)
@@ -319,23 +341,70 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (sourceDoc?.category) category = sourceDoc.category;
       if (sourceDoc?.document_type) documentType = sourceDoc.document_type;
     }
+    let listingDocType = 'Other Contract Documents';
+    if (isFinalSigner && signingRequest.listing_document_id) {
+      const { data: sourceListingDoc } = await supabaseServer
+        .from('listing_documents')
+        .select('document_type')
+        .eq('id', signingRequest.listing_document_id)
+        .maybeSingle();
+      if (sourceListingDoc?.document_type) listingDocType = sourceListingDoc.document_type as string;
+    }
 
     // Only the final signer's output becomes a Document -- earlier
     // signers' partially-signed PDFs are just handed to the next signer.
-    const { data: signedDocRow, error: docInsertError } = isFinalSigner ? await supabaseServer
-      .from('documents')
-      .insert({
-        transaction_id: signingRequest.transaction_id,
-        category,
-        document_type: documentType,
-        file_name: signedFileName,
-        storage_path: signedStoragePath,
-        content_type: 'application/pdf',
-        file_size: signedPdfBytes.byteLength,
-        is_signed: true,
-      })
-      .select()
-      .single() : { data: null, error: null };
+    let signedDocRow: { id: string } | null = null;
+    let docInsertError: unknown = null;
+    if (isFinalSigner && signingRequest.listing_id) {
+      let result = await supabaseServer
+        .from('listing_documents')
+        .insert({
+          listing_id: signingRequest.listing_id,
+          file_name: signedFileName,
+          storage_path: signedStoragePath,
+          content_type: 'application/pdf',
+          file_size: signedPdfBytes.byteLength,
+          document_type: listingDocType,
+          uploaded_by: signingRequest.requested_by,
+          is_signed: true,
+        })
+        .select('id')
+        .single();
+      if (result.error && /is_signed/i.test(result.error.message || '')) {
+        result = await supabaseServer
+          .from('listing_documents')
+          .insert({
+            listing_id: signingRequest.listing_id,
+            file_name: signedFileName,
+            storage_path: signedStoragePath,
+            content_type: 'application/pdf',
+            file_size: signedPdfBytes.byteLength,
+            document_type: listingDocType,
+            uploaded_by: signingRequest.requested_by,
+          })
+          .select('id')
+          .single();
+      }
+      signedDocRow = result.data as { id: string } | null;
+      docInsertError = result.error;
+    } else if (isFinalSigner) {
+      const result = await supabaseServer
+        .from('documents')
+        .insert({
+          transaction_id: signingRequest.transaction_id,
+          category,
+          document_type: documentType,
+          file_name: signedFileName,
+          storage_path: signedStoragePath,
+          content_type: 'application/pdf',
+          file_size: signedPdfBytes.byteLength,
+          is_signed: true,
+        })
+        .select()
+        .single();
+      signedDocRow = result.data as { id: string } | null;
+      docInsertError = result.error;
+    }
 
     if (docInsertError) {
       console.error('Signed PDF stored, but failed to add it to Documents (non-fatal):', docInsertError);
@@ -350,7 +419,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         signer_ip: signerIp,
         signer_user_agent: signerUserAgent,
         signed_storage_path: signedStoragePath,
-        signed_document_id: signedDocRow?.id || null,
+        ...(signingRequest.listing_id
+          ? { signed_listing_document_id: signedDocRow?.id || null }
+          : { signed_document_id: signedDocRow?.id || null }),
         updated_at: signedAtIso,
       })
       .eq('id', signingRequest.id)
@@ -363,21 +434,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // pending -> signed wins. The loser removes the copy it just stored
     // so the transaction doesn't end up with duplicate signed documents.
     if (!signedRows || signedRows.length === 0) {
-      if (signedDocRow?.id) await supabaseServer.from('documents').delete().eq('id', signedDocRow.id);
+      if (signedDocRow?.id) await supabaseServer.from(signingRequest.listing_id ? 'listing_documents' : 'documents').delete().eq('id', signedDocRow.id);
       await supabaseServer.storage.from(BUCKET).remove([signedStoragePath]);
       return NextResponse.json({ error: 'This document has already been signed' }, { status: 409 });
     }
+
+    await logListingSigning(signingRequest.listing_id, signingRequest.signer_name, `${isFinalSigner ? 'Signed' : 'Signed (more signers to go)'}: ${signingRequest.source_file_name}`);
 
     // Not the last signer: hand the partially-signed PDF to the next one
     // and tell them it's their turn. The link was created with the
     // original request; only now does it start working.
     if (nextRequest) {
       try {
-        const { data: txRow } = await supabaseServer
-          .from('transactions')
-          .select('property_address, file_number')
-          .eq('id', signingRequest.transaction_id)
-          .maybeSingle();
+        const ctx = await signingContext(signingRequest);
 
         const { error: activateError } = await supabaseServer
           .from('signing_requests')
@@ -396,8 +465,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           to: nextRequest.signer_email,
           signerName: nextRequest.signer_name,
           fileName: signingRequest.source_file_name,
-          propertyAddress: txRow?.property_address || 'the property',
-          fileNumber: txRow?.file_number || '',
+          propertyAddress: ctx.address,
+          fileNumber: ctx.fileNumber,
           signUrl: `${new URL(request.url).origin}/sign/${nextRequest.token}`,
           previousSignerName: signingRequest.signer_name,
         });
@@ -415,11 +484,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const copyRecipients = parseRecipients(signingRequest.distribute_to).recipients;
     if (copyRecipients.length > 0) {
       try {
-        const { data: txRow } = await supabaseServer
-          .from('transactions')
-          .select('property_address, file_number')
-          .eq('id', signingRequest.transaction_id)
-          .maybeSingle();
+        const ctx = await signingContext(signingRequest);
         const { data: tcUser } = await supabaseServer.auth.admin.getUserById(signingRequest.requested_by);
 
         const { sent, failed } = await sendSignedCopies({
@@ -431,8 +496,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           signedFileName,
           fields: {
             document: signingRequest.source_file_name.replace(/\.pdf$/i, ''),
-            property: txRow?.property_address || 'the property',
-            file_number: txRow?.file_number || '',
+            property: ctx.address,
+            file_number: ctx.fileNumber,
             signer: signingRequest.signer_name,
             signed_date: new Date(signedAtIso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Chicago' }),
           },

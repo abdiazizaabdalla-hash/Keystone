@@ -17,6 +17,7 @@ import OfferHistory from '@/components/OfferHistory';
 import ListingThread from '@/components/ListingThread';
 import SellerUpdateModal from '@/components/SellerUpdateModal';
 import ListingReadinessCard from '@/components/ListingReadinessCard';
+import ListingSignModal, { type ListingSigningRequest } from '@/components/ListingSignModal';
 import { computeReadiness } from '@/lib/listingReadiness';
 import {
   FINANCING_TYPES,
@@ -109,6 +110,7 @@ interface ListingDoc {
   file_size: number | null;
   created_at: string;
   url: string | null;
+  is_signed?: boolean | null;
 }
 
 const cardCls = 'bg-slate-800/50 border border-slate-700 rounded-lg p-5';
@@ -149,6 +151,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
   // Documents
   const [docs, setDocs] = useState<ListingDoc[]>([]);
+  const [signReqs, setSignReqs] = useState<ListingSigningRequest[]>([]);
+  const [signingDoc, setSigningDoc] = useState<ListingDoc | null>(null);
   const [docType, setDocType] = useState('General');
   const [uploading, setUploading] = useState(false);
   const [docError, setDocError] = useState('');
@@ -244,6 +248,12 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       if (Array.isArray(d)) setDocs(d);
     } catch {
       // The table may not exist yet on a fresh setup; the card then simply stays empty.
+    }
+    try {
+      const r = await call('GET', `/api/signing-requests?listingId=${id}`);
+      if (Array.isArray(r)) setSignReqs(r);
+    } catch {
+      // Signing may not be set up yet (add-listing-esign.sql); the documents then show no signature status.
     }
   }, [id, call]);
 
@@ -423,6 +433,39 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const pct = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
   const today = todayIso();
   const daysToGoLive = listing.planned_list_date ? Math.round((Date.parse(`${listing.planned_list_date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000) : null;
+
+  // Where a document stands in e-signing: the newest request for it (a multi-signer request is several rows).
+  const isPdfDoc = (d: ListingDoc) => d.file_name.toLowerCase().endsWith('.pdf');
+  const signStatusFor = (d: ListingDoc): { text: string; tone: string; voidId?: string } | null => {
+    if (d.is_signed) return { text: '✓ Signed', tone: 'text-green-300' };
+    const mine = signReqs.filter((r) => r.listing_document_id === d.id);
+    if (mine.length === 0) return null;
+    const newest = mine[0]; // the list is newest first
+    const group = newest.group_id ? mine.filter((r) => r.group_id === newest.group_id) : [newest];
+    const ordered = [...group].sort((a, b) => (a.signing_order || 1) - (b.signing_order || 1));
+    const pending = ordered.filter((r) => r.status === 'pending');
+    const signedCount = ordered.filter((r) => r.status === 'signed').length;
+    if (pending.length > 0) {
+      const next = pending[0];
+      return {
+        text: ordered.length > 1 ? `Awaiting signature · signed ${signedCount} of ${ordered.length} · waiting on ${next.signer_name}` : `Awaiting signature from ${next.signer_name}`,
+        tone: 'text-blue-300',
+        voidId: next.id,
+      };
+    }
+    if (ordered.some((r) => r.status === 'declined')) return { text: 'Signer declined', tone: 'text-amber-300' };
+    if (ordered.some((r) => r.status === 'voided')) return { text: 'Signature request voided', tone: 'text-slate-500' };
+    return null;
+  };
+  const voidSigning = async (requestId: string) => {
+    if (!confirm('Void this signature request? The link will stop working and you can send a new one.')) return;
+    try {
+      await call('PATCH', `/api/signing-requests/${requestId}`, { action: 'void' });
+      await loadDocs();
+    } catch (err) {
+      setDocError(err instanceof Error ? err.message : 'Could not void the request');
+    }
+  };
 
   const saveDetails = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1164,11 +1207,34 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                             ) : (
                               <span className="text-slate-300 break-all">{d.file_name}</span>
                             )}
+                            {(() => {
+                              const status = signStatusFor(d);
+                              if (!status) return null;
+                              return (
+                                <p className={`text-xs mt-0.5 ${status.tone}`}>
+                                  {status.text}
+                                  {status.voidId && (
+                                    <button type="button" onClick={() => voidSigning(status.voidId as string)} className="ml-2 text-slate-400 hover:text-red-300 underline">
+                                      Void
+                                    </button>
+                                  )}
+                                </p>
+                              );
+                            })()}
                             <p className="text-xs text-slate-500">
                               {d.file_size ? (d.file_size / 1024 / 1024 >= 1 ? `${(d.file_size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(d.file_size / 1024))} KB`) : ''}
                             </p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
+                            {isPdfDoc(d) && !d.is_signed && !signStatusFor(d)?.voidId && (
+                              <button
+                                type="button"
+                                onClick={() => setSigningDoc(d)}
+                                className="text-xs px-2 py-1 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition"
+                              >
+                                Request signature
+                              </button>
+                            )}
                             <MoveMenu
                               onMove={(t) => void moveDoc(d.id, t)}
                               label={`Move ${d.file_name} to another area`}
@@ -1358,6 +1424,20 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           </button>
         </div>
       </div>
+
+      {signingDoc && (
+        <ListingSignModal
+          doc={{ id: signingDoc.id, file_name: signingDoc.file_name, url: signingDoc.url }}
+          seller={{ name: listing.seller_name, email: listing.seller_email }}
+          people={emailContacts}
+          onClose={() => setSigningDoc(null)}
+          onSent={async () => {
+            setSigningDoc(null);
+            await loadDocs();
+            await act(async () => undefined, 'Sent for signature.');
+          }}
+        />
+      )}
 
       {sellerUpdate && (
         <SellerUpdateModal

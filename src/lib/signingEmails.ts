@@ -31,7 +31,7 @@ export async function sendSigningRequestEmail(input: {
       <div style="font-family: Georgia, serif; color: #1a1a1a; max-width: 560px; margin: 0 auto;">
         <p>Hi ${escapeHtml(first)},</p>
         ${turnLine}
-        <p>You've been asked to sign <strong>${escapeHtml(input.fileName)}</strong> for ${escapeHtml(input.propertyAddress)} (file #${escapeHtml(input.fileNumber)}).</p>
+        <p>You've been asked to sign <strong>${escapeHtml(input.fileName)}</strong> for ${escapeHtml(input.propertyAddress)}${input.fileNumber ? ` (file #${escapeHtml(input.fileNumber)})` : ''}.</p>
         <p><a href="${input.signUrl}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px;">Review &amp; Sign</a></p>
         ${positionLine}
         <p style="font-size: 13px; color: #666;">Or paste this link into your browser: ${input.signUrl}</p>

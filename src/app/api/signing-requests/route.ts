@@ -9,6 +9,7 @@ import { sendSigningRequestEmail } from '@/lib/signingEmails';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
 import { parseRecipients } from '@/lib/signedCopies';
+import { logListingActivity, requireListingAccess } from '@/lib/listings';
 
 const BUCKET = 'transaction-documents';
 // Signing links used to never expire at all -- found during the 2026-09
@@ -24,6 +25,23 @@ export async function GET(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
     const transactionId = request.nextUrl.searchParams.get('transactionId');
+    const listingId = request.nextUrl.searchParams.get('listingId');
+
+    // A listing's signature requests (same access rule as the listing itself).
+    if (listingId && !transactionId) {
+      await requireListingAccess(request, listingId);
+      const { data: listingRows, error: listingError } = await supabaseServer
+        .from('signing_requests')
+        .select('*')
+        .eq('listing_id', listingId)
+        .order('created_at', { ascending: false });
+      if (listingError) {
+        // add-listing-esign.sql not run yet: there can be no listing requests.
+        if (/listing_id/i.test(listingError.message || '')) return NextResponse.json([]);
+        throw listingError;
+      }
+      return NextResponse.json((listingRows || []).map(toSafeRequest));
+    }
 
     if (!transactionId) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
@@ -84,6 +102,8 @@ function toSafeRequest(r: any) {
   return {
         id: r.id,
         document_id: r.document_id,
+        listing_document_id: r.listing_document_id ?? null,
+        signed_listing_document_id: r.signed_listing_document_id ?? null,
         signer_name: r.signer_name,
         signer_email: r.signer_email,
         source_file_name: r.source_file_name,
@@ -116,9 +136,10 @@ export async function POST(request: NextRequest) {
     await assertTrialActive(user);
 
     const body = await request.json();
-    const { documentId, signers: rawSigners, signerName, signerEmail, sendCopyTo, copySubject, copyMessage, fields: rawFields } = body;
+    const { documentId, listingDocumentId, signers: rawSigners, signerName, signerEmail, sendCopyTo, copySubject, copyMessage, fields: rawFields } = body;
 
-    if (!documentId || typeof documentId !== 'string') {
+    const isListingDoc = typeof listingDocumentId === 'string' && listingDocumentId.length > 0;
+    if (!isListingDoc && (!documentId || typeof documentId !== 'string')) {
       return NextResponse.json({ error: 'documentId is required' }, { status: 400 });
     }
     // One or more signers, in signing order. The old single-signer shape
@@ -156,46 +177,80 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email message must be 3000 characters or fewer' }, { status: 400 });
     }
 
-    const { data: document, error: docError } = await supabaseServer
-      .from('documents')
-      .select('id, transaction_id, file_name, storage_path, content_type')
-      .eq('id', documentId)
-      .single();
+    // The document being signed lives on a deal (documents) or a listing (listing_documents).
+    let document: { id: string; storage_path: string; file_name: string; content_type: string | null };
+    let transaction: { id: string | null; property_address: string; file_number: string };
+    let listingId: string | null = null;
 
-    if (docError || !document) {
-      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
-    }
-
-    const looksLikePdf =
-      document.content_type === 'application/pdf' || document.file_name.toLowerCase().endsWith('.pdf');
-    if (!looksLikePdf) {
-      return NextResponse.json({ error: 'Only PDF documents can be sent for signature' }, { status: 400 });
-    }
-
-    const { data: transaction, error: txError } = await supabaseServer
-      .from('transactions')
-      .select('id, agent_id, file_number, property_address')
-      .eq('id', document.transaction_id)
-      .single();
-
-    if (txError || !transaction) {
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
-    }
-
-    if (!isAdmin) {
-      const { data: agent } = await supabaseServer
-        .from('agents')
-        .select('id')
-        .eq('id', transaction.agent_id)
-        .eq('tc_user_id', user.id)
-        .single();
-      if (!agent) {
-        return NextResponse.json(
-          { error: 'You do not have permission to request a signature for this document' },
-          { status: 403 }
-        );
+    if (isListingDoc) {
+      const { data: listingDoc } = await supabaseServer
+        .from('listing_documents')
+        .select('id, listing_id, file_name, storage_path, content_type')
+        .eq('id', listingDocumentId)
+        .maybeSingle();
+      if (!listingDoc) {
+        return NextResponse.json({ error: 'Document not found' }, { status: 404 });
       }
+      // Same access rule as every other listing change (TCs on the listing's team; never agents).
+      const access = await requireListingAccess(request, listingDoc.listing_id as string);
+      listingId = listingDoc.listing_id as string;
+      document = {
+        id: listingDoc.id as string,
+        storage_path: listingDoc.storage_path as string,
+        file_name: listingDoc.file_name as string,
+        content_type: (listingDoc.content_type as string | null) ?? null,
+      };
+      transaction = { id: null, property_address: access.listing.property_address as string, file_number: '' };
+      if (!(document.content_type === 'application/pdf' || document.file_name.toLowerCase().endsWith('.pdf'))) {
+        return NextResponse.json({ error: 'Only PDF documents can be sent for signature' }, { status: 400 });
+      }
+    } else {
+      const { data: dealDoc, error: docError } = await supabaseServer
+        .from('documents')
+        .select('id, transaction_id, file_name, storage_path, content_type')
+        .eq('id', documentId)
+        .single();
+
+      if (docError || !dealDoc) {
+        return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+      }
+
+      const looksLikePdf =
+        dealDoc.content_type === 'application/pdf' || dealDoc.file_name.toLowerCase().endsWith('.pdf');
+      if (!looksLikePdf) {
+        return NextResponse.json({ error: 'Only PDF documents can be sent for signature' }, { status: 400 });
+      }
+
+      const { data: dealTx, error: txError } = await supabaseServer
+        .from('transactions')
+        .select('id, agent_id, file_number, property_address')
+        .eq('id', dealDoc.transaction_id)
+        .single();
+
+      if (txError || !dealTx) {
+        return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+      }
+
+      if (!isAdmin) {
+        const { data: agent } = await supabaseServer
+          .from('agents')
+          .select('id')
+          .eq('id', dealTx.agent_id)
+          .eq('tc_user_id', user.id)
+          .single();
+        if (!agent) {
+          return NextResponse.json(
+            { error: 'You do not have permission to request a signature for this document' },
+            { status: 403 }
+          );
+        }
+      }
+      document = dealDoc;
+      transaction = { id: dealTx.id as string, property_address: dealTx.property_address as string, file_number: dealTx.file_number as string };
     }
+    const target = listingId
+      ? { listing_id: listingId, listing_document_id: document.id }
+      : { transaction_id: transaction.id, document_id: document.id };
 
     const { data: fileBlob, error: downloadError } = await supabaseServer.storage
       .from(BUCKET)
@@ -272,8 +327,7 @@ export async function POST(request: NextRequest) {
       const spotsForSigner = placedFields.filter((f) => f.signer === i);
       const isLast = i === signers.length - 1;
       return {
-        transaction_id: transaction.id,
-        document_id: document.id,
+        ...target,
         requested_by: user.id,
         signer_name: signer.name,
         signer_email: signer.email,
@@ -334,6 +388,13 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+      if (listingId && /listing_id|listing_document_id|transaction_id/i.test(message)) {
+        console.error('Signing request insert failed -- add-listing-esign.sql probably not run:', insertError);
+        return NextResponse.json(
+          { error: 'Signing listing documents is not set up yet. Run add-listing-esign.sql in the Supabase SQL editor, then try again.' },
+          { status: 500 }
+        );
+      }
       console.error('Signing request insert failed:', insertError);
       throw insertError || new Error('Signing request insert returned no rows');
     }
@@ -362,6 +423,7 @@ export async function POST(request: NextRequest) {
       console.error('Failed to email signing request (non-fatal):', emailError);
     }
 
+    if (listingId) await logListingActivity(listingId, user, `Sent for signature: ${document.file_name} (${signers.length === 1 ? signers[0].name : `${signers.length} signers`})`);
     await logAudit(request, user, 'signing.request', { entityType: 'signing_request', entityId: signingRequest.id, metadata: { signerEmail: signers[0].email, signers: signers.length, copyRecipients: copyRecipients.recipients.length, placedFields: placedFields.length } });
     return NextResponse.json({ ...toSafeRequest(signingRequest), signUrl, requests: orderedRows.map(toSafeRequest) }, { status: 201 });
   } catch (error) {

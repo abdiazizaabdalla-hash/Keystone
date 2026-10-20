@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { logListingActivity, requireListingAccess } from '@/lib/listings';
 
 // PATCH /api/signing-requests/[id] -- lets the TC void a signing request
 // they sent, as long as it's still pending. Added 2026-09: previously
@@ -33,25 +34,30 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Signing request not found' }, { status: 404 });
     }
 
-    const { data: transaction } = await supabaseServer
-      .from('transactions')
-      .select('id, agent_id')
-      .eq('id', signingRequest.transaction_id)
-      .single();
-
-    if (!transaction) {
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
-    }
-
-    if (!isAdmin) {
-      const { data: agent } = await supabaseServer
-        .from('agents')
-        .select('id')
-        .eq('id', transaction.agent_id)
-        .eq('tc_user_id', user.id)
+    if (signingRequest.listing_id) {
+      // A listing's request: same access rule as the listing itself (TCs on its team, never agents).
+      await requireListingAccess(request, signingRequest.listing_id as string);
+    } else {
+      const { data: transaction } = await supabaseServer
+        .from('transactions')
+        .select('id, agent_id')
+        .eq('id', signingRequest.transaction_id)
         .single();
-      if (!agent) {
-        return NextResponse.json({ error: 'You do not have permission to void this request' }, { status: 403 });
+
+      if (!transaction) {
+        return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
+      }
+
+      if (!isAdmin) {
+        const { data: agent } = await supabaseServer
+          .from('agents')
+          .select('id')
+          .eq('id', transaction.agent_id)
+          .eq('tc_user_id', user.id)
+          .single();
+        if (!agent) {
+          return NextResponse.json({ error: 'You do not have permission to void this request' }, { status: 403 });
+        }
       }
     }
 
@@ -80,6 +86,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .update({ status: 'voided', voided_at: voidedAtIso, updated_at: voidedAtIso })
         .eq('group_id', signingRequest.group_id)
         .eq('status', 'pending');
+    }
+
+    if (signingRequest.listing_id) {
+      await logListingActivity(signingRequest.listing_id as string, user, `Signature request voided: ${signingRequest.source_file_name}`);
     }
 
     return NextResponse.json(updated);
