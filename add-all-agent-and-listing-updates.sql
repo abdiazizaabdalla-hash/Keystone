@@ -94,4 +94,8 @@ grant select, insert, update, delete on table public.direct_messages to service_
 -- Safe to run more than once. Until it is run, agents can still see contacts but cannot add or remove any.
 alter table public.listing_contacts add column if not exists added_by_agent boolean not null default false;
 
+-- ===== add-agent-notice-seen.sql =====
+alter table public.transaction_agents add column if not exists notice_seen boolean not null default true;
+alter table public.transaction_agents alter column notice_seen set default false;
+
 notify pgrst, 'reload schema';

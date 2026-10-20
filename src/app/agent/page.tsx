@@ -9,9 +9,22 @@ import AgentCalendarPrompt from '@/components/AgentCalendarPrompt';
 import AgentListingCard, { type AgentListingSummary } from '@/components/AgentListingCard';
 import type { ListingStatus } from '@/lib/listingsShared';
 
-const NOTICE_DAYS = 14;
-const DISMISSED_KEY = 'agent_dismissed_notices';
-const isRecent = (iso: string) => Date.now() - new Date(iso).getTime() < NOTICE_DAYS * 86400000;
+const SEEN_KEY = 'agent_seen_notices';
+function readSeenHere(): string[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SEEN_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+function writeSeenHere(ids: string[]) {
+  try {
+    window.localStorage.setItem(SEEN_KEY, JSON.stringify([...new Set(ids)].slice(-200)));
+  } catch {
+    // Not remembered on this device; the server flag still covers it.
+  }
+}
 
 const LISTING_ORDER: ListingStatus[] = ['active', 'under_offer', 'preparing', 'converted', 'expired', 'withdrawn'];
 
@@ -25,6 +38,7 @@ interface AgentTransaction {
   nextDueDate: string | null;
   overdueCount: number;
   addedAt?: string | null;
+  isNew?: boolean;
   fromListingId?: string | null;
 }
 
@@ -109,6 +123,13 @@ export default function AgentHubPage() {
   // through a useCallback dependency.
   const [reloadCount, setReloadCount] = useState(0);
 
+  // "What's new": a deal that just reached this portal (most importantly a listing that became a transaction) is announced
+  // once. It stays on screen for this visit, is marked as seen, and is gone the next time the dashboard opens.
+  const [noticeIds, setNoticeIds] = useState<string[]>([]);
+  const [hiddenNotices, setHiddenNotices] = useState<string[]>([]);
+  const notices = transactions.filter((t) => noticeIds.includes(t.id) && !hiddenNotices.includes(t.id));
+
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -120,6 +141,15 @@ export default function AgentHubPage() {
         if (!txRes.ok) throw new Error('Failed to load your transactions');
         const txData = await txRes.json();
         setTransactions(Array.isArray(txData) ? txData : []);
+
+        // Announce what is new, then mark it seen (also remembered in this browser, for before the SQL update is run).
+        const seenHere = readSeenHere();
+        const fresh: string[] = (Array.isArray(txData) ? txData : []).filter((t: AgentTransaction) => t.isNew && !seenHere.includes(t.id)).map((t: AgentTransaction) => t.id);
+        if (fresh.length > 0) {
+          setNoticeIds((prev) => [...new Set([...prev, ...fresh])]);
+          writeSeenHere([...seenHere, ...fresh]);
+          authFetch('/api/agent/transactions/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: fresh }) }).catch(() => undefined);
+        }
 
         // Listings shared by the TC (read-only). Non-fatal like the invites.
         if (listingsRes && listingsRes.ok) {
@@ -176,32 +206,6 @@ export default function AgentHubPage() {
       setAccepting(null);
     }
   };
-
-  // "What's new": deals that reached this portal in the last two weeks (most importantly, a listing that became a transaction).
-  // Dismissing one is remembered on this device only.
-  const [dismissed, setDismissed] = useState<string[]>(() => {
-    try {
-      const raw = window.localStorage.getItem(DISMISSED_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
-    } catch {
-      return [];
-    }
-  });
-  const dismissNotice = (id: string) => {
-    setDismissed((prev) => {
-      const next = [...prev, id].slice(-100);
-      try {
-        window.localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
-      } catch {
-        // Not remembered; it simply shows again next visit.
-      }
-      return next;
-    });
-  };
-  const notices = transactions.filter(
-    (t) => t.addedAt && isRecent(t.addedAt) && !dismissed.includes(t.id)
-  );
 
   const onMarket = listings.filter((l) => l.status === 'active' || l.status === 'under_offer').length;
   const openOffers = listings.reduce((n, l) => n + l.openOffers, 0);
@@ -292,7 +296,7 @@ export default function AgentHubPage() {
                       <Link href={`/agent/transactions/${t.id}`} className="text-sm font-semibold text-emerald-300 hover:text-emerald-200">
                         Open the deal →
                       </Link>
-                      <button type="button" onClick={() => dismissNotice(t.id)} className="text-xs text-slate-500 hover:text-slate-300" aria-label="Dismiss">
+                      <button type="button" onClick={() => setHiddenNotices((prev) => [...prev, t.id])} className="text-xs text-slate-500 hover:text-slate-300" aria-label="Dismiss">
                         Dismiss
                       </button>
                     </div>
