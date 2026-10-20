@@ -892,6 +892,36 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </form>
           </div>
+
+          {/* Communication -- offer emails forwarded to this listing's own address wait for review in the Offers card;
+              the address itself lives down here, like the deal page. Hidden until the inbound domain is configured. */}
+          {inboundAddress && (
+            <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4 md:p-6">
+              <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
+              <p className="text-xs text-slate-400 mb-3">
+                Forward or CC offer emails for this listing here and they’ll wait in the Offers card for you to review. Nothing becomes an offer until you add it.
+              </p>
+              <div className="flex items-center gap-2 mb-2">
+                <code className="flex-1 min-w-0 truncate bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-blue-300">{inboundAddress}</code>
+                <button
+                  type="button"
+                  className="flex-shrink-0 px-3 py-2 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(inboundAddress);
+                      setCopiedAddr(true);
+                      setTimeout(() => setCopiedAddr(false), 2000);
+                    } catch {
+                      setNotice('Couldn’t copy automatically. Select the address and copy it by hand.');
+                    }
+                  }}
+                >
+                  {copiedAddr ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">{inbound.length === 0 ? 'No offer emails waiting.' : `${inbound.length} offer email${inbound.length === 1 ? '' : 's'} waiting in the Offers card.`}</p>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6 min-w-0">
@@ -1210,36 +1240,6 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           </button>
         </div>
       </div>
-
-      {/* Communication -- offer emails forwarded to this listing's own address wait for review in the Offers card;
-          the address itself lives down here, like the deal page. Hidden until the inbound domain is configured. */}
-      {inboundAddress && (
-        <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4 md:p-6 mt-8">
-          <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
-          <p className="text-xs text-slate-400 mb-3">
-            Forward or CC offer emails for this listing here and they’ll wait in the Offers card for you to review. Nothing becomes an offer until you add it.
-          </p>
-          <div className="flex items-center gap-2 mb-2">
-            <code className="flex-1 min-w-0 truncate bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-blue-300">{inboundAddress}</code>
-            <button
-              type="button"
-              className="flex-shrink-0 px-3 py-2 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(inboundAddress);
-                  setCopiedAddr(true);
-                  setTimeout(() => setCopiedAddr(false), 2000);
-                } catch {
-                  setNotice('Couldn’t copy automatically. Select the address and copy it by hand.');
-                }
-              }}
-            >
-              {copiedAddr ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
-          <p className="text-xs text-slate-500">{inbound.length === 0 ? 'No offer emails waiting.' : `${inbound.length} offer email${inbound.length === 1 ? '' : 's'} waiting in the Offers card.`}</p>
-        </div>
-      )}
 
       {sellerUpdate && (
         <SellerUpdateModal
