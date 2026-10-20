@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
-import { LISTING_STATUS_LABEL, LISTING_STATUSES, type ListingStatus } from '@/lib/listings';
+import { LISTING_STATUS_LABEL, LISTING_STATUSES, type ListingStatus } from '@/lib/listingsShared';
 
 interface Listing {
   id: string;
