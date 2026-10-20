@@ -645,6 +645,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         purchasePrice: Number(String(conv.price).replace(/[$,\s]/g, '')) || 0,
         acceptanceDate: conv.acceptanceDate || null,
         closingDate: conv.closingDate || null,
+        fromListingId: id,
         // The agent portal invite is sent with the deal (the server skips it when the agent has no email).
         inviteAgent: inviteAgent && Boolean(agents.find((a) => a.id === listing.agent_id)?.email),
       });
@@ -1848,7 +1849,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                     className="mt-0.5 accent-blue-500"
                   />
                   <span>
-                    {agentRow?.email ? `Send ${agentRow.name} an agent portal invite for this deal (${agentRow.email})` : 'The agent has no email on file, so no agent portal invite can be sent. Add one on the Agents page.'}
+                    {agentRow?.email ? `Put this deal on ${agentRow.name}'s agent portal and email them (${agentRow.email})` : 'The agent has no email on file, so no agent portal invite can be sent. Add one on the Agents page.'}
                   </span>
                 </label>
               );

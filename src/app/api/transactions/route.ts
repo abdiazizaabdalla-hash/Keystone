@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     const { user, isAdmin } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { agentId, fileNumber, propertyAddress, purchasePrice, templateId, acceptanceDate, closingDate, leaveUnassigned, allowDuplicate } = body;
+    const { agentId, fileNumber, propertyAddress, purchasePrice, templateId, acceptanceDate, closingDate, leaveUnassigned, allowDuplicate, fromListingId } = body;
 
     // Brokerage/Team owner only: create the transaction without stamping
     // a tc_user_id at all, for a deal that's come in but hasn't been
@@ -326,7 +326,15 @@ export async function POST(request: NextRequest) {
 
     // The agent gets a portal invite right away when they have an email (turn off with inviteAgent: false). It never
     // blocks or undoes the deal; the outcome comes back so the screen can say what happened.
-    const agentInvite = body.inviteAgent === false || assignUnassigned ? 'skipped' : await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin });
+    // A deal converted from a listing that is already shared with this same agent goes straight onto their portal:
+    // they already have access to the property, so there is nothing to accept.
+    let grantAccess = false;
+    if (typeof fromListingId === 'string' && fromListingId && !assignUnassigned) {
+      const { data: src } = await supabaseServer.from('listings').select('tc_user_id, agent_id, share_with_agent').eq('id', fromListingId).maybeSingle();
+      const visibleForListing = await getVisibleTcUserIds(user.id);
+      grantAccess = Boolean(src && src.agent_id === transaction.agent_id && src.share_with_agent === true && (isAdmin || visibleForListing.includes(src.tc_user_id as string)));
+    }
+    const agentInvite = body.inviteAgent === false || assignUnassigned ? 'skipped' : await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, grantAccess });
     return NextResponse.json({ ...transaction, agentInvite }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

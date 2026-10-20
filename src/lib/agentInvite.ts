@@ -2,6 +2,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { hasAgentRole, mergeAppMetadata } from '@/lib/privileged';
 import { sendAgentInviteEmail, sendAgentListingInviteEmail } from '@/lib/agentPortalEmails';
 import { logListingActivity } from '@/lib/listings';
+import { queueCalendarSync } from '@/lib/calendarSync';
 
 // Shared by the deal invite (POST /api/agent-invites) and the listing invite
 // (POST /api/listings/[id]/invite-agent): makes a one-time sign-in link for an agent's email,
@@ -13,7 +14,7 @@ import { logListingActivity } from '@/lib/listings';
 // returned for it.
 
 export type AgentLinkResult =
-  | { ok: true; actionLink: string; alreadyHadAccount: boolean }
+  | { ok: true; actionLink: string; alreadyHadAccount: boolean; userId: string | null; isAgent: boolean }
   | { ok: false; reason: 'other_account' | 'link_failed' };
 
 export async function createAgentLoginLink(email: string, appUrl: string, opts: { allowOtherAccount?: boolean } = {}): Promise<AgentLinkResult> {
@@ -40,7 +41,7 @@ export async function createAgentLoginLink(email: string, appUrl: string, opts: 
   }
   if (user && !isNew && !hasAgentRole(user) && !opts.allowOtherAccount) return { ok: false, reason: 'other_account' };
 
-  return { ok: true, actionLink, alreadyHadAccount: Boolean(user && !isNew) };
+  return { ok: true, actionLink, alreadyHadAccount: Boolean(user && !isNew), userId: user?.id ?? null, isAgent: Boolean(user && (isNew || hasAgentRole(user))) };
 }
 
 export type ListingInviteOutcome = 'sent' | 'already' | 'no_agent' | 'no_email' | 'not_shared' | 'other_account' | 'failed';
@@ -105,6 +106,12 @@ export async function inviteAgentToTransaction(params: {
   user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null };
   appUrl: string;
   email?: string;
+  /**
+   * Put the deal straight on the agent's portal instead of waiting for them to accept. Only for an account that is an
+   * agent login (never a coordinator's), and only when the caller has already confirmed the agent is entitled to this
+   * property (see POST /api/transactions: converted from a listing shared with this same agent).
+   */
+  grantAccess?: boolean;
 }): Promise<TxInviteOutcome> {
   try {
     const { transaction, user, appUrl } = params;
@@ -126,6 +133,18 @@ export async function inviteAgentToTransaction(params: {
     // Makes sure the agent has a login (and tags a brand-new one as an agent). The email carries a fixed page link, not this one-time link.
     const link = await createAgentLoginLink(email, appUrl, { allowOtherAccount: true });
     if (!link.ok) return 'failed';
+
+    if (params.grantAccess && link.isAgent && link.userId) {
+      const { error: grantError } = await supabaseServer
+        .from('transaction_agents')
+        .upsert({ transaction_id: transaction.id, agent_user_id: link.userId, invited_by: user.id }, { onConflict: 'transaction_id,agent_user_id', ignoreDuplicates: true });
+      if (grantError) {
+        console.error('Could not give the agent access to the deal (they can still accept the invite):', grantError);
+      } else {
+        await supabaseServer.from('agent_invites').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('transaction_id', transaction.id).eq('email', email);
+        queueCalendarSync(transaction.id);
+      }
+    }
 
     const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
     await sendAgentInviteEmail({ toEmail: email, tcLabel, propertyAddress: (transaction.property_address as string | null) || null, loginUrl: agentSetupUrl(appUrl, email) });
