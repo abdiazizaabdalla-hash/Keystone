@@ -10,6 +10,8 @@ interface Input {
   offers: { status: string; offer_price: number | null; offer_expires_at?: string | null; terms?: string | null }[];
   priceChanges: { old_price: number | null; new_price: number; changed_on: string }[];
   dates: { label: string; due_date: string }[];
+  /** Required listing documents not yet on file (and not marked unneeded). */
+  missingDocs?: string[];
   tcName: string;
   today: string;
 }
@@ -67,6 +69,10 @@ export function buildSellerUpdate(i: Input): { subject: string; body: string } {
   if (horizon.length) {
     lines.push('', 'Coming up:');
     for (const h of horizon.slice(0, 6)) lines.push(`- ${day(h.date)}: ${h.label}`);
+  }
+
+  if (i.missingDocs && i.missingDocs.length) {
+    lines.push('', `Still needed to finish the listing paperwork: ${i.missingDocs.join(', ')}.`);
   }
 
   lines.push('', 'Let me know if you have any questions or want to talk through next steps.', '', i.tcName || 'Your transaction coordinator');

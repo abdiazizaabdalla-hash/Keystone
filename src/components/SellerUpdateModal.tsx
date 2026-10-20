@@ -13,6 +13,7 @@ interface Props {
   offers: { status: string; offer_price: number | null; terms?: string | null }[];
   priceChanges: { old_price: number | null; new_price: number; changed_on: string }[];
   dates: { label: string; due_date: string }[];
+  missingDocs?: string[];
   /** Other people on the listing who can be copied (sellers, co-owners). */
   contacts: { name: string | null; email: string | null; role: string | null }[];
   onClose: () => void;
@@ -23,10 +24,10 @@ const inputCls =
   'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 
 // A seller progress update drafted from what is logged on the listing. Edit it, pick who gets it, send.
-export default function SellerUpdateModal({ listingId, tcName, listing, showings, offers, priceChanges, dates, contacts, onClose, onSent }: Props) {
+export default function SellerUpdateModal({ listingId, tcName, listing, showings, offers, priceChanges, dates, missingDocs, contacts, onClose, onSent }: Props) {
   const draft = useMemo(
-    () => buildSellerUpdate({ listing, showings, offers, priceChanges, dates, tcName, today: new Date().toISOString().slice(0, 10) }),
-    [listing, showings, offers, priceChanges, dates, tcName]
+    () => buildSellerUpdate({ listing, showings, offers, priceChanges, dates, missingDocs, tcName, today: new Date().toISOString().slice(0, 10) }),
+    [listing, showings, offers, priceChanges, dates, missingDocs, tcName]
   );
   const recipients = useMemo(() => {
     const out: { email: string; label: string }[] = [];

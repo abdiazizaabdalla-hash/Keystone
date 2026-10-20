@@ -8,6 +8,7 @@ import { offerDocPaths } from '@/lib/listingOfferFiles';
 import { queueListingCalendarSync, removeListingCalendarEvents } from '@/lib/calendarSync';
 import { isAgentUser } from '@/lib/agentPortal';
 import { removeInboundFiles } from '@/lib/listingInbound';
+import { REQUIRED_LISTING_DOCS } from '@/lib/listingReadiness';
 import {
   LISTING_STATUSES,
   cleanMoney,
@@ -101,6 +102,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     if ('shareWithAgent' in body) updates.share_with_agent = body.shareWithAgent === true;
     if ('notifyAgent' in body) updates.notify_agent = body.notifyAgent === true;
+    if ('docsNotNeeded' in body) {
+      const list = Array.isArray(body.docsNotNeeded) ? body.docsNotNeeded : [];
+      updates.docs_not_needed = REQUIRED_LISTING_DOCS.filter((t) => list.includes(t));
+    }
     if ('listedOn' in body) updates.listed_on = isIsoDate(body.listedOn) ? body.listedOn : null;
     // The first time a listing goes live starts its days-on-market clock (a typed date above wins).
     if ((updates.status === 'active' || updates.status === 'under_offer') && !listing.listed_on && !('listed_on' in updates)) {
@@ -150,10 +155,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // Calendar events live on the old owner's Google calendar; remove them before the listing moves.
     if (reassignedTo) await removeListingCalendarEvents(id);
     let { data, error } = await supabaseServer.from('listings').update(updates).eq('id', id).select('*').single();
-    if (error && /listed_on|notify_agent/.test(error.message || '')) {
-      // add-listing-round3.sql has not been run yet: save everything else.
+    if (error && /listed_on|notify_agent|docs_not_needed/.test(error.message || '')) {
+      // add-listing-round3.sql / add-listing-readiness.sql has not been run yet: save everything else.
       delete updates.listed_on;
       delete updates.notify_agent;
+      delete updates.docs_not_needed;
       ({ data, error } = await supabaseServer.from('listings').update(updates).eq('id', id).select('*').single());
     }
     if (error) throw error;

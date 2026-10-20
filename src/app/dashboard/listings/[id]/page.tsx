@@ -16,6 +16,8 @@ import OfferIntakeModal from '@/components/OfferIntakeModal';
 import OfferHistory from '@/components/OfferHistory';
 import ListingThread from '@/components/ListingThread';
 import SellerUpdateModal from '@/components/SellerUpdateModal';
+import ListingReadinessCard from '@/components/ListingReadinessCard';
+import { computeReadiness } from '@/lib/listingReadiness';
 import {
   FINANCING_TYPES,
   LISTING_STATUS_LABEL,
@@ -48,6 +50,7 @@ interface Listing {
   notify_agent?: boolean | null;
   inbound_token?: string | null;
   listed_on?: string | null;
+  docs_not_needed?: string[] | null;
   tc_user_id?: string;
 }
 interface Task { id: string; name: string; due_date: string | null; completed: boolean }
@@ -138,6 +141,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [newShowing, setNewShowing] = useState({ showingDate: '', kind: 'showing', visitor: '', interest: '', feedback: '' });
   const [priceForm, setPriceForm] = useState({ price: '', note: '' });
   const [showAllActivity, setShowAllActivity] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showPriceHistory, setShowPriceHistory] = useState(false);
   const [newDate, setNewDate] = useState({ label: '', dueDate: '' });
   const [newContact, setNewContact] = useState({ role: '', name: '', email: '', phone: '' });
 
@@ -1084,6 +1089,18 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             </form>
           </div>
 
+          {/* Ready to list: what is still missing before go-live */}
+          {['preparing', 'active'].includes(listing.status) && (
+            <ListingReadinessCard
+              listing={listing}
+              agentName={data.agent?.name ?? null}
+              docs={docs}
+              tasks={tasks}
+              dates={dates}
+              onWaive={(docsNotNeeded) => void act(() => call('PATCH', `/api/listings/${id}`, { docsNotNeeded }))}
+            />
+          )}
+
           {/* Documents */}
           <div className={cardCls}>
             <h2 className="text-lg font-bold text-slate-100 mb-1">Documents</h2>
@@ -1245,7 +1262,18 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Price history */}
           <div className={cardCls}>
-            <h2 className="text-lg font-bold text-slate-100 mb-3">Price history</h2>
+            <button
+              type="button"
+              onClick={() => setShowPriceHistory(!showPriceHistory)}
+              aria-expanded={showPriceHistory}
+              className="w-full flex items-center justify-between gap-3 text-left mb-3"
+            >
+              <h2 className="text-lg font-bold text-slate-100">
+                Price history <span className="text-sm font-normal text-slate-500">({priceChanges.length})</span>
+              </h2>
+              <span className="text-xs text-slate-400">{showPriceHistory ? 'Hide' : 'Show'}</span>
+            </button>
+            {showPriceHistory && (
             <ul className="space-y-1 text-sm mb-3">
               {priceChanges.length === 0 && <li className="text-slate-500">No price changes yet. {listing.list_price ? `Listed at ${money(listing.list_price)}.` : ''}</li>}
               {priceChanges.map((pc) => (
@@ -1263,6 +1291,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 </li>
               ))}
             </ul>
+            )}
             <form
               className="grid grid-cols-1 sm:grid-cols-[8rem_1fr_auto] gap-2"
               onSubmit={async (e) => {
@@ -1280,22 +1309,36 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             </form>
           </div>
 
-          {/* History */}
+          {/* History (hidden until opened) */}
           <div className={cardCls}>
-            <h2 className="text-lg font-bold text-slate-100 mb-3">History</h2>
-            {activity.length === 0 && <p className="text-sm text-slate-500">Changes to this listing will show up here.</p>}
-            <ul className="space-y-1.5 text-sm">
-              {(showAllActivity ? activity : activity.slice(0, 8)).map((a) => (
-                <li key={a.id} className="text-slate-300 break-words">
-                  <span className="text-slate-500 text-xs">{new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span> · {a.summary}
-                  {a.actor_label ? <span className="text-slate-600"> ({a.actor_label})</span> : null}
-                </li>
-              ))}
-            </ul>
-            {activity.length > 8 && (
-              <button type="button" onClick={() => setShowAllActivity(!showAllActivity)} className="mt-2 text-xs text-blue-400 hover:text-blue-300">
-                {showAllActivity ? 'Show less' : `Show all ${activity.length}`}
-              </button>
+            <button
+              type="button"
+              onClick={() => setShowHistory(!showHistory)}
+              aria-expanded={showHistory}
+              className="w-full flex items-center justify-between gap-3 text-left"
+            >
+              <h2 className="text-lg font-bold text-slate-100">
+                History <span className="text-sm font-normal text-slate-500">({activity.length})</span>
+              </h2>
+              <span className="text-xs text-slate-400">{showHistory ? 'Hide' : 'Show'}</span>
+            </button>
+            {showHistory && (
+              <div className="mt-3">
+                {activity.length === 0 && <p className="text-sm text-slate-500">Changes to this listing will show up here.</p>}
+                <ul className="space-y-1.5 text-sm">
+                  {(showAllActivity ? activity : activity.slice(0, 8)).map((a) => (
+                    <li key={a.id} className="text-slate-300 break-words">
+                      <span className="text-slate-500 text-xs">{new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span> · {a.summary}
+                      {a.actor_label ? <span className="text-slate-600"> ({a.actor_label})</span> : null}
+                    </li>
+                  ))}
+                </ul>
+                {activity.length > 8 && (
+                  <button type="button" onClick={() => setShowAllActivity(!showAllActivity)} className="mt-2 text-xs text-blue-400 hover:text-blue-300">
+                    {showAllActivity ? 'Show less' : `Show all ${activity.length}`}
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -1314,6 +1357,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           offers={offers}
           priceChanges={priceChanges}
           dates={dates}
+          missingDocs={computeReadiness({ listing, docs, tasks }).missingDocs}
           contacts={contacts}
           onClose={() => setSellerUpdate(false)}
           onSent={async () => {
