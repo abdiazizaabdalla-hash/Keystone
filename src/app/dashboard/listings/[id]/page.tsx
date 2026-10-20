@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { uploadIncoming } from '@/lib/incomingUploadClient';
+import { isDocDrag, isFileDrag, readDocDrag, startDocDrag } from '@/lib/docDrag';
 import { formatDisplayDate } from '@/lib/dueDates';
 import ContactPicker from '@/components/ContactPicker';
 import StepEmailModal from '@/components/StepEmailModal';
@@ -141,6 +142,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   // Documents
   const [docs, setDocs] = useState<ListingDoc[]>([]);
   const [docType, setDocType] = useState('General');
+  const [dragOverDocType, setDragOverDocType] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [docError, setDocError] = useState('');
 
@@ -318,7 +320,21 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  const uploadDocs = async (files: FileList | null) => {
+  const moveDoc = async (docId: string, documentType: string) => {
+    const current = docs.find((d) => d.id === docId);
+    if (!current || current.document_type === documentType) return;
+    setDocError('');
+    // Show the move straight away; the re-read below settles it (and undoes it if it failed).
+    setDocs((prev) => prev.map((d) => (d.id === docId ? { ...d, document_type: documentType } : d)));
+    try {
+      await call('PATCH', `/api/listings/${id}/documents/${docId}`, { documentType });
+    } catch (err) {
+      if (!handleAuth(err)) setDocError(err instanceof Error ? err.message : 'Could not move that document');
+    }
+    await loadDocs();
+  };
+
+  const uploadDocs = async (files: FileList | null, typeOverride?: string) => {
     if (!files || files.length === 0) return;
     setUploading(true);
     setDocError('');
@@ -328,7 +344,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         const res = await authFetch(`/api/listings/${id}/documents`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uploads: [uploaded], documentType: docType }),
+          body: JSON.stringify({ uploads: [uploaded], documentType: typeOverride || docType }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(`${file.name}: ${json.error || 'upload failed'}`);
@@ -1071,42 +1087,99 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           <div className={cardCls}>
             <h2 className="text-lg font-bold text-slate-100 mb-1">Documents</h2>
             <p className="text-xs text-slate-500 mb-3">Listing agreement, disclosures, photos. They are copied onto the deal when you convert.</p>
-            <ul className="space-y-2 text-sm mb-3">
-              {docs.map((d) => (
-                <li key={d.id} className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    {d.url ? (
-                      <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 break-all">
-                        {d.file_name}
-                      </a>
-                    ) : (
-                      <span className="text-slate-300 break-all">{d.file_name}</span>
-                    )}
-                    <p className="text-xs text-slate-500">
-                      {d.document_type}
-                      {d.file_size ? ` · ${(d.file_size / 1024 / 1024 >= 1 ? `${(d.file_size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(d.file_size / 1024))} KB`)}` : ''}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!confirm(`Remove ${d.file_name}?`)) return;
-                      try {
-                        await call('DELETE', `/api/listings/${id}/documents/${d.id}`);
-                        await loadDocs();
-                      } catch (err) {
-                        setDocError(err instanceof Error ? err.message : 'Could not remove');
+            <div className="space-y-3 mb-3">
+              {LISTING_DOC_TYPES.map((type) => {
+                const inType = docs.filter((d) => d.document_type === type);
+                const isOver = dragOverDocType === type;
+                return (
+                  <div
+                    key={type}
+                    onDragOver={(e) => {
+                      if (!isDocDrag(e) && !isFileDrag(e)) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = isDocDrag(e) ? 'move' : 'copy';
+                      if (dragOverDocType !== type) setDragOverDocType(type);
+                    }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOverDocType(null);
+                    }}
+                    onDrop={(e) => {
+                      setDragOverDocType(null);
+                      if (isDocDrag(e)) {
+                        e.preventDefault();
+                        const docId = readDocDrag(e);
+                        if (docId) void moveDoc(docId, type);
+                      } else if (isFileDrag(e)) {
+                        e.preventDefault();
+                        void uploadDocs(e.dataTransfer.files, type);
                       }
                     }}
-                    className="text-slate-600 hover:text-red-300 shrink-0"
-                    aria-label={`Remove ${d.file_name}`}
+                    className={`rounded-lg border px-3 py-2 transition ${isOver ? 'border-blue-400 bg-blue-500/10' : 'border-slate-700 bg-slate-900/30'}`}
                   >
-                    ✕
-                  </button>
-                </li>
-              ))}
-              {docs.length === 0 && <li className="text-slate-500">No documents yet.</li>}
-            </ul>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                      {type} <span className="font-normal normal-case text-slate-500">· {inType.length}</span>
+                    </p>
+                    <ul className="space-y-2 text-sm">
+                      {inType.map((d) => (
+                        <li
+                          key={d.id}
+                          draggable
+                          onDragStart={(e) => startDocDrag(e, d.id)}
+                          className="flex items-start justify-between gap-3 cursor-grab active:cursor-grabbing"
+                        >
+                          <div className="min-w-0">
+                            {d.url ? (
+                              <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 break-all">
+                                {d.file_name}
+                              </a>
+                            ) : (
+                              <span className="text-slate-300 break-all">{d.file_name}</span>
+                            )}
+                            <p className="text-xs text-slate-500">
+                              {d.file_size ? (d.file_size / 1024 / 1024 >= 1 ? `${(d.file_size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(d.file_size / 1024))} KB`) : ''}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) void moveDoc(d.id, e.target.value);
+                              }}
+                              className="bg-slate-800 border border-slate-700 rounded text-xs text-slate-400 px-1 py-0.5"
+                              aria-label={`Move ${d.file_name} to another area`}
+                            >
+                              <option value="">Move to…</option>
+                              {LISTING_DOC_TYPES.filter((t) => t !== type).map((t) => (
+                                <option key={t} value={t}>
+                                  {t}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!confirm(`Remove ${d.file_name}?`)) return;
+                                try {
+                                  await call('DELETE', `/api/listings/${id}/documents/${d.id}`);
+                                  await loadDocs();
+                                } catch (err) {
+                                  setDocError(err instanceof Error ? err.message : 'Could not remove');
+                                }
+                              }}
+                              className="text-slate-600 hover:text-red-300"
+                              aria-label={`Remove ${d.file_name}`}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                      {inType.length === 0 && <li className="text-xs text-slate-600">{isOver ? 'Drop here' : 'Nothing here. Drag a file or document onto this area.'}</li>}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <select className={`${inputCls} sm:w-auto`} value={docType} onChange={(e) => setDocType(e.target.value)}>
                 {LISTING_DOC_TYPES.map((t) => (

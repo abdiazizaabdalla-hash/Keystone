@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import SiteAnalytics from '@/components/SiteAnalytics';
+import GlobalFileDrop from '@/components/GlobalFileDrop';
 
 export const metadata: Metadata = {
   title: 'Relay TC - Transaction Management for Coordinators',
@@ -17,6 +18,7 @@ export default function RootLayout({
       <body className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-100">
         {children}
         <SiteAnalytics />
+        <GlobalFileDrop />
       </body>
     </html>
   );

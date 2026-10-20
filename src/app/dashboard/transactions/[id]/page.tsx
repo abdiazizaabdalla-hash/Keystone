@@ -5,6 +5,7 @@ import { use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { isDocDrag, isFileDrag, readDocDrag, startDocDrag } from '@/lib/docDrag';
 import { stagesForTaskNames } from '@/lib/transactionStages';
 import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categoryLabel, typesForCategory } from '@/lib/documentTaxonomy';
 import { DueDateSpec, formatDisplayDate } from '@/lib/dueDates';
@@ -1490,6 +1491,54 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     setCollapsedCategories((prev) => ({ ...prev, [categoryKey]: !prev[categoryKey] }));
   };
 
+  // Moving a document to another category: dragging a row (or an email
+  // attachment) onto a category box, or the "Move to…" menu on the row for
+  // phones and keyboards. Moving only changes where the file is filed; the
+  // file itself and any email it came with are untouched.
+  const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
+  const [movingDocId, setMovingDocId] = useState<string | null>(null);
+  const handleMoveDocument = async (docId: string, categoryKey: string) => {
+    const current = documents.find((d) => d.id === docId);
+    if (!current || (current.category || DEFAULT_CATEGORY_KEY) === categoryKey) return;
+    try {
+      setMovingDocId(docId);
+      const response = await authFetch('/api/documents', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: docId, category: categoryKey }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to move document');
+      }
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === docId ? { ...d, category: result.category, document_type: result.document_type } : d))
+      );
+      // Make sure the box it landed in is open so the move is visible.
+      setCollapsedCategories((prev) => ({ ...prev, [categoryKey]: false }));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error moving document:', error);
+      alert(error instanceof Error ? error.message : 'Failed to move document');
+    } finally {
+      setMovingDocId(null);
+    }
+  };
+
+  // Files dropped from the computer straight onto a category box.
+  const handleDropFilesOnCategory = async (files: FileList, categoryKey: string) => {
+    const documentType = typesForCategory(categoryKey)[0] || DEFAULT_DOCUMENT_TYPE;
+    setDirectUploadCategory(categoryKey);
+    for (const file of Array.from(files)) {
+      await handleUpload(file, null, categoryKey, documentType);
+    }
+    setDirectUploadCategory(null);
+    setCollapsedCategories((prev) => ({ ...prev, [categoryKey]: false }));
+  };
+
   const handleDeleteEmail = async (emailId: string) => {
     if (
       !confirm(
@@ -1738,7 +1787,11 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     const isTogglingRequiresSignature = togglingRequiresSignatureDocId === doc.id;
     return (
       <div key={doc.id}>
-        <div className="flex items-center justify-between gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-2.5">
+        <div
+          draggable
+          onDragStart={(e) => startDocDrag(e, doc.id)}
+          className="flex items-center justify-between gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-2.5"
+        >
           <div className="min-w-0 flex-1">
             <a
               href={doc.url || '#'}
@@ -1866,6 +1919,23 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               {isTogglingRequiresSignature ? '...' : requiresSignature ? 'No sig needed' : 'Needs sig'}
             </button>
           )}
+          <select
+            value=""
+            disabled={movingDocId === doc.id}
+            onChange={(e) => {
+              if (e.target.value) void handleMoveDocument(doc.id, e.target.value);
+            }}
+            className="bg-slate-800 border border-slate-600 rounded-lg text-xs text-slate-400 px-1.5 py-1 flex-shrink-0 max-w-[7.5rem] disabled:opacity-50"
+            aria-label={`Move ${doc.file_name} to another category`}
+            title="Move to another category (or drag the row onto one)"
+          >
+            <option value="">{movingDocId === doc.id ? 'Moving…' : 'Move to…'}</option>
+            {DOCUMENT_CATEGORIES.filter((c) => c.key !== (doc.category || DEFAULT_CATEGORY_KEY)).map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
           <button
             onClick={() => handleDeleteDocument(doc.id)}
             disabled={deletingDocId === doc.id}
@@ -2175,7 +2245,32 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       const isCollapsed = collapsedCategories[cat.key];
 
       return (
-        <div key={cat.key} className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden">
+        <div
+          key={cat.key}
+          onDragOver={(e) => {
+            if (!isDocDrag(e) && !isFileDrag(e)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = isDocDrag(e) ? 'move' : 'copy';
+            if (dragOverCategory !== cat.key) setDragOverCategory(cat.key);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOverCategory(null);
+          }}
+          onDrop={(e) => {
+            setDragOverCategory(null);
+            if (isDocDrag(e)) {
+              e.preventDefault();
+              const docId = readDocDrag(e);
+              if (docId) void handleMoveDocument(docId, cat.key);
+            } else if (isFileDrag(e)) {
+              e.preventDefault();
+              void handleDropFilesOnCategory(e.dataTransfer.files, cat.key);
+            }
+          }}
+          className={`border rounded-lg overflow-hidden transition ${
+            dragOverCategory === cat.key ? 'bg-blue-500/10 border-blue-400' : 'bg-slate-700/30 border-slate-600'
+          }`}
+        >
           <div className="w-full flex items-center gap-2 px-4 py-3 hover:bg-slate-700/50 transition">
             <button
               onClick={() => toggleCategoryCollapsed(cat.key)}
@@ -3497,6 +3592,9 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                                   href={att.url || '#'}
                                   target="_blank"
                                   rel="noopener noreferrer"
+                                  draggable
+                                  onDragStart={(e) => startDocDrag(e, att.id)}
+                                  title="Drag onto a Documents category to file it there"
                                   className="flex items-center justify-between gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-3 py-2 hover:border-slate-500 transition"
                                 >
                                   <span className="text-blue-400 hover:text-blue-300 truncate text-xs">

@@ -111,3 +111,10 @@ body {
   padding-left: 0.75em;
   color: var(--color-ink-300);
 }
+
+/* Added by GlobalFileDrop while a file is dragged over an upload area. */
+.file-drop-active {
+  outline: 2px dashed #60a5fa;
+  outline-offset: -2px;
+  border-radius: 0.5rem;
+}

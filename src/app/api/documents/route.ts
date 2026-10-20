@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isValidCategory, isValidDocumentType, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE } from '@/lib/documentTaxonomy';
+import { isValidCategory, isValidDocumentType, typesForCategory, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE } from '@/lib/documentTaxonomy';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
 import { logAudit } from '@/lib/audit';
@@ -305,13 +305,24 @@ export async function PATCH(request: NextRequest) {
       await assertTrialActive(user);
     }
     const body = await request.json();
-    const { id, isSigned, requiresSignature } = body;
+    const { id, isSigned, requiresSignature, category, documentType } = body;
 
     if (typeof id !== 'string' || !id) {
       return NextResponse.json({ error: 'Document id is required' }, { status: 400 });
     }
-    if (isSigned === undefined && requiresSignature === undefined) {
-      return NextResponse.json({ error: 'isSigned or requiresSignature is required' }, { status: 400 });
+    if (isSigned === undefined && requiresSignature === undefined && category === undefined && documentType === undefined) {
+      return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+    }
+    if (category !== undefined && typeof category !== 'string') {
+      return NextResponse.json({ error: 'category must be a string' }, { status: 400 });
+    }
+    if (documentType !== undefined && typeof documentType !== 'string') {
+      return NextResponse.json({ error: 'documentType must be a string' }, { status: 400 });
+    }
+    // Filing a document under a different category is a TC job; invited
+    // agents can upload and view but not reorganise the file.
+    if ((category !== undefined || documentType !== undefined) && isAgentUser(user)) {
+      return NextResponse.json({ error: 'Only the coordinator can move documents' }, { status: 403 });
     }
     if (isSigned !== undefined && typeof isSigned !== 'boolean') {
       return NextResponse.json({ error: 'isSigned must be a boolean' }, { status: 400 });
@@ -322,7 +333,7 @@ export async function PATCH(request: NextRequest) {
 
     const { data: doc, error: fetchError } = await supabaseServer
       .from('documents')
-      .select('id, transaction_id')
+      .select('id, transaction_id, category, document_type, file_name')
       .eq('id', id)
       .single();
 
@@ -340,9 +351,32 @@ export async function PATCH(request: NextRequest) {
       isAgent: isAgentUser(user),
     });
 
-    const updates: Record<string, boolean> = {};
+    const updates: Record<string, boolean | string> = {};
     if (isSigned !== undefined) updates.is_signed = isSigned;
     if (requiresSignature !== undefined) updates.requires_signature = requiresSignature;
+
+    // Moving a document: validated against the same taxonomy as uploads, so
+    // nothing outside the known categories/types can be written.
+    let moved = false;
+    if (category !== undefined || documentType !== undefined) {
+      const nextCategory = category !== undefined ? category : ((doc.category as string) || DEFAULT_CATEGORY_KEY);
+      if (!isValidCategory(nextCategory)) {
+        return NextResponse.json({ error: `Unknown document category: ${nextCategory}` }, { status: 400 });
+      }
+      let nextType: string;
+      if (documentType !== undefined) {
+        nextType = documentType;
+      } else {
+        const currentType = (doc.document_type as string) || DEFAULT_DOCUMENT_TYPE;
+        nextType = isValidDocumentType(nextCategory, currentType) ? currentType : typesForCategory(nextCategory)[0] || DEFAULT_DOCUMENT_TYPE;
+      }
+      if (!isValidDocumentType(nextCategory, nextType)) {
+        return NextResponse.json({ error: `"${nextType}" is not a valid document type for category "${nextCategory}"` }, { status: 400 });
+      }
+      updates.category = nextCategory;
+      updates.document_type = nextType;
+      moved = nextCategory !== ((doc.category as string) || DEFAULT_CATEGORY_KEY) || nextType !== doc.document_type;
+    }
 
     const { data: updated, error: updateError } = await supabaseServer
       .from('documents')
@@ -353,6 +387,9 @@ export async function PATCH(request: NextRequest) {
 
     if (updateError) throw updateError;
 
+    if (moved) {
+      await logAudit(request, user, 'document.move', { entityType: 'document', entityId: id, metadata: { transactionId: doc.transaction_id, from: doc.category, to: updates.category } });
+    }
     return NextResponse.json(updated);
   } catch (error) {
     if (error instanceof AuthError) {
