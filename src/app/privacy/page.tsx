@@ -66,8 +66,8 @@ export default function PrivacyPage() {
           <code>userinfo.email</code> scope).
         </p>
         <ul>
-          <li><strong>What we access:</strong> your Google Account email address, and the calendar events that Relay itself creates for your transactions. We do not read, copy, or store your other calendar events.</li>
-          <li><strong>What we do with it:</strong> add, update, and remove transaction key dates (for example inspection, appraisal, and closing deadlines) on the calendar you connected, so they appear alongside your other appointments. Nothing else.</li>
+          <li><strong>What we access:</strong> your Google Account email address, and the calendar events that Relay itself creates for your transactions and listings. We do not read, copy, or store your other calendar events.</li>
+          <li><strong>What we do with it:</strong> add, update, and remove key dates (for example inspection, appraisal, and closing deadlines, and a listing&rsquo;s go-live, expiration, and open-house dates) on the calendar you connected, so they appear alongside your other appointments. If you are an agent invited to Relay by your transaction coordinator, the same applies to the dates of the deals and listings shared with you; you can connect your own calendar or leave it disconnected. Nothing else.</li>
           <li><strong>What we store:</strong> your Google email address and an encrypted token that lets Relay keep those events up to date, plus the ID of each event we created. The token is encrypted before it is saved.</li>
           <li><strong>Who sees it:</strong> we do not sell or share Google user data, and we do not use it for advertising. It is not used to build or train AI or machine-learning models.</li>
           <li><strong>Disconnecting:</strong> you can disconnect your calendar in Relay at any time, which stops syncing and deletes the stored token. You can also revoke Relay&rsquo;s access from your Google Account&rsquo;s security settings. To delete the events Relay created, remove them in Google Calendar or contact us.</li>
