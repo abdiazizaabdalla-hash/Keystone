@@ -19,6 +19,7 @@ import SellerUpdateModal from '@/components/SellerUpdateModal';
 import ListingReadinessCard from '@/components/ListingReadinessCard';
 import ListingSignModal, { type ListingSigningRequest } from '@/components/ListingSignModal';
 import { computeReadiness } from '@/lib/listingReadiness';
+import { suggestFileNumber } from '@/lib/fileNumber';
 import {
   FINANCING_TYPES,
   LISTING_STATUS_LABEL,
@@ -114,6 +115,14 @@ interface ListingDoc {
 }
 
 const cardCls = 'bg-slate-800/50 border border-slate-700 rounded-lg p-5';
+// Loose check that two addresses start with the same street number (used only to warn about a wrong contract).
+function sameStreetNumber(a: string, b: string): boolean {
+  const num = (x: string) => (x.trim().match(/^\d+/) || [''])[0];
+  const na = num(a);
+  const nb = num(b);
+  return !na || !nb || na === nb;
+}
+
 const OFFER_LABEL: Record<string, string> = { received: 'Received', countered: 'Countered', accepted: 'Accepted', rejected: 'Rejected', withdrawn: 'Withdrawn' };
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '');
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -176,6 +185,20 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [conv, setConv] = useState({ fileNumber: '', acceptanceDate: '', closingDate: '', price: '' });
   const [converting, setConverting] = useState(false);
   const [convertError, setConvertError] = useState('');
+  // Deal details read from a contract (nothing is saved until "Create deal")
+  interface DealRead {
+    fileName: string;
+    propertyAddress: string;
+    dates: { kind: string; label: string; dueDate: string }[];
+    contacts: { role: string; name: string; email?: string; phone?: string }[];
+    notes: string;
+  }
+  const [dealRead, setDealRead] = useState<DealRead | null>(null);
+  const [reading, setReading] = useState('');
+  const [readError, setReadError] = useState('');
+  const [offerDocs, setOfferDocs] = useState<{ id: string; file_name: string; doc_kind: string }[]>([]);
+  const [inviteAgent, setInviteAgent] = useState(true);
+  const [dealCreated, setDealCreated] = useState<{ txId: string; notes: string[] } | null>(null);
 
   const handleAuth = useCallback(
     (err: unknown) => {
@@ -495,17 +518,86 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     setSavingDetails(false);
   };
 
-  const openConvert = (offer: Offer | 'none') => {
+  // Reads a contract that is already on the listing (or on the offer) and fills the deal form from it.
+  const readContract = async (source: 'listing' | 'offer', documentId: string) => {
+    setReading(documentId);
+    setReadError('');
+    try {
+      const r = await call('POST', `/api/listings/${id}/extract-deal`, { source, documentId });
+      setConv((c) => ({
+        ...c,
+        acceptanceDate: r.acceptanceDate || c.acceptanceDate,
+        closingDate: r.closingDate || c.closingDate,
+        price: r.price ? String(r.price) : c.price,
+      }));
+      setDealRead({ fileName: r.fileName, propertyAddress: r.propertyAddress || '', dates: r.dates || [], contacts: r.contacts || [], notes: r.notes || '' });
+    } catch (err) {
+      if (!handleAuth(err)) setReadError(err instanceof Error ? err.message : 'Could not read that contract');
+    } finally {
+      setReading('');
+    }
+  };
+
+  const openConvert = async (offer: Offer | 'none') => {
     setConvertError('');
-    const d = new Date();
-    const stamp = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}.${d.getFullYear()}`;
+    setDealRead(null);
+    setReadError('');
+    setOfferDocs([]);
+    setDealCreated(null);
+    const agentEmail = agents.find((a) => a.id === listing.agent_id)?.email;
+    setInviteAgent(Boolean(agentEmail));
     setConv({
-      fileNumber: `FL-${stamp}`,
+      fileNumber: suggestFileNumber(new Date(), []),
       acceptanceDate: todayIso(),
       closingDate: offer !== 'none' && offer.closing_date ? offer.closing_date : '',
       price: offer !== 'none' && offer.offer_price ? String(offer.offer_price) : listing.list_price ? String(listing.list_price) : '',
     });
     setConvertOffer(offer);
+
+    // File number: today's date, numbered when you already started a deal today.
+    authFetch('/api/transactions')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => {
+        const numbers = Array.isArray(list) ? list.map((t: { file_number?: string }) => t.file_number || '') : [];
+        setConv((c) => ({ ...c, fileNumber: suggestFileNumber(new Date(), numbers) }));
+      })
+      .catch(() => undefined);
+
+    // Pick the best contract already on file and read it: the offer's own purchase contract first, then a listing
+    // document filed as a Purchase Contract.
+    let pick: { source: 'listing' | 'offer'; id: string } | null = null;
+    if (offer !== 'none') {
+      try {
+        const v = await call('GET', `/api/listings/${id}/offers/${offer.id}/versions`);
+        const od = (Array.isArray(v.documents) ? v.documents : []).filter((d: { file_name: string }) => d.file_name.toLowerCase().endsWith('.pdf'));
+        setOfferDocs(od);
+        const contract = od.find((d: { doc_kind: string }) => d.doc_kind === 'purchase_contract');
+        if (contract) pick = { source: 'offer', id: contract.id };
+      } catch {
+        // No offer documents to offer; the form still works by hand.
+      }
+    }
+    if (!pick) {
+      const own = docs.find((d) => d.document_type === 'Purchase Contract' && d.file_name.toLowerCase().endsWith('.pdf'));
+      if (own) pick = { source: 'listing', id: own.id };
+    }
+    if (pick) await readContract(pick.source, pick.id);
+  };
+
+  // Upload a contract right from the convert step: it is kept on the listing as a Purchase Contract, then read.
+  const uploadContractAndRead = async (file: File | undefined) => {
+    if (!file) return;
+    setReadError('');
+    setReading('uploading');
+    try {
+      const [uploaded] = await uploadIncoming([file]);
+      const row = await call('POST', `/api/listings/${id}/documents`, { uploads: [uploaded], documentType: 'Purchase Contract' });
+      await loadDocs();
+      await readContract('listing', row.id as string);
+    } catch (err) {
+      if (!handleAuth(err)) setReadError(err instanceof Error ? err.message : 'Could not upload that file');
+      setReading('');
+    }
   };
 
   const convert = async (e: React.FormEvent) => {
@@ -527,6 +619,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         closingDate: conv.closingDate || null,
       });
       txId = tx.id as string;
+      const notes: string[] = [];
 
       // Carry the people over. Contacts failing never undoes the deal.
       for (const c of contacts) {
@@ -536,12 +629,49 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           // One contact failing never undoes the deal.
         }
       }
+      // People the contract named (buyer, lender, title) that are not already on the listing.
+      if (dealRead) {
+        const have = new Set(contacts.map((c) => `${(c.role || '').toLowerCase()}|${(c.name || '').toLowerCase()}`));
+        for (const c of dealRead.contacts) {
+          if (have.has(`${c.role.toLowerCase()}|${c.name.toLowerCase()}`)) continue;
+          try {
+            await call('POST', `/api/transactions/${txId}/contacts`, { role: c.role, name: c.name, email: c.email || '', phone: c.phone || '' });
+          } catch {
+            // Same as above.
+          }
+        }
+        // The contract's deadlines become the deal's critical dates.
+        const dates = dealRead.dates.filter((d) => d.dueDate);
+        if (dates.length > 0) {
+          try {
+            await call('POST', `/api/transactions/${txId}/key-dates`, { dates: dates.map((d) => ({ kind: d.kind, label: d.label, dueDate: d.dueDate, source: 'contract' })) });
+          } catch {
+            notes.push('The contract dates could not be added. Add them under Critical dates on the deal.');
+          }
+        }
+      }
       // Copy the listing documents onto the deal (best effort, same as the people)
       await call('POST', `/api/listings/${id}/copy-documents`, { transactionId: txId, offerId: convertOffer && convertOffer !== 'none' ? convertOffer.id : undefined }).catch(() => undefined);
       if (convertOffer && convertOffer !== 'none') {
         await call('PATCH', `/api/listings/${id}/offers/${convertOffer.id}`, { status: 'accepted' }).catch(() => undefined);
       }
       await call('PATCH', `/api/listings/${id}`, { convertedTransactionId: txId });
+
+      // Give the agent access to the agent portal for this deal (they get the invite email).
+      const agentEmail = agents.find((a) => a.id === listing.agent_id)?.email;
+      if (inviteAgent && agentEmail) {
+        try {
+          await call('POST', '/api/agent-invites', { transactionId: txId, email: agentEmail });
+        } catch (err) {
+          notes.push(`The agent portal invite to ${agentEmail} did not go out (${err instanceof Error ? err.message : 'unknown error'}). You can send it from the deal.`);
+        }
+      }
+
+      if (notes.length > 0) {
+        setDealCreated({ txId, notes });
+        setConverting(false);
+        return;
+      }
       router.push(`/dashboard/transactions/${txId}`);
     } catch (err) {
       if (handleAuth(err)) return;
@@ -1158,7 +1288,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           {/* Documents */}
           <div className={cardCls}>
             <h2 className="text-lg font-bold text-slate-100 mb-1">Documents</h2>
-            <p className="text-xs text-slate-500 mb-3">Listing agreement, disclosures, photos. They are copied onto the deal when you convert.</p>
+            <p className="text-xs text-slate-500 mb-3">Listing agreement, disclosures, photos. Drop the signed purchase contract under Purchase Contract any time and it fills in the deal when you convert. Everything here is copied onto the deal.</p>
             <div className="space-y-3 mb-3">
               {LISTING_DOC_TYPES.map((type) => {
                 const inType = docs.filter((d) => d.document_type === type);
@@ -1538,16 +1668,112 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       )}
 
       {convertOffer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
-          <form onSubmit={convert} className="w-full max-w-md bg-slate-800 border border-slate-600 rounded-xl p-6 space-y-3">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4" role="dialog" aria-modal="true">
+          {dealCreated ? (
+            <div className="w-full max-w-md bg-slate-800 border border-slate-600 rounded-xl p-6 space-y-3 my-8">
+              <h2 className="text-lg font-bold text-slate-100">Deal created</h2>
+              <p className="text-sm text-slate-400">The deal is ready, with a couple of things to follow up on:</p>
+              <ul className="list-disc pl-5 text-sm text-amber-300 space-y-1">
+                {dealCreated.notes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+              <Link href={`/dashboard/transactions/${dealCreated.txId}`} className="inline-block px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg">
+                Open the deal
+              </Link>
+            </div>
+          ) : (
+          <form onSubmit={convert} className="w-full max-w-md bg-slate-800 border border-slate-600 rounded-xl p-6 space-y-3 my-8">
             <h2 className="text-lg font-bold text-slate-100">Convert to a deal</h2>
             <p className="text-sm text-slate-400">
               Creates a new transaction for {listing.property_address} with the agent and everyone listed here, and starts your closing checklist from the dates below.
               {convertOffer !== 'none' ? ' The offer is marked accepted.' : ''}
             </p>
+
+            {/* Fill the deal in from a contract */}
+            <div className="rounded-lg border border-slate-700 bg-slate-900/30 p-3 space-y-2">
+              <p className="text-sm font-medium text-slate-200">Fill in from a contract</p>
+              <p className="text-xs text-slate-500">Read the signed purchase contract to fill in the price, dates, contract deadlines and the people named. You review everything before the deal is created.</p>
+              {reading && <p className="text-xs text-blue-300">{reading === 'uploading' ? 'Uploading…' : 'Reading the contract…'}</p>}
+              {readError && <p className="text-xs text-amber-300">{readError}</p>}
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  className={`${inputCls} !w-auto max-w-full`}
+                  value=""
+                  disabled={Boolean(reading)}
+                  onChange={(e) => {
+                    const [src, docId] = e.target.value.split(':');
+                    if (docId) void readContract(src === 'offer' ? 'offer' : 'listing', docId);
+                  }}
+                  aria-label="Choose a contract to read"
+                >
+                  <option value="">Choose a file on this listing…</option>
+                  {offerDocs.map((d) => (
+                    <option key={`o${d.id}`} value={`offer:${d.id}`}>
+                      Offer: {d.file_name}
+                    </option>
+                  ))}
+                  {docs
+                    .filter((d) => d.file_name.toLowerCase().endsWith('.pdf'))
+                    .map((d) => (
+                      <option key={`l${d.id}`} value={`listing:${d.id}`}>
+                        {d.document_type}: {d.file_name}
+                      </option>
+                    ))}
+                </select>
+                <label className={`px-3 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-xs rounded-lg cursor-pointer ${reading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  Upload a contract
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      void uploadContractAndRead(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+              {dealRead && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-xs text-green-300">Filled in from {dealRead.fileName}. Check the details below.</p>
+                  {dealRead.propertyAddress && !sameStreetNumber(dealRead.propertyAddress, listing.property_address) && (
+                    <p className="text-xs text-amber-300">The contract says the property is at {dealRead.propertyAddress}, which does not look like {listing.property_address}. Make sure this is the right contract.</p>
+                  )}
+                  {dealRead.notes && <p className="text-xs text-amber-300">Double-check: {dealRead.notes}</p>}
+                  {dealRead.dates.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-slate-400">Contract deadlines (added as the deal&apos;s critical dates):</p>
+                      {dealRead.dates.map((d, i) => (
+                        <div key={d.kind} className="flex items-center gap-2">
+                          <span className="text-xs text-slate-300 flex-1 min-w-0 truncate">{d.label}</span>
+                          <input
+                            type="date"
+                            className={`${inputCls} !w-auto`}
+                            value={d.dueDate}
+                            onChange={(e) => setDealRead({ ...dealRead, dates: dealRead.dates.map((x, j) => (j === i ? { ...x, dueDate: e.target.value } : x)) })}
+                            aria-label={d.label}
+                          />
+                          <button type="button" onClick={() => setDealRead({ ...dealRead, dates: dealRead.dates.filter((_, j) => j !== i) })} className="text-slate-500 hover:text-red-300 text-sm" aria-label={`Remove ${d.label}`}>
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {dealRead.contacts.length > 0 && (
+                    <p className="text-xs text-slate-400">
+                      People added to the deal: {dealRead.contacts.map((c) => `${c.role}: ${c.name}`).join(' · ')}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div>
               <label className={labelCls}>File number</label>
               <input className={inputCls} value={conv.fileNumber} onChange={(e) => setConv({ ...conv, fileNumber: e.target.value })} required />
+              <p className="text-[11px] text-slate-500 mt-1">Starts as today&apos;s date. Change it to anything you like.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -1563,9 +1789,26 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <label className={labelCls}>Sale price</label>
               <MoneyInput className={inputCls} aria-label="Sale price" value={conv.price} onValueChange={(v) => setConv({ ...conv, price: v })} />
             </div>
+            {(() => {
+              const agentRow = agents.find((a) => a.id === listing.agent_id);
+              return (
+                <label className={`flex items-start gap-2 text-sm ${agentRow?.email ? 'text-slate-300 cursor-pointer' : 'text-slate-500'}`}>
+                  <input
+                    type="checkbox"
+                    checked={inviteAgent && Boolean(agentRow?.email)}
+                    disabled={!agentRow?.email}
+                    onChange={(e) => setInviteAgent(e.target.checked)}
+                    className="mt-0.5 accent-blue-500"
+                  />
+                  <span>
+                    {agentRow?.email ? `Send ${agentRow.name} an agent portal invite for this deal (${agentRow.email})` : 'The agent has no email on file, so no agent portal invite can be sent. Add one on the Agents page.'}
+                  </span>
+                </label>
+              );
+            })()}
             {convertError && <p className="text-sm text-red-400">{convertError}</p>}
             <div className="flex items-center gap-3 pt-1">
-              <button type="submit" disabled={converting || !conv.fileNumber.trim()} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+              <button type="submit" disabled={converting || Boolean(reading) || !conv.fileNumber.trim()} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 {converting ? 'Creating the deal…' : 'Create deal'}
               </button>
               <button type="button" onClick={() => setConvertOffer(null)} disabled={converting} className="text-sm text-slate-400 hover:text-slate-200">
@@ -1573,6 +1816,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               </button>
             </div>
           </form>
+          )}
         </div>
       )}
     </div>

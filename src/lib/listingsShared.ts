@@ -66,7 +66,7 @@ export function cleanMoney(v: unknown): number | null {
 }
 
 
-export const LISTING_DOC_TYPES = ['General', 'Listing Agreement', 'Seller Disclosure', 'Other Contract Documents'];
+export const LISTING_DOC_TYPES = ['General', 'Listing Agreement', 'Seller Disclosure', 'Purchase Contract', 'Other Contract Documents'];
 
 export const SHOWING_KINDS = ['showing', 'open_house', 'broker_tour'] as const;
 export type ShowingKind = (typeof SHOWING_KINDS)[number];
