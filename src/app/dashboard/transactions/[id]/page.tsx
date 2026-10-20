@@ -10,6 +10,7 @@ import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categ
 import { DueDateSpec, formatDisplayDate } from '@/lib/dueDates';
 import DueDateControl from '@/components/DueDateControl';
 import StepEmailModal from '@/components/StepEmailModal';
+import ContactPicker from '@/components/ContactPicker';
 import KeyDatesPanel from '@/components/KeyDatesPanel';
 import SignatureFieldPlacer from '@/components/SignatureFieldPlacer';
 import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
@@ -2905,7 +2906,22 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             plus any other parties for this deal, typed in by hand. Sits
             directly under the Checklist card via the shared wrapper above. */}
         <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6">
-          <h2 className="text-lg font-bold text-slate-100 mb-4">Contacts</h2>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="text-lg font-bold text-slate-100">Contacts</h2>
+            <ContactPicker
+              existingEmails={contacts.map((c) => c.email)}
+              onPick={async (c) => {
+                const response = await authFetch(`/api/transactions/${resolvedParams.id}/contacts`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(c),
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result?.error || 'Failed to add');
+                setContacts((prev) => [...prev, result]);
+              }}
+            />
+          </div>
 
           <div className="space-y-4">
             {/* Agent row -- read-only here; edit via the Agents page. */}

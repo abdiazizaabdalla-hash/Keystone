@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
+import ContactPicker from '@/components/ContactPicker';
 import { LISTING_STATUS_LABEL, LISTING_STATUSES, LISTING_DOC_TYPES, type ListingStatus } from '@/lib/listingsShared';
 
 interface Listing {
@@ -655,7 +656,16 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Contacts */}
           <div className={cardCls}>
-            <h2 className="text-lg font-bold text-slate-100 mb-3">People on this listing</h2>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h2 className="text-lg font-bold text-slate-100">People on this listing</h2>
+              <ContactPicker
+                existingEmails={contacts.map((c) => c.email)}
+                onPick={async (c) => {
+                  await call('POST', `/api/listings/${id}/contacts`, c);
+                  await act(async () => undefined);
+                }}
+              />
+            </div>
             <ul className="space-y-2 text-sm mb-3">
               {contacts.map((c) => (
                 <li key={c.id} className="flex items-start justify-between gap-3">
