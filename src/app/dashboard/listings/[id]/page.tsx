@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { uploadIncoming } from '@/lib/incomingUploadClient';
-import MoveMenu from '@/components/MoveMenu';
-import { isDocDrag, isFileDrag, readDocDrag, startDocDrag } from '@/lib/docDrag';
+import DragHandle from '@/components/DragHandle';
+import { isDocDrag, isFileDrag, readDocDrag } from '@/lib/docDrag';
 import { formatDisplayDate } from '@/lib/dueDates';
 import ContactPicker from '@/components/ContactPicker';
 import StepEmailModal from '@/components/StepEmailModal';
@@ -1124,11 +1124,11 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                       {inType.map((d) => (
                         <li
                           key={d.id}
-                          draggable
-                          onDragStart={(e) => startDocDrag(e, d.id)}
-                          className="flex items-start justify-between gap-3 cursor-grab active:cursor-grabbing"
+                          data-doc-row
+                          className="flex items-start gap-3"
                         >
-                          <div className="min-w-0">
+                          <DragHandle docId={d.id} label={`Drag ${d.file_name} to another area`} />
+                          <div className="min-w-0 flex-1">
                             {d.url ? (
                               <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 break-all">
                                 {d.file_name}
@@ -1141,11 +1141,6 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                             </p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <MoveMenu
-                              onMove={(t) => void moveDoc(d.id, t)}
-                              label={`Move ${d.file_name} to another area`}
-                              options={LISTING_DOC_TYPES.filter((t) => t !== type).map((t) => ({ value: t, label: t }))}
-                            />
                             <button
                               type="button"
                               onClick={async () => {
