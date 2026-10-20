@@ -7,6 +7,9 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import AgentCalendarPrompt from '@/components/AgentCalendarPrompt';
 import AgentListingCard, { type AgentListingSummary } from '@/components/AgentListingCard';
+import type { ListingStatus } from '@/lib/listingsShared';
+
+const LISTING_ORDER: ListingStatus[] = ['active', 'under_offer', 'preparing', 'converted', 'expired', 'withdrawn'];
 
 interface AgentTransaction {
   id: string;
@@ -177,6 +180,11 @@ export default function AgentHubPage() {
     }
   };
 
+  const onMarket = listings.filter((l) => l.status === 'active' || l.status === 'under_offer').length;
+  const openOffers = listings.reduce((n, l) => n + l.openOffers, 0);
+  const activeDeals = transactions.filter((t) => t.status !== 'Closed').length;
+  const overdueSteps = transactions.filter((t) => t.status !== 'Closed').reduce((n, t) => n + t.overdueCount, 0);
+
   const tcGroups = useMemo<TcGroup[]>(() => {
     const byTc = new Map<string, TcGroup>();
     for (const tx of transactions) {
@@ -238,40 +246,73 @@ export default function AgentHubPage() {
           </div>
         )}
 
-        {listings.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-baseline justify-between gap-3 mb-3">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Your listings</p>
-              <Link href="/agent/listings" className="text-xs text-blue-400 hover:text-blue-300">
-                View all ({listings.length}) →
-              </Link>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              {listings
-                .filter((l) => l.status !== 'expired')
-                .slice(0, 6)
-                .map((l) => (
-                  <AgentListingCard key={l.id} listing={l} />
-                ))}
-            </div>
-          </div>
-        )}
-
         {loading ? (
           <p className="text-slate-400 text-sm">Loading…</p>
         ) : error ? (
           <p className="text-red-400 text-sm">{error}</p>
-        ) : transactions.length === 0 && listings.length === 0 ? (
-          <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 text-center">
-            <p className="text-slate-300">You don&apos;t have access to any deals yet.</p>
-            <p className="text-slate-500 text-sm mt-1">
-              {pendingInvites.length > 0
-                ? 'Accept the invite above to get started.'
-                : "Once a transaction coordinator adds you to one, it'll show up here."}
-            </p>
-          </div>
-        ) : transactions.length === 0 ? null : (
+        ) : (
           <>
+            {/* At a glance. Each tile jumps to the section it counts. */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-10">
+              {[
+                { label: 'Listings on the market', value: onMarket, href: '#listings', tone: 'text-emerald-300' },
+                { label: 'Open offers', value: openOffers, href: '#listings', tone: openOffers > 0 ? 'text-amber-300' : 'text-slate-100' },
+                { label: 'Active transactions', value: activeDeals, href: '#transactions', tone: 'text-blue-300' },
+                { label: 'Overdue steps', value: overdueSteps, href: '#transactions', tone: overdueSteps > 0 ? 'text-red-400' : 'text-slate-100' },
+              ].map((t) => (
+                <a key={t.label} href={t.href} className="bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 hover:bg-slate-700/40 transition">
+                  <p className={`text-2xl font-semibold ${t.tone}`}>{t.value}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{t.label}</p>
+                </a>
+              ))}
+            </div>
+
+            {/* LISTINGS */}
+            <section id="listings" className="mb-12 scroll-mt-6">
+              <div className="flex items-baseline justify-between gap-3 mb-4 pb-2 border-b border-slate-700">
+                <h2 className="text-lg font-display font-semibold text-slate-100">
+                  Listings <span className="text-sm font-normal text-slate-500">({listings.length})</span>
+                </h2>
+                {listings.length > 0 && (
+                  <Link href="/agent/listings" className="text-xs text-blue-400 hover:text-blue-300">
+                    View all →
+                  </Link>
+                )}
+              </div>
+              {listings.length === 0 ? (
+                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 text-center">
+                  <p className="text-slate-400 text-sm">No listings shared with you yet.</p>
+                  <p className="text-slate-500 text-xs mt-1">When your TC starts a listing for you and shares it, it shows up here.</p>
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {[...listings]
+                    .filter((l) => l.status !== 'expired')
+                    .sort((x, y) => LISTING_ORDER.indexOf(x.status) - LISTING_ORDER.indexOf(y.status))
+                    .slice(0, 6)
+                    .map((l) => (
+                      <AgentListingCard key={l.id} listing={l} />
+                    ))}
+                </div>
+              )}
+            </section>
+
+            {/* TRANSACTIONS */}
+            <section id="transactions" className="scroll-mt-6">
+              <div className="flex items-baseline justify-between gap-3 mb-4 pb-2 border-b border-slate-700">
+                <h2 className="text-lg font-display font-semibold text-slate-100">
+                  Transactions <span className="text-sm font-normal text-slate-500">({transactions.length})</span>
+                </h2>
+              </div>
+              {transactions.length === 0 ? (
+                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 text-center">
+                  <p className="text-slate-400 text-sm">You aren&apos;t on any transactions yet.</p>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {pendingInvites.length > 0 ? 'Accept the invite above to get started.' : "Once a transaction coordinator adds you to one, it'll show up here."}
+                  </p>
+                </div>
+              ) : (
+                <>
             {/* Your TCs -- most agents only ever see one card here. */}
             <div className="mb-8">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Your TCs</p>
@@ -376,6 +417,9 @@ export default function AgentHubPage() {
                 </div>
               ))}
             </div>
+                </>
+              )}
+            </section>
           </>
         )}
       </div>
