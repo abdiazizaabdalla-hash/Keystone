@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { uploadIncoming } from '@/lib/incomingUploadClient';
 import DragHandle from '@/components/DragHandle';
-import { isDocDrag, isFileDrag, readDocDrag } from '@/lib/docDrag';
+import { isDocDrag, isFileDrag, readDocDrag, startDocDrag } from '@/lib/docDrag';
 import { formatDisplayDate } from '@/lib/dueDates';
 import ContactPicker from '@/components/ContactPicker';
 import StepEmailModal from '@/components/StepEmailModal';
@@ -143,7 +143,6 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   // Documents
   const [docs, setDocs] = useState<ListingDoc[]>([]);
   const [docType, setDocType] = useState('General');
-  const [dragOverDocType, setDragOverDocType] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [docError, setDocError] = useState('');
 
@@ -1091,7 +1090,6 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             <div className="space-y-3 mb-3">
               {LISTING_DOC_TYPES.map((type) => {
                 const inType = docs.filter((d) => d.document_type === type);
-                const isOver = dragOverDocType === type;
                 return (
                   <div
                     key={type}
@@ -1099,13 +1097,13 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                       if (!isDocDrag(e) && !isFileDrag(e)) return;
                       e.preventDefault();
                       e.dataTransfer.dropEffect = isDocDrag(e) ? 'move' : 'copy';
-                      if (dragOverDocType !== type) setDragOverDocType(type);
+                      e.currentTarget.classList.add('doc-drop-over');
                     }}
                     onDragLeave={(e) => {
-                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOverDocType(null);
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.classList.remove('doc-drop-over');
                     }}
                     onDrop={(e) => {
-                      setDragOverDocType(null);
+                      e.currentTarget.classList.remove('doc-drop-over');
                       if (isDocDrag(e)) {
                         e.preventDefault();
                         const docId = readDocDrag(e);
@@ -1115,7 +1113,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                         void uploadDocs(e.dataTransfer.files, type);
                       }
                     }}
-                    className={`rounded-lg border px-3 py-2 transition ${isOver ? 'border-blue-400 bg-blue-500/10' : 'border-slate-700 bg-slate-900/30'}`}
+                    className="rounded-lg border border-slate-700 bg-slate-900/30 px-3 py-2"
                   >
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
                       {type} <span className="font-normal normal-case text-slate-500">· {inType.length}</span>
@@ -1124,13 +1122,14 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                       {inType.map((d) => (
                         <li
                           key={d.id}
-                          data-doc-row
-                          className="flex items-start gap-3"
+                          draggable
+                          onDragStart={(e) => startDocDrag(e, d.id)}
+                          className="flex items-start gap-3 cursor-grab active:cursor-grabbing"
                         >
-                          <DragHandle docId={d.id} label={`Drag ${d.file_name} to another area`} />
+                          <DragHandle label={`Drag ${d.file_name} to another area`} />
                           <div className="min-w-0 flex-1">
                             {d.url ? (
-                              <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 break-all">
+                              <a href={d.url} target="_blank" rel="noopener noreferrer" draggable={false} className="text-blue-400 hover:text-blue-300 break-all">
                                 {d.file_name}
                               </a>
                             ) : (
@@ -1160,7 +1159,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                           </div>
                         </li>
                       ))}
-                      {inType.length === 0 && <li className="text-xs text-slate-600">{isOver ? 'Drop here' : 'Nothing here. Drag a file or document onto this area.'}</li>}
+                      {inType.length === 0 && <li className="text-xs text-slate-600">Nothing here. Drag a file or document onto this area.</li>}
                     </ul>
                   </div>
                 );

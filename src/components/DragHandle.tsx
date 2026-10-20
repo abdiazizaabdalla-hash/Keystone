@@ -1,28 +1,20 @@
-'use client';
-
-import { startDocDrag } from '@/lib/docDrag';
-
-// The four-arrow grip at the top-left of a document. Only this handle starts
-// a drag, so clicking links and buttons on the row never turns into an
-// accidental move. The whole row is shown as the thing being dragged.
-export default function DragHandle({ docId, label }: { docId: string; label: string }) {
+// A tiny four-arrow icon at the top-left of a document. It is only a visual
+// cue: the whole row can be dragged, this just shows that it can be.
+export default function DragHandle({ label }: { label: string }) {
   return (
-    <span
-      draggable
-      onDragStart={(e) => {
-        startDocDrag(e, docId);
-        const row = (e.currentTarget as HTMLElement).closest('[data-doc-row]');
-        if (row) e.dataTransfer.setDragImage(row, 16, 16);
-      }}
-      onClick={(e) => e.stopPropagation()}
+    <svg
+      className="h-3 w-3 flex-shrink-0 self-start mt-1 cursor-grab text-slate-500"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      viewBox="0 0 24 24"
       role="img"
       aria-label={label}
-      title="Drag to move to another area"
-      className="inline-flex h-6 w-6 flex-shrink-0 cursor-grab items-center justify-center self-start rounded-md border border-slate-600 text-slate-400 transition hover:border-blue-500 hover:text-blue-300 active:cursor-grabbing"
     >
-      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3" />
-      </svg>
-    </span>
+      <title>Drag to move to another area</title>
+      <path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3" />
+    </svg>
   );
 }

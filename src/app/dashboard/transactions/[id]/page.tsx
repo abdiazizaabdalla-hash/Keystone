@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import DragHandle from '@/components/DragHandle';
-import { isDocDrag, isFileDrag, readDocDrag } from '@/lib/docDrag';
+import { isDocDrag, isFileDrag, readDocDrag, startDocDrag } from '@/lib/docDrag';
 import { stagesForTaskNames } from '@/lib/transactionStages';
 import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categoryLabel, typesForCategory } from '@/lib/documentTaxonomy';
 import { DueDateSpec, formatDisplayDate } from '@/lib/dueDates';
@@ -1496,7 +1496,6 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   // attachment) onto a category box, or the "Move to…" menu on the row for
   // phones and keyboards. Moving only changes where the file is filed; the
   // file itself and any email it came with are untouched.
-  const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
   const [, setMovingDocId] = useState<string | null>(null);
   const handleMoveDocument = async (docId: string, categoryKey: string) => {
     const current = documents.find((d) => d.id === docId);
@@ -1789,15 +1788,17 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     return (
       <div key={doc.id}>
         <div
-          data-doc-row
-          className="flex items-center justify-between gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-2.5"
+          draggable
+          onDragStart={(e) => startDocDrag(e, doc.id)}
+          className="flex items-center justify-between gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-2.5 cursor-grab active:cursor-grabbing"
         >
-          <DragHandle docId={doc.id} label={`Drag ${doc.file_name} to another category`} />
+          <DragHandle label={`Drag ${doc.file_name} to another category`} />
           <div className="min-w-0 flex-1">
             <a
               href={doc.url || '#'}
               target="_blank"
               rel="noopener noreferrer"
+              draggable={false}
               className="text-blue-400 hover:text-blue-300 truncate block"
             >
               📄 {doc.file_name}
@@ -2235,13 +2236,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             if (!isDocDrag(e) && !isFileDrag(e)) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = isDocDrag(e) ? 'move' : 'copy';
-            if (dragOverCategory !== cat.key) setDragOverCategory(cat.key);
+            // Highlight straight on the element: re-rendering this very large page on every drag event made dragging lag.
+            e.currentTarget.classList.add('doc-drop-over');
           }}
           onDragLeave={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOverCategory(null);
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.classList.remove('doc-drop-over');
           }}
           onDrop={(e) => {
-            setDragOverCategory(null);
+            e.currentTarget.classList.remove('doc-drop-over');
             if (isDocDrag(e)) {
               e.preventDefault();
               const docId = readDocDrag(e);
@@ -2251,9 +2253,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               void handleDropFilesOnCategory(e.dataTransfer.files, cat.key);
             }
           }}
-          className={`border rounded-lg overflow-hidden transition ${
-            dragOverCategory === cat.key ? 'bg-blue-500/10 border-blue-400' : 'bg-slate-700/30 border-slate-600'
-          }`}
+          className="border rounded-lg overflow-hidden bg-slate-700/30 border-slate-600"
         >
           <div className="w-full flex items-center gap-2 px-4 py-3 hover:bg-slate-700/50 transition">
             <button
@@ -3573,10 +3573,12 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                               {email.attachments.map((att) => (
                                 <div
                                   key={att.id}
-                                  data-doc-row
-                                  className="flex items-center gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-3 py-2 hover:border-slate-500 transition"
+                                  draggable
+                                  onDragStart={(e) => startDocDrag(e, att.id)}
+                                  title="Drag onto a Documents category to file it there"
+                                  className="flex items-center gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-3 py-2 hover:border-slate-500 transition cursor-grab active:cursor-grabbing"
                                 >
-                                  <DragHandle docId={att.id} label={`Drag ${att.fileName} to a Documents category`} />
+                                  <DragHandle label={`Drag ${att.fileName} to a Documents category`} />
                                   <a
                                     href={att.url || '#'}
                                     target="_blank"
