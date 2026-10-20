@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { suggestFileNumber } from '@/lib/fileNumber';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
@@ -79,7 +80,22 @@ export default function NewTransactionPage() {
     fetchTemplates();
     checkAiAvailability();
     checkTeamOwner();
+    suggestNumber();
   }, []);
+
+  // Pre-fills the file number with today's date (10.20.2026, then 10.20.2.2026 for a second deal that day).
+  // Only fills an empty box, so anything the person typed or the contract reader filled in is left alone.
+  const suggestNumber = async () => {
+    try {
+      const res = await authFetch('/api/transactions');
+      const list = res.ok ? await res.json() : [];
+      const numbers = Array.isArray(list) ? list.map((t: { file_number?: string }) => t.file_number || '') : [];
+      const suggestion = suggestFileNumber(new Date(), numbers);
+      setFormData((prev) => (prev.fileNumber ? prev : { ...prev, fileNumber: suggestion }));
+    } catch {
+      // No suggestion; the box just stays empty.
+    }
+  };
 
   // Non-fatal either way: a 403/404 (no team) just means there is no team
   // default template to pre-select.
@@ -592,11 +608,11 @@ export default function NewTransactionPage() {
               name="fileNumber"
               value={formData.fileNumber}
               onChange={handleChange}
-              placeholder="e.g., FL-2024-001234"
+              placeholder="e.g., 10.20.2026"
               required
               className="w-full bg-slate-600 border border-slate-600 hover:border-slate-500 focus:border-blue-500 rounded-lg px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition"
             />
-            <p className="text-xs text-slate-400 mt-2">Unique identifier for this transaction</p>
+            <p className="text-xs text-slate-400 mt-2">Starts as today&apos;s date (a second deal the same day becomes 10.20.2.2026). Change it to anything you like.</p>
           </div>
 
           {/* Property Address */}
