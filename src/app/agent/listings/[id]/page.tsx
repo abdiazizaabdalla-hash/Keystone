@@ -20,6 +20,7 @@ interface Detail {
     mlsUrl: string | null;
     sellerName: string | null;
     listedOn?: string | null;
+    convertedTransactionId?: string | null;
   };
   tcLabel: string;
   dates: { id: string; label: string; due_date: string }[];
@@ -80,8 +81,8 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
   if (error || !data)
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6">
-        <Link href="/agent" className="text-sm text-slate-400 hover:text-slate-200">
-          ← Back to your deals
+        <Link href="/agent/listings" className="text-sm text-slate-400 hover:text-slate-200">
+          ← Back to your listings
         </Link>
         <p className="mt-4 text-red-400 text-sm">{error || 'Listing not found'}</p>
       </div>
@@ -93,8 +94,8 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 px-4 py-6 md:px-6 md:py-10">
       <div className="max-w-3xl mx-auto space-y-5">
-        <Link href="/agent" className="text-sm text-slate-400 hover:text-slate-200">
-          ← Back to your deals
+        <Link href="/agent/listings" className="text-sm text-slate-400 hover:text-slate-200">
+          ← Back to your listings
         </Link>
         <div>
           <h1 className="text-2xl font-display font-semibold text-slate-100 break-words">{listing.propertyAddress}</h1>
@@ -115,6 +116,16 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
             </p>
           )}
         </div>
+
+        {listing.convertedTransactionId && (
+          <Link
+            href={`/agent/transactions/${listing.convertedTransactionId}`}
+            className="flex items-center justify-between gap-3 bg-emerald-900/20 border border-emerald-700/50 rounded-lg px-4 py-3 text-sm hover:bg-emerald-900/30 transition"
+          >
+            <span className="text-slate-200">This listing is now under contract.</span>
+            <span className="text-emerald-300 shrink-0">Open the deal →</span>
+          </Link>
+        )}
 
         <div className={card}>
           <h2 className="text-lg font-bold text-slate-100 mb-3">Key dates</h2>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
@@ -249,34 +250,15 @@ export default function AgentHubPage() {
         )}
 
         {listings.length > 0 && (
-          <div className="mb-8">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Your listings</p>
-            <div className="grid gap-3 md:grid-cols-2">
-              {listings.map((l) => (
-                <button
-                  key={l.id}
-                  type="button"
-                  onClick={() => router.push(`/agent/listings/${l.id}`)}
-                  className="text-left bg-slate-700/30 border border-slate-600 rounded-lg p-4 hover:bg-slate-600/30 transition"
-                >
-                  <p className="text-slate-100 font-semibold leading-snug break-words">{l.propertyAddress}</p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    {l.status.replace('_', ' ')}
-                    {l.listPrice ? ` · $${Number(l.listPrice).toLocaleString('en-US')}` : ''}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-2">
-                    {[
-                      l.openOffers > 0 ? `${l.openOffers} open offer${l.openOffers === 1 ? '' : 's'}` : '',
-                      `${l.showings} showing${l.showings === 1 ? '' : 's'}`,
-                      l.expirationDate ? `expires ${formatDisplayDate(l.expirationDate)}` : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
+          <Link
+            href="/agent/listings"
+            className="mb-6 flex items-center justify-between gap-3 bg-slate-700/30 border border-slate-600 rounded-lg px-4 py-3 text-sm hover:bg-slate-600/30 transition"
+          >
+            <span className="text-slate-300">
+              You have {listings.length} listing{listings.length === 1 ? '' : 's'} with your TC.
+            </span>
+            <span className="text-blue-400 shrink-0">View listings →</span>
+          </Link>
         )}
 
         {loading ? (

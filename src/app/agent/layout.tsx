@@ -87,7 +87,8 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   const isMessages = pathname === '/agent/messages' || pathname.includes('/messages');
   const isInvoices = pathname.startsWith('/agent/invoices');
   const isSettings = pathname.startsWith('/agent/settings');
-  const isDeals = !isMessages && !isInvoices && !isSettings;
+  const isListings = pathname.startsWith('/agent/listings');
+  const isDeals = !isMessages && !isInvoices && !isSettings && !isListings;
 
   const handleLogout = () => {
     clearSession();
@@ -123,6 +124,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
           <div className="absolute left-0 right-0 top-full bg-slate-800 border-b border-slate-700 shadow-xl px-3 pb-3 space-y-1">
             {[
               { href: '/agent', label: 'Deals', active: isDeals },
+              { href: '/agent/listings', label: 'Listings', active: isListings },
               { href: '/agent/messages', label: 'Messages', active: isMessages },
               { href: '/agent/invoices', label: 'Invoices', active: isInvoices },
               { href: '/agent/settings', label: 'Settings', active: isSettings },
@@ -204,6 +206,17 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
                 <path d="M13 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2h-2z" />
                 <path d="M5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5z" />
                 <path d="M13 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2h-2z" />
+              </svg>
+            }
+          />
+          <SideLink
+            href="/agent/listings"
+            label="Listings"
+            collapsed={collapsed}
+            active={isListings}
+            icon={
+              <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
               </svg>
             }
           />

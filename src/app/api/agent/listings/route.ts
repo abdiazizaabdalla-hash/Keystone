@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
         listPrice: l.list_price,
         plannedListDate: l.planned_list_date,
         expirationDate: l.expiration_date,
+        listedOn: l.listed_on ?? null,
         openOffers: openOffers.get(l.id as string) || 0,
         showings: showingCount.get(l.id as string) || 0,
         tcLabel: tcLabels.get(l.tc_user_id as string) || 'Transaction coordinator',
