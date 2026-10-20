@@ -73,6 +73,9 @@ export function cleanChild(kind: ChildKind, body: Record<string, unknown>, listi
       v.option_days = n !== null && Number.isFinite(n) && n >= 0 && n < 400 ? n : null;
     }
     if (!partial || 'closingDate' in body) v.closing_date = isIsoDate(body.closingDate) ? body.closingDate : null;
+    if (!partial || 'offerExpires' in body) v.offer_expires_at = cleanText(body.offerExpires, 80);
+    if (!partial || 'possession' in body) v.possession = cleanText(body.possession, 300);
+    if (!partial || 'contingencies' in body) v.contingencies = cleanText(body.contingencies, 2000);
     if (!partial && !v.buyer_name && v.offer_price === null) return { ok: false, error: 'Add a buyer name or an offer price' };
     return { ok: true, value: v };
   }

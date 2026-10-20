@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { logListingActivity, requireListingAccess } from '@/lib/listings';
+import { OFFER_BUCKET, offerDocPaths } from '@/lib/listingOfferFiles';
 import { queueListingCalendarSync, removeListingEvent } from '@/lib/calendarSync';
 import { CHILD_TABLE, cleanChild, isChildKind } from '@/lib/listingChildren';
 
@@ -58,8 +59,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       const eventId = (gone as { google_event_id?: string | null } | null)?.google_event_id;
       if (eventId) await removeListingEvent(id, eventId);
     }
+    // An offer's stored documents are removed with it (the rows cascade; the files would be orphaned).
+    const offerPaths = kind === 'offers' ? await offerDocPaths({ offerId: childId }) : [];
     const { error } = await supabaseServer.from(table).delete().eq('id', childId).eq('listing_id', id);
     if (error) throw error;
+    if (offerPaths.length) await supabaseServer.storage.from(OFFER_BUCKET).remove(offerPaths);
     return NextResponse.json({ success: true });
   } catch (error) {
     return fail(error, 'delete');

@@ -7,6 +7,8 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import ContactPicker from '@/components/ContactPicker';
 import StepEmailModal from '@/components/StepEmailModal';
+import OfferIntakeModal from '@/components/OfferIntakeModal';
+import OfferHistory from '@/components/OfferHistory';
 import {
   FINANCING_TYPES,
   LISTING_STATUS_LABEL,
@@ -48,6 +50,10 @@ interface Offer {
   option_days?: number | null;
   closing_date?: string | null;
   seller_concessions?: number | null;
+  offer_expires_at?: string | null;
+  possession?: string | null;
+  contingencies?: string | null;
+  current_version?: number | null;
 }
 interface Showing { id: string; showing_date: string; kind: string; visitor: string | null; interest: string | null; feedback: string | null }
 interface PriceChange { id: string; old_price: number | null; new_price: number; changed_on: string; note: string | null }
@@ -101,6 +107,10 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const EMPTY_OFFER = { buyerName: '', buyerAgent: '', offerPrice: '', receivedOn: '', terms: '', financing: '', earnestMoney: '', optionDays: '', closingDate: '', sellerConcessions: '' };
   const [newOffer, setNewOffer] = useState(EMPTY_OFFER);
   const [emailTask, setEmailTask] = useState<Task | null>(null);
+  // Offer intake: 'new' = from documents, an Offer = counteroffer/amendment for it
+  const [intake, setIntake] = useState<'new' | Offer | null>(null);
+  const [historyOpen, setHistoryOpen] = useState<string | null>(null);
+  const [historyKey, setHistoryKey] = useState(0);
   const [newShowing, setNewShowing] = useState({ showingDate: '', kind: 'showing', visitor: '', interest: '', feedback: '' });
   const [priceForm, setPriceForm] = useState({ price: '', note: '' });
   const [showAllActivity, setShowAllActivity] = useState(false);
@@ -343,7 +353,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         }
       }
       // Copy the listing documents onto the deal (best effort, same as the people)
-      if (docs.length > 0) await call('POST', `/api/listings/${id}/copy-documents`, { transactionId: txId }).catch(() => undefined);
+      await call('POST', `/api/listings/${id}/copy-documents`, { transactionId: txId, offerId: convertOffer && convertOffer !== 'none' ? convertOffer.id : undefined }).catch(() => undefined);
       if (convertOffer && convertOffer !== 'none') {
         await call('PATCH', `/api/listings/${id}/offers/${convertOffer.id}`, { status: 'accepted' }).catch(() => undefined);
       }
@@ -481,7 +491,12 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
           {/* Offers */}
           <div className={cardCls}>
-            <h2 className="text-lg font-bold text-slate-100 mb-3">Offers</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h2 className="text-lg font-bold text-slate-100">Offers</h2>
+              <button type="button" onClick={() => setIntake('new')} className="text-sm px-3 py-1.5 rounded-lg border border-blue-500/60 text-blue-300 hover:bg-blue-500/10">
+                Add offer from PDF
+              </button>
+            </div>
             {offers.length === 0 && <p className="text-sm text-slate-500 mb-3">No offers logged yet.</p>}
             {comparable.length >= 2 && (
               <div className="mb-4 overflow-x-auto border border-slate-700 rounded-lg">
@@ -496,6 +511,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                       <th className="px-3 py-2">Earnest</th>
                       <th className="px-3 py-2">Option</th>
                       <th className="px-3 py-2">Closing</th>
+                      <th className="px-3 py-2">Expires</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -513,6 +529,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                           <td className="px-3 py-2">{o.earnest_money ? money(o.earnest_money) : '—'}</td>
                           <td className="px-3 py-2">{o.option_days != null ? `${o.option_days}d` : '—'}</td>
                           <td className="px-3 py-2">{o.closing_date ? formatDisplayDate(o.closing_date) : '—'}</td>
+                          <td className="px-3 py-2">{o.offer_expires_at || '—'}</td>
                         </tr>
                       );
                     })}
@@ -546,7 +563,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                       ))}
                     </select>
                   </div>
-                  {(o.financing || o.earnest_money || o.option_days != null || o.closing_date || o.seller_concessions) && (
+                  {(o.financing || o.earnest_money || o.option_days != null || o.closing_date || o.seller_concessions || o.offer_expires_at || o.possession) && (
                     <p className="text-xs text-slate-400 mt-2">
                       {[
                         o.financing,
@@ -554,11 +571,14 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                         o.option_days != null ? `${o.option_days}-day option` : '',
                         o.closing_date ? `Closing ${formatDisplayDate(o.closing_date)}` : '',
                         o.seller_concessions ? `Seller pays ${money(o.seller_concessions)}` : '',
+                        o.offer_expires_at ? `Expires ${o.offer_expires_at}` : '',
+                        o.possession ? `Possession: ${o.possession}` : '',
                       ]
                         .filter(Boolean)
                         .join(' · ')}
                     </p>
                   )}
+                  {o.contingencies && <p className="text-xs text-slate-400 mt-1 whitespace-pre-wrap break-words">Contingencies: {o.contingencies}</p>}
                   {o.terms && <p className="text-sm text-slate-400 mt-2 whitespace-pre-wrap break-words">{o.terms}</p>}
                   <div className="mt-2 flex items-center gap-4 text-sm">
                     {!converted && (o.status === 'received' || o.status === 'countered') && (
@@ -566,10 +586,19 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                         Accept and convert to deal
                       </button>
                     )}
+                    {!converted && (
+                      <button type="button" onClick={() => setIntake(o)} className="text-blue-400 hover:text-blue-300">
+                        Counteroffer / amendment
+                      </button>
+                    )}
+                    <button type="button" onClick={() => setHistoryOpen(historyOpen === o.id ? null : o.id)} className="text-slate-400 hover:text-slate-200">
+                      {historyOpen === o.id ? 'Hide history' : `History${(o.current_version || 1) > 1 ? ` (v${o.current_version})` : ''}`}
+                    </button>
                     <button type="button" onClick={() => act(() => call('DELETE', `/api/listings/${id}/offers/${o.id}`))} className="text-slate-500 hover:text-red-300">
                       Remove
                     </button>
                   </div>
+                  {historyOpen === o.id && <OfferHistory listingId={id} offerId={o.id} refreshKey={historyKey} />}
                 </div>
               ))}
             </div>
@@ -960,6 +989,22 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           </button>
         </div>
       </div>
+
+      {intake && (
+        <OfferIntakeModal
+          key={intake === 'new' ? 'new' : intake.id}
+          listingId={id}
+          offer={intake === 'new' ? null : (intake as unknown as Record<string, unknown>)}
+          onClose={() => setIntake(null)}
+          onSaved={async (message) => {
+            const wasRevision = intake !== 'new';
+            setIntake(null);
+            setHistoryKey((k) => k + 1);
+            if (wasRevision) setHistoryOpen((intake as Offer).id);
+            await act(async () => undefined, message);
+          }}
+        />
+      )}
 
       {emailTask && (
         <StepEmailModal

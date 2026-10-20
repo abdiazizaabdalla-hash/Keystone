@@ -33,6 +33,9 @@ interface Detail {
     optionDays: number | null;
     closingDate: string | null;
     sellerConcessions: number | null;
+    offerExpires: string | null;
+    possession: string | null;
+    contingencies: string | null;
     terms: string | null;
   }[];
   showings: { id: string; showing_date: string; kind: string; visitor: string | null; interest: string | null; feedback: string | null }[];
@@ -156,10 +159,13 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
                     o.optionDays != null ? `${o.optionDays}-day option` : '',
                     o.closingDate ? `Closing ${formatDisplayDate(o.closingDate)}` : '',
                     o.sellerConcessions ? `Seller pays ${money(o.sellerConcessions)}` : '',
+                    o.offerExpires ? `Expires ${o.offerExpires}` : '',
+                    o.possession ? `Possession: ${o.possession}` : '',
                   ]
                     .filter(Boolean)
                     .join(' · ')}
                 </p>
+                {o.contingencies && <p className="text-xs text-slate-400 mt-1 whitespace-pre-wrap break-words">Contingencies: {o.contingencies}</p>}
                 {o.terms && <p className="text-sm text-slate-400 mt-2 whitespace-pre-wrap break-words">{o.terms}</p>}
               </div>
             ))}

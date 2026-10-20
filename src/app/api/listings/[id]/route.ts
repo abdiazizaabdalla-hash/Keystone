@@ -4,6 +4,7 @@ import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
+import { offerDocPaths } from '@/lib/listingOfferFiles';
 import { queueListingCalendarSync, removeListingCalendarEvents } from '@/lib/calendarSync';
 import {
   LISTING_STATUSES,
@@ -164,10 +165,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
     await removeListingCalendarEvents(id);
     // Remove the stored files too; the document rows go with the listing, but storage objects would be orphaned.
+    const offerPathsToRemove = await offerDocPaths({ listingId: id });
     const { data: docs } = await supabaseServer.from('listing_documents').select('storage_path').eq('listing_id', id);
     const { error } = await supabaseServer.from('listings').delete().eq('id', id);
     if (error) throw error;
-    const paths = (docs || []).map((d) => d.storage_path as string).filter(Boolean);
+    const paths = [...(docs || []).map((d) => d.storage_path as string).filter(Boolean), ...offerPathsToRemove];
     if (paths.length > 0) await supabaseServer.storage.from('transaction-documents').remove(paths).catch(() => undefined);
     await logAudit(request, user, 'listing.delete', { entityType: 'listing', entityId: id });
     return NextResponse.json({ success: true });

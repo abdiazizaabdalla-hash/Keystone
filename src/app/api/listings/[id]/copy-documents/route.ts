@@ -54,7 +54,46 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
       copied += 1;
     }
-    return NextResponse.json({ copied, total: (docs || []).length });
+
+    // The accepted offer's own documents (contract, addenda, counteroffers) go onto the deal too.
+    let offerCopied = 0;
+    const offerId = typeof body.offerId === 'string' ? body.offerId : '';
+    if (offerId) {
+      const { data: offerDocs } = await supabaseServer
+        .from('listing_offer_documents')
+        .select('*')
+        .eq('offer_id', offerId)
+        .eq('listing_id', id)
+        .order('created_at', { ascending: true });
+      for (const d of offerDocs || []) {
+        const safeName = String(d.file_name).replace(/[^a-zA-Z0-9._-]/g, '_');
+        const dest = `${transactionId}/${crypto.randomUUID()}-${safeName}`;
+        const { error: copyError } = await supabaseServer.storage.from(BUCKET).copy(d.storage_path as string, dest);
+        if (copyError) {
+          console.error('Copying offer document failed', copyError);
+          continue;
+        }
+        const { error: insertError } = await supabaseServer.from('documents').insert({
+          transaction_id: transactionId,
+          // Same categories the Documents tab uses: contract in Contract & Disclosures, addenda and counters in Amendments & Addenda
+          category: d.doc_kind === 'purchase_contract' ? 'contract_disclosures' : d.doc_kind === 'other' ? 'other' : 'amendments_addenda',
+          document_type: d.doc_kind === 'purchase_contract' ? 'Purchase Contract' : d.doc_kind === 'addendum' ? 'Other Addenda' : d.doc_kind === 'counteroffer' ? 'Contract Amendment' : 'General',
+          file_name: d.file_name,
+          storage_path: dest,
+          content_type: d.content_type,
+          file_size: d.file_size,
+          uploaded_by: user.id,
+          requires_signature: false,
+        });
+        if (insertError) {
+          await supabaseServer.storage.from(BUCKET).remove([dest]);
+          console.error('Inserting copied offer document failed', insertError);
+          continue;
+        }
+        offerCopied += 1;
+      }
+    }
+    return NextResponse.json({ copied: copied + offerCopied, total: (docs || []).length + offerCopied });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('Error copying listing documents:', error);
