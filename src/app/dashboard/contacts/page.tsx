@@ -6,6 +6,8 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { parseCsv } from '@/lib/csvImport';
 import Link from 'next/link';
 import type { ContactRow } from '@/lib/contactsCrm';
+import { tidyTags } from '@/lib/contactCategories';
+import AddContactToDealModal from '@/components/AddContactToDealModal';
 
 // Contacts: the TC's address book. Everyone in their business in one place, with
 // tags to slice it ("lender", "past client", "Austin") and a newsletter flag that
@@ -261,6 +263,28 @@ export default function ContactsPage() {
     }
   };
 
+  const [addTo, setAddTo] = useState<ContactRow | null>(null);
+
+  // How many contacts still carry role-style tags that the tidy-up would group into categories.
+  const untidyCount = useMemo(() => contacts.filter((c) => tidyTags(c.role, c.tags || []) !== (c.tags || [])).length, [contacts]);
+
+  const tidyUp = async () => {
+    setWorking(true);
+    setError('');
+    try {
+      const res = await authFetch('/api/contacts/tidy-tags', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to tidy tags');
+      await load();
+      flash(data.changed > 0 ? `Grouped tags into categories for ${data.changed} contact${data.changed === 1 ? '' : 's'}.` : 'Tags are already grouped.');
+    } catch (err) {
+      if (handleAuth(err)) return;
+      setError(err instanceof Error ? err.message : 'Failed to tidy tags');
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const importFromDeals = async () => {
     setWorking(true);
     setError('');
@@ -314,6 +338,17 @@ export default function ContactsPage() {
           <p className="text-slate-400">Everyone in your business in one place, with tags to sort them.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {untidyCount > 0 && (
+            <button
+              type="button"
+              onClick={tidyUp}
+              disabled={working}
+              className="px-4 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg transition disabled:opacity-50"
+              title="Turns role-style tags like &quot;seller's preferred inspector&quot; into broad categories like Inspector. Roles and tags you typed yourself are not changed."
+            >
+              Group tags ({untidyCount})
+            </button>
+          )}
           <button
             type="button"
             onClick={importFromDeals}
@@ -449,7 +484,7 @@ export default function ContactsPage() {
                 <th className="px-2 py-3">Email / phone</th>
                 <th className="px-2 py-3">Tags</th>
                 <th className="px-2 py-3">Newsletter</th>
-                <th className="px-2 py-3 w-16" />
+                <th className="px-2 py-3 w-32" />
               </tr>
             </thead>
             <tbody>
@@ -491,7 +526,10 @@ export default function ContactsPage() {
                       <span className="text-xs text-slate-600">No</span>
                     )}
                   </td>
-                  <td className="px-2 py-3 text-right">
+                  <td className="px-2 py-3 text-right whitespace-nowrap">
+                    <button type="button" onClick={() => setAddTo(c)} className="text-xs text-blue-400 hover:text-blue-300 mr-3">
+                      Add to deal
+                    </button>
                     <button type="button" onClick={() => openEdit(c)} className="text-xs text-blue-400 hover:text-blue-300">
                       Edit
                     </button>
@@ -514,6 +552,8 @@ export default function ContactsPage() {
         Relay doesn&rsquo;t send newsletters. Mark people who agreed to hear from you, then export the list into Mailchimp, Constant Contact, or any email tool.
         Only add people who have said yes, and keep an unsubscribe link in every email you send.
       </p>
+
+      {addTo && <AddContactToDealModal person={addTo} onClose={() => setAddTo(null)} />}
 
       {form && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">

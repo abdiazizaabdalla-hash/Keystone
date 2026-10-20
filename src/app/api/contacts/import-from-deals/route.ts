@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
+import { categoryForRole } from '@/lib/contactCategories';
 import { cleanTags } from '@/lib/contactsCrm';
 import { EMAIL_RE } from '@/lib/stepEmailTemplates';
 
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
         phone: a.phone ? String(a.phone).slice(0, 40) : null,
         company: a.brokerage ? String(a.brokerage).slice(0, 120) : null,
         role: 'Agent',
-        tags: ['agent'],
+        tags: ['Agent'],
       });
     }
 
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
           name: String(p.name || '').slice(0, 120),
           phone: p.phone ? String(p.phone).slice(0, 40) : null,
           role: role || null,
-          tags: cleanTags(role ? [role.toLowerCase()] : []),
+          tags: cleanTags(categoryForRole(role) ? [categoryForRole(role)] : []),
         });
       }
     }

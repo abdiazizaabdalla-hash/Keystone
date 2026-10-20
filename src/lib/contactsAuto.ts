@@ -1,5 +1,6 @@
 import { supabaseServer } from '@/lib/supabase';
 import { cleanTags } from '@/lib/contactsCrm';
+import { categoryForRole } from '@/lib/contactCategories';
 import { EMAIL_RE } from '@/lib/stepEmailTemplates';
 
 // Keeps a TC's Contacts directory filled in as they work: whenever a person with an
@@ -31,7 +32,7 @@ export async function autoAddContact(
       phone: person.phone ? String(person.phone).trim().slice(0, 40) || null : null,
       company: person.company ? String(person.company).trim().slice(0, 120) || null : null,
       role: role || null,
-      tags: cleanTags(role ? [role.toLowerCase()] : []),
+      tags: cleanTags(categoryForRole(role) ? [categoryForRole(role)] : []),
       newsletter: false,
       source: 'deals',
     });
