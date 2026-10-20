@@ -105,7 +105,7 @@ function AcceptContent() {
           <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
             <h1 className="text-xl font-display font-semibold text-slate-100 mb-3">Couldn&apos;t log you in</h1>
             <p className="text-slate-400 text-sm mb-6">{errorMessage}</p>
-            <Link href="/agent/login" className="text-blue-400 hover:text-blue-300 font-medium text-sm">
+            <Link href="/agent/login?mode=link" className="text-blue-400 hover:text-blue-300 font-medium text-sm">
               Request a new login link
             </Link>
           </div>

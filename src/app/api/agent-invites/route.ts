@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { sendAgentInviteEmail } from '@/lib/agentPortalEmails';
-import { createAgentLoginLink } from '@/lib/agentInvite';
+import { inviteAgentToTransaction } from '@/lib/agentInvite';
 
 // Confirms the caller (a TC) owns `transactionId`, the same ownership
 // check src/app/api/documents/route.ts uses -- direct-owner only, not the
@@ -129,37 +128,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
 
-    const { error: insertError } = await supabaseServer.from('agent_invites').insert({
-      transaction_id: transactionId,
-      email,
-      invited_by: user.id,
-      status: 'pending',
-    });
-    if (insertError) throw insertError;
-
-    const appUrl = request.nextUrl.origin;
-    const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
-
-    // One email, one link (see createAgentLoginLink). An email that already belongs to a non-agent account
-    // (a TC, say) is deliberately NOT retagged here; that only happens when that account's owner accepts
-    // the invite (api/agent-invites/accept), so the link is still sent for it.
-    let inviteEmailSent = true;
-    const link = await createAgentLoginLink(email, appUrl, { allowOtherAccount: true });
-    if (!link.ok) {
-      inviteEmailSent = false;
-    } else {
-      try {
-        await sendAgentInviteEmail({
-          toEmail: email,
-          tcLabel,
-          propertyAddress: transaction.property_address || null,
-          actionLink: link.actionLink,
-        });
-      } catch (emailError) {
-        inviteEmailSent = false;
-        console.error('Error sending agent invite email:', emailError);
-      }
-    }
+    // The row, the agent's login and the email are handled together (see inviteAgentToTransaction); the email links to a
+    // fixed page that never expires. An email that already belongs to a non-agent account (a TC, say) is still invited:
+    // that account is only made an agent when its owner accepts (api/agent-invites/accept).
+    const outcome = await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, email });
+    const inviteEmailSent = outcome === 'sent';
 
     return NextResponse.json({ status: 'invited', email, inviteEmailSent });
   } catch (error) {

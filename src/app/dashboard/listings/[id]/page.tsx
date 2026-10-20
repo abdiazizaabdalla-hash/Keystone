@@ -645,9 +645,14 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         purchasePrice: Number(String(conv.price).replace(/[$,\s]/g, '')) || 0,
         acceptanceDate: conv.acceptanceDate || null,
         closingDate: conv.closingDate || null,
+        // The agent portal invite is sent with the deal (the server skips it when the agent has no email).
+        inviteAgent: inviteAgent && Boolean(agents.find((a) => a.id === listing.agent_id)?.email),
       });
       txId = tx.id as string;
       const notes: string[] = [];
+      if (tx.agentInvite === 'failed') {
+        notes.push(`The agent portal invite to ${agents.find((a) => a.id === listing.agent_id)?.email || 'the agent'} did not go out. You can send it from the deal.`);
+      }
 
       // Carry the people over. Contacts failing never undoes the deal.
       for (const c of contacts) {
@@ -684,16 +689,6 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         await call('PATCH', `/api/listings/${id}/offers/${convertOffer.id}`, { status: 'accepted' }).catch(() => undefined);
       }
       await call('PATCH', `/api/listings/${id}`, { convertedTransactionId: txId });
-
-      // Give the agent access to the agent portal for this deal (they get the invite email).
-      const agentEmail = agents.find((a) => a.id === listing.agent_id)?.email;
-      if (inviteAgent && agentEmail) {
-        try {
-          await call('POST', '/api/agent-invites', { transactionId: txId, email: agentEmail });
-        } catch (err) {
-          notes.push(`The agent portal invite to ${agentEmail} did not go out (${err instanceof Error ? err.message : 'unknown error'}). You can send it from the deal.`);
-        }
-      }
 
       if (notes.length > 0) {
         setDealCreated({ txId, notes });

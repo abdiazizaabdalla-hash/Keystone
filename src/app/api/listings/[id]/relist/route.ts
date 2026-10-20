@@ -4,6 +4,8 @@ import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { logAudit } from '@/lib/audit';
+import { findOpenListingDuplicate } from '@/lib/duplicates';
+import { getVisibleTcUserIds } from '@/lib/team';
 import { queueListingCalendarSync } from '@/lib/calendarSync';
 import { cleanMoney, cleanTemplateName, dueFromOffset, isIsoDate, loadTemplateSteps, logListingActivity, requireListingAccess } from '@/lib/listings';
 
@@ -22,6 +24,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!ok) return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
 
     const body = await request.json().catch(() => ({}));
+    const dup = await findOpenListingDuplicate(await getVisibleTcUserIds(user.id), listing.property_address as string);
+    if (dup) {
+      return NextResponse.json({ error: `There is already an open listing for ${dup.label}.`, code: 'duplicate_listing', existing: { id: dup.id, label: dup.label } }, { status: 409 });
+    }
     const planned = isIsoDate(body.plannedListDate) ? body.plannedListDate : null;
     const newPrice = cleanMoney(body.listPrice);
     const note = `Relisted from the ${listing.status === 'expired' ? 'expired' : 'withdrawn'} listing at ${listing.property_address}${listing.mls_number ? ` (MLS ${listing.mls_number})` : ''}.`;

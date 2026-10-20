@@ -8,6 +8,7 @@ import { offerDocPaths } from '@/lib/listingOfferFiles';
 import { queueListingCalendarSync, removeListingCalendarEvents } from '@/lib/calendarSync';
 import { isAgentUser } from '@/lib/agentPortal';
 import { removeInboundFiles } from '@/lib/listingInbound';
+import { sendListingPortalInvite } from '@/lib/agentInvite';
 import { REQUIRED_LISTING_DOCS } from '@/lib/listingReadiness';
 import {
   LISTING_STATUSES,
@@ -138,6 +139,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     // Linking the deal this listing became (after "Convert to deal"). Must be a deal this TC can see.
     if ('convertedTransactionId' in body && body.convertedTransactionId) {
+      if (listing.converted_transaction_id && listing.converted_transaction_id !== body.convertedTransactionId) {
+        return NextResponse.json({ error: 'This listing has already been turned into a deal.', code: 'already_converted', existing: { id: listing.converted_transaction_id } }, { status: 409 });
+      }
       const { data: tx } = await supabaseServer.from('transactions').select('id, agent_id').eq('id', body.convertedTransactionId).maybeSingle();
       if (!tx) return NextResponse.json({ error: 'Deal not found' }, { status: 400 });
       if (!isAdmin) {
@@ -203,6 +207,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     queueListingCalendarSync(id);
+
+    // A newly assigned agent, or sharing switched on, gets their portal login without anyone having to remember.
+    // Only while the listing is still open, and never twice for the same agent.
+    const agentChanged = 'agent_id' in updates && updates.agent_id && updates.agent_id !== listing.agent_id;
+    const sharingTurnedOn = updates.share_with_agent === true && listing.share_with_agent !== true;
+    if ((agentChanged || sharingTurnedOn) && data && ['preparing', 'active', 'under_offer'].includes(data.status as string)) {
+      await sendListingPortalInvite({ listing: data, user, appUrl: request.nextUrl.origin, onlyIfNew: true });
+    }
     return NextResponse.json(data);
   } catch (error) {
     return fail(error, 'update');

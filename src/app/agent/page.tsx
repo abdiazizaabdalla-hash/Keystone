@@ -22,12 +22,6 @@ interface AgentTransaction {
   overdueCount: number;
 }
 
-interface TcGroup {
-  tcUserId: string;
-  tcLabel: string;
-  transactions: AgentTransaction[];
-}
-
 interface PendingInvite {
   inviteId: string;
   transactionId: string;
@@ -37,21 +31,18 @@ interface PendingInvite {
   createdAt: string;
 }
 
-// Same status colors as src/app/dashboard/transactions/page.tsx (text
-// only now, no pill), so a deal reads the same way here as it does on
-// the TC's own list.
-const getStatusTextColor = (status: string) => {
-  switch (status) {
-    case 'Closed':
-      return 'text-green-400';
-    case 'Contract Pending':
-      return 'text-yellow-400';
-    case 'Under Contract':
-      return 'text-blue-400';
-    default:
-      return 'text-slate-400';
-  }
-};
+// Same status colors as the TC's own transactions list, as a small pill.
+function StatusPill({ status }: { status: string }) {
+  const tone =
+    status === 'Closed'
+      ? 'bg-green-900/30 border-green-800 text-green-300'
+      : status === 'Contract Pending'
+        ? 'bg-yellow-900/20 border-yellow-800/70 text-yellow-300'
+        : status === 'Under Contract'
+          ? 'bg-blue-900/30 border-blue-800 text-blue-300'
+          : 'bg-slate-700/60 border-slate-600 text-slate-300';
+  return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full border text-xs font-medium whitespace-nowrap ${tone}`}>{status}</span>;
+}
 
 // Same due-date flag logic as the TC list -- overdue wins, Closed shows
 // nothing, otherwise "Due today" / "Due in Nd" / a plain date.
@@ -185,18 +176,16 @@ export default function AgentHubPage() {
   const activeDeals = transactions.filter((t) => t.status !== 'Closed').length;
   const overdueSteps = transactions.filter((t) => t.status !== 'Closed').reduce((n, t) => n + t.overdueCount, 0);
 
-  const tcGroups = useMemo<TcGroup[]>(() => {
-    const byTc = new Map<string, TcGroup>();
-    for (const tx of transactions) {
-      const key = tx.tcUserId || tx.tcLabel;
-      const existing = byTc.get(key);
-      if (existing) {
-        existing.transactions.push(tx);
-      } else {
-        byTc.set(key, { tcUserId: tx.tcUserId, tcLabel: tx.tcLabel, transactions: [tx] });
-      }
-    }
-    return Array.from(byTc.values()).sort((a, b) => a.tcLabel.localeCompare(b.tcLabel));
+  // Most agents work with one coordinator, so it is only named per row when there are several.
+  const tcLabels = useMemo(() => [...new Set([...transactions.map((t) => t.tcLabel), ...listings.map((l) => l.tcLabel)].filter(Boolean))], [transactions, listings]);
+  const multiTc = tcLabels.length > 1;
+
+  // Needs attention first (overdue, then soonest due), closed deals last.
+  const sortedTransactions = useMemo(() => {
+    const rank = (t: AgentTransaction) => (t.status === 'Closed' ? 3 : t.overdueCount > 0 ? 0 : t.nextDueDate ? 1 : 2);
+    return [...transactions].sort(
+      (x, y) => rank(x) - rank(y) || (x.nextDueDate || '9999').localeCompare(y.nextDueDate || '9999') || (x.propertyAddress || '').localeCompare(y.propertyAddress || '')
+    );
   }, [transactions]);
 
   return (
@@ -207,7 +196,7 @@ export default function AgentHubPage() {
             <img src="/relay-icon.png" alt="Relay TC" className="hidden md:block w-10 h-10 object-contain" />
             <div>
               <h1 className="text-xl md:text-2xl font-display font-semibold text-slate-100">Dashboard</h1>
-              <p className="text-slate-400 text-sm mt-0.5">Your listings and every deal you&apos;ve been added to, across every TC.</p>
+              <p className="text-slate-400 text-sm mt-0.5">{tcLabels.length === 1 ? `Your listings and deals with ${tcLabels[0]}.` : "Your listings and every deal you've been added to."}</p>
             </div>
           </div>
         </div>
@@ -313,110 +302,66 @@ export default function AgentHubPage() {
                 </div>
               ) : (
                 <>
-            {/* Your TCs -- most agents only ever see one card here. */}
-            <div className="mb-8">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Your TCs</p>
-              <div className="flex flex-wrap gap-3">
-                {tcGroups.map((g) => (
-                  <div
-                    key={g.tcUserId || g.tcLabel}
-                    className="flex items-center gap-3 bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg px-4 py-3"
-                  >
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0">
-                      {g.tcLabel[0]?.toUpperCase() || 'T'}
-                    </div>
-                    <div>
-                      <p className="text-slate-100 text-sm font-semibold leading-tight">{g.tcLabel}</p>
-                      <p className="text-slate-500 text-xs leading-tight">
-                        {g.transactions.length} transaction{g.transactions.length !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* One table per TC, same column layout as the TC's own
-                transactions list (minus price/agent/delete, which are
-                TC-only). */}
-            <div className="space-y-8">
-              {tcGroups.map((g) => (
-                <div key={g.tcUserId || g.tcLabel}>
-                  <p className="text-sm font-semibold text-slate-300 mb-2">{g.tcLabel}</p>
-                  {/* Phones: one stacked card per deal, so the full address wraps and
-                      status + due date are visible without sideways scrolling. */}
+                  {/* Phones: one card per deal */}
                   <div className="md:hidden space-y-3">
-                    {g.transactions.map((tx) => (
-                      <button
+                    {sortedTransactions.map((tx) => (
+                      <Link
                         key={tx.id}
-                        type="button"
-                        onClick={() => router.push(`/agent/transactions/${tx.id}`)}
-                        className="block w-full text-left bg-slate-700/30 border border-slate-600 rounded-lg p-4 active:bg-slate-600/40 transition"
+                        href={`/agent/transactions/${tx.id}`}
+                        className="block bg-slate-800/50 border border-slate-700 rounded-lg p-4 active:bg-slate-700/40 transition"
                       >
-                        <p className="text-slate-100 font-semibold text-base leading-snug break-words">
-                          {tx.propertyAddress || tx.fileNumber}
-                        </p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-slate-100 font-semibold leading-snug break-words">{tx.propertyAddress || tx.fileNumber}</p>
+                          <StatusPill status={tx.status} />
+                        </div>
                         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mt-3">
-                          <span className={`text-sm font-medium ${getStatusTextColor(tx.status)}`}>{tx.status}</span>
+                          <span className="font-mono text-xs text-slate-500">File {tx.fileNumber}</span>
                           <span>{getDueBadge(tx)}</span>
                         </div>
-                        <p className="font-mono text-xs text-slate-500 mt-2">File {tx.fileNumber}</p>
-                      </button>
+                        {multiTc && <p className="text-xs text-slate-500 mt-2">{tx.tcLabel}</p>}
+                      </Link>
                     ))}
                   </div>
 
-                  {/* Tablets and desktop: the original table, unchanged. */}
-                  <div className="hidden md:block bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-slate-600 bg-slate-800/50">
-                            <th className="px-6 py-4 text-left">
-                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">File #</span>
-                            </th>
-                            <th className="px-6 py-4 text-left">
-                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Property</span>
-                            </th>
-                            <th className="px-6 py-4 text-left">
-                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</span>
-                            </th>
-                            <th className="px-6 py-4 text-left">
-                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Next Due</span>
-                            </th>
+                  {/* Tablets and desktop: one clean table */}
+                  <div className="hidden md:block bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-slate-700 text-left">
+                          <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Property</th>
+                          <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">File #</th>
+                          {multiTc && <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Coordinator</th>}
+                          <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                          <th className="px-5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Next due</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedTransactions.map((tx) => (
+                          <tr
+                            key={tx.id}
+                            className="border-b border-slate-700/60 last:border-0 hover:bg-slate-700/30 cursor-pointer transition"
+                            onClick={() => router.push(`/agent/transactions/${tx.id}`)}
+                          >
+                            <td className="px-5 py-3.5">
+                              <span className="text-slate-100 font-medium block max-w-md truncate">{tx.propertyAddress || tx.fileNumber}</span>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <span className="font-mono text-sm text-slate-400">{tx.fileNumber}</span>
+                            </td>
+                            {multiTc && (
+                              <td className="px-5 py-3.5">
+                                <span className="text-sm text-slate-300">{tx.tcLabel}</span>
+                              </td>
+                            )}
+                            <td className="px-5 py-3.5">
+                              <StatusPill status={tx.status} />
+                            </td>
+                            <td className="px-5 py-3.5">{getDueBadge(tx)}</td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {g.transactions.map((tx, index) => (
-                            <tr
-                              key={tx.id}
-                              className={`border-b border-slate-600/50 hover:bg-slate-600/30 cursor-pointer transition ${
-                                index % 2 === 0 ? 'bg-slate-700/20' : ''
-                              }`}
-                              onClick={() => router.push(`/agent/transactions/${tx.id}`)}
-                            >
-                              <td className="px-6 py-4">
-                                <span className="font-mono text-sm text-slate-300">{tx.fileNumber}</span>
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className="text-slate-300 max-w-xs truncate block">
-                                  {tx.propertyAddress || tx.fileNumber}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className={`text-sm font-medium ${getStatusTextColor(tx.status)}`}>
-                                  {tx.status}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">{getDueBadge(tx)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                </div>
-              ))}
-            </div>
                 </>
               )}
             </section>

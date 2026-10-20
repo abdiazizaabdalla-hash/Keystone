@@ -16,6 +16,8 @@ import crypto from 'crypto';
 import { getUserPlan } from '@/lib/privileged';
 import { queueCalendarSync, removeTransactionCalendarEvents } from '@/lib/calendarSync';
 import { logAudit } from '@/lib/audit';
+import { findOpenTransactionDuplicate } from '@/lib/duplicates';
+import { inviteAgentToTransaction } from '@/lib/agentInvite';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -109,7 +111,7 @@ export async function POST(request: NextRequest) {
     const { user, isAdmin } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { agentId, fileNumber, propertyAddress, purchasePrice, templateId, acceptanceDate, closingDate, leaveUnassigned } = body;
+    const { agentId, fileNumber, propertyAddress, purchasePrice, templateId, acceptanceDate, closingDate, leaveUnassigned, allowDuplicate } = body;
 
     // Brokerage/Team owner only: create the transaction without stamping
     // a tc_user_id at all, for a deal that's come in but hasn't been
@@ -136,6 +138,23 @@ export async function POST(request: NextRequest) {
       const visibleIds = await getVisibleTcUserIds(user.id);
       if (!agent || !visibleIds.includes(agent.tc_user_id)) {
         return NextResponse.json({ error: 'Agent not found or does not belong to you' }, { status: 403 });
+      }
+    }
+
+    // The same property (or file number) already open? Stop here unless the coordinator confirmed it is intended
+    // (a double click, or starting the same deal twice, is the usual cause).
+    if (allowDuplicate !== true) {
+      const visibleForCheck = await getVisibleTcUserIds(user.id);
+      const dup = await findOpenTransactionDuplicate(visibleForCheck, typeof propertyAddress === 'string' ? propertyAddress : null, typeof fileNumber === 'string' ? fileNumber : null);
+      if (dup) {
+        return NextResponse.json(
+          {
+            error: dup.by === 'file_number' ? `Another open transaction already uses file number ${fileNumber}.` : `There is already an open transaction for ${dup.label}.`,
+            code: 'duplicate_transaction',
+            existing: { id: dup.id, label: dup.label },
+          },
+          { status: 409 }
+        );
       }
     }
 
@@ -304,7 +323,11 @@ export async function POST(request: NextRequest) {
 
 
     await logAudit(request, user, 'transaction.create', { entityType: 'transaction', entityId: transaction.id });
-    return NextResponse.json(transaction, { status: 201 });
+
+    // The agent gets a portal invite right away when they have an email (turn off with inviteAgent: false). It never
+    // blocks or undoes the deal; the outcome comes back so the screen can say what happened.
+    const agentInvite = body.inviteAgent === false || assignUnassigned ? 'skipped' : await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin });
+    return NextResponse.json({ ...transaction, agentInvite }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

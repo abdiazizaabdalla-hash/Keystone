@@ -8,6 +8,7 @@ import { logAudit } from '@/lib/audit';
 import { autoAddContact } from '@/lib/contactsAuto';
 import { queueListingCalendarSync } from '@/lib/calendarSync';
 import { sendListingPortalInvite } from '@/lib/agentInvite';
+import { findOpenListingDuplicate } from '@/lib/duplicates';
 import { logListingActivity, cleanMoney, cleanTemplateName, cleanText, dueFromOffset, isIsoDate, loadTemplateSteps } from '@/lib/listings';
 
 function fail(error: unknown, what: string) {
@@ -80,6 +81,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Agent not found or does not belong to you' }, { status: 403 });
       }
       agentId = agent.id as string;
+    }
+
+    // The same property already being listed? Stop unless the coordinator confirmed it is intended.
+    if (body.allowDuplicate !== true) {
+      const dup = await findOpenListingDuplicate(await getVisibleTcUserIds(user.id), address);
+      if (dup) {
+        return NextResponse.json(
+          { error: `There is already an open listing for ${dup.label}.`, code: 'duplicate_listing', existing: { id: dup.id, label: dup.label } },
+          { status: 409 }
+        );
+      }
     }
 
     const { data: listing, error } = await supabaseServer

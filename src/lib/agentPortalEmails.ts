@@ -18,15 +18,16 @@ export async function sendAgentInviteEmail(params: {
   toEmail: string;
   tcLabel: string;
   propertyAddress: string | null;
-  actionLink: string;
+  loginUrl: string;
 }) {
-  const { toEmail, tcLabel, propertyAddress, actionLink } = params;
+  const { toEmail, tcLabel, propertyAddress, loginUrl } = params;
   const dealLabel = propertyAddress ? `for ${propertyAddress}` : 'on Relay TC';
   const html = wrapper(
     "You've been added to a deal",
     `<p><strong>${escapeHtml(tcLabel)}</strong> added you ${escapeHtml(dealLabel)} on Relay TC, a transaction coordination
      workspace.</p>
-     <p><a href="${actionLink}" style="color: #b45309;">Log in to Relay TC</a></p>
+     <p><a href="${loginUrl}" style="color: #b45309;">Set up your Relay TC account</a></p>
+     <p style="font-size: 13px; color: #555;">This link doesn't expire. It takes you to a page that emails you a fresh sign-in link when you ask for one.</p>
      <p>Once in, you'll be able to see the deal's checklist, upload and download documents, and
      message ${tcLabel} right from the page.</p>`
   );
@@ -75,15 +76,16 @@ export async function sendAgentListingInviteEmail(params: {
   toEmail: string;
   tcLabel: string;
   propertyAddress: string | null;
-  actionLink: string;
+  loginUrl: string;
 }) {
-  const { toEmail, tcLabel, propertyAddress, actionLink } = params;
+  const { toEmail, tcLabel, propertyAddress, loginUrl } = params;
   const listingLabel = propertyAddress ? `your listing at ${propertyAddress}` : 'your listing';
   const html = wrapper(
     'Follow your listing on Relay TC',
     `<p><strong>${escapeHtml(tcLabel)}</strong> is coordinating ${escapeHtml(listingLabel)} on Relay TC, a transaction
      coordination workspace, and has given you a login to follow it.</p>
-     <p><a href="${actionLink}" style="color: #b45309;">Log in to Relay TC</a></p>
+     <p><a href="${loginUrl}" style="color: #b45309;">Set up your Relay TC account</a></p>
+     <p style="font-size: 13px; color: #555;">This link doesn't expire. It takes you to a page that emails you a fresh sign-in link when you ask for one.</p>
      <p>You'll see the listing's offers, showings and key dates, and you can message ${escapeHtml(tcLabel)} right from the page.</p>`
   );
 

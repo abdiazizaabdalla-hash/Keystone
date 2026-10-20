@@ -6,7 +6,7 @@ import { sendListingPortalInvite, type ListingInviteOutcome } from '@/lib/agentI
 import { checkRateLimit } from '@/lib/rateLimit';
 import { logAudit } from '@/lib/audit';
 
-const MESSAGE: Record<Exclude<ListingInviteOutcome, 'sent'>, { status: number; error: string }> = {
+const MESSAGE: Record<Exclude<ListingInviteOutcome, 'sent' | 'already'>, { status: number; error: string }> = {
   no_agent: { status: 400, error: 'Choose an agent for this listing first.' },
   no_email: { status: 400, error: "This agent doesn't have an email on file. Add one to the agent, then try again." },
   not_shared: { status: 400, error: 'Turn on "Share with the agent" first. The agent only sees listings that are shared.' },
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .from('listing_activity')
       .select('created_at')
       .eq('listing_id', id)
-      .like('summary', 'Invited % to the agent portal')
+      .like('summary', `Invited % (${String(agent?.email || '').trim().toLowerCase()}) to the agent portal`)
       .order('created_at', { ascending: false })
       .limit(1);
     return NextResponse.json({
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Too many invites for this listing. Please wait a bit and try again.' }, { status: 429 });
     }
     const outcome = await sendListingPortalInvite({ listing, user, appUrl: request.nextUrl.origin });
-    if (outcome !== 'sent') return NextResponse.json({ error: MESSAGE[outcome].error }, { status: MESSAGE[outcome].status });
+    if (outcome !== 'sent' && outcome !== 'already') return NextResponse.json({ error: MESSAGE[outcome].error }, { status: MESSAGE[outcome].status });
     await logAudit(request, user, 'listing.invite_agent', { entityType: 'listing', entityId: id });
     return NextResponse.json({ status: 'sent' });
   } catch (error) {

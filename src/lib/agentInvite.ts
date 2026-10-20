@@ -1,6 +1,6 @@
 import { supabaseServer } from '@/lib/supabase';
 import { hasAgentRole, mergeAppMetadata } from '@/lib/privileged';
-import { sendAgentListingInviteEmail } from '@/lib/agentPortalEmails';
+import { sendAgentInviteEmail, sendAgentListingInviteEmail } from '@/lib/agentPortalEmails';
 import { logListingActivity } from '@/lib/listings';
 
 // Shared by the deal invite (POST /api/agent-invites) and the listing invite
@@ -43,7 +43,7 @@ export async function createAgentLoginLink(email: string, appUrl: string, opts: 
   return { ok: true, actionLink, alreadyHadAccount: Boolean(user && !isNew) };
 }
 
-export type ListingInviteOutcome = 'sent' | 'no_agent' | 'no_email' | 'not_shared' | 'other_account' | 'failed';
+export type ListingInviteOutcome = 'sent' | 'already' | 'no_agent' | 'no_email' | 'not_shared' | 'other_account' | 'failed';
 
 /**
  * Emails the listing's agent a login for the agent portal, where the listing shows up under Listings.
@@ -53,6 +53,8 @@ export async function sendListingPortalInvite(params: {
   listing: { id: string; agent_id?: unknown; share_with_agent?: unknown; property_address?: unknown };
   user: { email?: string | null; user_metadata?: Record<string, unknown> | null };
   appUrl: string;
+  /** Skip when this agent was already invited to this listing (used for automatic invites; the Send button always sends). */
+  onlyIfNew?: boolean;
 }): Promise<ListingInviteOutcome> {
   try {
     const { listing, user, appUrl } = params;
@@ -63,6 +65,11 @@ export async function sendListingPortalInvite(params: {
     const email = String(agent.email || '').trim().toLowerCase();
     if (!email.includes('@')) return 'no_email';
 
+    if (params.onlyIfNew) {
+      const { data: prior } = await supabaseServer.from('listing_activity').select('id').eq('listing_id', listing.id).like('summary', `Invited % (${email}) to the agent portal`).limit(1);
+      if (prior && prior.length > 0) return 'already';
+    }
+
     const link = await createAgentLoginLink(email, appUrl);
     if (!link.ok) return link.reason === 'other_account' ? 'other_account' : 'failed';
 
@@ -71,12 +78,62 @@ export async function sendListingPortalInvite(params: {
       toEmail: email,
       tcLabel,
       propertyAddress: (listing.property_address as string | null) || null,
-      actionLink: link.actionLink,
+      loginUrl: agentSetupUrl(appUrl, email),
     });
-    await logListingActivity(listing.id, user, `Invited ${agent.name || email} to the agent portal`);
+    await logListingActivity(listing.id, user, `Invited ${agent.name || email} (${email}) to the agent portal`);
     return 'sent';
   } catch (error) {
     console.error('sendListingPortalInvite failed (ignored):', error);
     return 'failed';
   }
 }
+
+
+/**
+ * Where an invited agent starts. A fixed page on our site, so the link in the email never expires: the page sends
+ * a fresh sign-in link on demand (see /agent/login). The one-time links that do expire are never put in an email.
+ */
+export function agentSetupUrl(appUrl: string, email: string): string {
+  return `${appUrl}/agent/login?invited=1&email=${encodeURIComponent(email)}`;
+}
+
+export type TxInviteOutcome = 'sent' | 'already' | 'no_agent' | 'no_email' | 'failed';
+
+/** Invites the transaction's agent (or `email`) to the portal for this deal. Skips quietly when they are already invited. Never throws. */
+export async function inviteAgentToTransaction(params: {
+  transaction: { id: string; agent_id?: unknown; property_address?: unknown };
+  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null };
+  appUrl: string;
+  email?: string;
+}): Promise<TxInviteOutcome> {
+  try {
+    const { transaction, user, appUrl } = params;
+    let email = normalize(params.email);
+    if (!email) {
+      if (!transaction.agent_id) return 'no_agent';
+      const { data: agent } = await supabaseServer.from('agents').select('email').eq('id', transaction.agent_id as string).maybeSingle();
+      if (!agent) return 'no_agent';
+      email = normalize(agent.email as string | null);
+    }
+    if (!email.includes('@')) return 'no_email';
+
+    const { data: existing } = await supabaseServer.from('agent_invites').select('status').eq('transaction_id', transaction.id).eq('email', email).maybeSingle();
+    if (existing) return 'already';
+
+    const { error: insertError } = await supabaseServer.from('agent_invites').insert({ transaction_id: transaction.id, email, invited_by: user.id, status: 'pending' });
+    if (insertError) throw insertError;
+
+    // Makes sure the agent has a login (and tags a brand-new one as an agent). The email carries a fixed page link, not this one-time link.
+    const link = await createAgentLoginLink(email, appUrl, { allowOtherAccount: true });
+    if (!link.ok) return 'failed';
+
+    const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
+    await sendAgentInviteEmail({ toEmail: email, tcLabel, propertyAddress: (transaction.property_address as string | null) || null, loginUrl: agentSetupUrl(appUrl, email) });
+    return 'sent';
+  } catch (error) {
+    console.error('inviteAgentToTransaction failed (ignored):', error);
+    return 'failed';
+  }
+}
+
+const normalize = (e: string | null | undefined) => (e || '').trim().toLowerCase();

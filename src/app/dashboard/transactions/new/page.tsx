@@ -283,9 +283,12 @@ export default function NewTransactionPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const [duplicate, setDuplicate] = useState<{ id: string; message: string } | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent | null, allowDuplicate = false) => {
+    e?.preventDefault();
     setError(null);
+    setDuplicate(null);
     setSubmitting(true);
 
     try {
@@ -305,9 +308,17 @@ export default function NewTransactionPage() {
           acceptanceDate: formData.acceptanceDate || null,
           closingDate: formData.closingDate || null,
           templateId: formData.templateId,
+          allowDuplicate,
         }),
       });
 
+      if (res.status === 409) {
+        const dupData = await res.json().catch(() => ({}));
+        if (dupData.code === 'duplicate_transaction') {
+          setDuplicate({ id: dupData.existing?.id, message: dupData.error });
+          return;
+        }
+      }
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'Failed to create transaction');
@@ -545,6 +556,22 @@ export default function NewTransactionPage() {
           </div>
         )}
 
+        {duplicate && (
+          <div className="mb-8 rounded-lg border border-amber-700/60 bg-amber-900/20 p-4 text-sm">
+            <p className="text-amber-200">{duplicate.message} Is this the same deal?</p>
+            <div className="flex flex-wrap gap-3 mt-3">
+              {duplicate.id && (
+                <Link href={`/dashboard/transactions/${duplicate.id}`} className="px-3 py-1.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-xs font-semibold rounded-lg">
+                  Open the existing transaction
+                </Link>
+              )}
+              <button type="button" onClick={() => handleSubmit(null, true)} disabled={submitting} className="px-3 py-1.5 text-xs font-semibold text-amber-200 border border-amber-700/60 rounded-lg hover:bg-amber-900/30 disabled:opacity-50">
+                It&apos;s different, create it anyway
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Error Alert */}
         {error && (
           <div className="mb-8 bg-red-900/30 border border-red-700 rounded-lg p-4">
@@ -560,7 +587,7 @@ export default function NewTransactionPage() {
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 space-y-8">
+        <form onSubmit={(e) => handleSubmit(e)} className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 space-y-8">
           {/* Agent Selection */}
           <div>
             <label className="block text-sm font-semibold text-slate-200 mb-3">

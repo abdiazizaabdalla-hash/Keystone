@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabaseBrowser as supabase } from '@/lib/supabaseClient';
 import { saveSession } from '@/lib/authClient';
@@ -12,11 +12,15 @@ import { saveSession } from '@/lib/authClient';
 // is just a Supabase Auth user distinguished by app_metadata.role. The
 // magic-link mode below is only the fallback for someone who forgot
 // their password (or, in principle, never finished /agent/welcome).
-export default function AgentLoginPage() {
+function AgentLoginContent() {
   const router = useRouter();
-  const [mode, setMode] = useState<'password' | 'link'>('password');
+  const search = useSearchParams();
+  // Invite emails land here (/agent/login?invited=1&email=...). That link is a fixed page and never expires:
+  // the sign-in link itself is only sent when the agent asks for it below.
+  const invited = search.get('invited') === '1';
+  const [mode, setMode] = useState<'password' | 'link'>(invited || search.get('mode') === 'link' ? 'link' : 'password');
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState((search.get('email') || '').trim().toLowerCase().slice(0, 254));
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
@@ -101,11 +105,13 @@ export default function AgentLoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <img src="/relay-icon.png" alt="Relay TC" className="w-16 h-16 object-contain inline-block mb-4 bg-white rounded-xl p-2" />
-          <h1 className="text-2xl font-display font-semibold text-slate-100">Agent log in</h1>
+          <h1 className="text-2xl font-display font-semibold text-slate-100">{invited && mode === 'link' ? 'Set up your agent account' : 'Agent log in'}</h1>
           <p className="text-slate-400 text-sm mt-1">
             {mode === 'password'
               ? 'Log in with the password you set when you first accepted an invite.'
-              : "No password needed -- we'll email you a link that logs you straight in."}
+              : invited
+                ? "Welcome. Confirm your email and we'll send a link that signs you in and lets you choose a password. This page never expires, so come back any time to get a new link."
+                : "No password needed -- we'll email you a link that logs you straight in."}
           </p>
         </div>
 
@@ -150,7 +156,7 @@ export default function AgentLoginPage() {
             </form>
           ) : sent ? (
             <p className="text-slate-200 text-sm text-center">
-              If <strong>{email.trim()}</strong> has access to any deals on Relay TC, a login link is on its way.
+              If <strong>{email.trim()}</strong> has access to anything on Relay TC, a sign-in link is on its way.
               Check your inbox.
             </p>
           ) : (
@@ -171,14 +177,14 @@ export default function AgentLoginPage() {
                 disabled={submitting}
                 className="w-full px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
               >
-                {submitting ? 'Sending…' : 'Send login link'}
+                {submitting ? 'Sending…' : invited ? 'Email me my sign-in link' : 'Send login link'}
               </button>
               <button
                 type="button"
                 onClick={() => switchMode('password')}
                 className="w-full text-center text-sm text-blue-400 hover:text-blue-300"
               >
-                Back to password login
+                {invited ? 'I already have a password' : 'Back to password login'}
               </button>
             </form>
           )}
@@ -192,5 +198,13 @@ export default function AgentLoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function AgentLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <AgentLoginContent />
+    </Suspense>
   );
 }

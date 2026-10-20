@@ -64,6 +64,8 @@ export default function ListingsPage() {
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  // The same property is already being listed: offer to open it, or add this one anyway.
+  const [dupListing, setDupListing] = useState<{ id: string; message: string } | null>(null);
   const [form, setForm] = useState({
     propertyAddress: '',
     agentId: '',
@@ -207,9 +209,10 @@ export default function ListingsPage() {
     }
   };
 
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const create = async (e: React.FormEvent | null, allowDuplicate = false) => {
+    e?.preventDefault();
     setFormError('');
+    setDupListing(null);
     setSaving(true);
     try {
       const res = await authFetch('/api/listings', {
@@ -217,11 +220,17 @@ export default function ListingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
+          allowDuplicate,
           agentId: form.agentId || null,
           contacts: found.filter((p) => p.include).map((p) => ({ role: p.role, name: p.name, email: p.email, phone: p.phone })),
         }),
       });
       const data = await res.json();
+      if (res.status === 409 && data.code === 'duplicate_listing') {
+        setDupListing({ id: data.existing?.id, message: data.error });
+        setSaving(false);
+        return;
+      }
       if (!res.ok) throw new Error(data.error || 'Failed to create listing');
       // Keep the agreement itself on the listing (best effort — the listing already exists)
       if (pdfFile) {
@@ -444,6 +453,21 @@ export default function ListingsPage() {
               </div>
             )}
             {formError && <p className="text-sm text-red-400">{formError}</p>}
+            {dupListing && (
+              <div className="rounded-lg border border-amber-700/60 bg-amber-900/20 p-3 text-sm">
+                <p className="text-amber-200">{dupListing.message} Is this the same one?</p>
+                <div className="flex flex-wrap gap-3 mt-2">
+                  {dupListing.id && (
+                    <Link href={`/dashboard/listings/${dupListing.id}`} className="px-3 py-1.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-xs font-semibold rounded-lg">
+                      Open the existing listing
+                    </Link>
+                  )}
+                  <button type="button" onClick={() => create(null, true)} disabled={saving} className="px-3 py-1.5 text-xs font-semibold text-amber-200 border border-amber-700/60 rounded-lg hover:bg-amber-900/30 disabled:opacity-50">
+                    It&apos;s different, add it anyway
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-3 pt-1">
               <button type="submit" disabled={saving} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 {saving ? 'Creating…' : 'Create listing'}
