@@ -65,3 +65,5 @@ export function cleanMoney(v: unknown): number | null {
   return Number.isFinite(n) && n >= 0 && n < 1e10 ? n : null;
 }
 
+
+export const LISTING_DOC_TYPES = ['General', 'Listing Agreement', 'Seller Disclosure', 'Other Contract Documents'];

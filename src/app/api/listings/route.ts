@@ -5,6 +5,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
+import { autoAddContact } from '@/lib/contactsAuto';
 import { cleanMoney, cleanText, dueFromOffset, isIsoDate, loadTemplateSteps } from '@/lib/listings';
 
 function fail(error: unknown, what: string) {
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
         planned_list_date: planned,
         expiration_date: expiration,
         mls_number: cleanText(body.mlsNumber, 60),
+        notes: cleanText(body.notes, 4000),
         status: 'preparing',
       })
       .select('*')
@@ -111,16 +113,28 @@ export async function POST(request: NextRequest) {
       if (tErr) throw tErr;
     }
 
-    // The seller is also a contact on this listing.
+    // Everyone on the listing: the seller first, then anyone else (e.g. found by reading the agreement).
+    const people: { role: string | null; name: string | null; email: string | null; phone: string | null }[] = [];
     if (listing.seller_name || listing.seller_email) {
-      await supabaseServer.from('listing_contacts').insert({
-        listing_id: listing.id,
-        role: 'Seller',
-        name: listing.seller_name,
-        email: listing.seller_email,
-        phone: listing.seller_phone,
-        position: 0,
-      });
+      people.push({ role: 'Seller', name: listing.seller_name, email: listing.seller_email, phone: listing.seller_phone });
+    }
+    const extra: unknown[] = Array.isArray(body.contacts) ? body.contacts.slice(0, 30) : [];
+    for (const raw of extra) {
+      const c = (raw || {}) as Record<string, unknown>;
+      const person = {
+        role: cleanText(c.role, 60),
+        name: cleanText(c.name, 200),
+        email: cleanText(c.email, 254)?.toLowerCase() ?? null,
+        phone: cleanText(c.phone, 40),
+      };
+      if (!person.name && !person.email) continue;
+      // The seller above already covers the same person.
+      if (people.some((p) => (p.email && p.email === person.email) || (p.name && person.name && p.name.toLowerCase() === person.name.toLowerCase()))) continue;
+      people.push(person);
+    }
+    if (people.length > 0) {
+      await supabaseServer.from('listing_contacts').insert(people.map((p, i) => ({ ...p, listing_id: listing.id, position: i })));
+      for (const p of people) await autoAddContact(user.id, p);
     }
 
     await logAudit(request, user, 'listing.create', { entityType: 'listing', entityId: listing.id });

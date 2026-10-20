@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
-import { LISTING_STATUS_LABEL, LISTING_STATUSES, type ListingStatus } from '@/lib/listingsShared';
+import { LISTING_STATUS_LABEL, LISTING_STATUSES, LISTING_DOC_TYPES, type ListingStatus } from '@/lib/listingsShared';
 
 interface Listing {
   id: string;
@@ -32,6 +32,15 @@ interface Detail { listing: Listing; agent: { id: string; name: string } | null;
 const inputCls =
   'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 const labelCls = 'block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5';
+interface ListingDoc {
+  id: string;
+  file_name: string;
+  document_type: string;
+  file_size: number | null;
+  created_at: string;
+  url: string | null;
+}
+
 const cardCls = 'bg-slate-800/50 border border-slate-700 rounded-lg p-5';
 const OFFER_LABEL: Record<string, string> = { received: 'Received', countered: 'Countered', accepted: 'Accepted', rejected: 'Rejected', withdrawn: 'Withdrawn' };
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '');
@@ -55,6 +64,12 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [newOffer, setNewOffer] = useState({ buyerName: '', buyerAgent: '', offerPrice: '', receivedOn: '', terms: '' });
   const [newDate, setNewDate] = useState({ label: '', dueDate: '' });
   const [newContact, setNewContact] = useState({ role: '', name: '', email: '', phone: '' });
+
+  // Documents
+  const [docs, setDocs] = useState<ListingDoc[]>([]);
+  const [docType, setDocType] = useState('General');
+  const [uploading, setUploading] = useState(false);
+  const [docError, setDocError] = useState('');
 
   // Convert modal
   const [convertOffer, setConvertOffer] = useState<Offer | 'none' | null>(null);
@@ -123,10 +138,44 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     }
   }, [id, call, applyDetail, handleAuth]);
 
+  const loadDocs = useCallback(async () => {
+    try {
+      const d = await call('GET', `/api/listings/${id}/documents`);
+      if (Array.isArray(d)) setDocs(d);
+    } catch {
+      // The table may not exist yet on a fresh setup; the card then simply stays empty.
+    }
+  }, [id, call]);
+
   useEffect(() => {
-    const t = setTimeout(load, 0);
+    const t = setTimeout(() => {
+      load();
+      loadDocs();
+    }, 0);
     return () => clearTimeout(t);
-  }, [load]);
+  }, [load, loadDocs]);
+
+  const uploadDocs = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setDocError('');
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('documentType', docType);
+        const res = await authFetch(`/api/listings/${id}/documents`, { method: 'POST', body: fd });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(`${file.name}: ${json.error || 'upload failed'}`);
+      }
+      await loadDocs();
+    } catch (err) {
+      if (!handleAuth(err)) setDocError(err instanceof Error ? err.message : 'Upload failed');
+      await loadDocs();
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // Runs a change, then re-reads the page so everything (due dates, counts) is current.
   const act = async (fn: () => Promise<unknown>, okMsg?: string, resetForm = false) => {
@@ -233,6 +282,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           // One contact failing never undoes the deal.
         }
       }
+      // Copy the listing documents onto the deal (best effort, same as the people)
+      if (docs.length > 0) await call('POST', `/api/listings/${id}/copy-documents`, { transactionId: txId }).catch(() => undefined);
       if (convertOffer && convertOffer !== 'none') {
         await call('PATCH', `/api/listings/${id}/offers/${convertOffer.id}`, { status: 'accepted' }).catch(() => undefined);
       }
@@ -536,6 +587,70 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 Add
               </button>
             </form>
+          </div>
+
+          {/* Documents */}
+          <div className={cardCls}>
+            <h2 className="text-lg font-bold text-slate-100 mb-1">Documents</h2>
+            <p className="text-xs text-slate-500 mb-3">Listing agreement, disclosures, photos. They are copied onto the deal when you convert.</p>
+            <ul className="space-y-2 text-sm mb-3">
+              {docs.map((d) => (
+                <li key={d.id} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    {d.url ? (
+                      <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 break-all">
+                        {d.file_name}
+                      </a>
+                    ) : (
+                      <span className="text-slate-300 break-all">{d.file_name}</span>
+                    )}
+                    <p className="text-xs text-slate-500">
+                      {d.document_type}
+                      {d.file_size ? ` · ${(d.file_size / 1024 / 1024 >= 1 ? `${(d.file_size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(d.file_size / 1024))} KB`)}` : ''}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!confirm(`Remove ${d.file_name}?`)) return;
+                      try {
+                        await call('DELETE', `/api/listings/${id}/documents/${d.id}`);
+                        await loadDocs();
+                      } catch (err) {
+                        setDocError(err instanceof Error ? err.message : 'Could not remove');
+                      }
+                    }}
+                    className="text-slate-600 hover:text-red-300 shrink-0"
+                    aria-label={`Remove ${d.file_name}`}
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+              {docs.length === 0 && <li className="text-slate-500">No documents yet.</li>}
+            </ul>
+            <div className="flex flex-wrap items-center gap-2">
+              <select className={`${inputCls} sm:w-auto`} value={docType} onChange={(e) => setDocType(e.target.value)}>
+                {LISTING_DOC_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <label className={`px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                {uploading ? 'Uploading…' : 'Upload files'}
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    uploadDocs(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+            {docError && <p className="text-sm text-red-400 mt-2">{docError}</p>}
           </div>
 
           {/* Contacts */}

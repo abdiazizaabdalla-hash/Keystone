@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
+import { autoAddContact } from '@/lib/contactsAuto';
 import { requireListingAccess } from '@/lib/listings';
 import { CHILD_TABLE, MAX_PER_LISTING, cleanChild, isChildKind } from '@/lib/listingChildren';
 
@@ -25,6 +26,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { data, error } = await supabaseServer.from(table).insert({ ...cleaned.value, ...extra, listing_id: id }).select('*').single();
     if (error) throw error;
+    if (kind === 'contacts') {
+      const owner = (listing as { tc_user_id?: string }).tc_user_id;
+      const c = data as { name?: string | null; email?: string | null; phone?: string | null; role?: string | null };
+      if (owner) await autoAddContact(owner, c);
+    }
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });

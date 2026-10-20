@@ -25,6 +25,17 @@ interface AgentOption {
   id: string;
   name: string;
 }
+interface FoundPerson {
+  role: string;
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+  include: boolean;
+}
+
+const SELLER_ROLE = /seller|owner|trustee|executor|principal/i;
+const normName = (v: string) => v.toLowerCase().replace(/[^a-z]/g, '');
 
 const inputCls =
   'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
@@ -58,7 +69,14 @@ export default function ListingsPage() {
     sellerPhone: '',
     listPrice: '',
     plannedListDate: '',
+    notes: '',
   });
+  // Starting from an uploaded listing agreement
+  const [aiAvailable, setAiAvailable] = useState(false);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [reading, setReading] = useState(false);
+  const [readMsg, setReadMsg] = useState('');
+  const [found, setFound] = useState<FoundPerson[]>([]);
 
   const handleAuth = useCallback(
     (err: unknown) => {
@@ -73,9 +91,14 @@ export default function ListingsPage() {
 
   const load = useCallback(async () => {
     try {
-      const [lRes, aRes] = await Promise.all([authFetch('/api/listings'), authFetch('/api/agents')]);
+      const [lRes, aRes, xRes] = await Promise.all([
+        authFetch('/api/listings'),
+        authFetch('/api/agents'),
+        authFetch('/api/listings/extract-agreement').catch(() => null),
+      ]);
       const l = await lRes.json();
       const a = await aRes.json();
+      if (xRes && xRes.ok) setAiAvailable(Boolean((await xRes.json()).available));
       if (!lRes.ok) throw new Error(l.error || 'Failed to load listings');
       setListings(l);
       if (Array.isArray(a)) setAgents(a.map((x: AgentOption) => ({ id: x.id, name: x.name })));
@@ -98,6 +121,75 @@ export default function ListingsPage() {
     [listings, filter]
   );
 
+  const resetNew = () => {
+    setForm({ propertyAddress: '', agentId: '', sellerName: '', sellerEmail: '', sellerPhone: '', listPrice: '', plannedListDate: '', notes: '' });
+    setPdfFile(null);
+    setFound([]);
+    setReadMsg('');
+    setFormError('');
+  };
+
+  const readAgreement = async (file: File) => {
+    setPdfFile(file);
+    setReading(true);
+    setReadMsg('');
+    setFormError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await authFetch('/api/listings/extract-agreement', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setReadMsg(data.error || 'Could not read the agreement.');
+        return;
+      }
+      const f = data.fields || {};
+      const people: FoundPerson[] = (Array.isArray(f.people) ? f.people : [])
+        .map((p: Record<string, unknown>) => ({
+          role: String(p.role || '').trim(),
+          name: String(p.name || '').trim(),
+          email: String(p.email || '').trim(),
+          phone: String(p.phone || '').trim(),
+          company: String(p.company || '').trim(),
+          include: true,
+        }))
+        .filter((p: FoundPerson) => p.name || p.email);
+      const firstSeller = people.find((p) => SELLER_ROLE.test(p.role));
+      // Match the listing agent against the agents already set up
+      const agentPerson = people.find((p) => /listing agent|agent|realtor|salesperson/i.test(p.role) && !/broker(age)?$/i.test(p.role));
+      const matchedAgent = agentPerson ? agents.find((a) => normName(a.name) === normName(agentPerson.name)) : undefined;
+      const noteParts = [
+        f.listingType ? `Listing type: ${f.listingType}` : '',
+        f.mlsNumber ? `MLS #: ${f.mlsNumber}` : '',
+        f.expirationDate ? `Listing expires: ${f.expirationDate}` : '',
+        f.commissionSummary ? `Fees: ${f.commissionSummary}` : '',
+        f.notes ? `Double-check: ${f.notes}` : '',
+      ].filter(Boolean);
+      setForm((prev) => ({
+        ...prev,
+        propertyAddress: prev.propertyAddress || String(f.propertyAddress || ''),
+        listPrice: prev.listPrice || (Number(f.listPrice) > 0 ? String(Math.round(Number(f.listPrice))) : ''),
+        plannedListDate: prev.plannedListDate || String(f.agreementStartDate || ''),
+        sellerName: prev.sellerName || firstSeller?.name || '',
+        sellerEmail: prev.sellerEmail || firstSeller?.email || '',
+        sellerPhone: prev.sellerPhone || firstSeller?.phone || '',
+        agentId: prev.agentId || matchedAgent?.id || '',
+        notes: prev.notes || noteParts.join('\n'),
+      }));
+      // The seller is already in the form fields, so only list everyone else for review
+      setFound(people.filter((p) => p !== firstSeller));
+      setReadMsg(
+        `Read the agreement. Check everything below before creating — ${people.length} ${people.length === 1 ? 'person' : 'people'} found.` +
+          (agentPerson && !matchedAgent ? ` The listing agent (${agentPerson.name}) isn't set up in Relay yet, so pick one below.` : '')
+      );
+    } catch (err) {
+      if (handleAuth(err)) return;
+      setReadMsg('Could not read the agreement. You can enter the details yourself.');
+    } finally {
+      setReading(false);
+    }
+  };
+
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -106,10 +198,25 @@ export default function ListingsPage() {
       const res = await authFetch('/api/listings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, agentId: form.agentId || null }),
+        body: JSON.stringify({
+          ...form,
+          agentId: form.agentId || null,
+          contacts: found.filter((p) => p.include).map((p) => ({ role: p.role, name: p.name, email: p.email, phone: p.phone })),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create listing');
+      // Keep the agreement itself on the listing (best effort — the listing already exists)
+      if (pdfFile) {
+        try {
+          const fd = new FormData();
+          fd.append('file', pdfFile);
+          fd.append('documentType', 'Listing Agreement');
+          await authFetch(`/api/listings/${data.id}/documents`, { method: 'POST', body: fd });
+        } catch {
+          /* the listing page lets them upload it again */
+        }
+      }
       router.push(`/dashboard/listings/${data.id}`);
     } catch (err) {
       if (handleAuth(err)) return;
@@ -214,6 +321,28 @@ export default function ListingsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
           <form onSubmit={create} className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-800 border border-slate-600 rounded-xl p-6 space-y-3">
             <h2 className="text-lg font-bold text-slate-100">New listing</h2>
+            {aiAvailable && (
+              <div className="rounded-lg border border-dashed border-slate-600 bg-slate-900/40 p-3">
+                <p className="text-sm font-semibold text-slate-200">Start from the listing agreement</p>
+                <p className="text-xs text-slate-400 mt-0.5 mb-2">
+                  Upload the signed PDF and Relay fills in the address, price, dates and everyone named on it. You review before anything is saved.
+                </p>
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  disabled={reading}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) readAgreement(f);
+                    e.target.value = '';
+                  }}
+                  className="block w-full text-xs text-slate-300 file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-slate-700 file:text-slate-100 file:text-xs"
+                />
+                {reading && <p className="text-xs text-blue-300 mt-2">Reading {pdfFile?.name}… this takes about 15–30 seconds.</p>}
+                {!reading && readMsg && <p className="text-xs text-slate-300 mt-2">{readMsg}</p>}
+                {!reading && pdfFile && <p className="text-xs text-slate-500 mt-1">{pdfFile.name} will be saved on the listing under Documents.</p>}
+              </div>
+            )}
             <input className={inputCls} placeholder="Property address *" value={form.propertyAddress} onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })} required autoFocus />
             <select className={inputCls} value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })}>
               <option value="">Listing agent (choose one)</option>
@@ -234,12 +363,41 @@ export default function ListingsPage() {
               <input className={inputCls} type="date" value={form.plannedListDate} onChange={(e) => setForm({ ...form, plannedListDate: e.target.value })} />
               <p className="text-xs text-slate-500 mt-1">Checklist due dates count back and forward from this day, and move if you change it.</p>
             </div>
+            {form.notes && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Notes</label>
+                <textarea className={inputCls} rows={4} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              </div>
+            )}
+            {found.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Other people on the agreement</label>
+                <div className="space-y-1.5">
+                  {found.map((p, i) => (
+                    <label key={i} className="flex items-start gap-2 rounded-lg bg-slate-700/40 border border-slate-600/60 px-3 py-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={p.include}
+                        onChange={(e) => setFound((prev) => prev.map((x, j) => (j === i ? { ...x, include: e.target.checked } : x)))}
+                      />
+                      <span className="text-sm text-slate-200 min-w-0">
+                        <span className="font-medium">{p.name || p.email}</span>
+                        <span className="text-slate-400"> · {p.role || 'Contact'}</span>
+                        {(p.email || p.phone) && <span className="block text-xs text-slate-400 truncate">{[p.email, p.phone].filter(Boolean).join(' · ')}</span>}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Checked people are added to the listing and saved to your Contacts.</p>
+              </div>
+            )}
             {formError && <p className="text-sm text-red-400">{formError}</p>}
             <div className="flex items-center gap-3 pt-1">
               <button type="submit" disabled={saving} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 {saving ? 'Creating…' : 'Create listing'}
               </button>
-              <button type="button" onClick={() => setShowNew(false)} className="text-sm text-slate-400 hover:text-slate-200">
+              <button type="button" onClick={() => { setShowNew(false); resetNew(); }} className="text-sm text-slate-400 hover:text-slate-200">
                 Cancel
               </button>
             </div>

@@ -128,8 +128,12 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (listing.tc_user_id !== user.id) {
       return NextResponse.json({ error: 'Only the person who created this listing can delete it' }, { status: 403 });
     }
+    // Remove the stored files too; the document rows go with the listing, but storage objects would be orphaned.
+    const { data: docs } = await supabaseServer.from('listing_documents').select('storage_path').eq('listing_id', id);
     const { error } = await supabaseServer.from('listings').delete().eq('id', id);
     if (error) throw error;
+    const paths = (docs || []).map((d) => d.storage_path as string).filter(Boolean);
+    if (paths.length > 0) await supabaseServer.storage.from('transaction-documents').remove(paths).catch(() => undefined);
     await logAudit(request, user, 'listing.delete', { entityType: 'listing', entityId: id });
     return NextResponse.json({ success: true });
   } catch (error) {
