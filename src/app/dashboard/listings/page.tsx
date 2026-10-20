@@ -343,20 +343,39 @@ export default function ListingsPage() {
                 {!reading && pdfFile && <p className="text-xs text-slate-500 mt-1">{pdfFile.name} will be saved on the listing under Documents.</p>}
               </div>
             )}
-            <input className={inputCls} placeholder="Property address *" value={form.propertyAddress} onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })} required autoFocus />
-            <select className={inputCls} value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })}>
-              <option value="">Listing agent (choose one)</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Property address *</label>
+              <input className={inputCls} placeholder="123 Main St, Austin, TX 78701" value={form.propertyAddress} onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })} required autoFocus />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Listing agent *</label>
+              <select className={inputCls} value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })}>
+                <option value="">Choose the agent who holds this listing</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500 mt-1">The agent the listing belongs to. They are also the agent on the deal if you convert it.</p>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input className={inputCls} placeholder="Seller name" value={form.sellerName} onChange={(e) => setForm({ ...form, sellerName: e.target.value })} />
-              <input className={inputCls} placeholder="Seller email" type="email" value={form.sellerEmail} onChange={(e) => setForm({ ...form, sellerEmail: e.target.value })} />
-              <input className={inputCls} placeholder="Seller phone" value={form.sellerPhone} onChange={(e) => setForm({ ...form, sellerPhone: e.target.value })} />
-              <input className={inputCls} placeholder="List price" inputMode="decimal" value={form.listPrice} onChange={(e) => setForm({ ...form, listPrice: e.target.value })} />
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Seller name</label>
+                <input className={inputCls} placeholder="Full name" value={form.sellerName} onChange={(e) => setForm({ ...form, sellerName: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Seller email</label>
+                <input className={inputCls} placeholder="name@email.com" type="email" value={form.sellerEmail} onChange={(e) => setForm({ ...form, sellerEmail: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Seller phone</label>
+                <input className={inputCls} placeholder="(512) 555-0123" value={form.sellerPhone} onChange={(e) => setForm({ ...form, sellerPhone: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">List price</label>
+                <input className={inputCls} placeholder="450000" inputMode="decimal" value={form.listPrice} onChange={(e) => setForm({ ...form, listPrice: e.target.value })} />
+              </div>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Planned list date</label>
