@@ -77,7 +77,7 @@ interface Offer {
 interface Showing { id: string; showing_date: string; kind: string; visitor: string | null; interest: string | null; feedback: string | null }
 interface PriceChange { id: string; old_price: number | null; new_price: number; changed_on: string; note: string | null }
 interface ActivityRow { id: string; actor_label: string | null; summary: string; created_at: string }
-interface Contact { id: string; role: string | null; name: string | null; email: string | null; phone: string | null }
+interface Contact { id: string; role: string | null; name: string | null; email: string | null; phone: string | null; added_by_agent?: boolean | null }
 interface DateRow { id: string; label: string; due_date: string }
 interface InboundItem {
   id: string;
@@ -1489,6 +1489,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                     <p className="break-words">
                       <span className="text-slate-100 font-medium">{c.name || c.email || 'Contact'}</span>
                       {c.role ? <span className="text-slate-500"> · {c.role}</span> : null}
+                      {c.added_by_agent ? <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">Added by agent</span> : null}
                     </p>
                     <p className="text-xs text-slate-500 break-all">{[c.email, c.phone].filter(Boolean).join(' · ')}</p>
                   </div>

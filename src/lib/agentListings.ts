@@ -1,4 +1,7 @@
+import { NextRequest } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { isAgentUser } from '@/lib/agentPortal';
 
 // Which listings an agent-portal user may see. There is no invite step for listings: a listing is
 // visible to the person whose login email matches the email on the listing's agent record, as long
@@ -26,4 +29,13 @@ export async function getAgentListingRows(email: string | null | undefined) {
     return [];
   }
   return listings || [];
+}
+
+/** An agent is signed in and this listing is one that is shared with them. Same lookup as the list, so the rules can't drift. */
+export async function requireAgentListing(request: NextRequest, listingId: string) {
+  const { user } = await getUserFromRequest(request);
+  if (!isAgentUser(user)) throw new AuthError('This endpoint is for agent accounts only', 403);
+  const listing = (await getAgentListingRows(user.email)).find((l) => l.id === listingId);
+  if (!listing) throw new AuthError('Listing not found', 404);
+  return { user, listing };
 }
