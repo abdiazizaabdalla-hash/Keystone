@@ -123,7 +123,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
         {mobileOpen && (
           <div className="absolute left-0 right-0 top-full bg-slate-800 border-b border-slate-700 shadow-xl px-3 pb-3 space-y-1">
             {[
-              { href: '/agent', label: 'Deals', active: isDeals },
+              { href: '/agent', label: 'Dashboard', active: isDeals },
               { href: '/agent/listings', label: 'Listings', active: isListings },
               { href: '/agent/messages', label: 'Messages', active: isMessages },
               { href: '/agent/invoices', label: 'Invoices', active: isInvoices },
@@ -197,7 +197,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
         <nav className={`flex-1 min-h-0 overflow-y-auto py-6 space-y-2 ${collapsed ? 'px-2' : 'px-3'}`}>
           <SideLink
             href="/agent"
-            label="Deals"
+            label="Dashboard"
             collapsed={collapsed}
             active={isDeals}
             icon={

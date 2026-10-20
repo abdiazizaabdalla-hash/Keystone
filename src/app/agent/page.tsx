@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import AgentCalendarPrompt from '@/components/AgentCalendarPrompt';
+import AgentListingCard, { type AgentListingSummary } from '@/components/AgentListingCard';
 
 interface AgentTransaction {
   id: string;
@@ -16,18 +17,6 @@ interface AgentTransaction {
   tcLabel: string;
   nextDueDate: string | null;
   overdueCount: number;
-}
-
-interface AgentListing {
-  id: string;
-  propertyAddress: string;
-  status: string;
-  listPrice: number | null;
-  plannedListDate: string | null;
-  expirationDate: string | null;
-  openOffers: number;
-  showings: number;
-  tcLabel: string;
 }
 
 interface TcGroup {
@@ -108,7 +97,7 @@ export default function AgentHubPage() {
   const router = useRouter();
   const [transactions, setTransactions] = useState<AgentTransaction[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
-  const [listings, setListings] = useState<AgentListing[]>([]);
+  const [listings, setListings] = useState<AgentListingSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [accepting, setAccepting] = useState<string | null>(null);
@@ -209,8 +198,8 @@ export default function AgentHubPage() {
           <div className="flex items-center gap-3">
             <img src="/relay-icon.png" alt="Relay TC" className="hidden md:block w-10 h-10 object-contain" />
             <div>
-              <h1 className="text-xl md:text-2xl font-display font-semibold text-slate-100">Your deals</h1>
-              <p className="text-slate-400 text-sm mt-0.5">Every transaction you&apos;ve been added to, across every TC.</p>
+              <h1 className="text-xl md:text-2xl font-display font-semibold text-slate-100">Dashboard</h1>
+              <p className="text-slate-400 text-sm mt-0.5">Your listings and every deal you&apos;ve been added to, across every TC.</p>
             </div>
           </div>
         </div>
@@ -250,15 +239,22 @@ export default function AgentHubPage() {
         )}
 
         {listings.length > 0 && (
-          <Link
-            href="/agent/listings"
-            className="mb-6 flex items-center justify-between gap-3 bg-slate-700/30 border border-slate-600 rounded-lg px-4 py-3 text-sm hover:bg-slate-600/30 transition"
-          >
-            <span className="text-slate-300">
-              You have {listings.length} listing{listings.length === 1 ? '' : 's'} with your TC.
-            </span>
-            <span className="text-blue-400 shrink-0">View listings →</span>
-          </Link>
+          <div className="mb-8">
+            <div className="flex items-baseline justify-between gap-3 mb-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Your listings</p>
+              <Link href="/agent/listings" className="text-xs text-blue-400 hover:text-blue-300">
+                View all ({listings.length}) →
+              </Link>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {listings
+                .filter((l) => l.status !== 'expired')
+                .slice(0, 6)
+                .map((l) => (
+                  <AgentListingCard key={l.id} listing={l} />
+                ))}
+            </div>
+          </div>
         )}
 
         {loading ? (

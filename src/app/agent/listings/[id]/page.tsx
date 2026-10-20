@@ -59,9 +59,9 @@ interface Contact {
 
 const DOC_TYPE_ORDER = ['Listing Agreement', 'Seller Disclosure', 'Purchase Contract', 'Other Contract Documents', 'General'];
 const sizeLabel = (n: number | null) => (n ? (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`) : '');
-const inputCls = 'w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500';
+const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '—');
-const card = 'bg-slate-700/30 border border-slate-600 rounded-lg p-5';
+const card = 'bg-slate-800/50 border border-slate-700 rounded-lg p-5';
 const OFFER_LABEL: Record<string, string> = { received: 'Received', countered: 'Countered', accepted: 'Accepted', rejected: 'Rejected', withdrawn: 'Withdrawn' };
 
 // The listing agent's read-only view of a listing their TC is running: where it stands, offers, showings,
@@ -151,10 +151,10 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-slate-400 text-sm">Loading…</div>;
+  if (loading) return <div className="p-4 md:p-8 text-slate-400">Loading listing…</div>;
   if (error || !data)
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-6">
+      <div className="p-4 md:p-8">
         <Link href="/agent/listings" className="text-sm text-slate-400 hover:text-slate-200">
           ← Back to your listings
         </Link>
@@ -170,30 +170,35 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 px-4 py-6 md:px-6 md:py-10">
-      <div className="max-w-3xl mx-auto space-y-5">
-        <Link href="/agent/listings" className="text-sm text-slate-400 hover:text-slate-200">
-          ← Back to your listings
-        </Link>
-        <div>
-          <h1 className="text-2xl font-display font-semibold text-slate-100 break-words">{listing.propertyAddress}</h1>
+    <div className="p-4 md:p-8 max-w-6xl">
+      <Link href="/agent/listings" className="text-sm text-slate-400 hover:text-slate-200">
+        ← Back to listings
+      </Link>
+
+      <div className="mt-3 mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 break-words">{listing.propertyAddress}</h1>
           <p className="text-sm text-slate-400 mt-1">
-            {LISTING_STATUS_LABEL[listing.status]} · {money(listing.listPrice)}
-            {(listing.status === 'active' || listing.status === 'under_offer') && daysOnMarket(listing.listedOn) !== null ? ` · ${daysOnMarket(listing.listedOn)} days on market` : ''}
-            {listing.sellerName ? ` · Seller: ${listing.sellerName}` : ''} · Managed by {data.tcLabel}
+            {[listing.sellerName && `Seller: ${listing.sellerName}`, `Managed by ${data.tcLabel}`, money(listing.listPrice)].filter(Boolean).join(' · ')}
           </p>
-          {(listing.mlsUrl || listing.mlsNumber) && (
-            <p className="text-sm mt-1">
-              {listing.mlsUrl ? (
-                <a href={listing.mlsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
-                  View listing{listing.mlsNumber ? ` (MLS ${listing.mlsNumber})` : ''}
-                </a>
-              ) : (
-                <span className="text-slate-400">MLS {listing.mlsNumber}</span>
-              )}
-            </p>
-          )}
+          <p className="text-sm text-slate-400 mt-1">
+            {(listing.status === 'active' || listing.status === 'under_offer') && daysOnMarket(listing.listedOn) !== null && (
+              <span>
+                {daysOnMarket(listing.listedOn)} day{daysOnMarket(listing.listedOn) === 1 ? '' : 's'} on market
+                {listing.mlsUrl || listing.mlsNumber ? ' · ' : ''}
+              </span>
+            )}
+            {listing.mlsUrl ? (
+              <a href={listing.mlsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
+                View listing{listing.mlsNumber ? ` (MLS ${listing.mlsNumber})` : ''}
+              </a>
+            ) : listing.mlsNumber ? (
+              `MLS ${listing.mlsNumber}`
+            ) : null}
+          </p>
         </div>
+        <span className="px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-sm text-slate-100">{LISTING_STATUS_LABEL[listing.status]}</span>
+      </div>
 
         {listing.convertedTransactionId && (
           <Link
@@ -205,6 +210,104 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
           </Link>
         )}
 
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="space-y-6 min-w-0">
+          <div className={card}>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h2 className="text-lg font-bold text-slate-100">Checklist</h2>
+              <span className="text-xs text-slate-400">
+                {doneCount}/{checklist.length} done
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden mb-4" aria-hidden>
+              <div className="h-full bg-blue-500" style={{ width: `${checklist.length ? Math.round((doneCount / checklist.length) * 100) : 0}%` }} />
+            </div>
+            {checklist.length === 0 && <p className="text-sm text-slate-500">No steps yet.</p>}
+            <ul className="space-y-1">
+              {checklist.map((t) => {
+                const overdue = !t.completed && t.dueDate && t.dueDate < today;
+                return (
+                  <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 border-b border-slate-700/50 last:border-0">
+                    <input type="checkbox" checked={t.completed} readOnly disabled className="accent-blue-500" aria-label={`${t.name}: ${t.completed ? 'done' : 'not done'}`} />
+                    <span className={`flex-1 min-w-[10rem] text-sm break-words ${t.completed ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{t.name}</span>
+                    {t.dueDate && <span className={`text-xs ${overdue ? 'text-red-300' : 'text-slate-400'}`}>{formatDisplayDate(t.dueDate)}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="text-xs text-slate-500 mt-3">Your coordinator keeps this up to date. Message them if something needs to change.</p>
+          </div>
+        <div className={card}>
+          <h2 className="text-lg font-bold text-slate-100 mb-3">Offers</h2>
+          {offers.length === 0 && <p className="text-sm text-slate-500">No offers yet.</p>}
+          <div className="space-y-3">
+            {offers.map((o) => (
+              <div key={o.id} className="border border-slate-600 rounded-lg p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-slate-100 font-medium break-words">
+                    {o.buyerName || 'Buyer'} {o.offerPrice ? <span className="text-slate-300">· {money(o.offerPrice)}</span> : null}
+                  </p>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">{OFFER_LABEL[o.status] || o.status}</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  {[
+                    o.buyerAgent && `Agent: ${o.buyerAgent}`,
+                    o.receivedOn && `Received ${formatDisplayDate(o.receivedOn)}`,
+                    o.financing,
+                    o.earnestMoney ? `Earnest ${money(o.earnestMoney)}` : '',
+                    o.optionDays != null ? `${o.optionDays}-day option` : '',
+                    o.closingDate ? `Closing ${formatDisplayDate(o.closingDate)}` : '',
+                    o.sellerConcessions ? `Seller pays ${money(o.sellerConcessions)}` : '',
+                    o.offerExpires ? `Expires ${o.offerExpires}` : '',
+                    o.possession ? `Possession: ${o.possession}` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+                {o.contingencies && <p className="text-xs text-slate-400 mt-1 whitespace-pre-wrap break-words">Contingencies: {o.contingencies}</p>}
+                {o.terms && <p className="text-sm text-slate-400 mt-2 whitespace-pre-wrap break-words">{o.terms}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className={card}>
+          <h2 className="text-lg font-bold text-slate-100 mb-1">Showings and feedback</h2>
+          <p className="text-xs text-slate-500 mb-3">{showings.length} logged</p>
+          {showings.length === 0 && <p className="text-sm text-slate-500">Nothing logged yet.</p>}
+          <ul className="space-y-2">
+            {showings.map((sh) => (
+              <li key={sh.id} className="text-sm border border-slate-600 rounded-lg px-3 py-2">
+                <p className="text-slate-200 break-words">
+                  <span className="font-medium">{formatDisplayDate(sh.showing_date)}</span>
+                  <span className="text-slate-500"> · {SHOWING_KIND_LABEL[sh.kind as keyof typeof SHOWING_KIND_LABEL] || 'Showing'}</span>
+                  {sh.visitor ? <span className="text-slate-400"> · {sh.visitor}</span> : null}
+                  {sh.interest ? <span className="text-slate-400"> · {SHOWING_INTEREST_LABEL[sh.interest]}</span> : null}
+                </p>
+                {sh.feedback && <p className="text-slate-400 mt-1 whitespace-pre-wrap break-words">{sh.feedback}</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {priceChanges.length > 0 && (
+          <div className={card}>
+            <h2 className="text-lg font-bold text-slate-100 mb-3">Price history</h2>
+            <ul className="text-sm space-y-1 text-slate-300">
+              {priceChanges.map((pc) => (
+                <li key={pc.id}>
+                  <span className="text-slate-500">{formatDisplayDate(pc.changed_on)}</span> · {pc.old_price ? `${money(pc.old_price)} → ` : ''}
+                  <span className="font-medium text-slate-100">{money(pc.new_price)}</span>
+                  {pc.note ? <span className="text-slate-500"> — {pc.note}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        </div>
+        <div className="space-y-6 min-w-0">
         <div className={card}>
           <h2 className="text-lg font-bold text-slate-100 mb-3">Key dates</h2>
           <ul className="text-sm space-y-1">
@@ -228,36 +331,6 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
             ))}
             {!listing.plannedListDate && !listing.expirationDate && dates.length === 0 && <li className="text-slate-500">No dates yet.</li>}
           </ul>
-        </div>
-
-        <div className={card}>
-          <div className="flex items-baseline justify-between gap-3 mb-3">
-            <h2 className="text-lg font-bold text-slate-100">Checklist</h2>
-            {checklist.length > 0 && (
-              <span className="text-xs text-slate-400">
-                {doneCount} of {checklist.length} done
-              </span>
-            )}
-          </div>
-          {checklist.length === 0 && <p className="text-sm text-slate-500">No steps yet.</p>}
-          <ul className="space-y-1.5">
-            {checklist.map((t) => {
-              const overdue = !t.completed && t.dueDate && t.dueDate < today;
-              return (
-                <li key={t.id} className="flex items-start gap-2.5 text-sm">
-                  <span
-                    aria-hidden="true"
-                    className={`mt-0.5 w-4 h-4 rounded border shrink-0 flex items-center justify-center text-[10px] ${t.completed ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-500'}`}
-                  >
-                    {t.completed ? '✓' : ''}
-                  </span>
-                  <span className={`flex-1 min-w-0 break-words ${t.completed ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{t.name}</span>
-                  {t.dueDate && <span className={`shrink-0 text-xs ${overdue ? 'text-red-400' : 'text-slate-500'}`}>{formatDisplayDate(t.dueDate)}</span>}
-                </li>
-              );
-            })}
-          </ul>
-          <p className="text-xs text-slate-500 mt-3">Your coordinator keeps this up to date. Message them below if something needs to change.</p>
         </div>
 
         <div className={card}>
@@ -347,75 +420,8 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
 
-        <div className={card}>
-          <h2 className="text-lg font-bold text-slate-100 mb-3">Offers</h2>
-          {offers.length === 0 && <p className="text-sm text-slate-500">No offers yet.</p>}
-          <div className="space-y-3">
-            {offers.map((o) => (
-              <div key={o.id} className="border border-slate-600 rounded-lg p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <p className="text-slate-100 font-medium break-words">
-                    {o.buyerName || 'Buyer'} {o.offerPrice ? <span className="text-slate-300">· {money(o.offerPrice)}</span> : null}
-                  </p>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">{OFFER_LABEL[o.status] || o.status}</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  {[
-                    o.buyerAgent && `Agent: ${o.buyerAgent}`,
-                    o.receivedOn && `Received ${formatDisplayDate(o.receivedOn)}`,
-                    o.financing,
-                    o.earnestMoney ? `Earnest ${money(o.earnestMoney)}` : '',
-                    o.optionDays != null ? `${o.optionDays}-day option` : '',
-                    o.closingDate ? `Closing ${formatDisplayDate(o.closingDate)}` : '',
-                    o.sellerConcessions ? `Seller pays ${money(o.sellerConcessions)}` : '',
-                    o.offerExpires ? `Expires ${o.offerExpires}` : '',
-                    o.possession ? `Possession: ${o.possession}` : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
-                {o.contingencies && <p className="text-xs text-slate-400 mt-1 whitespace-pre-wrap break-words">Contingencies: {o.contingencies}</p>}
-                {o.terms && <p className="text-sm text-slate-400 mt-2 whitespace-pre-wrap break-words">{o.terms}</p>}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className={card}>
-          <h2 className="text-lg font-bold text-slate-100 mb-1">Showings and feedback</h2>
-          <p className="text-xs text-slate-500 mb-3">{showings.length} logged</p>
-          {showings.length === 0 && <p className="text-sm text-slate-500">Nothing logged yet.</p>}
-          <ul className="space-y-2">
-            {showings.map((sh) => (
-              <li key={sh.id} className="text-sm border border-slate-600 rounded-lg px-3 py-2">
-                <p className="text-slate-200 break-words">
-                  <span className="font-medium">{formatDisplayDate(sh.showing_date)}</span>
-                  <span className="text-slate-500"> · {SHOWING_KIND_LABEL[sh.kind as keyof typeof SHOWING_KIND_LABEL] || 'Showing'}</span>
-                  {sh.visitor ? <span className="text-slate-400"> · {sh.visitor}</span> : null}
-                  {sh.interest ? <span className="text-slate-400"> · {SHOWING_INTEREST_LABEL[sh.interest]}</span> : null}
-                </p>
-                {sh.feedback && <p className="text-slate-400 mt-1 whitespace-pre-wrap break-words">{sh.feedback}</p>}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {priceChanges.length > 0 && (
-          <div className={card}>
-            <h2 className="text-lg font-bold text-slate-100 mb-3">Price history</h2>
-            <ul className="text-sm space-y-1 text-slate-300">
-              {priceChanges.map((pc) => (
-                <li key={pc.id}>
-                  <span className="text-slate-500">{formatDisplayDate(pc.changed_on)}</span> · {pc.old_price ? `${money(pc.old_price)} → ` : ''}
-                  <span className="font-medium text-slate-100">{money(pc.new_price)}</span>
-                  {pc.note ? <span className="text-slate-500"> — {pc.note}</span> : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         <ListingThread endpoint={`/api/agent/listings/${id}/comments`} self="agent" otherLabel={data.tcLabel} />
+        </div>
       </div>
     </div>
   );
