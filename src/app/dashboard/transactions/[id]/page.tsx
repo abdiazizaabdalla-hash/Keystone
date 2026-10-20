@@ -1497,7 +1497,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   // phones and keyboards. Moving only changes where the file is filed; the
   // file itself and any email it came with are untouched.
   const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
-  const [movingDocId, setMovingDocId] = useState<string | null>(null);
+  const [, setMovingDocId] = useState<string | null>(null);
   const handleMoveDocument = async (docId: string, categoryKey: string) => {
     const current = documents.find((d) => d.id === docId);
     if (!current || (current.category || DEFAULT_CATEGORY_KEY) === categoryKey) return;
