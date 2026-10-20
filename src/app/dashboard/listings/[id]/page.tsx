@@ -139,6 +139,10 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   // Details form
   const [det, setDet] = useState({ propertyAddress: '', agentId: '', sellerName: '', sellerEmail: '', sellerPhone: '', listPrice: '', plannedListDate: '', expirationDate: '', mlsNumber: '', mlsUrl: '', notes: '', shareWithAgent: true, notifyAgent: false, listedOn: '', tcUserId: '' });
   const [savingDetails, setSavingDetails] = useState(false);
+  // Has the listing's agent been given a portal login? (the listing only shows in their portal once they can sign in)
+  const [portal, setPortal] = useState<{ hasAgent: boolean; agentName: string | null; agentEmail: string | null; shared: boolean; invitedAt: string | null } | null>(null);
+  const [invitingPortal, setInvitingPortal] = useState(false);
+  const [portalMsg, setPortalMsg] = useState('');
 
   // Add forms
   const [newStep, setNewStep] = useState('');
@@ -289,14 +293,37 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     }
   }, [id, call]);
 
+  const loadPortal = useCallback(async () => {
+    try {
+      setPortal(await call('GET', `/api/listings/${id}/invite-agent`));
+    } catch {
+      setPortal(null);
+    }
+  }, [id, call]);
+
   useEffect(() => {
     const t = setTimeout(() => {
       load();
       loadDocs();
       loadInbound();
+      loadPortal();
     }, 0);
     return () => clearTimeout(t);
-  }, [load, loadDocs, loadInbound]);
+  }, [load, loadDocs, loadInbound, loadPortal]);
+
+  const invitePortal = async () => {
+    setInvitingPortal(true);
+    setPortalMsg('');
+    try {
+      await call('POST', `/api/listings/${id}/invite-agent`);
+      setPortalMsg('Invite sent.');
+      await loadPortal();
+    } catch (err) {
+      if (!handleAuth(err)) setPortalMsg(err instanceof Error ? err.message : 'Could not send the invite');
+    } finally {
+      setInvitingPortal(false);
+    }
+  };
 
   const reviewInbound = async (item: InboundItem) => {
     setOpeningInbound(item.id);
@@ -516,6 +543,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       true
     );
     setSavingDetails(false);
+    loadPortal();
   };
 
   // Reads a contract that is already on the listing (or on the offer) and fills the deal form from it.
@@ -1201,6 +1229,29 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 <span className="block text-xs text-slate-500">Read-only: key dates, offers, showings and price history. They never see your checklist, notes or documents.</span>
               </span>
             </label>
+            {portal?.hasAgent && (
+              <div className="rounded-lg border border-slate-600 bg-slate-800/50 px-3 py-2.5 text-sm">
+                <p className="text-slate-200 font-medium">Agent portal login</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {!portal.agentEmail
+                    ? `${portal.agentName || 'The agent'} has no email on file, so they can't be invited. Add one to the agent.`
+                    : !portal.shared
+                      ? 'Sharing is off, so this listing is hidden from the agent.'
+                      : portal.invitedAt
+                        ? `Invited ${new Date(portal.invitedAt).toLocaleDateString()} at ${portal.agentEmail}. They sign in with that email and see this listing under Listings.`
+                        : `Not invited yet. They need a login with ${portal.agentEmail} before this listing shows in their portal.`}
+                </p>
+                {portal.agentEmail && portal.shared && (
+                  <div className="mt-2 flex items-center gap-3">
+                    <button type="button" onClick={invitePortal} disabled={invitingPortal} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-100 text-xs font-semibold rounded-lg disabled:opacity-50">
+                      {invitingPortal ? 'Sending…' : portal.invitedAt ? 'Resend invite' : 'Send portal invite'}
+                    </button>
+                    {portalMsg && <span className="text-xs text-slate-400">{portalMsg}</span>}
+                  </div>
+                )}
+                {portalMsg && !(portal.agentEmail && portal.shared) && <p className="text-xs text-slate-400 mt-1">{portalMsg}</p>}
+              </div>
+            )}
             <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
               <input type="checkbox" checked={det.notifyAgent} disabled={!det.shareWithAgent || !det.agentId} onChange={(e) => setDet({ ...det, notifyAgent: e.target.checked })} className="accent-blue-500 mt-1" />
               <span>

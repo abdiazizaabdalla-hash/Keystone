@@ -84,7 +84,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
     return <>{children}</>;
   }
 
-  const isMessages = pathname === '/agent/messages' || pathname.includes('/messages');
+  const isMessages = pathname === '/agent/messages';
   const isInvoices = pathname.startsWith('/agent/invoices');
   const isSettings = pathname.startsWith('/agent/settings');
   const isListings = pathname.startsWith('/agent/listings');

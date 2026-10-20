@@ -69,3 +69,49 @@ export async function sendNewMessageEmail(params: {
     html,
   });
 }
+
+// Sent when a TC invites the listing agent to the portal from a listing (no deal needed yet).
+export async function sendAgentListingInviteEmail(params: {
+  toEmail: string;
+  tcLabel: string;
+  propertyAddress: string | null;
+  actionLink: string;
+}) {
+  const { toEmail, tcLabel, propertyAddress, actionLink } = params;
+  const listingLabel = propertyAddress ? `your listing at ${propertyAddress}` : 'your listing';
+  const html = wrapper(
+    'Follow your listing on Relay TC',
+    `<p><strong>${escapeHtml(tcLabel)}</strong> is coordinating ${escapeHtml(listingLabel)} on Relay TC, a transaction
+     coordination workspace, and has given you a login to follow it.</p>
+     <p><a href="${actionLink}" style="color: #b45309;">Log in to Relay TC</a></p>
+     <p>You'll see the listing's offers, showings and key dates, and you can message ${escapeHtml(tcLabel)} right from the page.</p>`
+  );
+
+  const resend = getResendClient();
+  return resend.emails.send({
+    from: INVOICE_FROM_EMAIL,
+    to: toEmail,
+    subject: `${tcLabel} gave you access to your listing on Relay TC`,
+    html,
+  });
+}
+
+// A general (not deal- or listing-specific) message between a coordinator and an agent.
+export async function sendDirectMessageEmail(params: { toEmail: string; senderLabel: string; preview: string; portalUrl: string }) {
+  const { toEmail, senderLabel, preview, portalUrl } = params;
+  const trimmedPreview = preview.length > 200 ? `${preview.slice(0, 200)}…` : preview;
+  const html = wrapper(
+    `New message from ${senderLabel}`,
+    `<p><strong>${escapeHtml(senderLabel)}</strong> sent you a message on Relay TC:</p>
+     <p style="padding: 12px 16px; background: #f5f0e6; border-radius: 6px; white-space: pre-wrap;">${escapeHtml(trimmedPreview)}</p>
+     <p><a href="${portalUrl}" style="color: #b45309;">Reply on Relay TC</a></p>`
+  );
+
+  const resend = getResendClient();
+  return resend.emails.send({
+    from: INVOICE_FROM_EMAIL,
+    to: toEmail,
+    subject: `${senderLabel} sent you a message on Relay TC`,
+    html,
+  });
+}

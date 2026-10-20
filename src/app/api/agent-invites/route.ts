@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { sendAgentInviteEmail } from '@/lib/agentPortalEmails';
-import { hasAgentRole, mergeAppMetadata } from '@/lib/privileged';
+import { createAgentLoginLink } from '@/lib/agentInvite';
 
 // Confirms the caller (a TC) owns `transactionId`, the same ownership
 // check src/app/api/documents/route.ts uses -- direct-owner only, not the
@@ -140,54 +140,20 @@ export async function POST(request: NextRequest) {
     const appUrl = request.nextUrl.origin;
     const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
 
-    // One email, one link: generateLink creates the account (same as
-    // shouldCreateUser did on signInWithOtp) and hands back the real
-    // action_link WITHOUT sending anything itself -- the custom email
-    // below is the only one that goes out. Safe to call straight on
-    // supabaseServer (unlike signInWithOtp, this doesn't set session
-    // state on the caller, so it doesn't need the throwaway client from
-    // createAuthClient -- see lib/supabase.ts).
-    const { data: linkData, error: linkError } = await supabaseServer.auth.admin.generateLink({
-      type: 'magiclink',
-      email,
-      options: {
-        redirectTo: `${appUrl}/agent/accept`,
-      },
-    });
-
-    // Tag a brand-new invited account as an agent right away (the agent
-    // dashboard where they accept the invite is gated on this role). The
-    // role lives in app_metadata, which only our server can write -- see
-    // lib/privileged.ts. An email that already belongs to an existing
-    // account (a TC, say) is deliberately NOT retagged here; that only
-    // happens when that account's owner accepts the invite
-    // (api/agent-invites/accept).
-    const invitedUser = linkData?.user;
-    if (
-      invitedUser &&
-      !invitedUser.last_sign_in_at &&
-      !hasAgentRole(invitedUser) &&
-      Date.now() - new Date(invitedUser.created_at).getTime() < 2 * 60 * 1000
-    ) {
-      try {
-        await mergeAppMetadata(invitedUser.id, { role: 'agent' });
-      } catch (err) {
-        console.error('Error tagging invited agent account:', err);
-      }
-    }
-
-    const actionLink = linkData?.properties?.action_link;
+    // One email, one link (see createAgentLoginLink). An email that already belongs to a non-agent account
+    // (a TC, say) is deliberately NOT retagged here; that only happens when that account's owner accepts
+    // the invite (api/agent-invites/accept), so the link is still sent for it.
     let inviteEmailSent = true;
-    if (linkError || !actionLink) {
+    const link = await createAgentLoginLink(email, appUrl, { allowOtherAccount: true });
+    if (!link.ok) {
       inviteEmailSent = false;
-      console.error('Error generating agent invite link:', linkError);
     } else {
       try {
         await sendAgentInviteEmail({
           toEmail: email,
           tcLabel,
           propertyAddress: transaction.property_address || null,
-          actionLink,
+          actionLink: link.actionLink,
         });
       } catch (emailError) {
         inviteEmailSent = false;

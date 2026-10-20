@@ -7,6 +7,7 @@ import { getVisibleTcUserIds } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
 import { autoAddContact } from '@/lib/contactsAuto';
 import { queueListingCalendarSync } from '@/lib/calendarSync';
+import { sendListingPortalInvite } from '@/lib/agentInvite';
 import { logListingActivity, cleanMoney, cleanTemplateName, cleanText, dueFromOffset, isIsoDate, loadTemplateSteps } from '@/lib/listings';
 
 function fail(error: unknown, what: string) {
@@ -141,7 +142,11 @@ export async function POST(request: NextRequest) {
     await logListingActivity(listing.id as string, user, 'Listing created');
     queueListingCalendarSync(listing.id as string);
     await logAudit(request, user, 'listing.create', { entityType: 'listing', entityId: listing.id });
-    return NextResponse.json(listing, { status: 201 });
+
+    // The agent gets a portal login right away so the listing shows up under Listings in their portal.
+    // Skipped quietly when there is no agent, no email or sharing is off; the listing page shows the state.
+    const agentInvite = agentId ? await sendListingPortalInvite({ listing, user, appUrl: request.nextUrl.origin }) : 'no_agent';
+    return NextResponse.json({ ...listing, agentInvite }, { status: 201 });
   } catch (error) {
     return fail(error, 'create');
   }
