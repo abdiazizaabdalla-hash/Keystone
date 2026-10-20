@@ -8,7 +8,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import DragHandle from '@/components/DragHandle';
 import { isDocDrag, isFileDrag, readDocDrag, startDocDrag } from '@/lib/docDrag';
 import { stagesForTaskNames } from '@/lib/transactionStages';
-import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categoryLabel, typesForCategory } from '@/lib/documentTaxonomy';
+import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categoryLabel, typesForCategory, isValidDocumentType } from '@/lib/documentTaxonomy';
 import { DueDateSpec, formatDisplayDate } from '@/lib/dueDates';
 import DueDateControl from '@/components/DueDateControl';
 import StepEmailModal from '@/components/StepEmailModal';
@@ -1500,6 +1500,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const handleMoveDocument = async (docId: string, categoryKey: string) => {
     const current = documents.find((d) => d.id === docId);
     if (!current || (current.category || DEFAULT_CATEGORY_KEY) === categoryKey) return;
+    const previous = { category: current.category, document_type: current.document_type };
+    // Show the move straight away (the server work behind it takes a moment);
+    // it is put back if the server refuses. Same type rule the server applies:
+    // keep the type if the new category has it, else use that category's first.
+    const keepType = current.document_type && isValidDocumentType(categoryKey, current.document_type);
+    const optimisticType = keepType ? current.document_type : typesForCategory(categoryKey)[0] || DEFAULT_DOCUMENT_TYPE;
+    setDocuments((prev) => prev.map((d) => (d.id === docId ? { ...d, category: categoryKey, document_type: optimisticType } : d)));
+    setCollapsedCategories((prev) => ({ ...prev, [categoryKey]: false }));
     try {
       setMovingDocId(docId);
       const response = await authFetch('/api/documents', {
@@ -1514,9 +1522,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setDocuments((prev) =>
         prev.map((d) => (d.id === docId ? { ...d, category: result.category, document_type: result.document_type } : d))
       );
-      // Make sure the box it landed in is open so the move is visible.
-      setCollapsedCategories((prev) => ({ ...prev, [categoryKey]: false }));
     } catch (error) {
+      setDocuments((prev) => prev.map((d) => (d.id === docId ? { ...d, ...previous } : d)));
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
         return;

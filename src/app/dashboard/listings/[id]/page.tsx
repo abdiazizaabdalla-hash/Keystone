@@ -330,8 +330,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       await call('PATCH', `/api/listings/${id}/documents/${docId}`, { documentType });
     } catch (err) {
       if (!handleAuth(err)) setDocError(err instanceof Error ? err.message : 'Could not move that document');
+      await loadDocs(); // put the list back the way the server has it
     }
-    await loadDocs();
   };
 
   const uploadDocs = async (files: FileList | null, typeOverride?: string) => {
