@@ -28,6 +28,12 @@ export async function GET(request: NextRequest) {
       .order('updated_at', { ascending: false });
     if (error) throw error;
 
+    // When each deal reached this agent's portal, and which came from one of their listings (for the "what's new" notices).
+    const { data: grants } = await supabaseServer.from('transaction_agents').select('transaction_id, created_at').eq('agent_user_id', user.id).in('transaction_id', transactionIds);
+    const addedAt = new Map((grants || []).map((g) => [g.transaction_id as string, g.created_at as string]));
+    const { data: fromListings } = await supabaseServer.from('listings').select('id, converted_transaction_id').in('converted_transaction_id', transactionIds);
+    const listingForTx = new Map((fromListings || []).map((l) => [l.converted_transaction_id as string, l.id as string]));
+
     const agentRecordIds = [...new Set((transactions || []).map((t) => t.agent_id).filter(Boolean))];
     const { data: agentRecords } = agentRecordIds.length
       ? await supabaseServer.from('agents').select('id, tc_user_id').in('id', agentRecordIds)
@@ -83,6 +89,8 @@ export async function GET(request: NextRequest) {
         tcLabel: tcLabels.get(tcUserId) || 'Transaction coordinator',
         nextDueDate: summary?.nextDueDate ?? null,
         overdueCount: summary?.overdueCount ?? 0,
+        addedAt: addedAt.get(t.id as string) ?? null,
+        fromListingId: listingForTx.get(t.id as string) ?? null,
       };
     });
 

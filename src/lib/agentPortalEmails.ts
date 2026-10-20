@@ -19,12 +19,17 @@ export async function sendAgentInviteEmail(params: {
   tcLabel: string;
   propertyAddress: string | null;
   loginUrl: string;
+  fromListing?: boolean;
 }) {
-  const { toEmail, tcLabel, propertyAddress, loginUrl } = params;
+  const { toEmail, tcLabel, propertyAddress, loginUrl, fromListing } = params;
   const dealLabel = propertyAddress ? `for ${propertyAddress}` : 'on Relay TC';
+  const where = propertyAddress ? `at ${propertyAddress}` : '';
   const html = wrapper(
-    "You've been added to a deal",
-    `<p><strong>${escapeHtml(tcLabel)}</strong> added you ${escapeHtml(dealLabel)} on Relay TC, a transaction coordination
+    fromListing ? 'Your listing is now an active transaction' : "You've been added to a deal",
+    fromListing
+      ? `<p>Your listing ${escapeHtml(where)} is now under contract. <strong>${escapeHtml(tcLabel)}</strong> set it up as a transaction on Relay TC,
+     and it is already on your dashboard.</p>`
+      : `<p><strong>${escapeHtml(tcLabel)}</strong> added you ${escapeHtml(dealLabel)} on Relay TC, a transaction coordination
      workspace.</p>
      <p><a href="${loginUrl}" style="color: #b45309;">Set up your Relay TC account</a></p>
      <p style="font-size: 13px; color: #555;">This link doesn't expire. It takes you to a page that emails you a fresh sign-in link when you ask for one.</p>
@@ -36,7 +41,7 @@ export async function sendAgentInviteEmail(params: {
   return resend.emails.send({
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
-    subject: `${tcLabel} added you to a deal on Relay TC`,
+    subject: fromListing ? `Your listing${propertyAddress ? ` at ${propertyAddress}` : ''} is now an active transaction` : `${tcLabel} added you to a deal on Relay TC`,
     html,
   });
 }

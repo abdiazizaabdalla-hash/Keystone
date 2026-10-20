@@ -326,15 +326,14 @@ export async function POST(request: NextRequest) {
 
     // The agent gets a portal invite right away when they have an email (turn off with inviteAgent: false). It never
     // blocks or undoes the deal; the outcome comes back so the screen can say what happened.
-    // A deal converted from a listing that is already shared with this same agent goes straight onto their portal:
-    // they already have access to the property, so there is nothing to accept.
-    let grantAccess = false;
+    // A deal converted from this agent's own listing says so in the email.
+    let fromListing = false;
     if (typeof fromListingId === 'string' && fromListingId && !assignUnassigned) {
-      const { data: src } = await supabaseServer.from('listings').select('tc_user_id, agent_id, share_with_agent').eq('id', fromListingId).maybeSingle();
+      const { data: src } = await supabaseServer.from('listings').select('tc_user_id, agent_id').eq('id', fromListingId).maybeSingle();
       const visibleForListing = await getVisibleTcUserIds(user.id);
-      grantAccess = Boolean(src && src.agent_id === transaction.agent_id && src.share_with_agent === true && (isAdmin || visibleForListing.includes(src.tc_user_id as string)));
+      fromListing = Boolean(src && src.agent_id === transaction.agent_id && (isAdmin || visibleForListing.includes(src.tc_user_id as string)));
     }
-    const agentInvite = body.inviteAgent === false || assignUnassigned ? 'skipped' : await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, grantAccess });
+    const agentInvite = body.inviteAgent === false || assignUnassigned ? 'skipped' : await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, fromListing });
     return NextResponse.json({ ...transaction, agentInvite }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

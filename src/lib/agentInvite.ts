@@ -106,12 +106,8 @@ export async function inviteAgentToTransaction(params: {
   user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null };
   appUrl: string;
   email?: string;
-  /**
-   * Put the deal straight on the agent's portal instead of waiting for them to accept. Only for an account that is an
-   * agent login (never a coordinator's), and only when the caller has already confirmed the agent is entitled to this
-   * property (see POST /api/transactions: converted from a listing shared with this same agent).
-   */
-  grantAccess?: boolean;
+  /** The deal came from the agent's own listing: the email says so. */
+  fromListing?: boolean;
 }): Promise<TxInviteOutcome> {
   try {
     const { transaction, user, appUrl } = params;
@@ -134,7 +130,9 @@ export async function inviteAgentToTransaction(params: {
     const link = await createAgentLoginLink(email, appUrl, { allowOtherAccount: true });
     if (!link.ok) return 'failed';
 
-    if (params.grantAccess && link.isAgent && link.userId) {
+    // The deal goes straight onto the agent's portal: no accepting. (Skipped for an email that belongs to a coordinator's
+    // login; that one keeps the old invite-and-accept step, which is what protects a coordinator from being tagged as an agent.)
+    if (link.isAgent && link.userId) {
       const { error: grantError } = await supabaseServer
         .from('transaction_agents')
         .upsert({ transaction_id: transaction.id, agent_user_id: link.userId, invited_by: user.id }, { onConflict: 'transaction_id,agent_user_id', ignoreDuplicates: true });
@@ -147,7 +145,7 @@ export async function inviteAgentToTransaction(params: {
     }
 
     const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
-    await sendAgentInviteEmail({ toEmail: email, tcLabel, propertyAddress: (transaction.property_address as string | null) || null, loginUrl: agentSetupUrl(appUrl, email) });
+    await sendAgentInviteEmail({ toEmail: email, tcLabel, propertyAddress: (transaction.property_address as string | null) || null, loginUrl: agentSetupUrl(appUrl, email), fromListing: params.fromListing === true });
     return 'sent';
   } catch (error) {
     console.error('inviteAgentToTransaction failed (ignored):', error);

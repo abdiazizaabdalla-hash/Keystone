@@ -9,6 +9,10 @@ import AgentCalendarPrompt from '@/components/AgentCalendarPrompt';
 import AgentListingCard, { type AgentListingSummary } from '@/components/AgentListingCard';
 import type { ListingStatus } from '@/lib/listingsShared';
 
+const NOTICE_DAYS = 14;
+const DISMISSED_KEY = 'agent_dismissed_notices';
+const isRecent = (iso: string) => Date.now() - new Date(iso).getTime() < NOTICE_DAYS * 86400000;
+
 const LISTING_ORDER: ListingStatus[] = ['active', 'under_offer', 'preparing', 'converted', 'expired', 'withdrawn'];
 
 interface AgentTransaction {
@@ -20,6 +24,8 @@ interface AgentTransaction {
   tcLabel: string;
   nextDueDate: string | null;
   overdueCount: number;
+  addedAt?: string | null;
+  fromListingId?: string | null;
 }
 
 interface PendingInvite {
@@ -171,6 +177,32 @@ export default function AgentHubPage() {
     }
   };
 
+  // "What's new": deals that reached this portal in the last two weeks (most importantly, a listing that became a transaction).
+  // Dismissing one is remembered on this device only.
+  const [dismissed, setDismissed] = useState<string[]>(() => {
+    try {
+      const raw = window.localStorage.getItem(DISMISSED_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
+  const dismissNotice = (id: string) => {
+    setDismissed((prev) => {
+      const next = [...prev, id].slice(-100);
+      try {
+        window.localStorage.setItem(DISMISSED_KEY, JSON.stringify(next));
+      } catch {
+        // Not remembered; it simply shows again next visit.
+      }
+      return next;
+    });
+  };
+  const notices = transactions.filter(
+    (t) => t.addedAt && isRecent(t.addedAt) && !dismissed.includes(t.id)
+  );
+
   const onMarket = listings.filter((l) => l.status === 'active' || l.status === 'under_offer').length;
   const openOffers = listings.reduce((n, l) => n + l.openOffers, 0);
   const activeDeals = transactions.filter((t) => t.status !== 'Closed').length;
@@ -241,6 +273,34 @@ export default function AgentHubPage() {
           <p className="text-red-400 text-sm">{error}</p>
         ) : (
           <>
+            {notices.length > 0 && (
+              <div className="mb-8 space-y-2">
+                {notices.map((t) => (
+                  <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 bg-emerald-900/20 border border-emerald-700/50 rounded-lg px-4 py-3">
+                    <p className="text-sm text-slate-200 min-w-0 break-words">
+                      {t.fromListingId ? (
+                        <>
+                          Your listing at <strong>{t.propertyAddress || t.fileNumber}</strong> is now an active transaction.
+                        </>
+                      ) : (
+                        <>
+                          You were added to <strong>{t.propertyAddress || t.fileNumber}</strong>.
+                        </>
+                      )}
+                    </p>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <Link href={`/agent/transactions/${t.id}`} className="text-sm font-semibold text-emerald-300 hover:text-emerald-200">
+                        Open the deal →
+                      </Link>
+                      <button type="button" onClick={() => dismissNotice(t.id)} className="text-xs text-slate-500 hover:text-slate-300" aria-label="Dismiss">
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* At a glance. Each tile jumps to the section it counts. */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-10">
               {[
