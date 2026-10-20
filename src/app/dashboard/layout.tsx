@@ -259,6 +259,7 @@ export default function DashboardLayout({
               { href: '/dashboard/messages', label: 'Messages' },
               { href: '/dashboard/search', label: 'Search' },
               { href: '/dashboard/transactions', label: 'Transactions' },
+              { href: '/dashboard/listings', label: 'Listings' },
               { href: '/dashboard/agents', label: 'Agents' },
               { href: '/dashboard/contacts', label: 'Contacts' },
               { href: '/dashboard/invoices', label: 'Invoices' },
@@ -408,6 +409,17 @@ export default function DashboardLayout({
                 <path d="M13 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2h-2z" />
                 <path d="M5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5z" />
                 <path d="M13 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2h-2z" />
+              </svg>
+            }
+          />
+
+          <NavLink
+            href="/dashboard/listings"
+            label="Listings"
+            collapsed={collapsed}
+            icon={
+              <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
               </svg>
             }
           />

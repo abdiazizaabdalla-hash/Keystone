@@ -143,6 +143,8 @@ export async function deleteUserCompletely(userId: string): Promise<{ transactio
   await deleteWhere('payment_accounts', 'tc_user_id', [userId]);
   await deleteWhere('calendar_connections', 'tc_user_id', [userId]);
   await deleteWhere('key_date_calendar_events', 'user_id', [userId]);
+  await deleteWhere('listings', 'tc_user_id', [userId]); // its checklist, offers, contacts and dates go with it
+  await deleteWhere('listing_template_steps', 'tc_user_id', [userId]);
   await deleteWhere('calendar_feed_tokens', 'user_id', [userId]);
   await deleteWhere('contacts', 'tc_user_id', [userId]);
   await deleteWhere('step_email_templates', 'tc_user_id', [userId]);
