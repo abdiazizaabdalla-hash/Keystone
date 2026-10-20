@@ -1,5 +1,5 @@
 // Suggested file numbers: the day the deal starts, as MM.DD.YYYY (for example 10.20.2026).
-// A second deal started the same day becomes MM.DD.2.YYYY, a third MM.DD.3.YYYY, and so on.
+// Further deals started the same day count up from 1: MM.DD.1.YYYY, then MM.DD.2.YYYY, and so on.
 // It is only a suggestion; people can type any file number they like.
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -15,13 +15,13 @@ export function suggestFileNumber(date: Date, existing: string[]): string {
   const year = date.getFullYear();
   const pattern = sameDayPattern(month, day, year);
 
-  let highest = 0; // 0 = nothing started today yet; the plain date counts as number 1
+  let highest = -1; // -1 = nothing started today yet; the plain date is 0, then .1, .2, ...
   for (const raw of existing) {
     const match = pattern.exec((raw || '').trim());
     if (!match) continue;
-    highest = Math.max(highest, match[1] ? Number(match[1]) : 1);
+    highest = Math.max(highest, match[1] ? Number(match[1]) : 0);
   }
 
   const base = `${pad(month)}.${pad(day)}`;
-  return highest === 0 ? `${base}.${year}` : `${base}.${highest + 1}.${year}`;
+  return highest < 0 ? `${base}.${year}` : `${base}.${highest + 1}.${year}`;
 }
