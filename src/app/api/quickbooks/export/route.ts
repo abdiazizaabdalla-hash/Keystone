@@ -49,7 +49,7 @@ function csvResponse(csv: string, filename: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
+    const { user, isAdmin } = await getUserFromRequest(request);
     if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
 
     const p = new URL(request.url).searchParams;
@@ -60,11 +60,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Dates must look like 2026-10-21' }, { status: 400 });
     }
 
-    const { data: agents, error: agentError } = await supabaseServer
-      .from('agents')
-      .select('id, name, brokerage, email, phone')
-      .eq('tc_user_id', user.id)
-      .limit(5000);
+    // Same scope as the Invoices page: a coordinator gets the invoices of their own agents; a platform admin
+    // (who sees every invoice there) gets every invoice here too.
+    let agentsQuery = supabaseServer.from('agents').select('id, name, brokerage, email, phone').limit(5000);
+    if (!isAdmin) agentsQuery = agentsQuery.eq('tc_user_id', user.id);
+    const { data: agents, error: agentError } = await agentsQuery;
     if (agentError) throw agentError;
     const agentList = agents || [];
 
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
     }
 
     const agentById = new Map(agentList.map((a) => [a.id as string, a]));
-    if (agentById.size === 0) {
+    if (!isAdmin && agentById.size === 0) {
       return type === 'count' ? NextResponse.json({ count: 0, unpaid: 0, paid: 0, parts: 0 }) : csvResponse(toCsv(type === 'payments' ? QB_PAYMENT_HEADERS : QB_INVOICE_HEADERS, []), `relay-${type}.csv`);
     }
 
@@ -90,10 +90,11 @@ export async function GET(request: NextRequest) {
     let query = supabaseServer
       .from('invoices')
       .select('id, agent_id, transaction_id, amount_owed, invoice_number, invoice_date, due_date, paid, paid_at, paid_amount, refunded_amount')
-      .in('agent_id', [...agentById.keys()])
       .order('invoice_date', { ascending: true })
       .order('invoice_number', { ascending: true })
       .limit(5000);
+
+    if (!isAdmin) query = query.in('agent_id', [...agentById.keys()]);
 
     if (type === 'payments') {
       query = query.eq('paid', true);
@@ -132,7 +133,7 @@ export async function GET(request: NextRequest) {
           const tx = txById.get(inv.transaction_id);
           return [
             inv.invoice_number,
-            agentById.get(inv.agent_id)?.name || '',
+            agentById.get(inv.agent_id)?.name || 'Unknown agent',
             usDate(inv.paid_at),
             money(gross),
             money(refunded),
@@ -160,7 +161,7 @@ export async function GET(request: NextRequest) {
         const desc = tx ? `${item} - ${tx.property_address} (${tx.file_number})` : item;
         return [
           inv.invoice_number,
-          agentById.get(inv.agent_id)?.name || '',
+          agentById.get(inv.agent_id)?.name || 'Unknown agent',
           usDate(inv.invoice_date),
           usDate(inv.due_date),
           tx ? `${tx.property_address} · File ${tx.file_number}` : '',
