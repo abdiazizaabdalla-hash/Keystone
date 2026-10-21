@@ -231,6 +231,8 @@ export default function InvoicesPage() {
             </div>
             <Link
               href="/dashboard/invoices/quickbooks"
+              target="_blank"
+              rel="noopener noreferrer"
               className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 text-sm rounded-lg transition"
             >
               QuickBooks import / export

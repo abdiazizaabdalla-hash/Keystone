@@ -208,8 +208,11 @@ export default function QuickBooksConnectCard() {
                     Retry {status.needsAttention} that need attention
                   </button>
                 )}
-                <Link href="/dashboard/invoices" className={ghost}>
+                <Link href="/dashboard/invoices" target="_blank" rel="noopener noreferrer" className={ghost}>
                   See invoices
+                </Link>
+                <Link href="/dashboard/invoices/quickbooks" target="_blank" rel="noopener noreferrer" className={ghost}>
+                  Import / export files
                 </Link>
               </div>
               <p className="text-xs text-slate-500">
@@ -229,7 +232,7 @@ export default function QuickBooksConnectCard() {
       ) : (
         <p className="text-xs text-slate-400">
           The direct connection is coming soon. You can move invoices today with the{' '}
-          <Link href="/dashboard/invoices/quickbooks" className="text-blue-400 hover:text-blue-300 underline">
+          <Link href="/dashboard/invoices/quickbooks" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">
             QuickBooks import and export files
           </Link>
           .
