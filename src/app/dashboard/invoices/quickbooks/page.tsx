@@ -59,11 +59,11 @@ export default function QuickBooksPage() {
   };
 
   // ---------------- export ----------------
-  const [status, setStatus] = useState<'open' | 'all'>('open');
+  const [status, setStatus] = useState<'open' | 'all'>('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [item, setItem] = useState(DEFAULT_ITEM_NAME);
-  const [count, setCount] = useState<{ count: number; parts: number } | null>(null);
+  const [count, setCount] = useState<{ count: number; unpaid: number; paid: number; parts: number } | null>(null);
   const [exportMsg, setExportMsg] = useState('');
   const [downloading, setDownloading] = useState<string | null>(null);
 
@@ -267,8 +267,8 @@ export default function QuickBooksPage() {
             <label className="text-sm text-slate-400">
               Invoices
               <select value={status} onChange={(e) => setStatus(e.target.value as 'open' | 'all')} className={`${input} w-full mt-1`}>
-                <option value="open">Unpaid only</option>
                 <option value="all">Paid and unpaid</option>
+                <option value="open">Unpaid only</option>
               </select>
             </label>
             <label className="text-sm text-slate-400">
@@ -305,7 +305,8 @@ export default function QuickBooksPage() {
             </button>
           </div>
           <p className="text-xs text-slate-500 mb-1">
-            {count ? `${count.count} invoice${count.count === 1 ? '' : 's'} match.` : 'Counting…'} QuickBooks accepts up to {QB_MAX_INVOICES_PER_FILE} invoices per file, so bigger sets download in parts.
+            {count ? `${count.count} invoice${count.count === 1 ? '' : 's'} will be in the file (${count.unpaid} unpaid, ${count.paid} paid in this date range).` : 'Counting…'}
+            {count && count.count === 0 && count.paid + count.unpaid > 0 ? ' Switch to “Paid and unpaid” to include the rest.' : ''} QuickBooks accepts up to {QB_MAX_INVOICES_PER_FILE} invoices per file, so bigger sets download in parts.
           </p>
           {exportMsg && <p className="text-sm text-red-400 mt-2">{exportMsg}</p>}
 

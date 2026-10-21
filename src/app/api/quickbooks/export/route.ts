@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
 
     const agentById = new Map(agentList.map((a) => [a.id as string, a]));
     if (agentById.size === 0) {
-      return type === 'count' ? NextResponse.json({ count: 0, parts: 0 }) : csvResponse(toCsv(type === 'payments' ? QB_PAYMENT_HEADERS : QB_INVOICE_HEADERS, []), `relay-${type}.csv`);
+      return type === 'count' ? NextResponse.json({ count: 0, unpaid: 0, paid: 0, parts: 0 }) : csvResponse(toCsv(type === 'payments' ? QB_PAYMENT_HEADERS : QB_INVOICE_HEADERS, []), `relay-${type}.csv`);
     }
 
     const statusAll = p.get('status') === 'all';
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
       if (from) query = query.gte('paid_at', `${from}T00:00:00`);
       if (to) query = query.lte('paid_at', `${to}T23:59:59`);
     } else {
-      if (!statusAll) query = query.eq('paid', false);
+      if (!statusAll && type !== 'count') query = query.eq('paid', false);
       if (from) query = query.gte('invoice_date', `${from}T00:00:00`);
       if (to) query = query.lte('invoice_date', `${to}T23:59:59`);
     }
@@ -110,7 +110,11 @@ export async function GET(request: NextRequest) {
     const invoices = (invoiceRows || []) as InvoiceRow[];
 
     if (type === 'count') {
-      return NextResponse.json({ count: invoices.length, parts: Math.ceil(invoices.length / QB_MAX_INVOICES_PER_FILE) });
+      // The count looks at every invoice in the date range, then reports how many the chosen filter keeps.
+      const unpaid = invoices.filter((i) => !i.paid).length;
+      const paid = invoices.length - unpaid;
+      const count = statusAll ? invoices.length : unpaid;
+      return NextResponse.json({ count, unpaid, paid, parts: Math.ceil(count / QB_MAX_INVOICES_PER_FILE) });
     }
 
     const txIds = [...new Set(invoices.map((i) => i.transaction_id).filter(Boolean))];
