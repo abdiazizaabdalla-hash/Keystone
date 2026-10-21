@@ -108,7 +108,7 @@ export const PLANS: Plan[] = [
       'Auto-built checklist with configurable per-step deadlines',
       'Document uploads per checklist step',
       'Calendar link for Google, Outlook and Apple, plus CSV deal import',
-      'Manual invoicing',
+      'Manual invoicing, with QuickBooks import and export',
     ],
     limits: {
       maxActiveTransactions: null,
@@ -130,6 +130,7 @@ export const PLANS: Plan[] = [
       'Listings, offers and showings, converted to a deal in one click',
       'Document uploads per checklist step',
       'Calendar link for Google, Outlook and Apple, plus CSV deal import',
+      'QuickBooks invoice import and export',
       'Custom checklist templates with required-step flags',
       'Admin dashboard access',
       'Priority support',

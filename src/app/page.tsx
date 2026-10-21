@@ -347,6 +347,7 @@ export default function Home() {
             {[
               "One-click Add to Google Calendar, Outlook or Apple Calendar, no sign-in or permissions needed",
               "Critical dates, checklist due dates and listing dates, kept up to date as they change",
+              "Choose what goes on your calendar: critical dates, closing day, checklist due dates, listing dates",
               "A private link only you have, which you can replace any time",
               "Direct two-way Google Calendar sync is coming soon",
             ].map((line) => (
@@ -384,6 +385,32 @@ export default function Home() {
         </ShotRow>
       </section>
 
+      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <ShotRow
+          name="quickbooks.jpg"
+          alt="The QuickBooks import and export page in Relay, with downloads for invoices, payments and agents, and an upload for QuickBooks invoices"
+          reverse
+        >
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Invoicing</p>
+          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Your invoices, in QuickBooks in minutes.</h2>
+          <p className="text-slate-400 mb-5">Download your Relay invoices as a file QuickBooks Online imports, or upload an export from QuickBooks to bring invoices into Relay. Nothing to connect and no permissions to grant, so you stay in control.</p>
+          <ul className="space-y-2.5 text-sm text-slate-300">
+            {[
+              "Invoices in QuickBooks’ own column layout, split into files of 100 to match its import limit",
+              "A payments report and your agents as a customer list, so the invoices land on the right customers",
+              "Upload an Excel or CSV export from QuickBooks and see every match to an agent and deal before anything is saved",
+              "Duplicates are skipped and existing invoices are never changed",
+            ].map((line) => (
+              <li key={line} className="flex items-start gap-2.5">
+                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                {line}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-slate-500 mt-4">Included on every plan. This works by file: it does not connect to your QuickBooks account or sync on its own, and QuickBooks cannot import payment status from a file.</p>
+        </ShotRow>
+      </section>
+
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-8">Everything you need to run the deal</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -402,7 +429,10 @@ export default function Home() {
             { title: "Custom templates", body: 'Build checklists for different deal types, for deals and for listings. Pro and Team.' },
             { title: "Compliance report", body: 'Export a timestamped PDF of a deal’s documents, messages and checklist.' },
             { title: "Team workspaces", body: 'Share a workspace with other coordinators. The owner sees the team’s files.' },
-            { title: "Payment tracking", body: 'See which invoices are paid and which are still outstanding. Move invoices to and from QuickBooks with a file.' },
+            { title: "Payment tracking", body: 'See which invoices are paid and which are still outstanding.' },
+            { title: "QuickBooks import and export", body: 'Download invoices, payments and agents for QuickBooks Online, or upload a QuickBooks export to bring invoices in.' },
+            { title: "Calendar preferences", body: 'Pick which dates reach your calendar: critical dates, closing day, checklists or listing dates.' },
+            { title: "Editable listing checklists", body: 'Rename and reorder steps, and mark the whole checklist done in one click.' },
             { title: "Duplicate protection", body: 'A warning before the same property or file number is added twice.' },
           ].map((f) => (
             <div key={f.title} className="p-5 bg-slate-800/60 border border-slate-700 rounded-xl">
