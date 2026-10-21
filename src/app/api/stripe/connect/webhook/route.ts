@@ -1,3 +1,4 @@
+import { queueQuickBooksSync } from '@/lib/quickbooksSync';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
@@ -153,6 +154,8 @@ export async function POST(request: NextRequest) {
 
         if (error) {
           console.error(`Error marking invoice ${invoiceId} paid from Stripe Connect webhook:`, error);
+        } else {
+          queueQuickBooksSync(invoiceId); // record the payment in QuickBooks, if the TC connected it
         }
         break;
       }

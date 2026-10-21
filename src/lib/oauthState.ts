@@ -14,14 +14,14 @@ import crypto from 'crypto';
  * and it's required for the OAuth flow to work at all anyway.
  */
 function getStateSecret(): string {
-  const secret = process.env.GOOGLE_CLIENT_SECRET;
+  const secret = process.env.GOOGLE_CLIENT_SECRET || process.env.QUICKBOOKS_CLIENT_SECRET;
   if (!secret) {
-    throw new Error('GOOGLE_CLIENT_SECRET is not set — cannot start a Google OAuth flow');
+    throw new Error('No OAuth client secret is set — cannot start an OAuth flow');
   }
   return secret;
 }
 
-export type OAuthReturnTo = 'settings' | 'onboarding' | 'agent';
+export type OAuthReturnTo = 'settings' | 'onboarding' | 'agent' | 'quickbooks';
 
 interface OAuthStatePayload {
   userId: string;
@@ -53,7 +53,7 @@ export function verifyOAuthState(token: string): { userId: string; from: OAuthRe
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as Partial<OAuthStatePayload>;
     if (typeof payload.userId !== 'string' || typeof payload.exp !== 'number') return null;
     if (Date.now() > payload.exp) return null;
-    return { userId: payload.userId, from: payload.from === 'onboarding' || payload.from === 'agent' ? payload.from : 'settings' };
+    return { userId: payload.userId, from: payload.from === 'onboarding' || payload.from === 'agent' || payload.from === 'quickbooks' ? payload.from : 'settings' };
   } catch {
     return null;
   }

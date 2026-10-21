@@ -34,8 +34,30 @@ interface Invoice {
   refunded?: boolean;
   refunded_at?: string | null;
   refunded_amount?: number | null;
+  qb_sync_status?: string | null;
+  qb_sync_error?: string | null;
+  qb_payment_id?: string | null;
   agent: Agent | null;
   transaction: Transaction | null;
+}
+
+/** A small line saying what happened in QuickBooks, when the TC has connected it. */
+function QbNote({ invoice }: { invoice: Invoice }) {
+  if (invoice.qb_sync_status === 'synced') {
+    return (
+      <div className="text-xs text-slate-500 mt-1">
+        In QuickBooks{invoice.paid ? (invoice.qb_payment_id ? ' · payment recorded' : ' · payment not recorded yet') : ''}
+      </div>
+    );
+  }
+  if (invoice.qb_sync_status === 'error') {
+    return (
+      <div className="text-xs text-amber-400 mt-1" title={invoice.qb_sync_error || ''}>
+        QuickBooks: action needed{invoice.qb_sync_error ? ` — ${invoice.qb_sync_error}` : ''}
+      </div>
+    );
+  }
+  return null;
 }
 
 export default function InvoicesPage() {
@@ -308,6 +330,7 @@ export default function InvoicesPage() {
                     {invoice.refunded ? 'Refunded' : invoice.paid ? 'Paid' : 'Unpaid'}
                   </span>
                 </div>
+                <QbNote invoice={invoice} />
                 <p className="text-slate-100 text-xl font-semibold mt-2">
                   ${invoice.amount_owed.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </p>
@@ -439,6 +462,7 @@ export default function InvoicesPage() {
                         }`}>
                           {invoice.refunded ? 'Refunded' : invoice.paid ? 'Paid' : 'Unpaid'}
                         </span>
+                        <QbNote invoice={invoice} />
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-4">

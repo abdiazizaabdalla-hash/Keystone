@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { logAudit } from '@/lib/audit';
+import { queueQuickBooksSync } from '@/lib/quickbooksSync';
 
 export async function GET(request: NextRequest) {
   try {
@@ -194,6 +195,7 @@ export async function POST(request: NextRequest) {
     if (invoiceError) throw invoiceError;
 
     await logAudit(request, user, 'invoice.create', { entityType: 'invoice', entityId: invoice.id });
+    queueQuickBooksSync(invoice.id); // no-op unless this TC connected QuickBooks
     return NextResponse.json(invoice, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -272,6 +274,8 @@ export async function PATCH(request: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    if (paid === true) queueQuickBooksSync(updatedInvoice.id); // record the payment in QuickBooks, if connected
 
     const [{ data: agentRow }, { data: transactionRow }] = await Promise.all([
       updatedInvoice.agent_id

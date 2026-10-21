@@ -14,7 +14,9 @@ export async function GET(request: NextRequest) {
   const stateToken = searchParams.get('state');
   const oauthError = searchParams.get('error');
 
-  const state = stateToken ? verifyOAuthState(stateToken) : null;
+  // A state token minted for QuickBooks must never be accepted here.
+  const verified = stateToken ? verifyOAuthState(stateToken) : null;
+  const state = verified && verified.from !== 'quickbooks' ? verified : null;
   const finalPage =
     state?.from === 'onboarding' ? '/onboarding' : state?.from === 'agent' ? '/agent/settings' : '/dashboard/settings';
 

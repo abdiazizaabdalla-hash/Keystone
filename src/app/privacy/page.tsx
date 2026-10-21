@@ -48,6 +48,7 @@ export default function PrivacyPage() {
           <li><strong>Resend</strong> &mdash; sending and receiving email;</li>
           <li><strong>Sentry</strong> &mdash; error monitoring;</li>
           <li><strong>Google</strong> &mdash; only if you choose to connect your Google Calendar (see &ldquo;Google Calendar data&rdquo; below);</li>
+          <li><strong>Intuit (QuickBooks)</strong> &mdash; only if you choose to connect QuickBooks Online (see &ldquo;QuickBooks data&rdquo; below);</li>
           <li><strong>Anthropic</strong> &mdash; when you upload a contract for automatic reading, the document is sent to Anthropic to extract the details. It is used to return the result to you.</li>
         </ul>
         <p>
@@ -56,6 +57,21 @@ export default function PrivacyPage() {
           asked to sign. We may also disclose information when the law requires it or to protect people&rsquo;s safety and our
           rights, or as part of a merger or sale of the business (with notice to you).
         </p>
+      </section>
+
+      <section>
+        <h2>QuickBooks data</h2>
+        <p>
+          Connecting QuickBooks Online is optional, and you can also move invoices with import and export files without
+          connecting anything. If you connect, Relay asks Intuit for permission to work with your QuickBooks accounting data
+          (the <code>com.intuit.quickbooks.accounting</code> scope).
+        </p>
+        <ul>
+          <li><strong>What we do:</strong> create a customer for each agent you invoice, create the invoices you make in Relay, and record payments on them when they are paid. Before creating anything, Relay looks up the one customer, product or service, or invoice number it needs, so that nothing is duplicated. Relay does not edit or delete anything in QuickBooks, and we do not read or copy your other accounting records.</li>
+          <li><strong>What we store:</strong> your QuickBooks company ID and name, encrypted tokens that let Relay keep invoices up to date, the QuickBooks ID of each customer, invoice, and payment Relay created, and a short note when something could not be sent. The tokens are encrypted before they are saved.</li>
+          <li><strong>Who sees it:</strong> we do not sell or share QuickBooks data, and we do not use it for advertising or to train AI or machine-learning models.</li>
+          <li><strong>Disconnecting:</strong> you can disconnect in Settings at any time. Relay then tells Intuit to end the connection, deletes the stored tokens, and forgets the links it kept. Everything already in QuickBooks stays there. You can also remove Relay from your Intuit account&rsquo;s connected apps.</li>
+        </ul>
       </section>
 
       <section>

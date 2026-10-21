@@ -9,6 +9,7 @@ import { DueDateSpec, normalizeDueDateSpec } from '@/lib/dueDates';
 import { TASK_TEMPLATE } from '@/lib/transactionStages';
 import DueDateControl from '@/components/DueDateControl';
 import CalendarConnectCard from '@/components/CalendarConnectCard';
+import QuickBooksConnectCard from '@/components/QuickBooksConnectCard';
 
 function SettingsContent() {
   const router = useRouter();
@@ -851,6 +852,8 @@ function SettingsContent() {
           </div>
         </div>
 
+
+        <QuickBooksConnectCard />
 
         <CalendarConnectCard audience="tc" />
 
