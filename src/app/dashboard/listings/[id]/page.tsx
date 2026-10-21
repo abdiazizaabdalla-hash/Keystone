@@ -149,6 +149,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const EMPTY_OFFER = { buyerName: '', buyerAgent: '', offerPrice: '', receivedOn: '', terms: '', financing: '', earnestMoney: '', optionDays: '', closingDate: '', sellerConcessions: '' };
   const [newOffer, setNewOffer] = useState(EMPTY_OFFER);
   const [emailTask, setEmailTask] = useState<Task | null>(null);
+  // Renaming a checklist step in place
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   // Offer intake: 'new' = from documents, an Offer = counteroffer/amendment for it
   const [intake, setIntake] = useState<'new' | Offer | null>(null);
   const [historyOpen, setHistoryOpen] = useState<string | null>(null);
@@ -835,20 +837,80 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           <div className={cardCls}>
             <div className="flex items-center justify-between gap-3 mb-3">
               <h2 className="text-lg font-bold text-slate-100">Checklist</h2>
-              <span className="text-xs text-slate-400">
-                {done}/{tasks.length} done
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-400">
+                  {done}/{tasks.length} done
+                </span>
+                {tasks.length > 0 &&
+                  (done < tasks.length ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!confirm(`Mark all ${tasks.length - done} open step${tasks.length - done === 1 ? '' : 's'} as done?`)) return;
+                        void act(() => call('POST', `/api/listings/${id}/checklist`, { action: 'complete_all' }), 'All steps marked done.');
+                      }}
+                      className="text-xs px-2.5 py-1 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition"
+                    >
+                      Mark all done
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void act(() => call('POST', `/api/listings/${id}/checklist`, { action: 'reopen_all' }), 'All steps reopened.')}
+                      className="text-xs px-2.5 py-1 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 rounded-lg transition"
+                    >
+                      Reopen all
+                    </button>
+                  ))}
+              </div>
             </div>
             <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden mb-4" aria-hidden>
               <div className="h-full bg-blue-500" style={{ width: `${pct}%` }} />
             </div>
             <ul className="space-y-1">
-              {tasks.map((t) => {
+              {tasks.map((t, idx) => {
                 const overdue = !t.completed && t.due_date && t.due_date < today;
+                const move = (dir: -1 | 1) => {
+                  const ids = tasks.map((x) => x.id);
+                  const j = idx + dir;
+                  if (j < 0 || j >= ids.length) return;
+                  [ids[idx], ids[j]] = [ids[j], ids[idx]];
+                  void act(() => call('POST', `/api/listings/${id}/checklist`, { action: 'reorder', ids }));
+                };
+                const saveRename = () => {
+                  const next = renaming && renaming.id === t.id ? renaming.name.trim() : '';
+                  setRenaming(null);
+                  if (next && next !== t.name) void act(() => call('PATCH', `/api/listings/${id}/tasks/${t.id}`, { name: next }));
+                };
                 return (
                   <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 border-b border-slate-700/50 last:border-0">
                     <input type="checkbox" checked={t.completed} onChange={(e) => act(() => call('PATCH', `/api/listings/${id}/tasks/${t.id}`, { completed: e.target.checked }))} className="accent-blue-500" aria-label={`Mark "${t.name}" done`} />
-                    <span className={`flex-1 min-w-[10rem] text-sm break-words ${t.completed ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{t.name}</span>
+                    {renaming && renaming.id === t.id ? (
+                      <input
+                        autoFocus
+                        value={renaming.name}
+                        maxLength={200}
+                        onChange={(e) => setRenaming({ id: t.id, name: e.target.value })}
+                        onBlur={saveRename}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            saveRename();
+                          } else if (e.key === 'Escape') setRenaming(null);
+                        }}
+                        className={`${inputCls} flex-1 min-w-[10rem] !py-1 text-sm`}
+                        aria-label={`Rename ${t.name}`}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setRenaming({ id: t.id, name: t.name })}
+                        title="Click to rename"
+                        className={`flex-1 min-w-[10rem] text-left text-sm break-words hover:text-blue-300 ${t.completed ? 'text-slate-500 line-through' : 'text-slate-200'}`}
+                      >
+                        {t.name}
+                      </button>
+                    )}
                     <input
                       type="date"
                       value={t.due_date || ''}
@@ -859,6 +921,14 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                     <button type="button" onClick={() => setEmailTask(t)} className="text-xs text-blue-400 hover:text-blue-300" aria-label={`Email about ${t.name}`}>
                       Email
                     </button>
+                    <span className="flex items-center">
+                      <button type="button" onClick={() => move(-1)} disabled={idx === 0} className="px-1 text-slate-600 hover:text-slate-200 disabled:opacity-20 disabled:hover:text-slate-600 text-xs" aria-label={`Move ${t.name} up`}>
+                        ↑
+                      </button>
+                      <button type="button" onClick={() => move(1)} disabled={idx === tasks.length - 1} className="px-1 text-slate-600 hover:text-slate-200 disabled:opacity-20 disabled:hover:text-slate-600 text-xs" aria-label={`Move ${t.name} down`}>
+                        ↓
+                      </button>
+                    </span>
                     <button type="button" onClick={() => act(() => call('DELETE', `/api/listings/${id}/tasks/${t.id}`))} className="text-slate-600 hover:text-red-300 text-sm" aria-label={`Remove ${t.name}`}>
                       ✕
                     </button>
@@ -879,6 +949,13 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 Add
               </button>
             </form>
+            <p className="mt-3 text-xs text-slate-500">
+              Click a step to rename it, use the arrows to reorder.{' '}
+              <Link href="/dashboard/listings/template" className="text-blue-400 hover:text-blue-300">
+                Edit your default checklist
+              </Link>{' '}
+              for new listings.
+            </p>
           </div>
 
           {/* Offers */}
