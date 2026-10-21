@@ -30,10 +30,11 @@ interface Props {
   name?: string;
   required?: boolean;
   disabled?: boolean;
+  form?: string;
   'aria-label'?: string;
 }
 
-export default function MoneyInput({ value, onValueChange, className = '', placeholder, id, name, required, disabled, ...rest }: Props) {
+export default function MoneyInput({ value, onValueChange, className = '', placeholder, id, name, required, disabled, form, ...rest }: Props) {
   const shown = value === null || value === undefined || value === '' ? '' : formatMoneyText(String(value));
   return (
     <div className="relative">
@@ -48,6 +49,7 @@ export default function MoneyInput({ value, onValueChange, className = '', place
         autoComplete="off"
         required={required}
         disabled={disabled}
+        form={form}
         aria-label={rest['aria-label']}
         placeholder={placeholder}
         value={shown}

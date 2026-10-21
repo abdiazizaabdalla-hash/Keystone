@@ -789,6 +789,46 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
       {notice && <p className="mb-4 text-sm text-green-400">{notice}</p>}
 
+      {/* Key details at the top, like the transaction page. These inputs belong to the "More details" form below
+          (form="listing-details"), so one Save covers both. */}
+      <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className={labelCls}>Address</label>
+            <input form="listing-details" className={inputCls} value={det.propertyAddress} onChange={(e) => setDet({ ...det, propertyAddress: e.target.value })} required />
+          </div>
+          <div>
+            <label className={labelCls}>Listing agent</label>
+            <select form="listing-details" className={inputCls} value={det.agentId} onChange={(e) => setDet({ ...det, agentId: e.target.value })}>
+              <option value="">None yet</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>List price</label>
+            <MoneyInput form="listing-details" className={inputCls} aria-label="List price" value={det.listPrice} onValueChange={(v) => setDet({ ...det, listPrice: v })} />
+          </div>
+          <div>
+            <label className={labelCls}>Planned list date</label>
+            <input form="listing-details" className={inputCls} type="date" value={det.plannedListDate} onChange={(e) => setDet({ ...det, plannedListDate: e.target.value })} />
+          </div>
+          <div>
+            <label className={labelCls}>Listing expires</label>
+            <input form="listing-details" className={inputCls} type="date" value={det.expirationDate} onChange={(e) => setDet({ ...det, expirationDate: e.target.value })} />
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button type="submit" form="listing-details" disabled={savingDetails} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+            {savingDetails ? 'Saving…' : 'Save details'}
+          </button>
+          <p className="text-xs text-slate-500">Changing the planned list date moves every unfinished checklist step with it.</p>
+        </div>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-6 min-w-0">
           {/* Checklist */}
@@ -1156,36 +1196,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
         <div className="space-y-6 min-w-0">
           {/* Details */}
-          <form onSubmit={saveDetails} className={`${cardCls} space-y-3`}>
-            <h2 className="text-lg font-bold text-slate-100">Details</h2>
-            <div>
-              <label className={labelCls}>Address</label>
-              <input className={inputCls} value={det.propertyAddress} onChange={(e) => setDet({ ...det, propertyAddress: e.target.value })} required />
-            </div>
-            <div>
-              <label className={labelCls}>Listing agent</label>
-              <select className={inputCls} value={det.agentId} onChange={(e) => setDet({ ...det, agentId: e.target.value })}>
-                <option value="">None yet</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <form id="listing-details" onSubmit={saveDetails} className={`${cardCls} space-y-3`}>
+            <h2 className="text-lg font-bold text-slate-100">More details</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>List price</label>
-                <MoneyInput className={inputCls} aria-label="List price" value={det.listPrice} onValueChange={(v) => setDet({ ...det, listPrice: v })} />
-              </div>
-              <div>
-                <label className={labelCls}>Planned list date</label>
-                <input className={inputCls} type="date" value={det.plannedListDate} onChange={(e) => setDet({ ...det, plannedListDate: e.target.value })} />
-              </div>
-              <div>
-                <label className={labelCls}>Listing expires</label>
-                <input className={inputCls} type="date" value={det.expirationDate} onChange={(e) => setDet({ ...det, expirationDate: e.target.value })} />
-              </div>
               <div>
                 <label className={labelCls}>MLS number</label>
                 <input className={inputCls} value={det.mlsNumber} onChange={(e) => setDet({ ...det, mlsNumber: e.target.value })} />
@@ -1271,7 +1284,6 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             <button type="submit" disabled={savingDetails} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
               {savingDetails ? 'Saving…' : 'Save details'}
             </button>
-            <p className="text-xs text-slate-500">Changing the planned list date moves every unfinished checklist step with it.</p>
           </form>
 
           {data.agent && listing.share_with_agent !== false && <ListingThread endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} />}
