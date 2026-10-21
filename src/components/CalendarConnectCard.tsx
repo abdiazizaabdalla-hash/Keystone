@@ -185,7 +185,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
               {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
             </button>
           ) : status && status.available === false ? (
-            <p className="text-xs text-slate-400">Direct Google Calendar sync is coming soon. Use the calendar link next to this for now. It works with Google Calendar too.</p>
+            <p className="text-xs text-slate-400">Live two-way Google sync is coming soon. “Add to Google Calendar” already works today and keeps your dates up to date.</p>
           ) : (
             <button
               type="button"
@@ -198,30 +198,46 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
           )}
         </div>
 
-        <div className="rounded-lg border border-slate-600 p-5">
-          <h3 className="font-semibold text-slate-100 text-sm mb-2">Apple, Outlook, or any calendar</h3>
+        <div className={`rounded-lg border border-slate-600 p-5 ${status && status.available === false ? 'order-first border-blue-500 bg-slate-800/50' : ''}`}>
+          <h3 className="font-semibold text-slate-100 text-sm mb-2">Add to Google, Outlook or Apple Calendar</h3>
           <p className="text-xs text-slate-500 mb-4">
-            Subscribe once with your private link. No sign-in needed, and it refreshes on its own (some calendar apps take a few hours).
+            One click, no sign-in or permissions. Your dates show up and stay current on their own (calendar apps refresh every hour or so, Google can take a few hours).
           </p>
           {feed ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={copyLink}
-                  className="text-sm px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-100 font-semibold rounded-lg transition"
+                <a
+                  href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(feed.webcalUrl)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
                 >
-                  {copied ? 'Copied' : 'Copy link'}
-                </button>
+                  Add to Google Calendar
+                </a>
+                <a
+                  href={`https://outlook.office.com/calendar/0/addfromweb?url=${encodeURIComponent(feed.url)}&name=${encodeURIComponent('Relay TC')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 rounded-lg transition"
+                >
+                  Add to Outlook
+                </a>
                 <a
                   href={feed.webcalUrl}
                   className="text-sm px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 rounded-lg transition"
                 >
-                  Open in calendar app
+                  Apple / other app
                 </a>
+                <button
+                  type="button"
+                  onClick={copyLink}
+                  className="text-sm px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 rounded-lg transition"
+                >
+                  {copied ? 'Copied' : 'Copy link'}
+                </button>
               </div>
               <p className="text-xs text-slate-500">
-                In Google Calendar: Other calendars, <span className="text-slate-400">From URL</span>, paste the link. Anyone with this link can see your dates, so don’t share it.{' '}
+                Prefer to do it by hand? In Google Calendar choose Other calendars, <span className="text-slate-400">From URL</span>, and paste the copied link. Anyone with this link can see your dates, so don’t share it.{' '}
                 <button type="button" onClick={resetLink} disabled={busy === 'reset'} className="text-blue-400 hover:text-blue-300 underline disabled:opacity-50">
                   Make a new link
                 </button>
