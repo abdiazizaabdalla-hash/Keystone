@@ -402,7 +402,7 @@ export default function Home() {
             { title: "Custom templates", body: 'Build checklists for different deal types, for deals and for listings. Pro and Team.' },
             { title: "Compliance report", body: 'Export a timestamped PDF of a deal’s documents, messages and checklist.' },
             { title: "Team workspaces", body: 'Share a workspace with other coordinators. The owner sees the team’s files.' },
-            { title: "Payment tracking", body: 'See which invoices are paid and which are still outstanding.' },
+            { title: "Payment tracking", body: 'See which invoices are paid and which are still outstanding. Move invoices to and from QuickBooks with a file.' },
             { title: "Duplicate protection", body: 'A warning before the same property or file number is added twice.' },
           ].map((f) => (
             <div key={f.title} className="p-5 bg-slate-800/60 border border-slate-700 rounded-xl">

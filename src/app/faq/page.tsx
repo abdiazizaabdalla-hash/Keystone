@@ -148,6 +148,11 @@ const FAQS: { category: string; q: string; a: string }[] = [
   // Invoicing & payments
   {
     category: 'Invoicing & payments',
+    q: 'Does Relay work with QuickBooks?',
+    a: 'Yes, by file. Under Invoices, QuickBooks import / export lets you download your invoices, a payments report and your agents as CSV files that QuickBooks Online can import, and upload an Excel or CSV export from QuickBooks to bring invoices into Relay. You check every match before anything is saved. It does not connect to your QuickBooks account or sync on its own.',
+  },
+  {
+    category: 'Invoicing & payments',
     q: 'Are invoices generated automatically?',
     a: 'No — you create the invoice yourself from the transaction page whenever you’re ready, even after the deal closes. The commission math (flat fee plus any percentage of the purchase price) is calculated for you from the agent’s saved settings, so you’re never doing that part by hand.',
   },

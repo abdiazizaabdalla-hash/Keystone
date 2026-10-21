@@ -202,8 +202,18 @@ export default function InvoicesPage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6 md:mb-12">
-          <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">Invoices</h1>
-          <p className="text-slate-400">Manage and track agent fee invoices</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">Invoices</h1>
+              <p className="text-slate-400">Manage and track agent fee invoices</p>
+            </div>
+            <Link
+              href="/dashboard/invoices/quickbooks"
+              className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 text-sm rounded-lg transition"
+            >
+              QuickBooks import / export
+            </Link>
+          </div>
         </div>
 
         {/* Stats Cards */}
