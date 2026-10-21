@@ -1163,6 +1163,140 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             </form>
           </div>
 
+          {/* Documents */}
+          <div className={cardCls}>
+            <h2 className="text-lg font-bold text-slate-100 mb-1">Documents</h2>
+            <p className="text-xs text-slate-500 mb-3">Listing agreement, disclosures, photos. Drop the signed purchase contract under Purchase Contract any time and it fills in the deal when you convert. Everything here is copied onto the deal.</p>
+            <div className="space-y-3 mb-3">
+              {LISTING_DOC_TYPES.map((type) => {
+                const inType = docs.filter((d) => d.document_type === type);
+                return (
+                  <div
+                    key={type}
+                    onDragOver={(e) => {
+                      if (!isDocDrag(e) && !isFileDrag(e)) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = isDocDrag(e) ? 'move' : 'copy';
+                      e.currentTarget.classList.add('doc-drop-over');
+                    }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.classList.remove('doc-drop-over');
+                    }}
+                    onDrop={(e) => {
+                      e.currentTarget.classList.remove('doc-drop-over');
+                      if (isDocDrag(e)) {
+                        e.preventDefault();
+                        const docId = readDocDrag(e);
+                        if (docId) void moveDoc(docId, type);
+                      } else if (isFileDrag(e)) {
+                        e.preventDefault();
+                        void uploadDocs(e.dataTransfer.files, type);
+                      }
+                    }}
+                    className="rounded-lg border border-slate-700 bg-slate-900/30 px-3 py-2"
+                  >
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                      {type} <span className="font-normal normal-case text-slate-500">· {inType.length}</span>
+                    </p>
+                    <ul className="space-y-2 text-sm">
+                      {inType.map((d) => (
+                        <li
+                          key={d.id}
+                          draggable
+                          onDragStart={(e) => startDocDrag(e, d.id)}
+                          className="flex items-start gap-3 cursor-grab active:cursor-grabbing"
+                        >
+                          <DragHandle label={`Drag ${d.file_name} to another area`} />
+                          <div className="min-w-0 flex-1">
+                            {d.url ? (
+                              <a href={d.url} target="_blank" rel="noopener noreferrer" draggable={false} className="text-blue-400 hover:text-blue-300 break-all">
+                                {d.file_name}
+                              </a>
+                            ) : (
+                              <span className="text-slate-300 break-all">{d.file_name}</span>
+                            )}
+                            {(() => {
+                              const status = signStatusFor(d);
+                              if (!status) return null;
+                              return (
+                                <p className={`text-xs mt-0.5 ${status.tone}`}>
+                                  {status.text}
+                                  {status.voidId && (
+                                    <button type="button" onClick={() => voidSigning(status.voidId as string)} className="ml-2 text-slate-400 hover:text-red-300 underline">
+                                      Void
+                                    </button>
+                                  )}
+                                </p>
+                              );
+                            })()}
+                            <p className="text-xs text-slate-500">
+                              {d.file_size ? (d.file_size / 1024 / 1024 >= 1 ? `${(d.file_size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(d.file_size / 1024))} KB`) : ''}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isPdfDoc(d) && !d.is_signed && !signStatusFor(d)?.voidId && (
+                              <button
+                                type="button"
+                                onClick={() => setSigningDoc(d)}
+                                className="text-xs px-2 py-1 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition"
+                              >
+                                Request signature
+                              </button>
+                            )}
+                            <MoveMenu
+                              onMove={(t) => void moveDoc(d.id, t)}
+                              label={`Move ${d.file_name} to another area`}
+                              options={LISTING_DOC_TYPES.filter((t) => t !== type).map((t) => ({ value: t, label: t }))}
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!confirm(`Remove ${d.file_name}?`)) return;
+                                try {
+                                  await call('DELETE', `/api/listings/${id}/documents/${d.id}`);
+                                  await loadDocs();
+                                } catch (err) {
+                                  setDocError(err instanceof Error ? err.message : 'Could not remove');
+                                }
+                              }}
+                              className="text-slate-600 hover:text-red-300"
+                              aria-label={`Remove ${d.file_name}`}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                      {inType.length === 0 && <li className="text-xs text-slate-600">Nothing here. Drag a file or document onto this area.</li>}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <select className={`${inputCls} sm:w-auto`} value={docType} onChange={(e) => setDocType(e.target.value)}>
+                {LISTING_DOC_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <label className={`px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                {uploading ? 'Uploading…' : 'Upload files'}
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    uploadDocs(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+            {docError && <p className="text-sm text-red-400 mt-2">{docError}</p>}
+          </div>
+
           {/* Communication -- offer emails forwarded to this listing's own address wait for review in the Offers card;
               the address itself lives down here, like the deal page. Hidden until the inbound domain is configured. */}
           {inboundAddress && (
@@ -1343,140 +1477,6 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               onWaive={(docsNotNeeded) => void act(() => call('PATCH', `/api/listings/${id}`, { docsNotNeeded }))}
             />
           )}
-
-          {/* Documents */}
-          <div className={cardCls}>
-            <h2 className="text-lg font-bold text-slate-100 mb-1">Documents</h2>
-            <p className="text-xs text-slate-500 mb-3">Listing agreement, disclosures, photos. Drop the signed purchase contract under Purchase Contract any time and it fills in the deal when you convert. Everything here is copied onto the deal.</p>
-            <div className="space-y-3 mb-3">
-              {LISTING_DOC_TYPES.map((type) => {
-                const inType = docs.filter((d) => d.document_type === type);
-                return (
-                  <div
-                    key={type}
-                    onDragOver={(e) => {
-                      if (!isDocDrag(e) && !isFileDrag(e)) return;
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = isDocDrag(e) ? 'move' : 'copy';
-                      e.currentTarget.classList.add('doc-drop-over');
-                    }}
-                    onDragLeave={(e) => {
-                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.classList.remove('doc-drop-over');
-                    }}
-                    onDrop={(e) => {
-                      e.currentTarget.classList.remove('doc-drop-over');
-                      if (isDocDrag(e)) {
-                        e.preventDefault();
-                        const docId = readDocDrag(e);
-                        if (docId) void moveDoc(docId, type);
-                      } else if (isFileDrag(e)) {
-                        e.preventDefault();
-                        void uploadDocs(e.dataTransfer.files, type);
-                      }
-                    }}
-                    className="rounded-lg border border-slate-700 bg-slate-900/30 px-3 py-2"
-                  >
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                      {type} <span className="font-normal normal-case text-slate-500">· {inType.length}</span>
-                    </p>
-                    <ul className="space-y-2 text-sm">
-                      {inType.map((d) => (
-                        <li
-                          key={d.id}
-                          draggable
-                          onDragStart={(e) => startDocDrag(e, d.id)}
-                          className="flex items-start gap-3 cursor-grab active:cursor-grabbing"
-                        >
-                          <DragHandle label={`Drag ${d.file_name} to another area`} />
-                          <div className="min-w-0 flex-1">
-                            {d.url ? (
-                              <a href={d.url} target="_blank" rel="noopener noreferrer" draggable={false} className="text-blue-400 hover:text-blue-300 break-all">
-                                {d.file_name}
-                              </a>
-                            ) : (
-                              <span className="text-slate-300 break-all">{d.file_name}</span>
-                            )}
-                            {(() => {
-                              const status = signStatusFor(d);
-                              if (!status) return null;
-                              return (
-                                <p className={`text-xs mt-0.5 ${status.tone}`}>
-                                  {status.text}
-                                  {status.voidId && (
-                                    <button type="button" onClick={() => voidSigning(status.voidId as string)} className="ml-2 text-slate-400 hover:text-red-300 underline">
-                                      Void
-                                    </button>
-                                  )}
-                                </p>
-                              );
-                            })()}
-                            <p className="text-xs text-slate-500">
-                              {d.file_size ? (d.file_size / 1024 / 1024 >= 1 ? `${(d.file_size / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(d.file_size / 1024))} KB`) : ''}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {isPdfDoc(d) && !d.is_signed && !signStatusFor(d)?.voidId && (
-                              <button
-                                type="button"
-                                onClick={() => setSigningDoc(d)}
-                                className="text-xs px-2 py-1 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition"
-                              >
-                                Request signature
-                              </button>
-                            )}
-                            <MoveMenu
-                              onMove={(t) => void moveDoc(d.id, t)}
-                              label={`Move ${d.file_name} to another area`}
-                              options={LISTING_DOC_TYPES.filter((t) => t !== type).map((t) => ({ value: t, label: t }))}
-                            />
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (!confirm(`Remove ${d.file_name}?`)) return;
-                                try {
-                                  await call('DELETE', `/api/listings/${id}/documents/${d.id}`);
-                                  await loadDocs();
-                                } catch (err) {
-                                  setDocError(err instanceof Error ? err.message : 'Could not remove');
-                                }
-                              }}
-                              className="text-slate-600 hover:text-red-300"
-                              aria-label={`Remove ${d.file_name}`}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                      {inType.length === 0 && <li className="text-xs text-slate-600">Nothing here. Drag a file or document onto this area.</li>}
-                    </ul>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <select className={`${inputCls} sm:w-auto`} value={docType} onChange={(e) => setDocType(e.target.value)}>
-                {LISTING_DOC_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-              <label className={`px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                {uploading ? 'Uploading…' : 'Upload files'}
-                <input
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    uploadDocs(e.target.files);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            </div>
-            {docError && <p className="text-sm text-red-400 mt-2">{docError}</p>}
-          </div>
 
           {/* Contacts */}
           <div className={cardCls}>
