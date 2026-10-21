@@ -5,7 +5,10 @@ import { parseDate, parsePrice, normalizeAddress } from './csvImport';
 
 /** QuickBooks takes at most this many invoices per import file. */
 export const QB_MAX_INVOICES_PER_FILE = 100;
-export const DEFAULT_ITEM_NAME = 'Transaction coordination fee';
+/** What each invoice line says it is for (shown on the invoice). */
+export const FEE_DESCRIPTION = 'Transaction coordination fee';
+/** The QuickBooks product/service a line is filed under. It must already exist in their QuickBooks, and "Services" is the one QuickBooks creates by default. */
+export const DEFAULT_ITEM_NAME = 'Services';
 
 /** YYYY-MM-DD (or an ISO timestamp) -> MM/DD/YYYY, which is what QuickBooks (US) expects. */
 export function usDate(value: string | null | undefined): string {

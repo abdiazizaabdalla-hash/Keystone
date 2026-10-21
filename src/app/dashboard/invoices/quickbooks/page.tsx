@@ -71,7 +71,7 @@ export default function QuickBooksPage() {
     const p = new URLSearchParams({ type, status, ...extra });
     if (from) p.set('from', from);
     if (to) p.set('to', to);
-    if (type === 'invoices') p.set('item', item || DEFAULT_ITEM_NAME);
+    if (type === 'invoices') p.set('item', item.trim());
     return `/api/quickbooks/export?${p.toString()}`;
   };
 
@@ -280,10 +280,14 @@ export default function QuickBooksPage() {
               <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={`${input} w-full mt-1`} />
             </label>
             <label className="text-sm text-slate-400">
-              QuickBooks product/service name
-              <input value={item} onChange={(e) => setItem(e.target.value)} maxLength={100} className={`${input} w-full mt-1`} />
+              QuickBooks product/service
+              <input value={item} onChange={(e) => setItem(e.target.value)} maxLength={100} placeholder="Leave blank to skip" className={`${input} w-full mt-1`} />
             </label>
           </div>
+
+          <p className="text-xs text-slate-500 -mt-2 mb-4">
+            The product/service must already exist in your QuickBooks (Settings → Products and services), or QuickBooks cannot match that column. “Services” is the one QuickBooks starts with. Not sure? Clear the box: each line then carries just its description, “Transaction coordination fee – address”.
+          </p>
 
           <div className="flex flex-wrap items-center gap-2 mb-2">
             {count && count.parts > 1 ? (
@@ -317,7 +321,7 @@ export default function QuickBooksPage() {
                 <span className="text-slate-300">Customers first.</span> Download “Agents as customers”. In QuickBooks Online open Settings (gear) → Import data → Customers, upload it and map the columns. Skip this if your agents are already customers there with the same names.
               </li>
               <li>
-                <span className="text-slate-300">Product/service.</span> Make sure QuickBooks has a product or service with the name above (Settings → Products and services). If it uses another name, change the name here before you download.
+                <span className="text-slate-300">Product/service.</span> The “Item(Product/Service)” column must name something in your QuickBooks products and services. Type its exact name in the box above before you download, or clear the box to leave that column empty. Leave Terms, Service Date, Email and Note to customer on “Select…”.
               </li>
               <li>
                 <span className="text-slate-300">Invoices.</span> Settings → Import data → Invoices, upload the file, and check each column is mapped (InvoiceNo, Customer, InvoiceDate, DueDate and the item columns). QuickBooks takes {QB_MAX_INVOICES_PER_FILE} invoices per file, and its import is not available for companies that charge sales tax on these items.

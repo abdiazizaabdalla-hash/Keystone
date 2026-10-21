@@ -6,6 +6,7 @@ import { toCsv } from '@/lib/contactsCrm';
 import { logAudit } from '@/lib/audit';
 import {
   DEFAULT_ITEM_NAME,
+  FEE_DESCRIPTION,
   QB_CUSTOMER_HEADERS,
   QB_INVOICE_HEADERS,
   QB_MAX_INVOICES_PER_FILE,
@@ -152,13 +153,15 @@ export async function GET(request: NextRequest) {
     // Invoices: one file holds at most 100 (QuickBooks' limit); ?part= picks which 100.
     const part = Math.max(1, Math.floor(Number(p.get('part')) || 1));
     const slice = invoices.slice((part - 1) * QB_MAX_INVOICES_PER_FILE, part * QB_MAX_INVOICES_PER_FILE);
-    const item = (p.get('item') || DEFAULT_ITEM_NAME).trim().slice(0, 100) || DEFAULT_ITEM_NAME;
+    // The product/service column is only filled when it names something that exists in their QuickBooks.
+    // Sent but empty = leave the column blank; not sent = QuickBooks' default "Services".
+    const item = p.has('item') ? (p.get('item') || '').trim().slice(0, 100) : DEFAULT_ITEM_NAME;
 
     const csv = toCsv(
       QB_INVOICE_HEADERS,
       slice.map((inv) => {
         const tx = txById.get(inv.transaction_id);
-        const desc = tx ? `${item} - ${tx.property_address} (${tx.file_number})` : item;
+        const desc = tx ? `${FEE_DESCRIPTION} - ${tx.property_address} (${tx.file_number})` : FEE_DESCRIPTION;
         return [
           inv.invoice_number,
           agentById.get(inv.agent_id)?.name || 'Unknown agent',
