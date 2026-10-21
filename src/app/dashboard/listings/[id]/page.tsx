@@ -1,6 +1,7 @@
 'use client';
 
 import MoneyInput from '@/components/MoneyInput';
+import PhoneInput from '@/components/PhoneInput';
 import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -442,6 +443,25 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  // Checklist changes show instantly (no waiting on the server and a full reload of the page). If the server
+  // says no, the page is reloaded from it so what you see is what is saved.
+  const quickTasks = async (next: (tasks: Task[]) => Task[], req: () => Promise<unknown>, okMsg?: string) => {
+    setError('');
+    setData((d) => (d ? { ...d, tasks: next(d.tasks) } : d));
+    try {
+      await req();
+      if (okMsg) flash(okMsg);
+    } catch (err) {
+      if (handleAuth(err)) return;
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+      try {
+        applyDetail(await call('GET', `/api/listings/${id}`));
+      } catch {
+        /* the error above is enough */
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-4 md:p-8">
@@ -847,7 +867,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                       type="button"
                       onClick={() => {
                         if (!confirm(`Mark all ${tasks.length - done} open step${tasks.length - done === 1 ? '' : 's'} as done?`)) return;
-                        void act(() => call('POST', `/api/listings/${id}/checklist`, { action: 'complete_all' }), 'All steps marked done.');
+                        void quickTasks((ts) => ts.map((x) => ({ ...x, completed: true })), () => call('POST', `/api/listings/${id}/checklist`, { action: 'complete_all' }), 'All steps marked done.');
                       }}
                       className="text-xs px-2.5 py-1 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition"
                     >
@@ -856,7 +876,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                   ) : (
                     <button
                       type="button"
-                      onClick={() => void act(() => call('POST', `/api/listings/${id}/checklist`, { action: 'reopen_all' }), 'All steps reopened.')}
+                      onClick={() => void quickTasks((ts) => ts.map((x) => ({ ...x, completed: false })), () => call('POST', `/api/listings/${id}/checklist`, { action: 'reopen_all' }), 'All steps reopened.')}
                       className="text-xs px-2.5 py-1 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 rounded-lg transition"
                     >
                       Reopen all
@@ -875,16 +895,16 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                   const j = idx + dir;
                   if (j < 0 || j >= ids.length) return;
                   [ids[idx], ids[j]] = [ids[j], ids[idx]];
-                  void act(() => call('POST', `/api/listings/${id}/checklist`, { action: 'reorder', ids }));
+                  void quickTasks((ts) => ids.map((tid) => ts.find((x) => x.id === tid)).filter((x): x is Task => !!x), () => call('POST', `/api/listings/${id}/checklist`, { action: 'reorder', ids }));
                 };
                 const saveRename = () => {
                   const next = renaming && renaming.id === t.id ? renaming.name.trim() : '';
                   setRenaming(null);
-                  if (next && next !== t.name) void act(() => call('PATCH', `/api/listings/${id}/tasks/${t.id}`, { name: next }));
+                  if (next && next !== t.name) void quickTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, name: next } : x)), () => call('PATCH', `/api/listings/${id}/tasks/${t.id}`, { name: next }));
                 };
                 return (
                   <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 border-b border-slate-700/50 last:border-0">
-                    <input type="checkbox" checked={t.completed} onChange={(e) => act(() => call('PATCH', `/api/listings/${id}/tasks/${t.id}`, { completed: e.target.checked }))} className="accent-blue-500" aria-label={`Mark "${t.name}" done`} />
+                    <input type="checkbox" checked={t.completed} onChange={(e) => { const checked = e.target.checked; void quickTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, completed: checked } : x)), () => call('PATCH', `/api/listings/${id}/tasks/${t.id}`, { completed: checked })); }} className="accent-blue-500" aria-label={`Mark "${t.name}" done`} />
                     {renaming && renaming.id === t.id ? (
                       <input
                         autoFocus
@@ -914,7 +934,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                     <input
                       type="date"
                       value={t.due_date || ''}
-                      onChange={(e) => act(() => call('PATCH', `/api/listings/${id}/tasks/${t.id}`, { dueDate: e.target.value || null }))}
+                      onChange={(e) => { const due = e.target.value || null; void quickTasks((ts) => ts.map((x) => (x.id === t.id ? { ...x, due_date: due } : x)), () => call('PATCH', `/api/listings/${id}/tasks/${t.id}`, { dueDate: due })); }}
                       className={`bg-transparent border border-slate-700 rounded px-2 py-1 text-xs ${overdue ? 'text-red-300 border-red-700/60' : 'text-slate-400'}`}
                       aria-label={`Due date for ${t.name}`}
                     />
@@ -929,7 +949,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                         ↓
                       </button>
                     </span>
-                    <button type="button" onClick={() => act(() => call('DELETE', `/api/listings/${id}/tasks/${t.id}`))} className="text-slate-600 hover:text-red-300 text-sm" aria-label={`Remove ${t.name}`}>
+                    <button type="button" onClick={() => void quickTasks((ts) => ts.filter((x) => x.id !== t.id), () => call('DELETE', `/api/listings/${id}/tasks/${t.id}`))} className="text-slate-600 hover:text-red-300 text-sm" aria-label={`Remove ${t.name}`}>
                       ✕
                     </button>
                   </li>
@@ -941,7 +961,17 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               onSubmit={async (e) => {
                 e.preventDefault();
                 if (!newStep.trim()) return;
-                if (await act(() => call('POST', `/api/listings/${id}/tasks`, { name: newStep }))) setNewStep('');
+                const name = newStep.trim();
+                setNewStep('');
+                setError('');
+                try {
+                  const row = (await call('POST', `/api/listings/${id}/tasks`, { name })) as Task;
+                  setData((d) => (d ? { ...d, tasks: [...d.tasks, row] } : d));
+                } catch (err) {
+                  if (handleAuth(err)) return;
+                  setNewStep(name);
+                  setError(err instanceof Error ? err.message : 'Something went wrong');
+                }
               }}
             >
               <input className={inputCls} placeholder="Add a step" value={newStep} onChange={(e) => setNewStep(e.target.value)} maxLength={200} />
@@ -1431,7 +1461,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               </div>
               <div>
                 <label className={labelCls}>Seller phone</label>
-                <input className={inputCls} value={det.sellerPhone} onChange={(e) => setDet({ ...det, sellerPhone: e.target.value })} />
+                <PhoneInput className={inputCls} value={det.sellerPhone} onValueChange={(v) => setDet({ ...det, sellerPhone: v })} />
               </div>
             </div>
             <div>
@@ -1595,7 +1625,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <input className={inputCls} placeholder="Role (Photographer…)" value={newContact.role} onChange={(e) => setNewContact({ ...newContact, role: e.target.value })} />
               <input className={inputCls} placeholder="Name" value={newContact.name} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} />
               <input className={inputCls} placeholder="Email" type="email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} />
-              <input className={inputCls} placeholder="Phone" value={newContact.phone} onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })} />
+              <PhoneInput className={inputCls} placeholder="Phone" value={newContact.phone} onValueChange={(v) => setNewContact({ ...newContact, phone: v })} />
               <div className="sm:col-span-2">
                 <button type="submit" className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg">
                   Add person

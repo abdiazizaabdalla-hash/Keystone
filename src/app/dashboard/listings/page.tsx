@@ -1,6 +1,7 @@
 'use client';
 
 import MoneyInput from '@/components/MoneyInput';
+import PhoneInput from '@/components/PhoneInput';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -399,7 +400,7 @@ export default function ListingsPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Seller phone</label>
-                <input className={inputCls} placeholder="(512) 555-0123" value={form.sellerPhone} onChange={(e) => setForm({ ...form, sellerPhone: e.target.value })} />
+                <PhoneInput className={inputCls} placeholder="(512) 555-0123" value={form.sellerPhone} onValueChange={(v) => setForm({ ...form, sellerPhone: v })} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">List price</label>

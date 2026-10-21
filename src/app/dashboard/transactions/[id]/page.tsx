@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, FormEvent, ChangeEvent } from 'react';
+import { formatPhoneInput } from '@/lib/formatPhone';
 import { use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -153,19 +154,6 @@ interface ExternalLink {
   last_accessed_at: string | null;
   access_count: number;
   created_at: string;
-}
-
-// Live-formats a Contacts phone field into "(555) 123-4567" as the user
-// types, regardless of how they type it (with dashes, spaces, pasted in
-// all at once, etc.) -- keeps only digits, then re-inserts the
-// punctuation. Caps at 10 digits (US/Canada numbers); anything typed
-// past that is simply ignored rather than overflowing the format.
-function formatPhoneInput(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 10);
-  if (digits.length === 0) return '';
-  if (digits.length < 4) return `(${digits}`;
-  if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 // Same idea for the email field -- email addresses never contain

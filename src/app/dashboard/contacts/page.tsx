@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import PhoneInput from '@/components/PhoneInput';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { parseCsv } from '@/lib/csvImport';
@@ -562,7 +563,7 @@ export default function ContactsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input className={inputCls} placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               <input className={inputCls} placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              <input className={inputCls} placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <PhoneInput className={inputCls} placeholder="Phone" value={form.phone} onValueChange={(v) => setForm({ ...form, phone: v })} />
               <input className={inputCls} placeholder="Company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
               <input className={inputCls} placeholder="Role (Agent, Lender, Title…)" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} />
               <input className={inputCls} placeholder="Tags, separated by commas" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />

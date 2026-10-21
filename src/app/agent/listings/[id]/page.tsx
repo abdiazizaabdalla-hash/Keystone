@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useEffect, useState } from 'react';
+import PhoneInput from '@/components/PhoneInput';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
@@ -377,7 +378,7 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
               <input className={inputCls} placeholder="Name" value={contactForm.name} onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })} maxLength={200} />
               <input className={inputCls} placeholder="Role (lender, stager, co-owner…)" value={contactForm.role} onChange={(e) => setContactForm({ ...contactForm, role: e.target.value })} maxLength={60} />
               <input className={inputCls} type="email" placeholder="Email" value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })} maxLength={254} />
-              <input className={inputCls} type="tel" placeholder="Phone" value={contactForm.phone} onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })} maxLength={40} />
+              <PhoneInput className={inputCls} placeholder="Phone" value={contactForm.phone} onValueChange={(v) => setContactForm({ ...contactForm, phone: v })} />
               <div className="sm:col-span-2 flex items-center gap-3">
                 <button type="submit" disabled={addingContact} className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                   {addingContact ? 'Adding…' : 'Add person'}

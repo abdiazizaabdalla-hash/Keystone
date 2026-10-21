@@ -1,6 +1,7 @@
 'use client';
 
 import MoneyInput from '@/components/MoneyInput';
+import PhoneInput from '@/components/PhoneInput';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
@@ -347,12 +348,10 @@ export default function AgentsPage() {
 
               <div>
                 <label className="text-sm text-slate-400 block mb-2">Phone</label>
-                <input
-                  type="tel"
+                <PhoneInput
                   name="phone"
                   value={formData.phone}
-                  onChange={handleInputChange}
-                  placeholder="(555) 123-4567"
+                  onValueChange={(v) => setFormData((prev) => ({ ...prev, phone: v }))}
                   className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
               </div>
