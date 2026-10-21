@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { getAgentListingRows } from '@/lib/agentListings';
+import { getCalendarPrefs } from '@/lib/calendarPrefs';
 
 // The public (token-authenticated) calendar feed behind the "subscribe" link
 // in Settings. Calendar apps fetch this URL on a schedule, with no login, so
@@ -9,6 +10,7 @@ import { getAgentListingRows } from '@/lib/agentListings';
 //
 // What goes in it:
 //   - TC:    critical dates + closing date + open checklist due dates on their deals
+//   (each kind can be switched off in Settings > Calendar > What goes on my calendar)
 //   - agent: critical dates + closing date on the deals they've been added to
 // Open items only, from 30 days back forward.
 
@@ -62,6 +64,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if (!feed) return notFound();
     const userId = feed.user_id as string;
 
+    const prefs = await getCalendarPrefs(userId);
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     // Deals this person owns (TC, including their team's) and deals they were added to as an agent.
@@ -97,7 +100,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const events: FeedEvent[] = [];
 
     for (const t of allTx) {
-      if (t.closing_date && t.closing_date >= since && t.status !== 'Closed') {
+      if (prefs.closing_date && t.closing_date && t.closing_date >= since && t.status !== 'Closed') {
         events.push({
           uid: `closing-${t.id}@relaytc.com`,
           date: t.closing_date,
@@ -108,14 +111,15 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     const allIds = allTx.map((t) => t.id);
-    if (allIds.length) {
+    if (allIds.length && (prefs.critical_dates || prefs.closing_date)) {
       const { data: keyDates } = await supabaseServer
         .from('transaction_key_dates')
-        .select('id, transaction_id, label, due_date')
+        .select('id, transaction_id, kind, label, due_date')
         .in('transaction_id', allIds)
         .eq('completed', false)
         .gte('due_date', since);
       for (const k of keyDates || []) {
+        if (!(k.kind === 'closing' ? prefs.closing_date : prefs.critical_dates)) continue;
         events.push({
           uid: `kd-${k.id}@relaytc.com`,
           date: k.due_date as string,
@@ -127,7 +131,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     // Checklist due dates are the TC's working list, not something agents see.
     const ownedList = [...ownedIds];
-    if (ownedList.length) {
+    if (ownedList.length && prefs.deal_tasks) {
       const { data: tasks } = await supabaseServer
         .from('tasks')
         .select('id, transaction_id, name, due_date')
@@ -162,22 +166,22 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       const all: L[] = [...((tcListings || []) as L[]), ...(agentListings as L[]).filter((l) => !tcIds.has(l.id))];
       const addr = new Map(all.map((l) => [l.id, l.property_address]));
       for (const l of all) {
-        if (l.planned_list_date && l.planned_list_date >= since) {
+        if (prefs.listing_dates && l.planned_list_date && l.planned_list_date >= since) {
           events.push({ uid: `listing-go-${l.id}@relaytc.com`, date: l.planned_list_date, summary: `List date — ${l.property_address}`, description: `Planned go-live for the listing at ${l.property_address}.` });
         }
-        if (l.expiration_date && l.expiration_date >= since) {
+        if (prefs.listing_dates && l.expiration_date && l.expiration_date >= since) {
           events.push({ uid: `listing-exp-${l.id}@relaytc.com`, date: l.expiration_date, summary: `Listing expires — ${l.property_address}`, description: `The listing agreement for ${l.property_address} expires.` });
         }
       }
       const allIds = all.map((l) => l.id);
-      if (allIds.length) {
+      if (allIds.length && prefs.listing_dates) {
         const { data: ld } = await supabaseServer.from('listing_dates').select('id, listing_id, label, due_date').in('listing_id', allIds).gte('due_date', since);
         for (const d of ld || []) {
           events.push({ uid: `listing-date-${d.id}@relaytc.com`, date: d.due_date as string, summary: `${d.label} — ${addr.get(d.listing_id as string)}`, description: `Listing date for ${addr.get(d.listing_id as string)}, from Relay TC.` });
         }
       }
       const tcIdList = [...tcIds];
-      if (tcIdList.length) {
+      if (tcIdList.length && prefs.listing_steps) {
         const { data: lt } = await supabaseServer
           .from('listing_tasks')
           .select('id, listing_id, name, due_date')

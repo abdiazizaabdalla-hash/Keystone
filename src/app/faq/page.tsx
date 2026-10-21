@@ -112,7 +112,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Listings & calendar',
     q: 'Will my dates show up on my calendar?',
-    a: 'Yes. In Settings, choose Add to Google Calendar, Outlook or Apple Calendar to subscribe once to your private Relay link. Critical dates, checklist due dates and listing dates then appear and move on their own as you change them. Calendar apps refresh subscribed links on their own schedule, so Google can take a few hours to show a change. Direct Google Calendar sync is coming soon.',
+    a: 'Yes. In Settings, choose Add to Google Calendar, Outlook or Apple Calendar to subscribe once to your private Relay link. Critical dates, checklist due dates and listing dates then appear and move on their own as you change them. Calendar apps refresh subscribed links on their own schedule, so Google can take a few hours to show a change. Direct Google Calendar sync is coming soon. You choose what goes on your calendar (critical dates, closing day, checklist due dates, listing dates) under Settings, and it applies to both.',
   },
   {
     category: 'Listings & calendar',

@@ -24,6 +24,22 @@ interface FeedLinks {
   url: string;
   webcalUrl: string;
 }
+interface Prefs {
+  critical_dates: boolean;
+  closing_date: boolean;
+  deal_tasks: boolean;
+  listing_steps: boolean;
+  listing_dates: boolean;
+}
+
+// What the user can switch on or off. `tcOnly` rows are hidden from agents (they never get checklists).
+const PREF_ROWS: { key: keyof Prefs; label: string; hint: string; tcOnly?: boolean }[] = [
+  { key: 'critical_dates', label: 'Critical dates', hint: 'Earnest money, inspection, appraisal, financing, title and custom deadlines' },
+  { key: 'closing_date', label: 'Closing day', hint: 'The closing date on each deal' },
+  { key: 'deal_tasks', label: 'Deal checklist due dates', hint: 'Your transaction checklist steps', tcOnly: true },
+  { key: 'listing_steps', label: 'Listing checklist due dates', hint: 'Prep steps on your listings', tcOnly: true },
+  { key: 'listing_dates', label: 'Listing dates', hint: 'Go-live day, open houses, price reviews and listing expiration' },
+];
 
 export default function CalendarConnectCard({ audience }: { audience: Audience }) {
   const router = useRouter();
@@ -34,6 +50,8 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState<'connect' | 'disconnect' | 'reset' | null>(null);
   const [copied, setCopied] = useState(false);
+  const [prefs, setPrefs] = useState<Prefs | null>(null);
+  const [savingPref, setSavingPref] = useState<keyof Prefs | null>(null);
 
   const handleAuthError = useCallback(
     (err: unknown): boolean => {
@@ -68,7 +86,12 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
 
     const load = async () => {
       try {
-        const [statusRes, feedRes] = await Promise.all([authFetch('/api/google-calendar/status'), authFetch('/api/calendar/feed')]);
+        const [statusRes, feedRes, prefsRes] = await Promise.all([
+          authFetch('/api/google-calendar/status'),
+          authFetch('/api/calendar/feed'),
+          authFetch('/api/calendar/preferences'),
+        ]);
+        if (prefsRes.ok) setPrefs(await prefsRes.json());
         if (statusRes.ok) {
           const data = await statusRes.json();
           setStatus({ connected: Boolean(data.connected), email: data.email || null, lastSyncedAt: data.lastSyncedAt || null, available: data.available !== false });
@@ -118,6 +141,31 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
       setMessage(err instanceof Error ? err.message : 'Error disconnecting Google Calendar');
     } finally {
       setBusy(null);
+    }
+  };
+
+  const togglePref = async (key: keyof Prefs) => {
+    if (!prefs || savingPref) return;
+    const previous = prefs;
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next); // instant; rolled back below if saving fails
+    setSavingPref(key);
+    setMessage('');
+    try {
+      const res = await authFetch('/api/calendar/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: next[key] }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not save');
+      setPrefs(data);
+    } catch (err) {
+      setPrefs(previous);
+      if (handleAuthError(err)) return;
+      setMessage(err instanceof Error ? err.message : 'Could not save your calendar choice');
+    } finally {
+      setSavingPref(null);
     }
   };
 
@@ -248,6 +296,32 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
           )}
         </div>
       </div>
+
+      {prefs && (
+        <div className="mt-5 rounded-lg border border-slate-600 p-5">
+          <h3 className="font-semibold text-slate-100 text-sm mb-1">What goes on my calendar</h3>
+          <p className="text-xs text-slate-500 mb-4">
+            Applies to Google Calendar and to the calendar link. Switching something off removes those events from a connected Google Calendar; link calendars drop them the next time they refresh.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {PREF_ROWS.filter((r) => !(r.tcOnly && audience === 'agent')).map((row) => (
+              <label key={row.key} className="flex items-start gap-3 rounded-lg border border-slate-700 px-3 py-2.5 cursor-pointer hover:border-slate-500">
+                <input
+                  type="checkbox"
+                  checked={prefs[row.key]}
+                  onChange={() => togglePref(row.key)}
+                  disabled={savingPref !== null}
+                  className="mt-0.5 h-4 w-4 accent-blue-500"
+                />
+                <span>
+                  <span className="block text-sm text-slate-200">{row.label}</span>
+                  <span className="block text-xs text-slate-500">{row.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

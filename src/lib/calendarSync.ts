@@ -12,6 +12,7 @@ import {
   type CalendarEventInput,
 } from './googleCalendar';
 import { getAgentListingRows } from './agentListings';
+import { getCalendarPrefs, type CalendarPrefs } from './calendarPrefs';
 
 // Google Calendar sync for BOTH sides of a deal:
 //   - the TC who owns the transaction: checklist task due dates (tasks.google_event_id)
@@ -38,6 +39,7 @@ interface SyncableTask {
 
 interface KeyDateRow {
   id: string;
+  kind?: string | null;
   label: string;
   due_date: string;
   completed: boolean;
@@ -128,7 +130,7 @@ export async function syncTransactionCalendar(transactionId: string, options: { 
     const [{ data: keyDates }, { data: agentLinks }, ownerId] = await Promise.all([
       supabaseServer
         .from('transaction_key_dates')
-        .select('id, label, due_date, completed')
+        .select('id, kind, label, due_date, completed')
         .eq('transaction_id', transactionId),
       supabaseServer.from('transaction_agents').select('agent_user_id').eq('transaction_id', transactionId),
       getOwnerTcUserId(tx),
@@ -156,7 +158,8 @@ export async function syncTransactionCalendar(transactionId: string, options: { 
       const accessToken = await getAccessTokenFor(userId);
       if (!accessToken) continue;
 
-      await syncKeyDatesForUser(accessToken, userId, label, dates, mappings);
+      const prefs = await getCalendarPrefs(userId);
+      await syncKeyDatesForUser(accessToken, userId, label, dates, mappings, prefs);
       // Best effort: the column comes from add-calendar-sync.sql; an error here (not run yet) is ignored.
       await supabaseServer
         .from('calendar_connections')
@@ -170,7 +173,7 @@ export async function syncTransactionCalendar(transactionId: string, options: { 
           .select('id, name, due_date, completed, google_event_id')
           .eq('transaction_id', transactionId);
         for (const task of (tasks || []) as SyncableTask[]) {
-          await syncOneTask(accessToken, label, task);
+          await syncOneTask(accessToken, label, task, prefs.deal_tasks);
         }
       }
     }
@@ -229,16 +232,19 @@ async function syncKeyDatesForUser(
   userId: string,
   label: string,
   dates: KeyDateRow[],
-  mappings: { key_date_id: string; user_id: string; google_event_id: string }[]
+  mappings: { key_date_id: string; user_id: string; google_event_id: string }[],
+  prefs: CalendarPrefs
 ): Promise<void> {
   const today = todayIso();
   for (const date of dates) {
     const existing = mappings.find((m) => m.key_date_id === date.id && m.user_id === userId);
     const isPast = date.due_date < today;
+    const wanted = date.kind === 'closing' ? prefs.closing_date : prefs.critical_dates;
 
-    // Completed dates lose their event. Dates already in the past that nobody has
-    // completed are simply left alone (no new clutter, no deleting history).
-    if (date.completed) {
+    // Completed dates, and kinds the user switched off in Calendar preferences, lose their event.
+    // Dates already in the past that nobody has completed are simply left alone (no new clutter,
+    // no deleting history).
+    if (date.completed || !wanted) {
       if (existing) await removeMappedEvent(accessToken, existing.key_date_id, userId, existing.google_event_id);
       continue;
     }
@@ -279,8 +285,8 @@ async function removeMappedEvent(accessToken: string, keyDateId: string, userId:
   await supabaseServer.from('key_date_calendar_events').delete().eq('key_date_id', keyDateId).eq('user_id', userId);
 }
 
-async function syncOneTask(accessToken: string, transactionLabel: string, task: SyncableTask): Promise<void> {
-  const shouldHaveEvent = Boolean(task.due_date) && !task.completed;
+async function syncOneTask(accessToken: string, transactionLabel: string, task: SyncableTask, enabled = true): Promise<void> {
+  const shouldHaveEvent = enabled && Boolean(task.due_date) && !task.completed;
 
   if (!shouldHaveEvent) {
     if (task.google_event_id) {
@@ -391,13 +397,14 @@ async function syncListingOwnerCalendar(listingId: string): Promise<void> {
     const ownerId = listing.tc_user_id as string;
     const accessToken = await getAccessTokenFor(ownerId);
     if (!accessToken) return;
+    const prefs = await getCalendarPrefs(ownerId);
 
     const label = `Listing · ${listing.property_address}`;
     const isOpen = OPEN_LISTING.includes(listing.status as string);
     const today = todayIso();
 
     // Expiration date
-    const expiration = isOpen ? (listing.expiration_date as string | null) : null;
+    const expiration = isOpen && prefs.listing_dates ? (listing.expiration_date as string | null) : null;
     const wantExp = Boolean(expiration) && (expiration as string) >= today;
     const expEventId = listing.google_expiration_event_id as string | null;
     if (!wantExp) {
@@ -437,10 +444,11 @@ async function syncListingOwnerCalendar(listingId: string): Promise<void> {
     // Steps and extra dates share one routine: an item has an event when it is open, in the future-or-today and the listing is open.
     const syncItems = async (
       table: 'listing_tasks' | 'listing_dates',
-      rows: { id: string; title: string; due_date: string | null; google_event_id: string | null; active: boolean }[]
+      rows: { id: string; title: string; due_date: string | null; google_event_id: string | null; active: boolean }[],
+      enabled: boolean
     ) => {
       for (const row of rows) {
-        const want = isOpen && row.active && Boolean(row.due_date);
+        const want = enabled && isOpen && row.active && Boolean(row.due_date);
         if (!want) {
           if (row.google_event_id) {
             try {
@@ -480,7 +488,8 @@ async function syncListingOwnerCalendar(listingId: string): Promise<void> {
     ]);
     await syncItems(
       'listing_tasks',
-      (tasks || []).map((t) => ({ id: t.id as string, title: t.name as string, due_date: t.due_date as string | null, google_event_id: (t.google_event_id as string | null) ?? null, active: !t.completed }))
+      (tasks || []).map((t) => ({ id: t.id as string, title: t.name as string, due_date: t.due_date as string | null, google_event_id: (t.google_event_id as string | null) ?? null, active: !t.completed })),
+      prefs.listing_steps
     );
     await syncItems(
       'listing_dates',
@@ -490,7 +499,8 @@ async function syncListingOwnerCalendar(listingId: string): Promise<void> {
         due_date: d.due_date as string | null,
         google_event_id: (d.google_event_id as string | null) ?? null,
         active: (d.due_date as string) >= today, // past dates simply drop off
-      }))
+      })),
+      prefs.listing_dates
     );
 
     await supabaseServer
@@ -636,7 +646,7 @@ export async function syncListingAgentCalendar(listingId: string, options: { onl
     for (const userId of users) {
       const accessToken = await getAccessTokenFor(userId);
       if (!accessToken) continue;
-      const isRecipient = recipients.includes(userId);
+      const isRecipient = recipients.includes(userId) && (await getCalendarPrefs(userId)).listing_dates;
       const mine = existing.filter((r) => r.user_id === userId);
 
       // Remove events that are no longer wanted (unshared, closed, date changed away or passed).
