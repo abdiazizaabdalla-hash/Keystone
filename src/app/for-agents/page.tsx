@@ -5,6 +5,22 @@ import PublicMobileMenu from '@/components/PublicMobileMenu';
 
 const FEATURES: { title: string; body: string }[] = [
   {
+    title: 'Your listings, before the contract',
+    body: 'See the listings your TC shares with you: key dates, the checklist, offers, showings and feedback, price history, documents and contacts. Add your own contacts too. Your TC’s private notes stay private.',
+  },
+  {
+    title: 'A heads-up, not another task',
+    body: 'When a listing goes under contract and becomes an active transaction, you get a one-time note on your dashboard. There is nothing to accept and nothing new to set up.',
+  },
+  {
+    title: 'One dashboard',
+    body: 'Your deals and your listings sit side by side, with what is new called out, so you can see where everything stands without asking.',
+  },
+  {
+    title: 'Dates on your calendar',
+    body: 'Add your deals’ key dates to Google Calendar, Outlook or Apple Calendar in one click. They update on their own when your TC moves a date.',
+  },
+  {
     title: 'See the checklist',
     body: 'Watch the deal move from contract to closing in real time -- every step, every due date, exactly as your TC sees it. View-only, so you always know where things stand without having to ask.',
   },
@@ -14,7 +30,7 @@ const FEATURES: { title: string; body: string }[] = [
   },
   {
     title: 'Message your TC directly',
-    body: 'A real conversation thread on the deal itself, with file attachments -- not another text chain or inbox to check. Right on the transaction, from either side.',
+    body: 'A general thread with your TC for everyday questions, plus a separate thread on each deal and listing, with file attachments. No more texts or email chains to dig through.',
   },
   {
     title: 'Get paid without the back-and-forth',
@@ -117,7 +133,7 @@ export default function ForAgentsPage() {
       <section id="features" className="max-w-6xl mx-auto px-6 pb-20 scroll-mt-20">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4 text-center">What you can do</h2>
         <p className="text-slate-400 mb-12 max-w-2xl mx-auto text-center">
-          Everything below is included the moment a TC invites you -- free, for as many TCs and deals as you work.
+          Everything below is included the moment a TC invites you -- free, for as many TCs, deals and listings as you work.
         </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {FEATURES.map((f) => (

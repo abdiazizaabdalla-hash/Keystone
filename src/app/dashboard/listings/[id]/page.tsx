@@ -1476,7 +1476,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <input type="checkbox" checked={det.shareWithAgent} onChange={(e) => setDet({ ...det, shareWithAgent: e.target.checked })} className="accent-blue-500 mt-1" />
               <span>
                 Show this listing to the listing agent in their Relay agent portal
-                <span className="block text-xs text-slate-500">Read-only: key dates, offers, showings and price history. They never see your checklist, notes or documents.</span>
+                <span className="block text-xs text-slate-500">Read-only: key dates, checklist, offers, showings, price history, documents and contacts. They can add their own contacts. Your private notes are never shared.</span>
               </span>
             </label>
             {portal?.hasAgent && (

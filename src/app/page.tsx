@@ -84,15 +84,15 @@ export default function Home() {
           </span>
           <div className="flex items-center gap-2 text-xs font-semibold tracking-wider text-blue-400 uppercase mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-            From contract to closing
+            From listing to closing
           </div>
           <h1 className="font-display text-5xl sm:text-6xl font-semibold text-slate-100 leading-[1.05] mb-6">
-            Contract to closing,<br />
+            Listing to closing,<br />
             <span className="italic text-blue-400">all in one workspace.</span>
           </h1>
           <p className="text-lg text-slate-400 mb-8 max-w-lg">
-            Relay helps transaction coordinators keep the checklist, documents, deadlines, agent
-            communication, and invoicing together on every deal.
+            Relay helps transaction coordinators keep listings, offers, the checklist, documents,
+            deadlines, agent communication, and invoicing together on every deal.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <Link
@@ -195,6 +195,33 @@ export default function Home() {
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <ShotRow
+          name="listings.jpg"
+          alt="A listing in Relay with its checklist, offers, showings and documents"
+        >
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Listings</p>
+          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Start before the contract.</h2>
+          <p className="text-slate-400 mb-5">Track a listing from the first call to going live, through offers, to a signed contract. When it goes under contract, convert it to a transaction in one click and nothing gets retyped.</p>
+          <ul className="space-y-2.5 text-sm text-slate-300">
+            {[
+              "A pre-listing checklist you can rename, reorder and mark done in one click",
+              "Offers and counteroffers in one place, with terms read from the offer PDF and a side-by-side comparison",
+              "Showings, open houses and buyer feedback, ready for your seller updates",
+              "Listing agreement, disclosures and photos in a Documents card, copied onto the deal when you convert",
+              "Price history, a ready-to-list check, and offer emails forwarded to the listing’s own address",
+              "Convert to a deal: the checklist, documents and contacts carry over and your agent is told it is now active",
+            ].map((line) => (
+              <li key={line} className="flex items-start gap-2.5">
+                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                {line}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-slate-500 mt-4">Included on every plan. Duplicate-address warnings keep the same property from being added twice.</p>
+        </ShotRow>
+      </section>
+
+      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div>
             <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">The transaction workspace</p>
@@ -207,7 +234,9 @@ export default function Home() {
           <div className="grid sm:grid-cols-2 gap-3">
             {[
               'Checklist',
+              'Critical dates',
               'Documents',
+              'Signatures',
               'Messages',
               'Contacts',
               'Invoice',
@@ -254,13 +283,15 @@ export default function Home() {
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Agent portal</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Give your agents their own view of the deal.</h2>
-          <p className="text-slate-400 mb-5">Agents get a free portal where they can check progress, upload documents, message you, and see their invoice. They only see the transactions and information you&apos;ve shared with them.</p>
+          <p className="text-slate-400 mb-5">Agents get a free portal where they can check progress on their deals and listings, upload documents, message you, and see their invoice. They only see what you&apos;ve shared with them.</p>
           <ul className="space-y-2.5 text-sm text-slate-300">
             {[
-              "See transaction status and dates",
-              "View checklist progress",
-              "Upload documents",
-              "Message you, with file attachments",
+              "See their deals and listings in one dashboard",
+              "View checklist progress, key dates, offers and showings",
+              "Upload documents and add contacts",
+              "General messages with you, plus messages on each deal",
+              "A heads-up when a listing becomes an active deal, with no extra step",
+              "Dates on their own calendar",
               "View their invoices",
             ].map((line) => (
               <li key={line} className="flex items-start gap-2.5">
@@ -304,18 +335,75 @@ export default function Home() {
         </ShotRow>
       </section>
 
+      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <ShotRow
+          name="calendar.jpg"
+          alt="Relay key dates and checklist due dates added to a Google, Outlook or Apple calendar" reverse
+        >
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Calendar</p>
+          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Your deadlines, on the calendar you already use.</h2>
+          <p className="text-slate-400 mb-5">Add your private Relay calendar link to Google Calendar, Outlook or Apple Calendar in one click. Dates you add or move in Relay show up there on their own, and agents get the dates for their deals too.</p>
+          <ul className="space-y-2.5 text-sm text-slate-300">
+            {[
+              "One-click Add to Google Calendar, Outlook or Apple Calendar, no sign-in or permissions needed",
+              "Critical dates, checklist due dates and listing dates, kept up to date as they change",
+              "A private link only you have, which you can replace any time",
+              "Direct two-way Google Calendar sync is coming soon",
+            ].map((line) => (
+              <li key={line} className="flex items-start gap-2.5">
+                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                {line}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-slate-500 mt-4">Calendar apps refresh subscribed links on their own schedule, so a change can take a little while to show.</p>
+        </ShotRow>
+      </section>
+
+      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <ShotRow
+          name="import.jpg"
+          alt="Importing deals from a spreadsheet into Relay and building a contact list"
+        >
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Bring your work with you</p>
+          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Move over in an afternoon.</h2>
+          <p className="text-slate-400 mb-5">Import your open deals from a spreadsheet, and let Relay build your address book as you work.</p>
+          <ul className="space-y-2.5 text-sm text-slate-300">
+            {[
+              "CSV deal import with automatic column matching and a preview before anything is created",
+              "Re-importing the same file updates existing deals instead of duplicating them",
+              "A contacts list that fills itself from your deals, with CSV import, export and a newsletter list",
+              "Contacts and agents with phone numbers formatted automatically",
+            ].map((line) => (
+              <li key={line} className="flex items-start gap-2.5">
+                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                {line}
+              </li>
+            ))}
+          </ul>
+        </ShotRow>
+      </section>
+
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-8">Everything you need to run the deal</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { title: "Built-in e-signatures", body: 'Send a document for signature from the transaction. No separate DocuSign account.' },
+            { title: "Listings to deals", body: 'Track a listing, its offers and showings, then convert it to a transaction in one click.' },
+            { title: "AI contract intake", body: 'Upload the contract and Relay fills in the deal, including the key dates.' },
+            { title: "Critical dates", body: 'Dates are read from the contract, shown on your dashboard, and sent to agents as reminders.' },
+            { title: "Built-in e-signatures", body: 'Send a document for signature from the transaction or listing. No separate DocuSign account.' },
+            { title: "Calendar links", body: 'Add your dates to Google, Outlook or Apple Calendar in one click. They update on their own.' },
+            { title: "CSV deal import", body: 'Bring in your open deals from a spreadsheet, with a preview and no duplicates.' },
+            { title: "Contacts", body: 'An address book that builds itself from your deals, with CSV import, export and a newsletter list.' },
             { title: "Document organization", body: 'Documents sorted into categories and linked to checklist steps.' },
-            { title: "Agent messaging", body: 'Message agents on the deal and attach files.' },
+            { title: "Agent portal and messaging", body: 'Agents get a free login for their deals and listings, with general and per-deal messages.' },
             { title: "Email-to-transaction", body: 'Forward or CC an email to the deal and it lands on the transaction, attachments included.' },
             { title: "Daily digest", body: 'A morning email with overdue and due-today steps.' },
-            { title: "Custom templates", body: 'Build checklists for different deal types. Pro and Team.' },
+            { title: "Custom templates", body: 'Build checklists for different deal types, for deals and for listings. Pro and Team.' },
+            { title: "Compliance report", body: 'Export a timestamped PDF of a deal’s documents, messages and checklist.' },
             { title: "Team workspaces", body: 'Share a workspace with other coordinators. The owner sees the team’s files.' },
             { title: "Payment tracking", body: 'See which invoices are paid and which are still outstanding.' },
+            { title: "Duplicate protection", body: 'A warning before the same property or file number is added twice.' },
           ].map((f) => (
             <div key={f.title} className="p-5 bg-slate-800/60 border border-slate-700 rounded-xl">
               <h3 className="font-semibold text-slate-100 text-sm mb-1.5">{f.title}</h3>

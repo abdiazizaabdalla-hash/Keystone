@@ -35,7 +35,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Pricing & billing',
     q: 'What’s included on the free Starter plan?',
-    a: 'Starter includes unlimited transactions, up to 3 agent profiles, the baseline checklist, document storage, e-signature requests, invoicing, and the free agent portal — enough to run your whole pipeline through Relay with no credit card required to start.',
+    a: 'Starter includes unlimited transactions and listings, up to 3 agent profiles, the baseline checklist, document storage, e-signature requests, invoicing, calendar links, CSV deal import, and the free agent portal — enough to run your whole pipeline through Relay with no credit card required to start.',
   },
   {
     category: 'Pricing & billing',
@@ -86,17 +86,43 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Agent portal',
     q: 'What can agents see and change?',
-    a: 'An invited agent can view the checklist, dates, and status (read-only), upload documents and mark them signed or unsigned, add a new transaction contact, and message you with file attachments. They cannot check off checklist items, delete a document, send or void a signature request, or edit or remove a contact — including ones they added themselves.',
+    a: 'On a deal, an invited agent can view the checklist, dates, and status (read-only), upload documents and mark them signed or unsigned, add a new contact, and message you with file attachments. On a listing you share with them, they can view the key dates, checklist, offers, showings, price history, documents and contacts, and add their own contacts. Your private notes are never shared. They cannot check off checklist items, delete a document, or send or void a signature request.',
   },
   {
     category: 'Agent portal',
     q: 'Can agents access other clients’ transactions?',
-    a: 'No. An agent only ever sees the specific transactions they’ve been individually invited to — never your other clients, your invoices, or your billing.',
+    a: 'No. An agent only ever sees the specific transactions and listings you’ve shared with them — never your other clients, your invoices, or your billing.',
   },
   {
     category: 'Agent portal',
     q: 'Can agents sign documents through Relay?',
     a: 'Agents can mark a document as signed or unsigned, the same toggle you have. Actually sending a document out for signature — or canceling a pending request — stays with the TC.',
+  },
+  // Listings & calendar
+  {
+    category: 'Listings & calendar',
+    q: 'Can I track a listing before there is a contract?',
+    a: 'Yes. A listing has its own checklist, offers and counteroffers, showings and buyer feedback, documents, contacts, key dates and price history, and a ready-to-list check. Every plan includes listings.',
+  },
+  {
+    category: 'Listings & calendar',
+    q: 'What happens when a listing goes under contract?',
+    a: 'Convert it to a transaction in one click. The property, the agent, documents and contacts carry over, the contract fills in the dates, and Relay warns you if the same property already exists. If you shared the listing, the agent gets a one-time note on their dashboard that it is now an active deal, with nothing to accept.',
+  },
+  {
+    category: 'Listings & calendar',
+    q: 'Will my dates show up on my calendar?',
+    a: 'Yes. In Settings, choose Add to Google Calendar, Outlook or Apple Calendar to subscribe once to your private Relay link. Critical dates, checklist due dates and listing dates then appear and move on their own as you change them. Calendar apps refresh subscribed links on their own schedule, so Google can take a few hours to show a change. Direct Google Calendar sync is coming soon.',
+  },
+  {
+    category: 'Listings & calendar',
+    q: 'Can I bring in my existing deals?',
+    a: 'Yes. Import a spreadsheet of open deals as a CSV: Relay matches the columns, shows a preview, and imports the rows. Importing the same file again updates the deals you already have instead of creating duplicates.',
+  },
+  {
+    category: 'Listings & calendar',
+    q: 'Can the same property be added twice?',
+    a: 'Relay warns you before it happens, for listings and transactions, even when the address is written a little differently (Dr or Drive, for example). You can still continue if it is a genuine second deal.',
   },
   // Documents & signatures
   {
