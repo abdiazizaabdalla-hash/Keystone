@@ -235,12 +235,14 @@ async function syncClaimedInvoice(invoiceId: string, forceRefresh = false): Prom
       await supabaseServer.from('quickbooks_connections').update({ last_synced_at: new Date().toISOString() }).eq('tc_user_id', tcUserId);
       return { ok: true, status: 'synced' };
     } catch (e) {
-      const message =
+      const tid = e instanceof QbApiError || e instanceof QbAuthError ? e.tid : undefined;
+      const base =
         e instanceof QbApiError
           ? e.message
           : e instanceof QbAuthError
           ? 'QuickBooks needs to be reconnected in Settings'
           : 'Something went wrong talking to QuickBooks. It will be retried.';
+      const message = tid ? `${base.slice(0, 230)} (QuickBooks ref ${tid})` : base;
       // The access token was refused (for example revoked early): get a fresh one and try once more. Only a refresh that
       // is itself refused (expired or revoked) turns into "reconnect".
       if (e instanceof QbAuthError && !forceRefresh) return syncClaimedInvoice(invoiceId, true);

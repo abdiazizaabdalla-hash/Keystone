@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { SUPPORT_EMAIL } from '@/lib/site';
 
 // Settings card for the direct QuickBooks Online connection (coordinators only).
 // With it on, an invoice created in Relay is created in QuickBooks, and a payment (including a Stripe payment)
@@ -221,9 +222,17 @@ export default function QuickBooksConnectCard() {
             </>
           )}
 
-          <button type="button" onClick={disconnect} disabled={busy !== null} className={ghost}>
-            {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={disconnect} disabled={busy !== null} className={ghost}>
+              {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
+            </button>
+            <a
+              href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('QuickBooks help')}&body=${encodeURIComponent('Describe what happened. If an invoice shows a "QuickBooks ref", paste it here.\n\n')}`}
+              className="text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2"
+            >
+              Need help with QuickBooks? Contact support
+            </a>
+          </div>
         </div>
       ) : status.available ? (
         <button type="button" onClick={connect} disabled={busy !== null} className={primary}>

@@ -89,14 +89,16 @@ async function tokenRequest(body: Record<string, string>): Promise<QbTokens> {
   });
   const text = await res.text();
   if (!res.ok) {
+    const tid = res.headers.get('intuit_tid') || undefined;
+    console.error('QuickBooks token request failed', { status: res.status, intuit_tid: tid, grant: body.grant_type, invalidGrant: text.includes('invalid_grant') });
     // Intuit answers {"error":"invalid_grant"} for a revoked / expired / already-rotated token.
-    throw new QbAuthError(`QuickBooks token request failed (${res.status}) ${text.slice(0, 200)}`, text.includes('invalid_grant'));
+    throw new QbAuthError(`QuickBooks token request failed (${res.status}) ${text.slice(0, 200)}`, text.includes('invalid_grant'), tid);
   }
   return JSON.parse(text) as QbTokens;
 }
 
 export class QbAuthError extends Error {
-  constructor(message: string, public readonly invalidGrant = false) {
+  constructor(message: string, public readonly invalidGrant = false, public readonly tid?: string) {
     super(message);
   }
 }
@@ -120,7 +122,7 @@ export async function revokeQbToken(token: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export class QbApiError extends Error {
-  constructor(message: string, public readonly status: number, public readonly code?: string) {
+  constructor(message: string, public readonly status: number, public readonly code?: string, public readonly tid?: string) {
     super(message);
   }
 }
@@ -139,7 +141,12 @@ async function call<T>(c: QbClient, method: 'GET' | 'POST', path: string, body?:
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
-  if (res.status === 401) throw new QbAuthError('QuickBooks rejected the access token');
+  // Intuit's reference for this exact request: quoted to Intuit support, and kept in our logs and on the invoice.
+  const tid = res.headers.get('intuit_tid') || undefined;
+  if (res.status === 401) {
+    console.error('QuickBooks API rejected the access token', { method, path, status: 401, intuit_tid: tid });
+    throw new QbAuthError('QuickBooks rejected the access token', false, tid);
+  }
   let json: Record<string, unknown> = {};
   try {
     json = text ? JSON.parse(text) : {};
@@ -149,7 +156,8 @@ async function call<T>(c: QbClient, method: 'GET' | 'POST', path: string, body?:
   if (!res.ok) {
     const fault = (json.Fault as { Error?: { Message?: string; Detail?: string; code?: string }[] } | undefined)?.Error?.[0];
     const msg = [fault?.Message, fault?.Detail].filter(Boolean).join(': ') || `QuickBooks returned ${res.status}`;
-    throw new QbApiError(msg.slice(0, 300), res.status, fault?.code);
+    console.error('QuickBooks API error', { method, path, status: res.status, code: fault?.code, message: msg.slice(0, 300), intuit_tid: tid });
+    throw new QbApiError(msg.slice(0, 300), res.status, fault?.code, tid);
   }
   return json as T;
 }
@@ -174,7 +182,8 @@ export async function getCompanyName(c: QbClient): Promise<string | null> {
 // ---- customers ----
 
 export async function findOrCreateCustomer(c: QbClient, a: { name: string; email?: string | null; company?: string | null }): Promise<string> {
-  const name = a.name.trim().slice(0, 100) || 'Unknown agent';
+  // QuickBooks refuses colons, tabs and line breaks in a name.
+  const name = a.name.replace(/[:\t\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Unknown agent';
   const found = await query<{ Id: string }>(c, 'Customer', `select Id from Customer where DisplayName = ${qbQuote(name)}`);
   if (found[0]) return found[0].Id;
   const create = async (display: string) =>
