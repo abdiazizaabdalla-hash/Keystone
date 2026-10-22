@@ -244,7 +244,7 @@ export default function TransactionsPage() {
                 <p className="text-slate-400 text-sm mt-1">{agents.get(tx.agent_id) || 'Unknown'}</p>
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mt-3">
                   <span className={`text-sm font-medium ${getStatusTextColor(tx.status)}`}>{tx.status}</span>
-                  <span className="font-semibold text-blue-400">${tx.purchase_price.toLocaleString()}</span>
+                  <span className="font-semibold text-blue-400">{tx.purchase_price ? `$${Number(tx.purchase_price).toLocaleString()}` : '—'}</span>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mt-2">
                   <span>{getDueBadge(tx)}</span>
@@ -317,7 +317,7 @@ export default function TransactionsPage() {
                         <span className="text-slate-300 max-w-xs truncate block">{tx.property_address}</span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="font-semibold text-blue-400">${tx.purchase_price.toLocaleString()}</span>
+                        <span className="font-semibold text-blue-400">{tx.purchase_price ? `$${Number(tx.purchase_price).toLocaleString()}` : '—'}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`text-sm font-medium ${getStatusTextColor(tx.status)}`}>

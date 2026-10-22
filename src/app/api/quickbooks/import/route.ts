@@ -248,6 +248,7 @@ export async function POST(request: NextRequest) {
               file_number: relayNumber,
               property_address: memo.slice(0, 300) || 'Imported from QuickBooks',
               status: 'Closed',
+              purchase_price: 0,
               inbound_token: crypto.randomBytes(6).toString('hex'),
             })
             .select('id')

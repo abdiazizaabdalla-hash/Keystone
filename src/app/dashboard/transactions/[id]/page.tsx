@@ -2350,7 +2350,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             {/* Purchase Price */}
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Purchase Price</p>
-              <p className="text-2xl font-bold text-blue-400">${transaction.purchase_price.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-blue-400">{transaction.purchase_price ? `$${Number(transaction.purchase_price).toLocaleString()}` : '—'}</p>
             </div>
 
             {/* Status Dropdown */}
@@ -2476,7 +2476,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     <p className="text-xs text-slate-500 mt-1">
                       Flat fee ${(agent?.flat_fee ?? 0).toLocaleString()}
                       {agent?.commission_percent ? (
-                        <> + {agent.commission_percent}% of ${transaction.purchase_price.toLocaleString()}</>
+                        <> + {agent.commission_percent}% of ${Number(transaction.purchase_price ?? 0).toLocaleString()}</>
                       ) : null}{' '}
                       ={' '}
                       <span className="text-slate-300 font-semibold">
