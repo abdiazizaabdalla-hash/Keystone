@@ -87,6 +87,28 @@ export default function ContactsPage() {
     setTimeout(() => setNotice(''), 3500);
   };
 
+  // Every time the page opens, quietly add anyone from your deals who is not here yet (agents, lenders, title...).
+  // It only adds; it never changes or removes a contact.
+  const syncedRef = useRef(false);
+  useEffect(() => {
+    if (syncedRef.current) return;
+    syncedRef.current = true;
+    const t = setTimeout(async () => {
+      try {
+        const res = await authFetch('/api/contacts/import-from-deals', { method: 'POST' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.added > 0) {
+          await load();
+          flash(`Added ${data.added} contact${data.added === 1 ? '' : 's'} from your deals.`);
+        }
+      } catch {
+        /* the manual "Import from my deals" button still works */
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [load]);
+
   const tagCounts = useMemo(() => {
     const map = new Map<string, { label: string; count: number }>();
     for (const c of contacts) {

@@ -6,6 +6,7 @@ import { isAgentUser } from '@/lib/agentPortal';
 import { logAudit } from '@/lib/audit';
 import { normName, relayInvoiceNumber, textMentionsDeal } from '@/lib/quickbooks';
 import { getPlanLimits } from '@/lib/plans';
+import { autoAddContact } from '@/lib/contactsAuto';
 import { getUserPlan } from '@/lib/privileged';
 import crypto from 'crypto';
 
@@ -220,6 +221,7 @@ export async function POST(request: NextRequest) {
           agentCount += 1;
           createdAgents += 1;
           createdAgentIds.push(agentId);
+          await autoAddContact(user.id, { name: wanted, role: 'Agent' });
           await logAudit(request, user, 'agent.create', { entityType: 'agent', entityId: agentId, metadata: { via: 'quickbooks.import' } });
         }
       }
