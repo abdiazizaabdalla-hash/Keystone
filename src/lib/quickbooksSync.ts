@@ -104,8 +104,37 @@ async function mark(id: string, patch: { qb_invoice_id?: string | null; qb_payme
 
 export type SyncResult = { ok: boolean; status: 'synced' | 'error' | 'skipped' | 'not_connected'; message?: string };
 
+// One sync per invoice at a time. Creating an invoice and marking it paid each start a sync; without this, two of them
+// could both find the invoice missing in QuickBooks and both create it. The claim is a single atomic UPDATE, so only one
+// caller gets it; a claim older than 90 seconds is treated as abandoned.
+async function claimInvoice(id: string): Promise<boolean> {
+  const staleBefore = new Date(Date.now() - 90_000).toISOString();
+  const { data } = await supabaseServer
+    .from('invoices')
+    .update({ qb_sync_status: 'syncing', qb_synced_at: new Date().toISOString() })
+    .eq('id', id)
+    .or(`qb_sync_status.is.null,qb_sync_status.neq.syncing,qb_synced_at.lt.${staleBefore}`)
+    .select('id');
+  return Boolean(data && data.length);
+}
+
 /** Sends one invoice (and, if it is paid, its payment) to QuickBooks. Safe to call again: it only does what is missing. */
 export async function syncInvoiceToQuickBooks(invoiceId: string): Promise<SyncResult> {
+  let claimed = false;
+  for (let attempt = 0; attempt < 10 && !claimed; attempt++) {
+    claimed = await claimInvoice(invoiceId);
+    if (!claimed) await new Promise((r) => setTimeout(r, 2000)); // another sync is working on it: wait, then pick up what is left
+  }
+  if (!claimed) return { ok: false, status: 'error', message: 'Another sync of this invoice is still running. Try again in a minute.' };
+  try {
+    return await syncClaimedInvoice(invoiceId);
+  } finally {
+    // Paths that finish without recording a result leave the claim behind: release it.
+    await supabaseServer.from('invoices').update({ qb_sync_status: null }).eq('id', invoiceId).eq('qb_sync_status', 'syncing');
+  }
+}
+
+async function syncClaimedInvoice(invoiceId: string): Promise<SyncResult> {
   try {
     const { data: inv } = await supabaseServer
       .from('invoices')
