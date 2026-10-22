@@ -149,7 +149,16 @@ export async function POST(request: NextRequest) {
     const defaultFlat = typeof meta.default_flat_fee === 'number' && meta.default_flat_fee >= 0 ? meta.default_flat_fee : 400;
     const defaultPercent = typeof meta.default_percent_fee === 'number' && meta.default_percent_fee >= 0 ? meta.default_percent_fee : 0;
     const { maxAgents } = getPlanLimits(getUserPlan(user));
+    const feeByName = new Map<string, number>(); // normalized customer name -> flat fee chosen on the preview screen
+    for (const a of Array.isArray(body.newAgents) ? body.newAgents : []) {
+      const o = (a || {}) as Record<string, unknown>;
+      const fee = Number(o.flatFee);
+      if (str(o.name, 255) && Number.isFinite(fee) && fee >= 0 && fee <= 100000) feeByName.set(normName(str(o.name, 255)), Math.round(fee * 100) / 100);
+    }
     const newAgents = new Map<string, string>(); // normalized customer name -> agent id created in this import
+    const createdAgentIds: string[] = [];
+    const createdDealIds: string[] = [];
+    const createdInvoiceIds: string[] = [];
     let agentCount = agentList.length;
     let createdAgents = 0;
     let createdDeals = 0;
@@ -197,7 +206,7 @@ export async function POST(request: NextRequest) {
           }
           const { data: agent, error: agentError } = await supabaseServer
             .from('agents')
-            .insert({ tc_user_id: user.id, name: wanted, flat_fee: defaultFlat, commission_percent: defaultPercent })
+            .insert({ tc_user_id: user.id, name: wanted, flat_fee: feeByName.get(key) ?? defaultFlat, commission_percent: defaultPercent })
             .select('id')
             .single();
           if (agentError || !agent) {
@@ -210,6 +219,7 @@ export async function POST(request: NextRequest) {
           agentIds.add(agentId);
           agentCount += 1;
           createdAgents += 1;
+          createdAgentIds.push(agentId);
           await logAudit(request, user, 'agent.create', { entityType: 'agent', entityId: agentId, metadata: { via: 'quickbooks.import' } });
         }
       }
@@ -255,6 +265,7 @@ export async function POST(request: NextRequest) {
         transactionId = tx.id;
         placeholderId = tx.id;
         createdDeals += 1;
+        createdDealIds.push(tx.id);
       }
 
       const date = DATE_RE.test(str(o.date, 10)) ? str(o.date, 10) : new Date().toISOString().split('T')[0];
@@ -267,7 +278,7 @@ export async function POST(request: NextRequest) {
       const paid = o.paid === true;
       const paidDate = DATE_RE.test(str(o.paidDate, 10)) ? str(o.paidDate, 10) : date;
 
-      const { error } = await supabaseServer.from('invoices').insert({
+      const { data: inserted, error } = await supabaseServer.from('invoices').insert({
         agent_id: agentId,
         transaction_id: transactionId,
         amount_owed: amount,
@@ -277,12 +288,13 @@ export async function POST(request: NextRequest) {
         paid,
         paid_at: paid ? `${paidDate}T12:00:00Z` : null,
         paid_amount: paid ? amount : null,
-      });
+      }).select('id').single();
       if (error) {
         console.error('QuickBooks import: insert failed', error);
         if (placeholderId) {
           await supabaseServer.from('transactions').delete().eq('id', placeholderId);
           createdDeals -= 1;
+          createdDealIds.pop();
         }
         fail('Could not be saved');
         continue;
@@ -290,10 +302,11 @@ export async function POST(request: NextRequest) {
       usedTx.add(transactionId);
       taken.add(relayNumber.toLowerCase());
       created.push(relayNumber);
+      if (inserted?.id) createdInvoiceIds.push(inserted.id as string);
     }
 
     await logAudit(request, user, 'quickbooks.import', { entityType: 'import', entityId: 'invoices', metadata: { created: created.length, skipped: skipped.length, agents: createdAgents, deals: createdDeals } });
-    return NextResponse.json({ created: created.length, skipped, createdAgents, createdDeals });
+    return NextResponse.json({ created: created.length, skipped, createdAgents, createdDeals, createdInvoiceIds, createdDealIds, createdAgentIds });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TrialExpiredError) {
@@ -301,5 +314,80 @@ export async function POST(request: NextRequest) {
     }
     console.error('Error importing QuickBooks invoices:', error);
     return NextResponse.json({ error: 'Failed to import invoices' }, { status: 500 });
+  }
+}
+
+// Undo an import. The browser sends back the ids the import returned; every one is re-checked here. Only invoices that
+// belong to this TC's agents (and were not already sent to QuickBooks) are removed, then the placeholder deals and agents
+// that import created, but only if nothing else has been added to them since.
+export async function DELETE(request: NextRequest) {
+  try {
+    const { user } = await getUserFromRequest(request);
+    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    await assertTrialActive(user);
+
+    const body = await request.json().catch(() => ({}));
+    const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && /^[0-9a-f-]{36}$/i.test(x)).slice(0, 600) : []);
+    const invoiceIds = ids(body.invoiceIds);
+    const dealIds = ids(body.dealIds);
+    const agentIds = ids(body.agentIds);
+    if (invoiceIds.length === 0) return NextResponse.json({ error: 'Nothing to undo' }, { status: 400 });
+
+    const { data: mine } = await supabaseServer.from('agents').select('id').eq('tc_user_id', user.id).limit(5000);
+    const myAgents = new Set((mine || []).map((a) => a.id as string));
+
+    let removedInvoices = 0;
+    const kept: string[] = [];
+    for (let i = 0; i < invoiceIds.length; i += 100) {
+      const { data: rows } = await supabaseServer
+        .from('invoices')
+        .select('id, agent_id, invoice_number, qb_invoice_id')
+        .in('id', invoiceIds.slice(i, i + 100));
+      const deletable: string[] = [];
+      for (const r of rows || []) {
+        if (!myAgents.has(r.agent_id as string)) continue;
+        if (r.qb_invoice_id) {
+          kept.push(String(r.invoice_number));
+          continue;
+        }
+        deletable.push(r.id as string);
+      }
+      if (deletable.length) {
+        const { error } = await supabaseServer.from('invoices').delete().in('id', deletable);
+        if (error) throw error;
+        removedInvoices += deletable.length;
+      }
+    }
+
+    let removedDeals = 0;
+    for (const id of dealIds) {
+      const { data: tx } = await supabaseServer.from('transactions').select('id, agent_id, status').eq('id', id).maybeSingle();
+      if (!tx || !myAgents.has(tx.agent_id as string) || tx.status !== 'Closed') continue;
+      const { count: invCount } = await supabaseServer.from('invoices').select('id', { count: 'exact', head: true }).eq('transaction_id', id);
+      const { count: taskCount } = await supabaseServer.from('tasks').select('id', { count: 'exact', head: true }).eq('transaction_id', id);
+      if ((invCount || 0) > 0 || (taskCount || 0) > 0) continue;
+      const { error } = await supabaseServer.from('transactions').delete().eq('id', id);
+      if (!error) removedDeals += 1;
+    }
+
+    let removedAgents = 0;
+    for (const id of agentIds) {
+      if (!myAgents.has(id)) continue;
+      const { count: txCount } = await supabaseServer.from('transactions').select('id', { count: 'exact', head: true }).eq('agent_id', id);
+      const { count: invCount } = await supabaseServer.from('invoices').select('id', { count: 'exact', head: true }).eq('agent_id', id);
+      if ((txCount || 0) > 0 || (invCount || 0) > 0) continue;
+      const { error } = await supabaseServer.from('agents').delete().eq('id', id).eq('tc_user_id', user.id);
+      if (!error) removedAgents += 1;
+    }
+
+    await logAudit(request, user, 'quickbooks.import.undo', { entityType: 'import', entityId: 'invoices', metadata: { invoices: removedInvoices, deals: removedDeals, agents: removedAgents } });
+    return NextResponse.json({ removedInvoices, removedDeals, removedAgents, kept });
+  } catch (error) {
+    if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof TrialExpiredError) {
+      return NextResponse.json({ error: error.message, code: 'trial_expired', trialEndsAt: error.trialEndsAt }, { status: error.status });
+    }
+    console.error('Error undoing QuickBooks import:', error);
+    return NextResponse.json({ error: 'Failed to undo the import' }, { status: 500 });
   }
 }

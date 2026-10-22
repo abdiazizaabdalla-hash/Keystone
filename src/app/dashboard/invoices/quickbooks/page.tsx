@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { readSpreadsheetFile } from '@/lib/readSpreadsheet';
-import { autoMapQb, readQbRows, splitHeader, DEFAULT_ITEM_NAME, QB_FIELDS, QB_MAX_INVOICES_PER_FILE, type QbFieldKey } from '@/lib/quickbooks';
+import { autoMapQb, normName, readQbRows, splitHeader, DEFAULT_ITEM_NAME, QB_FIELDS, QB_MAX_INVOICES_PER_FILE, type QbFieldKey } from '@/lib/quickbooks';
 
 // Move invoices between Relay and QuickBooks Online by file. No QuickBooks login or permissions are involved:
 //   Relay -> QuickBooks: download CSV files and use QuickBooks' own Import data screen.
@@ -35,6 +35,50 @@ interface DealOpt {
   file_number: string;
   property_address: string;
 }
+interface ImportResult {
+  created: number;
+  createdAgents?: number;
+  createdDeals?: number;
+  createdInvoiceIds?: string[];
+  createdDealIds?: string[];
+  createdAgentIds?: string[];
+  skipped: { number: string; reason: string }[];
+}
+interface UndoInfo {
+  at: number;
+  invoiceIds: string[];
+  dealIds: string[];
+  agentIds: string[];
+}
+const LAST_IMPORT_KEY = 'relay-last-quickbooks-import';
+
+/** The flat fee an agent most likely charges: the amount that appears most often on their invoices (latest wins a tie). */
+function suggestFees(rows: { customer: string; amount: number; date: string }[]): Record<string, string> {
+  const per = new Map<string, Map<number, { n: number; last: string }>>();
+  for (const r of rows) {
+    const key = normName(r.customer || 'Unknown customer');
+    const m = per.get(key) || new Map<number, { n: number; last: string }>();
+    const e = m.get(r.amount) || { n: 0, last: '' };
+    e.n += 1;
+    if (r.date > e.last) e.last = r.date;
+    m.set(r.amount, e);
+    per.set(key, m);
+  }
+  const out: Record<string, string> = {};
+  for (const [key, m] of per) {
+    let best: number | null = null;
+    let bestE = { n: 0, last: '' };
+    for (const [amount, e] of m) {
+      if (best === null || e.n > bestE.n || (e.n === bestE.n && e.last > bestE.last)) {
+        best = amount;
+        bestE = e;
+      }
+    }
+    out[key] = best === null ? '' : String(best);
+  }
+  return out;
+}
+
 interface Pick {
   include: boolean;
   agentId: string;
@@ -131,7 +175,26 @@ export default function QuickBooksPage() {
   const [picks, setPicks] = useState<Pick[]>([]);
   const [busy, setBusy] = useState(false);
   const [importError, setImportError] = useState('');
-  const [result, setResult] = useState<{ created: number; createdAgents?: number; createdDeals?: number; skipped: { number: string; reason: string }[] } | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [fees, setFees] = useState<Record<string, string>>({});
+  const [lastImport, setLastImport] = useState<UndoInfo | null>(null);
+  const [undoAsk, setUndoAsk] = useState(false);
+  const [undoMsg, setUndoMsg] = useState('');
+
+  // The most recent import can be undone, even after leaving the page (kept in this browser only).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const raw = localStorage.getItem(LAST_IMPORT_KEY);
+        if (!raw) return;
+        const v = JSON.parse(raw) as UndoInfo;
+        if (v && Array.isArray(v.invoiceIds) && v.invoiceIds.length && Date.now() - v.at < 14 * 86400000) setLastImport(v);
+      } catch {
+        /* storage unavailable: undo is then offered right after the import only */
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
   const reset = () => {
     setFileName('');
@@ -141,6 +204,9 @@ export default function QuickBooksPage() {
     setIssues([]);
     setPicks([]);
     setResult(null);
+    setFees({});
+    setUndoAsk(false);
+    setUndoMsg('');
     setImportError('');
     if (fileRef.current) fileRef.current.value = '';
   };
@@ -167,6 +233,7 @@ export default function QuickBooksPage() {
       setAgents(data.agents);
       setDeals(data.deals);
       setAgentSlots(typeof data.agentSlots === 'number' ? data.agentSlots : null);
+      setFees(suggestFees((data.rows as PreviewRow[]).filter((r) => r.status !== 'duplicate')));
       setPicks(
         (data.rows as PreviewRow[]).map((r) => ({
           include: r.status !== 'duplicate',
@@ -214,16 +281,22 @@ export default function QuickBooksPage() {
 
   const setPick = (i: number, patch: Partial<Pick>) => setPicks((prev) => prev.map((p, j) => (j === i ? { ...p, ...patch } : p)));
 
-  const chosenDeals = useMemo(() => new Set(picks.filter((p) => p.include && p.transactionId).map((p) => p.transactionId)), [picks]);
   const ready = rows ? rows.filter((_, i) => picks[i]?.include) : [];
-  const newAgentNames = useMemo(() => {
-    const names = new Map<string, string>();
+  // Every customer in the file that is not an agent yet, with the flat fee that will be set on them.
+  const newAgentList = useMemo(() => {
+    const seen = new Map<string, string>();
     (rows || []).forEach((r, i) => {
-      if (picks[i]?.include && picks[i].agentId === NEW_AGENT) names.set((r.customer || 'Unknown customer').trim().toLowerCase(), r.customer || 'Unknown customer');
+      if (picks[i]?.include && picks[i].agentId === NEW_AGENT) {
+        const name = (r.customer || 'Unknown customer').trim();
+        seen.set(normName(name), name);
+      }
     });
-    return [...names.values()];
+    return [...seen.entries()].map(([key, name]) => ({ key, name }));
   }, [rows, picks]);
-  const standalone = rows ? rows.filter((_, i) => picks[i]?.include && !picks[i].transactionId).length : 0;
+  const paidCount = rows ? rows.filter((_, i) => picks[i]?.include && picks[i].paid).length : 0;
+  const selectedCount = ready.length;
+  const setAll = (patch: Partial<Pick>) => setPicks((prev) => prev.map((p, i) => (rows?.[i]?.status === 'duplicate' ? p : { ...p, ...patch })));
+  const setPaidForSelected = (paid: boolean) => setPicks((prev) => prev.map((p) => (p.include ? { ...p, paid } : p)));
 
   const doImport = async () => {
     if (!rows) return;
@@ -248,13 +321,60 @@ export default function QuickBooksPage() {
       const res = await authFetch('/api/quickbooks/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'commit', rows: payload }),
+        body: JSON.stringify({
+          mode: 'commit',
+          rows: payload,
+          newAgents: newAgentList.map((a) => ({ name: a.name, flatFee: Number(fees[a.key]) >= 0 && fees[a.key] !== '' ? Number(fees[a.key]) : undefined })),
+        }),
       });
-      const data = await res.json();
+      const data = (await res.json()) as ImportResult & { error?: string };
       if (!res.ok) throw new Error(data.error || 'Import failed');
       setResult(data);
+      if (data.createdInvoiceIds?.length) {
+        const info: UndoInfo = { at: Date.now(), invoiceIds: data.createdInvoiceIds, dealIds: data.createdDealIds || [], agentIds: data.createdAgentIds || [] };
+        setLastImport(info);
+        try {
+          localStorage.setItem(LAST_IMPORT_KEY, JSON.stringify(info));
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (e) {
       if (!goAuth(e)) setImportError(e instanceof Error ? e.message : 'Import failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doUndo = async () => {
+    if (!lastImport) return;
+    setBusy(true);
+    setUndoMsg('');
+    try {
+      const res = await authFetch('/api/quickbooks/import', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceIds: lastImport.invoiceIds, dealIds: lastImport.dealIds, agentIds: lastImport.agentIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not undo');
+      setUndoMsg(
+        `Undone: removed ${data.removedInvoices} invoice${data.removedInvoices === 1 ? '' : 's'}` +
+          (data.removedAgents ? `, ${data.removedAgents} agent${data.removedAgents === 1 ? '' : 's'}` : '') +
+          (data.removedDeals ? ` and ${data.removedDeals} placeholder deal${data.removedDeals === 1 ? '' : 's'}` : '') +
+          '.' +
+          (data.kept?.length ? ` ${data.kept.length} already sent to QuickBooks were left in place.` : '')
+      );
+      setLastImport(null);
+      setResult(null);
+      setUndoAsk(false);
+      try {
+        localStorage.removeItem(LAST_IMPORT_KEY);
+      } catch {
+        /* ignore */
+      }
+    } catch (e) {
+      if (!goAuth(e)) setUndoMsg(e instanceof Error ? e.message : 'Could not undo');
     } finally {
       setBusy(false);
     }
@@ -410,6 +530,31 @@ export default function QuickBooksPage() {
             </div>
           )}
 
+          {undoMsg && <p className="mt-2 rounded-lg border border-slate-600 bg-slate-800/60 p-3 text-sm text-slate-200">{undoMsg}</p>}
+          {lastImport && !result && !rows && (
+            <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-slate-600 bg-slate-800/60 p-3 text-sm text-slate-300">
+              <span>
+                Your last import added {lastImport.invoiceIds.length} invoice{lastImport.invoiceIds.length === 1 ? '' : 's'}
+                {lastImport.agentIds.length ? ` and ${lastImport.agentIds.length} new agent${lastImport.agentIds.length === 1 ? '' : 's'}` : ''}.
+              </span>
+              {!undoAsk ? (
+                <button type="button" onClick={() => setUndoAsk(true)} className={btnGhost}>
+                  Undo it
+                </button>
+              ) : (
+                <span className="flex items-center gap-2">
+                  Remove them?
+                  <button type="button" disabled={busy} onClick={doUndo} className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+                    Yes, undo
+                  </button>
+                  <button type="button" onClick={() => setUndoAsk(false)} className={btnGhost}>
+                    Keep
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
+
           {rows && !result && (
             <div className="mt-6">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-3 text-sm">
@@ -421,59 +566,99 @@ export default function QuickBooksPage() {
                 </button>
               </div>
               <p className="text-xs text-slate-500 mb-3">
-                Every invoice is imported. A customer who is not an agent in Relay yet is added as a new agent, and an invoice with no deal is saved on a small closed “Imported from QuickBooks” deal, so you can bring in your history without any setup. If an invoice belongs to an agent or deal you already have, pick it below. Imported invoices are numbered with a QB- prefix.
+                Everything in the file comes in. Customers that are not agents yet are added as agents (name and flat fee only), and invoices are saved on their own, with no deal needed. Imported invoices are numbered with a QB- prefix.
               </p>
 
-              {(newAgentNames.length > 0 || standalone > 0) && (
-                <p className="text-xs text-blue-300 mb-3">
-                  {newAgentNames.length > 0 && `${newAgentNames.length} new agent${newAgentNames.length === 1 ? '' : 's'} will be added (${newAgentNames.slice(0, 6).join(', ')}${newAgentNames.length > 6 ? '…' : ''}). `}
-                  {standalone > 0 && `${standalone} invoice${standalone === 1 ? '' : 's'} will be saved without a deal.`}
-                  {agentSlots !== null && newAgentNames.length > agentSlots && ` Your plan has room for ${agentSlots} more agent profile${agentSlots === 1 ? '' : 's'}; pick an existing agent for the rest or upgrade.`}
-                </p>
+              {newAgentList.length > 0 && (
+                <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
+                  <p className="text-sm font-semibold text-slate-100">
+                    {newAgentList.length} new agent{newAgentList.length === 1 ? '' : 's'} will be added
+                  </p>
+                  <p className="text-xs text-slate-400 mb-2">Just a name and a flat fee. The fee is the amount charged most often in your file; change it here or later on the Agents page.</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {newAgentList.map((a) => (
+                      <label key={a.key} className="flex items-center justify-between gap-3 rounded-md bg-slate-800/60 px-3 py-2 text-sm text-slate-200">
+                        <span className="truncate">{a.name}</span>
+                        <span className="flex items-center gap-1 text-xs text-slate-400">
+                          Flat fee $
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={fees[a.key] ?? ''}
+                            onChange={(e) => setFees((f) => ({ ...f, [a.key]: e.target.value }))}
+                            className={`${input} w-24 py-1`}
+                          />
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {agentSlots !== null && newAgentList.length > agentSlots && (
+                    <p className="mt-2 text-xs text-amber-300">
+                      Your plan has room for {agentSlots} more agent profile{agentSlots === 1 ? '' : 's'}. Invoices for the rest will be skipped unless you upgrade or pick an existing agent for them.
+                    </p>
+                  )}
+                </div>
               )}
 
-              <div className="space-y-2">
+              <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-slate-400">
+                  {selectedCount} selected · {paidCount} marked paid
+                </span>
+                <button type="button" onClick={() => setAll({ include: true })} className={btnGhost}>
+                  Select all
+                </button>
+                <button type="button" onClick={() => setAll({ include: false })} className={btnGhost}>
+                  Select none
+                </button>
+                <button type="button" onClick={() => setPaidForSelected(true)} className={btnGhost}>
+                  Mark selected paid
+                </button>
+                <button type="button" onClick={() => setPaidForSelected(false)} className={btnGhost}>
+                  Mark selected unpaid
+                </button>
+              </div>
+
+              <div className="rounded-lg border border-slate-600 divide-y divide-slate-700 bg-slate-800/40">
                 {rows.map((r, i) => {
                   const p = picks[i];
                   if (!p) return null;
                   const dup = r.status === 'duplicate';
-                  const dealOptions = deals.filter((d) => p.agentId !== NEW_AGENT && d.agent_id === p.agentId && (!chosenDeals.has(d.id) || d.id === p.transactionId));
+                  const linked = p.transactionId ? deals.find((d) => d.id === p.transactionId) : undefined;
                   return (
-                    <div key={`${r.number}-${i}`} className={`rounded-lg border p-3 ${dup ? 'border-slate-700 opacity-60' : 'border-slate-600 bg-slate-800/40'}`}>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <input type="checkbox" checked={p.include && !dup} disabled={dup} onChange={(e) => setPick(i, { include: e.target.checked })} className="h-4 w-4 accent-blue-500" />
-                        <div className="min-w-[8rem]">
-                          <div className="font-mono text-sm text-blue-300">{r.number}</div>
-                          <div className="text-xs text-slate-500">{r.customer}</div>
-                        </div>
-                        <div className="text-sm font-semibold text-slate-100">{money(r.amount)}</div>
-                        {dup ? (
-                          <span className="text-xs text-slate-400">Already in Relay</span>
-                        ) : (
-                          <>
-                            <select value={p.agentId} onChange={(e) => setPick(i, { agentId: e.target.value, transactionId: '' })} className={`${input} flex-1 min-w-[10rem]`}>
-                              <option value={NEW_AGENT}>New agent: {r.customer || 'Unknown customer'}</option>
+                    <div key={`${r.number}-${i}`} className={`flex flex-wrap items-center gap-3 px-3 py-2 ${dup ? 'opacity-50' : ''}`}>
+                      <input type="checkbox" checked={p.include && !dup} disabled={dup} onChange={(e) => setPick(i, { include: e.target.checked })} className="h-4 w-4 accent-blue-500" />
+                      <div className="w-36 shrink-0">
+                        <div className="font-mono text-sm text-blue-300 truncate">{r.number}</div>
+                        <div className="text-xs text-slate-500">{r.date || 'no date'}</div>
+                      </div>
+                      {dup ? (
+                        <span className="flex-1 text-xs text-slate-400">Already in Relay</span>
+                      ) : (
+                        <>
+                          <div className="flex-1 min-w-[10rem]">
+                            <select
+                              value={p.agentId}
+                              onChange={(e) => setPick(i, { agentId: e.target.value, transactionId: '' })}
+                              className={`${input} w-full py-1.5`}
+                              aria-label={`Agent for invoice ${r.number}`}
+                            >
+                              <option value={NEW_AGENT}>{r.customer || 'Unknown customer'} (new agent)</option>
                               {agents.map((a) => (
                                 <option key={a.id} value={a.id}>
                                   {a.name}
                                 </option>
                               ))}
                             </select>
-                            <select value={p.transactionId} onChange={(e) => setPick(i, { transactionId: e.target.value })} disabled={p.agentId === NEW_AGENT} className={`${input} flex-[2] min-w-[12rem]`}>
-                              <option value="">No deal (invoice only)</option>
-                              {dealOptions.map((d) => (
-                                <option key={d.id} value={d.id}>
-                                  {d.property_address} ({d.file_number})
-                                </option>
-                              ))}
-                            </select>
-                            <label className="flex items-center gap-1.5 text-xs text-slate-400">
-                              <input type="checkbox" checked={p.paid} onChange={(e) => setPick(i, { paid: e.target.checked })} className="h-4 w-4 accent-blue-500" />
-                              Already paid
-                            </label>
-                          </>
-                        )}
-                      </div>
+                            {linked && <div className="mt-0.5 text-xs text-slate-500 truncate">Linked to {linked.property_address} ({linked.file_number})</div>}
+                          </div>
+                          <div className="w-24 text-right text-sm font-semibold text-slate-100">{money(r.amount)}</div>
+                          <label className="flex items-center gap-1.5 text-xs text-slate-300 w-16">
+                            <input type="checkbox" checked={p.paid} onChange={(e) => setPick(i, { paid: e.target.checked })} className="h-4 w-4 accent-green-500" />
+                            Paid
+                          </label>
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -517,13 +702,30 @@ export default function QuickBooksPage() {
                   ))}
                 </ul>
               )}
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 <Link href="/dashboard/invoices" className={btnPrimary}>
                   See invoices
                 </Link>
                 <button type="button" onClick={reset} className={btnGhost}>
                   Import another file
                 </button>
+                {lastImport && !undoAsk && (
+                  <button type="button" onClick={() => setUndoAsk(true)} className={btnGhost}>
+                    Undo this import
+                  </button>
+                )}
+                {lastImport && undoAsk && (
+                  <span className="flex items-center gap-2 text-sm text-slate-200">
+                    Remove these {lastImport.invoiceIds.length} invoices
+                    {lastImport.agentIds.length ? ` and ${lastImport.agentIds.length} new agents` : ''}?
+                    <button type="button" disabled={busy} onClick={doUndo} className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+                      Yes, undo
+                    </button>
+                    <button type="button" onClick={() => setUndoAsk(false)} className={btnGhost}>
+                      Keep
+                    </button>
+                  </span>
+                )}
               </div>
             </div>
           )}
