@@ -2,7 +2,7 @@
 
 import MoneyInput from '@/components/MoneyInput';
 import PhoneInput from '@/components/PhoneInput';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatPhoneNumber } from '@/lib/formatPhone';
@@ -50,6 +50,28 @@ export default function AgentsPage() {
   // connects. Empty/hidden for a solo TC with no team.
   const [directory, setDirectory] = useState<DirectoryAgent[]>([]);
   const [selectedDirectoryId, setSelectedDirectoryId] = useState('');
+  const [query, setQuery] = useState('');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // Name, brokerage, email and phone (digits only, so "555 1234" finds (555) 123-4567 style numbers).
+  const visibleAgents = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return agents;
+    const digits = q.replace(/\D/g, '');
+    return agents.filter((a) => {
+      const text = `${a.name} ${a.brokerage || ''} ${a.email || ''}`.toLowerCase();
+      if (text.includes(q)) return true;
+      return digits.length >= 3 && (a.phone || '').replace(/\D/g, '').includes(digits);
+    });
+  }, [agents, query]);
 
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -233,6 +255,7 @@ export default function AgentsPage() {
     });
     setEditingId(agent.id);
     setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (loading) {
@@ -250,15 +273,17 @@ export default function AgentsPage() {
 
   return (
     <div className="p-4 md:p-8">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Agents</h1>
-          <p className="text-slate-400">Manage your real estate agents</p>
+          <p className="text-slate-400">
+            {agents.length === 0 ? 'Manage your real estate agents' : `${agents.length} agent${agents.length === 1 ? '' : 's'}`}
+          </p>
         </div>
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition shadow-lg"
+            className="shrink-0 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition shadow-lg"
           >
             + Add Agent
           </button>
@@ -421,70 +446,128 @@ export default function AgentsPage() {
           <p className="text-slate-400">Add your first agent to get started</p>
         </div>
       ) : (
-        <div className="grid gap-6">
-          {agents.map((agent) => (
-            <div
-              key={agent.id}
-              className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 hover:border-slate-600 transition"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
-                    {agent.name[0]}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-100">{agent.name}</h3>
-                    <p className="text-sm text-slate-400">{agent.brokerage || 'No brokerage'}</p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleEdit(agent)}
-                    className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(agent.id)}
-                    className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition font-medium"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-6 py-4 border-t border-slate-600">
-                <div className="space-y-3">
-                  {agent.email && (
-                    <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Email</p>
-                      <p className="text-slate-300">{agent.email}</p>
-                    </div>
-                  )}
-                  {agent.phone && (
-                    <div>
-                      <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Phone</p>
-                      <p className="text-slate-300">{formatPhoneNumber(agent.phone)}</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Flat Fee per Deal</p>
-                    <p className="text-lg font-semibold text-blue-400">
-                      ${agent.flat_fee.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Percentage Fee</p>
-                    <p className="text-lg font-semibold text-blue-400">{agent.commission_percent}%</p>
-                  </div>
-                </div>
-              </div>
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[14rem]">
+              <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+              </svg>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search agents by name, brokerage, email or phone"
+                aria-label="Search agents"
+                className="w-full bg-slate-700/60 border border-slate-600 rounded-lg pl-9 pr-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              />
             </div>
-          ))}
-        </div>
+            {visibleAgents.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setExpanded(expanded.size >= visibleAgents.length ? new Set() : new Set(visibleAgents.map((a) => a.id)))}
+                className="text-sm text-slate-400 hover:text-slate-200 underline-offset-2 hover:underline"
+              >
+                {expanded.size >= visibleAgents.length ? 'Collapse all' : 'Expand all'}
+              </button>
+            )}
+          </div>
+
+          {visibleAgents.length === 0 ? (
+            <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-10 text-center">
+              <p className="text-slate-300 font-medium">No agents match &ldquo;{query.trim()}&rdquo;</p>
+              <button type="button" onClick={() => setQuery('')} className="mt-2 text-sm text-blue-400 hover:text-blue-300">
+                Clear search
+              </button>
+            </div>
+          ) : (
+            <ul className="rounded-xl border border-slate-600 bg-slate-800/40 divide-y divide-slate-700 overflow-hidden">
+              {visibleAgents.map((agent) => {
+                const open = expanded.has(agent.id);
+                return (
+                  <li key={agent.id}>
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(agent.id)}
+                      aria-expanded={open}
+                      aria-controls={`agent-${agent.id}`}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-700/40 transition"
+                    >
+                      <span className="w-9 h-9 shrink-0 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
+                        {(agent.name[0] || '?').toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-slate-100">{agent.name}</span>
+                        <span className="block truncate text-xs text-slate-400">{agent.brokerage || 'No brokerage'}</span>
+                      </span>
+                      <span className="hidden sm:inline text-sm text-slate-400">
+                        ${Number(agent.flat_fee ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        {Number(agent.commission_percent) > 0 ? ` + ${agent.commission_percent}%` : ''}
+                      </span>
+                      <svg className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {open && (
+                      <div id={`agent-${agent.id}`} className="px-4 pb-4 pt-1 sm:pl-[4.0rem]">
+                        <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                          <div>
+                            <dt className="text-xs uppercase tracking-wider text-slate-500">Email</dt>
+                            <dd className="mt-0.5 text-slate-200 break-all">
+                              {agent.email ? (
+                                <a href={`mailto:${agent.email}`} className="hover:text-blue-300">
+                                  {agent.email}
+                                </a>
+                              ) : (
+                                <span className="text-slate-500">Not added</span>
+                              )}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs uppercase tracking-wider text-slate-500">Phone</dt>
+                            <dd className="mt-0.5 text-slate-200">
+                              {agent.phone ? (
+                                <a href={`tel:${agent.phone}`} className="hover:text-blue-300">
+                                  {formatPhoneNumber(agent.phone)}
+                                </a>
+                              ) : (
+                                <span className="text-slate-500">Not added</span>
+                              )}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs uppercase tracking-wider text-slate-500">Flat fee per deal</dt>
+                            <dd className="mt-0.5 font-semibold text-blue-400">
+                              ${Number(agent.flat_fee ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs uppercase tracking-wider text-slate-500">Percentage fee</dt>
+                            <dd className="mt-0.5 font-semibold text-blue-400">{agent.commission_percent ?? 0}%</dd>
+                          </div>
+                        </dl>
+                        <div className="mt-4 flex gap-2">
+                          <button
+                            onClick={() => handleEdit(agent)}
+                            className="px-3.5 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(agent.id)}
+                            className="px-3.5 py-1.5 text-sm border border-red-500/50 text-red-300 hover:bg-red-600 hover:text-white rounded-lg transition font-medium"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
       )}
     </div>
   );
