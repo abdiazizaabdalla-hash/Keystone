@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'The QuickBooks connection is not open yet. You can still move invoices with the import and export files.' }, { status: 403 });
     }
     const origin = new URL(request.url).origin;
-    const url = getQbAuthUrl(`${origin}/api/quickbooks/callback`, signOAuthState(user.id, 'quickbooks'));
+    const url = await getQbAuthUrl(`${origin}/api/quickbooks/callback`, signOAuthState(user.id, 'quickbooks'));
     return NextResponse.json({ url });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });

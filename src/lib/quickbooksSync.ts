@@ -45,9 +45,9 @@ export async function getQbConnection(tcUserId: string): Promise<Connection | nu
 }
 
 /** A usable access token, refreshing (and saving the rotated refresh token) when needed. Null when the connection is dead. */
-async function clientFor(conn: Connection): Promise<QbClient | null> {
+async function clientFor(conn: Connection, forceRefresh = false): Promise<QbClient | null> {
   if (conn.status !== 'connected') return null;
-  const stillGood = conn.access_token && conn.access_expires_at && new Date(conn.access_expires_at).getTime() - Date.now() > 2 * 60 * 1000;
+  const stillGood = !forceRefresh && conn.access_token && conn.access_expires_at && new Date(conn.access_expires_at).getTime() - Date.now() > 2 * 60 * 1000;
   if (stillGood) {
     try {
       return { realmId: conn.realm_id, environment: conn.environment, accessToken: decryptSecret(conn.access_token as string) };
@@ -134,7 +134,7 @@ export async function syncInvoiceToQuickBooks(invoiceId: string): Promise<SyncRe
   }
 }
 
-async function syncClaimedInvoice(invoiceId: string): Promise<SyncResult> {
+async function syncClaimedInvoice(invoiceId: string, forceRefresh = false): Promise<SyncResult> {
   try {
     const { data: inv } = await supabaseServer
       .from('invoices')
@@ -164,7 +164,7 @@ async function syncClaimedInvoice(invoiceId: string): Promise<SyncResult> {
       return { ok: true, status: 'skipped', message: 'A $0 invoice is not sent to QuickBooks' };
     }
 
-    const client = await clientFor(conn);
+    const client = await clientFor(conn, forceRefresh);
     if (!client) {
       const msg = conn.status === 'needs_reconnect' ? 'QuickBooks needs to be reconnected in Settings' : 'Could not reach QuickBooks. It will be retried.';
       await mark(invoice.id, { qb_invoice_id: invoice.qb_invoice_id, qb_payment_id: invoice.qb_payment_id, qb_sync_status: 'error', qb_sync_error: msg });
@@ -241,6 +241,9 @@ async function syncClaimedInvoice(invoiceId: string): Promise<SyncResult> {
           : e instanceof QbAuthError
           ? 'QuickBooks needs to be reconnected in Settings'
           : 'Something went wrong talking to QuickBooks. It will be retried.';
+      // The access token was refused (for example revoked early): get a fresh one and try once more. Only a refresh that
+      // is itself refused (expired or revoked) turns into "reconnect".
+      if (e instanceof QbAuthError && !forceRefresh) return syncClaimedInvoice(invoiceId, true);
       if (e instanceof QbAuthError) {
         await supabaseServer.from('quickbooks_connections').update({ status: 'needs_reconnect', access_token: null, access_expires_at: null }).eq('tc_user_id', tcUserId);
       }

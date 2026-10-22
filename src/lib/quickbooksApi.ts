@@ -2,9 +2,40 @@
 // Relay only ever (a) finds the customer / product / invoice it needs by name or number, and
 // (b) creates the customer, product, invoice and payment records it is responsible for.
 
-const AUTH_URL = 'https://appcenter.intuit.com/connect/oauth2';
-const TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
-const REVOKE_URL = 'https://developer.api.intuit.com/v2/oauth2/tokens/revoke';
+// OAuth endpoints come from Intuit's discovery document (cached for a day). The addresses below are only a fallback
+// for when that document cannot be reached, so sign-in keeps working.
+const FALLBACK_ENDPOINTS = {
+  auth: 'https://appcenter.intuit.com/connect/oauth2',
+  token: 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer',
+  revoke: 'https://developer.api.intuit.com/v2/oauth2/tokens/revoke',
+};
+const DISCOVERY_URL = {
+  production: 'https://developer.api.intuit.com/.well-known/openid_configuration',
+  sandbox: 'https://developer.api.intuit.com/.well-known/openid_sandbox_configuration',
+};
+const endpointCache = new Map<string, { at: number; e: typeof FALLBACK_ENDPOINTS }>();
+// Only ever send credentials to an https address on intuit.com, whatever the document says.
+const trustedUrl = (u: unknown): u is string => typeof u === 'string' && /^https:\/\/([a-z0-9-]+\.)*intuit\.com\//i.test(u);
+
+async function oauthEndpoints(): Promise<typeof FALLBACK_ENDPOINTS> {
+  const env = qbEnvironment();
+  const hit = endpointCache.get(env);
+  if (hit && Date.now() - hit.at < 24 * 60 * 60 * 1000) return hit.e;
+  let e = FALLBACK_ENDPOINTS;
+  try {
+    const res = await fetch(DISCOVERY_URL[env], { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const d = (await res.json()) as Record<string, unknown>;
+      if (trustedUrl(d.authorization_endpoint) && trustedUrl(d.token_endpoint) && trustedUrl(d.revocation_endpoint)) {
+        e = { auth: d.authorization_endpoint, token: d.token_endpoint, revoke: d.revocation_endpoint };
+      }
+    }
+  } catch {
+    /* use the fallback */
+  }
+  endpointCache.set(env, { at: Date.now() - (e === FALLBACK_ENDPOINTS ? 23 * 60 * 60 * 1000 : 0), e }); // a failed lookup is retried in an hour
+  return e;
+}
 const SCOPE = 'com.intuit.quickbooks.accounting';
 const MINOR_VERSION = '75';
 
@@ -38,9 +69,9 @@ export function quickbooksAvailableFor(email: string | null | undefined): boolea
     .includes(e);
 }
 
-export function getQbAuthUrl(redirectUri: string, state: string): string {
+export async function getQbAuthUrl(redirectUri: string, state: string): Promise<string> {
   const p = new URLSearchParams({ client_id: credentials().id, response_type: 'code', scope: SCOPE, redirect_uri: redirectUri, state });
-  return `${AUTH_URL}?${p.toString()}`;
+  return `${(await oauthEndpoints()).auth}?${p.toString()}`;
 }
 
 export interface QbTokens {
@@ -51,7 +82,7 @@ export interface QbTokens {
 }
 
 async function tokenRequest(body: Record<string, string>): Promise<QbTokens> {
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetch((await oauthEndpoints()).token, {
     method: 'POST',
     headers: { Authorization: `Basic ${credentials().basic}`, 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams(body),
@@ -76,7 +107,7 @@ export const refreshQbTokens = (refreshToken: string) => tokenRequest({ grant_ty
 /** Best effort: tells Intuit to forget the grant. */
 export async function revokeQbToken(token: string): Promise<void> {
   try {
-    await fetch(REVOKE_URL, {
+    await fetch((await oauthEndpoints()).revoke, {
       method: 'POST',
       headers: { Authorization: `Basic ${credentials().basic}`, 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ token }),
