@@ -147,6 +147,9 @@ export default function QuickBooksConnectCard() {
     }
   };
 
+  // Until the direct connection is open to this user, show nothing (the file import/export is on the Invoices page).
+  if (status && !status.connected && !status.available) return null;
+
   const btn = 'text-sm px-4 py-2 rounded-lg transition disabled:opacity-50';
   const primary = `${btn} bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold`;
   const ghost = `${btn} border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100`;
@@ -238,15 +241,7 @@ export default function QuickBooksConnectCard() {
         <button type="button" onClick={connect} disabled={busy !== null} className={primary}>
           {busy === 'connect' ? 'Opening QuickBooks…' : 'Connect QuickBooks'}
         </button>
-      ) : (
-        <p className="text-xs text-slate-400">
-          The direct connection is coming soon. You can move invoices today with the{' '}
-          <Link href="/dashboard/invoices/quickbooks" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline">
-            QuickBooks import and export files
-          </Link>
-          .
-        </p>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -197,6 +197,9 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
     }
   };
 
+  // Show the direct Google connection only to people who can use it (or are already connected).
+  const googleShown = Boolean(status && (status.connected || status.available !== false));
+
   return (
     <div id="calendar" className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
       <h2 className="text-lg font-bold text-slate-100 mb-1">Calendar</h2>
@@ -208,7 +211,8 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
 
       {message && <div className="mb-4 text-sm text-slate-300">{message}</div>}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={`grid gap-4 ${googleShown ? 'sm:grid-cols-2' : ''}`}>
+        {googleShown && (
         <div className={`rounded-lg border p-5 ${status?.connected ? 'border-blue-500 bg-slate-800/50' : 'border-slate-600'}`}>
           <div className="flex items-center justify-between gap-2 mb-2">
             <h3 className="font-semibold text-slate-100 text-sm">Google Calendar</h3>
@@ -232,8 +236,6 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
             >
               {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
             </button>
-          ) : status && status.available === false ? (
-            <p className="text-xs text-slate-400">Live two-way Google sync is coming soon. “Add to Google Calendar” already works today and keeps your dates up to date.</p>
           ) : (
             <button
               type="button"
@@ -245,8 +247,9 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
             </button>
           )}
         </div>
+        )}
 
-        <div className={`rounded-lg border border-slate-600 p-5 ${status && status.available === false ? 'order-first border-blue-500 bg-slate-800/50' : ''}`}>
+        <div className={`rounded-lg border border-slate-600 p-5 `}>
           <h3 className="font-semibold text-slate-100 text-sm mb-2">Add to Google, Outlook or Apple Calendar</h3>
           <p className="text-xs text-slate-500 mb-4">
             One click, no sign-in or permissions. Your dates show up and stay current on their own (calendar apps refresh every hour or so, Google can take a few hours).
