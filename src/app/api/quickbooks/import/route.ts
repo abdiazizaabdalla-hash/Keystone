@@ -5,12 +5,18 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { logAudit } from '@/lib/audit';
 import { normName, relayInvoiceNumber, textMentionsDeal } from '@/lib/quickbooks';
+import { getPlanLimits } from '@/lib/plans';
+import { getUserPlan } from '@/lib/privileged';
+import crypto from 'crypto';
 
 // Bring invoices from a QuickBooks export into Relay. The browser reads the file and sends clean rows; nothing is
 // saved until the TC confirms.
 //   mode "preview": match each row to one of THIS TC's agents and an unbilled deal, flag duplicates. Saves nothing.
 //   mode "commit":  re-checks every choice on the server and creates the invoices. Existing invoices are never changed.
-// An invoice in Relay always belongs to a deal (one per deal), so a row with no deal chosen is skipped, not guessed.
+// An invoice in Relay always belongs to an agent and a deal (one invoice per deal). Nothing is skipped for lack of either:
+// a customer that is not an agent yet is created as one (name only, the TC's default fees), and an invoice with no deal gets
+// a small closed "Imported from QuickBooks" deal to hang on. Matches are never guessed: only an exact name/email or an
+// address/file number in the memo links an invoice to something that already exists.
 
 const MAX_ROWS = 500;
 const MAX_AMOUNT = 10_000_000;
@@ -114,9 +120,11 @@ export async function POST(request: NextRequest) {
           else if (hits.length === 0 && open.length === 1 && !r.text) transactionId = null; // never guess from "only one open deal"
         }
         if (transactionId) claimed.add(transactionId);
-        return { ...r, relayNumber, status: agentId && transactionId ? ('ready' as const) : ('needs_match' as const), agentId, transactionId };
+        return { ...r, relayNumber, status: 'ready' as const, agentId, transactionId };
       });
+      const { maxAgents } = getPlanLimits(getUserPlan(user));
       return NextResponse.json({
+        agentSlots: maxAgents === null ? null : Math.max(0, maxAgents - agentList.length),
         rows: preview,
         agents: agentList.map((a) => ({ id: a.id, name: a.name })),
         deals: txList
@@ -137,6 +145,15 @@ export async function POST(request: NextRequest) {
     const configured = tcUser?.user?.user_metadata?.invoice_due_days;
     if (typeof configured === 'number' && Number.isFinite(configured) && configured > 0) dueDays = configured;
 
+    const meta = (tcUser?.user?.user_metadata || {}) as Record<string, unknown>;
+    const defaultFlat = typeof meta.default_flat_fee === 'number' && meta.default_flat_fee >= 0 ? meta.default_flat_fee : 400;
+    const defaultPercent = typeof meta.default_percent_fee === 'number' && meta.default_percent_fee >= 0 ? meta.default_percent_fee : 0;
+    const { maxAgents } = getPlanLimits(getUserPlan(user));
+    const newAgents = new Map<string, string>(); // normalized customer name -> agent id created in this import
+    let agentCount = agentList.length;
+    let createdAgents = 0;
+    let createdDeals = 0;
+
     const created: string[] = [];
     const skipped: { number: string; reason: string }[] = [];
     for (const r of rawRows) {
@@ -153,24 +170,91 @@ export async function POST(request: NextRequest) {
         fail('Amount is not valid');
         continue;
       }
-      const agentId = str(o.agentId, 64);
-      const transactionId = str(o.transactionId, 64);
-      if (!agentIds.has(agentId)) {
-        fail('No agent chosen');
-        continue;
-      }
-      const tx = txById.get(transactionId);
-      if (!tx || tx.agent_id !== agentId) {
-        fail('No deal chosen for that agent');
-        continue;
-      }
-      if (billed.has(transactionId) || usedTx.has(transactionId)) {
-        fail('That deal already has an invoice');
-        continue;
-      }
+      let agentId = str(o.agentId, 64);
+      let transactionId = str(o.transactionId, 64);
+      const customer = str(o.customer, 255);
       if (taken.has(relayNumber.toLowerCase())) {
         fail('Already in Relay');
         continue;
+      }
+
+      // 1) The agent: one of this TC's own, or a new one made from the QuickBooks customer name.
+      if (agentId) {
+        if (!agentIds.has(agentId)) {
+          fail('That agent is not yours');
+          continue;
+        }
+      } else {
+        const wanted = customer || 'Unknown customer';
+        const key = normName(wanted);
+        const existing = agentList.find((a) => normName(a.name as string) === key);
+        if (existing) agentId = existing.id as string;
+        else if (newAgents.has(key)) agentId = newAgents.get(key) as string;
+        else {
+          if (maxAgents !== null && agentCount >= maxAgents) {
+            fail(`Your plan allows ${maxAgents} agent profile${maxAgents === 1 ? '' : 's'}; pick an existing agent for this one, or upgrade`);
+            continue;
+          }
+          const { data: agent, error: agentError } = await supabaseServer
+            .from('agents')
+            .insert({ tc_user_id: user.id, name: wanted, flat_fee: defaultFlat, commission_percent: defaultPercent })
+            .select('id')
+            .single();
+          if (agentError || !agent) {
+            console.error('QuickBooks import: agent insert failed', agentError);
+            fail('Could not create the agent');
+            continue;
+          }
+          agentId = agent.id as string;
+          newAgents.set(key, agentId);
+          agentIds.add(agentId);
+          agentCount += 1;
+          createdAgents += 1;
+          await logAudit(request, user, 'agent.create', { entityType: 'agent', entityId: agentId, metadata: { via: 'quickbooks.import' } });
+        }
+      }
+
+      // 2) The deal: a chosen unbilled one, or a small closed placeholder so the invoice has something to belong to.
+      let placeholderId: string | null = null;
+      if (transactionId) {
+        const tx = txById.get(transactionId);
+        if (!tx || tx.agent_id !== agentId) {
+          fail('That deal does not belong to that agent');
+          continue;
+        }
+        if (billed.has(transactionId) || usedTx.has(transactionId)) {
+          fail('That deal already has an invoice');
+          continue;
+        }
+      } else {
+        const memo = str(o.text, 500);
+        let tx: { id: string } | null = null;
+        for (let attempt = 0; attempt < 3 && !tx; attempt++) {
+          const { data, error } = await supabaseServer
+            .from('transactions')
+            .insert({
+              agent_id: agentId,
+              tc_user_id: user.id,
+              file_number: relayNumber,
+              property_address: memo.slice(0, 300) || 'Imported from QuickBooks',
+              status: 'Closed',
+              inbound_token: crypto.randomBytes(6).toString('hex'),
+            })
+            .select('id')
+            .single();
+          if (!error && data) tx = data as { id: string };
+          else if (error?.code !== '23505') {
+            console.error('QuickBooks import: deal insert failed', error);
+            break;
+          }
+        }
+        if (!tx) {
+          fail('Could not be saved');
+          continue;
+        }
+        transactionId = tx.id;
+        placeholderId = tx.id;
+        createdDeals += 1;
       }
 
       const date = DATE_RE.test(str(o.date, 10)) ? str(o.date, 10) : new Date().toISOString().split('T')[0];
@@ -196,6 +280,10 @@ export async function POST(request: NextRequest) {
       });
       if (error) {
         console.error('QuickBooks import: insert failed', error);
+        if (placeholderId) {
+          await supabaseServer.from('transactions').delete().eq('id', placeholderId);
+          createdDeals -= 1;
+        }
         fail('Could not be saved');
         continue;
       }
@@ -204,8 +292,8 @@ export async function POST(request: NextRequest) {
       created.push(relayNumber);
     }
 
-    await logAudit(request, user, 'quickbooks.import', { entityType: 'import', entityId: 'invoices', metadata: { created: created.length, skipped: skipped.length } });
-    return NextResponse.json({ created: created.length, skipped });
+    await logAudit(request, user, 'quickbooks.import', { entityType: 'import', entityId: 'invoices', metadata: { created: created.length, skipped: skipped.length, agents: createdAgents, deals: createdDeals } });
+    return NextResponse.json({ created: created.length, skipped, createdAgents, createdDeals });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TrialExpiredError) {

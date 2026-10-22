@@ -42,6 +42,9 @@ interface Pick {
   paid: boolean;
 }
 
+// Pick value meaning "make this QuickBooks customer a new agent".
+const NEW_AGENT = '__new__';
+
 const input = 'bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none';
 const card = 'bg-slate-700/50 border border-slate-600 rounded-lg p-6';
 const btnPrimary = 'px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50';
@@ -124,10 +127,11 @@ export default function QuickBooksPage() {
   const [rows, setRows] = useState<PreviewRow[] | null>(null);
   const [agents, setAgents] = useState<AgentOpt[]>([]);
   const [deals, setDeals] = useState<DealOpt[]>([]);
+  const [agentSlots, setAgentSlots] = useState<number | null>(null);
   const [picks, setPicks] = useState<Pick[]>([]);
   const [busy, setBusy] = useState(false);
   const [importError, setImportError] = useState('');
-  const [result, setResult] = useState<{ created: number; skipped: { number: string; reason: string }[] } | null>(null);
+  const [result, setResult] = useState<{ created: number; createdAgents?: number; createdDeals?: number; skipped: { number: string; reason: string }[] } | null>(null);
 
   const reset = () => {
     setFileName('');
@@ -162,10 +166,11 @@ export default function QuickBooksPage() {
       setRows(data.rows);
       setAgents(data.agents);
       setDeals(data.deals);
+      setAgentSlots(typeof data.agentSlots === 'number' ? data.agentSlots : null);
       setPicks(
         (data.rows as PreviewRow[]).map((r) => ({
           include: r.status !== 'duplicate',
-          agentId: r.agentId || '',
+          agentId: r.agentId || NEW_AGENT,
           transactionId: r.transactionId || '',
           paid: r.balance === 0,
         }))
@@ -210,7 +215,15 @@ export default function QuickBooksPage() {
   const setPick = (i: number, patch: Partial<Pick>) => setPicks((prev) => prev.map((p, j) => (j === i ? { ...p, ...patch } : p)));
 
   const chosenDeals = useMemo(() => new Set(picks.filter((p) => p.include && p.transactionId).map((p) => p.transactionId)), [picks]);
-  const ready = rows ? rows.filter((_, i) => picks[i]?.include && picks[i].agentId && picks[i].transactionId) : [];
+  const ready = rows ? rows.filter((_, i) => picks[i]?.include) : [];
+  const newAgentNames = useMemo(() => {
+    const names = new Map<string, string>();
+    (rows || []).forEach((r, i) => {
+      if (picks[i]?.include && picks[i].agentId === NEW_AGENT) names.set((r.customer || 'Unknown customer').trim().toLowerCase(), r.customer || 'Unknown customer');
+    });
+    return [...names.values()];
+  }, [rows, picks]);
+  const standalone = rows ? rows.filter((_, i) => picks[i]?.include && !picks[i].transactionId).length : 0;
 
   const doImport = async () => {
     if (!rows) return;
@@ -219,13 +232,15 @@ export default function QuickBooksPage() {
     try {
       const payload = rows
         .map((r, i) => ({ r, p: picks[i] }))
-        .filter(({ p }) => p?.include && p.agentId && p.transactionId)
+        .filter(({ p }) => p?.include)
         .map(({ r, p }) => ({
           number: r.number,
           amount: r.amount,
           date: r.date,
           due: r.due,
-          agentId: p.agentId,
+          customer: r.customer,
+          text: r.text,
+          agentId: p.agentId === NEW_AGENT ? '' : p.agentId,
           transactionId: p.transactionId,
           paid: p.paid,
           paidDate: r.paid_date,
@@ -254,7 +269,7 @@ export default function QuickBooksPage() {
           </Link>
           <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mt-2 mb-2">QuickBooks</h1>
           <p className="text-slate-400">
-            Move invoices between Relay and QuickBooks Online with files. Nothing connects to QuickBooks and nothing syncs by itself: you download or upload, and you stay in control.
+            Move invoices between Relay and QuickBooks Online with files: you download or upload, and you stay in control. To have new invoices and payments go across automatically, connect QuickBooks in Settings.
           </p>
         </div>
 
@@ -406,15 +421,23 @@ export default function QuickBooksPage() {
                 </button>
               </div>
               <p className="text-xs text-slate-500 mb-3">
-                An invoice in Relay belongs to one deal. Pick the agent and the deal for each line you want in; lines with no deal chosen are left out. Imported invoices are numbered with a QB- prefix.
+                Every invoice is imported. A customer who is not an agent in Relay yet is added as a new agent, and an invoice with no deal is saved on a small closed “Imported from QuickBooks” deal, so you can bring in your history without any setup. If an invoice belongs to an agent or deal you already have, pick it below. Imported invoices are numbered with a QB- prefix.
               </p>
+
+              {(newAgentNames.length > 0 || standalone > 0) && (
+                <p className="text-xs text-blue-300 mb-3">
+                  {newAgentNames.length > 0 && `${newAgentNames.length} new agent${newAgentNames.length === 1 ? '' : 's'} will be added (${newAgentNames.slice(0, 6).join(', ')}${newAgentNames.length > 6 ? '…' : ''}). `}
+                  {standalone > 0 && `${standalone} invoice${standalone === 1 ? '' : 's'} will be saved without a deal.`}
+                  {agentSlots !== null && newAgentNames.length > agentSlots && ` Your plan has room for ${agentSlots} more agent profile${agentSlots === 1 ? '' : 's'}; pick an existing agent for the rest or upgrade.`}
+                </p>
+              )}
 
               <div className="space-y-2">
                 {rows.map((r, i) => {
                   const p = picks[i];
                   if (!p) return null;
                   const dup = r.status === 'duplicate';
-                  const dealOptions = deals.filter((d) => d.agent_id === p.agentId && (!chosenDeals.has(d.id) || d.id === p.transactionId));
+                  const dealOptions = deals.filter((d) => p.agentId !== NEW_AGENT && d.agent_id === p.agentId && (!chosenDeals.has(d.id) || d.id === p.transactionId));
                   return (
                     <div key={`${r.number}-${i}`} className={`rounded-lg border p-3 ${dup ? 'border-slate-700 opacity-60' : 'border-slate-600 bg-slate-800/40'}`}>
                       <div className="flex flex-wrap items-center gap-3">
@@ -429,15 +452,15 @@ export default function QuickBooksPage() {
                         ) : (
                           <>
                             <select value={p.agentId} onChange={(e) => setPick(i, { agentId: e.target.value, transactionId: '' })} className={`${input} flex-1 min-w-[10rem]`}>
-                              <option value="">Choose agent…</option>
+                              <option value={NEW_AGENT}>New agent: {r.customer || 'Unknown customer'}</option>
                               {agents.map((a) => (
                                 <option key={a.id} value={a.id}>
                                   {a.name}
                                 </option>
                               ))}
                             </select>
-                            <select value={p.transactionId} onChange={(e) => setPick(i, { transactionId: e.target.value })} disabled={!p.agentId} className={`${input} flex-[2] min-w-[12rem]`}>
-                              <option value="">{p.agentId ? (dealOptions.length ? 'Choose deal…' : 'No unbilled deals') : 'Choose agent first'}</option>
+                            <select value={p.transactionId} onChange={(e) => setPick(i, { transactionId: e.target.value })} disabled={p.agentId === NEW_AGENT} className={`${input} flex-[2] min-w-[12rem]`}>
+                              <option value="">No deal (invoice only)</option>
                               {dealOptions.map((d) => (
                                 <option key={d.id} value={d.id}>
                                   {d.property_address} ({d.file_number})
@@ -481,7 +504,9 @@ export default function QuickBooksPage() {
           {result && (
             <div className="mt-2 rounded-lg border border-green-700/50 bg-green-900/20 p-4">
               <p className="text-green-300 font-semibold">
-                Imported {result.created} invoice{result.created === 1 ? '' : 's'}.
+                Imported {result.created} invoice{result.created === 1 ? '' : 's'}
+                {result.createdAgents ? `, added ${result.createdAgents} new agent${result.createdAgents === 1 ? '' : 's'}` : ''}
+                {result.createdDeals ? `, and saved ${result.createdDeals} without a deal` : ''}.
               </p>
               {result.skipped.length > 0 && (
                 <ul className="mt-2 text-sm text-slate-300 space-y-0.5">
