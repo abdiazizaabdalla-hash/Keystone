@@ -205,11 +205,12 @@ export async function POST(request: NextRequest) {
             fail(`Your plan allows ${maxAgents} agent profile${maxAgents === 1 ? '' : 's'}; pick an existing agent for this one, or upgrade`);
             continue;
           }
-          const { data: agent, error: agentError } = await supabaseServer
-            .from('agents')
-            .insert({ tc_user_id: user.id, name: wanted, flat_fee: feeByName.get(key) ?? defaultFlat, commission_percent: defaultPercent })
-            .select('id')
-            .single();
+          const agentRow = { tc_user_id: user.id, name: wanted, flat_fee: feeByName.get(key) ?? defaultFlat, commission_percent: defaultPercent };
+          // Tagged "quickbooks" so these can be told apart (add-quickbooks-import-tags.sql); still works before that SQL has been run.
+          let { data: agent, error: agentError } = await supabaseServer.from('agents').insert({ ...agentRow, source: 'quickbooks' }).select('id').single();
+          if (agentError && /source/i.test(agentError.message || '')) {
+            ({ data: agent, error: agentError } = await supabaseServer.from('agents').insert(agentRow).select('id').single());
+          }
           if (agentError || !agent) {
             console.error('QuickBooks import: agent insert failed', agentError);
             fail('Could not create the agent');
@@ -242,19 +243,19 @@ export async function POST(request: NextRequest) {
         const memo = str(o.text, 500);
         let tx: { id: string } | null = null;
         for (let attempt = 0; attempt < 3 && !tx; attempt++) {
-          const { data, error } = await supabaseServer
-            .from('transactions')
-            .insert({
-              agent_id: agentId,
-              tc_user_id: user.id,
-              file_number: relayNumber,
-              property_address: memo.slice(0, 300) || 'Imported from QuickBooks',
-              status: 'Closed',
-              purchase_price: 0,
-              inbound_token: crypto.randomBytes(6).toString('hex'),
-            })
-            .select('id')
-            .single();
+          const dealRow = {
+            agent_id: agentId,
+            tc_user_id: user.id,
+            file_number: relayNumber,
+            property_address: memo.slice(0, 300) || 'Imported from QuickBooks',
+            status: 'Closed',
+            purchase_price: 0,
+            inbound_token: crypto.randomBytes(6).toString('hex'),
+          };
+          let { data, error } = await supabaseServer.from('transactions').insert({ ...dealRow, source: 'quickbooks' }).select('id').single();
+          if (error && /source/i.test(error.message || '')) {
+            ({ data, error } = await supabaseServer.from('transactions').insert(dealRow).select('id').single());
+          }
           if (!error && data) tx = data as { id: string };
           else if (error?.code !== '23505') {
             console.error('QuickBooks import: deal insert failed', error);

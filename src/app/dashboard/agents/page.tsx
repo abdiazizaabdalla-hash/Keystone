@@ -15,6 +15,8 @@ interface Agent {
   phone: string;
   flat_fee: number;
   commission_percent: number;
+  /** 'quickbooks' when the agent was created by a QuickBooks import. */
+  source?: string | null;
 }
 
 interface FormData {
@@ -51,6 +53,7 @@ export default function AgentsPage() {
   const [directory, setDirectory] = useState<DirectoryAgent[]>([]);
   const [selectedDirectoryId, setSelectedDirectoryId] = useState('');
   const [query, setQuery] = useState('');
+  const [source, setSource] = useState<'all' | 'quickbooks'>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggleExpanded = (id: string) =>
@@ -62,16 +65,19 @@ export default function AgentsPage() {
     });
 
   // Name, brokerage, email and phone (digits only, so "555 1234" finds (555) 123-4567 style numbers).
+  const fromQb = (a: Agent) => a.source === 'quickbooks';
+  const qbCount = useMemo(() => agents.filter(fromQb).length, [agents]);
   const visibleAgents = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return agents;
+    const pool = source === 'quickbooks' ? agents.filter(fromQb) : agents;
+    if (!q) return pool;
     const digits = q.replace(/\D/g, '');
-    return agents.filter((a) => {
-      const text = `${a.name} ${a.brokerage || ''} ${a.email || ''}`.toLowerCase();
+    return pool.filter((a) => {
+      const text = `${a.name} ${a.brokerage || ''} ${a.email || ''} ${fromQb(a) ? 'quickbooks' : ''}`.toLowerCase();
       if (text.includes(q)) return true;
       return digits.length >= 3 && (a.phone || '').replace(/\D/g, '').includes(digits);
     });
-  }, [agents, query]);
+  }, [agents, query, source]);
 
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -448,6 +454,22 @@ export default function AgentsPage() {
       ) : (
         <>
           <div className="mb-4 flex flex-wrap items-center gap-3">
+            {qbCount > 0 && (
+              <div className="inline-flex rounded-lg border border-slate-600 bg-slate-800/60 p-0.5" role="tablist" aria-label="Show agents">
+                {([['all', 'All', agents.length], ['quickbooks', 'From QuickBooks', qbCount]] as const).map(([id, label, n]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={source === id}
+                    onClick={() => setSource(id)}
+                    className={`px-3 py-1.5 text-sm rounded-md transition whitespace-nowrap ${source === id ? 'bg-slate-600 text-white font-medium' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    {label} <span className="text-xs opacity-70">{n}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="relative flex-1 min-w-[14rem]">
               <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
@@ -496,7 +518,10 @@ export default function AgentsPage() {
                         {(agent.name[0] || '?').toUpperCase()}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium text-slate-100">{agent.name}</span>
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="truncate font-medium text-slate-100">{agent.name}</span>
+                          {fromQb(agent) && <span className="shrink-0 rounded-full border border-emerald-600/50 bg-emerald-900/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">QuickBooks</span>}
+                        </span>
                         <span className="block truncate text-xs text-slate-400">{agent.brokerage || 'No brokerage'}</span>
                       </span>
                       <span className="hidden sm:inline text-sm text-slate-400">

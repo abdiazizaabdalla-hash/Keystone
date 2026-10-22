@@ -21,7 +21,12 @@ interface Transaction {
   next_due_date?: string | null;
   /** How many incomplete tasks on this deal are already past their due_date. */
   overdue_count?: number;
+  /** 'quickbooks' when the deal was created by a QuickBooks import. */
+  source?: string | null;
 }
+
+// Deals saved by the QuickBooks import (also recognised before the source column exists: closed, named after an invoice number).
+const isQb = (t: Transaction) => t.source === 'quickbooks' || (t.source == null && t.status === 'Closed' && /^(QB|RELAY)-/i.test(t.file_number || ''));
 
 interface Agent {
   id: string;
@@ -36,7 +41,7 @@ export default function TransactionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [view, setView] = useState<'active' | 'attention' | 'closed' | 'all'>('active');
+  const [view, setView] = useState<'active' | 'attention' | 'closed' | 'quickbooks' | 'all'>('active');
   // Which agent groups are folded away, which "Closed" lists are open, and which deals are expanded.
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const [closedOpen, setClosedOpen] = useState<Set<string>>(new Set());
@@ -161,11 +166,14 @@ export default function TransactionsPage() {
     const byAgent = new Map<string, Transaction[]>();
     for (const tx of transactions) {
       const isClosed = tx.status === 'Closed';
+      const qb = isQb(tx);
+      // QuickBooks imports have their own tab; the everyday views leave them out (All shows everything).
+      if (view === 'quickbooks' ? !qb : view !== 'all' && qb) continue;
       if (view === 'active' && isClosed) continue;
       if (view === 'closed' && !isClosed) continue;
       if (view === 'attention' && (isClosed || !(tx.overdue_count && tx.overdue_count > 0))) continue;
       const agentName = agents.get(tx.agent_id) || 'Unknown agent';
-      if (q && !`${agentName} ${tx.property_address || ''} ${tx.file_number || ''} ${tx.status || ''}`.toLowerCase().includes(q)) continue;
+      if (q && !`${agentName} ${tx.property_address || ''} ${tx.file_number || ''} ${tx.status || ''} ${qb ? 'quickbooks' : ''}`.toLowerCase().includes(q)) continue;
       const list = byAgent.get(tx.agent_id) || [];
       list.push(tx);
       byAgent.set(tx.agent_id, list);
@@ -175,14 +183,21 @@ export default function TransactionsPage() {
       .map(([agentId, list]) => {
         const active = list.filter((t) => t.status !== 'Closed').sort((a, b) => dueKey(a).localeCompare(dueKey(b)) || b.created_at.localeCompare(a.created_at));
         const closed = list.filter((t) => t.status === 'Closed').sort((a, b) => (b.closing_date || b.created_at).localeCompare(a.closing_date || a.created_at));
-        return { agentId, name: agents.get(agentId) || 'Unknown agent', active, closed, overdue: active.reduce((n, t) => n + (t.overdue_count || 0), 0) };
+        return { agentId, name: agents.get(agentId) || 'Unknown agent', active, closed, overdue: active.reduce((n, t) => n + (t.overdue_count || 0), 0), qbOnly: list.length > 0 && list.every(isQb) };
       })
       .sort((a, b) => Number(b.active.length > 0) - Number(a.active.length > 0) || a.name.localeCompare(b.name));
   }, [transactions, agents, query, view]);
 
   const totals = useMemo(() => {
-    const active = transactions.filter((t) => t.status !== 'Closed');
-    return { all: transactions.length, active: active.length, closed: transactions.length - active.length, overdue: active.filter((t) => (t.overdue_count || 0) > 0).length };
+    const own = transactions.filter((t) => !isQb(t));
+    const active = own.filter((t) => t.status !== 'Closed');
+    return {
+      all: transactions.length,
+      active: active.length,
+      closed: own.length - active.length,
+      overdue: active.filter((t) => (t.overdue_count || 0) > 0).length,
+      quickbooks: transactions.length - own.length,
+    };
   }, [transactions]);
 
 
@@ -240,7 +255,10 @@ export default function TransactionsPage() {
           <Link href={`/dashboard/transactions/${tx.id}`} className="flex-1 min-w-0 flex items-center gap-3 pl-4 py-3">
             <span className={`h-2 w-2 shrink-0 rounded-full ${statusDot(tx.status)}`} title={tx.status} aria-hidden="true" />
             <span className="min-w-0 flex-1">
-              <span className={`block truncate text-sm font-medium ${closed ? 'text-slate-400' : 'text-slate-100'}`}>{tx.property_address || 'No address'}</span>
+              <span className="flex items-center gap-2 min-w-0">
+                <span className={`truncate text-sm font-medium ${closed ? 'text-slate-400' : 'text-slate-100'}`}>{tx.property_address || 'No address'}</span>
+                {isQb(tx) && <span className="shrink-0 rounded-full border border-emerald-600/50 bg-emerald-900/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">QuickBooks</span>}
+              </span>
               <span className="block truncate text-xs text-slate-500">
                 {tx.status}
                 {tx.file_number ? ` · File ${tx.file_number}` : ''}
@@ -313,6 +331,7 @@ export default function TransactionsPage() {
     { id: 'active', label: 'Active', count: totals.active },
     ...(totals.overdue > 0 ? [{ id: 'attention' as const, label: 'Needs attention', count: totals.overdue }] : []),
     { id: 'closed', label: 'Closed', count: totals.closed },
+    ...(totals.quickbooks > 0 ? [{ id: 'quickbooks' as const, label: 'QuickBooks', count: totals.quickbooks }] : []),
     { id: 'all', label: 'All', count: totals.all },
   ];
 
@@ -393,7 +412,7 @@ export default function TransactionsPage() {
             {groups.length === 0 ? (
               <div className="bg-slate-700/40 border border-slate-600 rounded-lg p-10 text-center">
                 <p className="text-slate-300 font-medium">
-                  {searching ? `Nothing matches “${query.trim()}”` : view === 'attention' ? 'Nothing is overdue.' : view === 'closed' ? 'No closed transactions yet.' : 'No active transactions.'}
+                  {searching ? `Nothing matches “${query.trim()}”` : view === 'attention' ? 'Nothing is overdue.' : view === 'closed' ? 'No closed transactions yet.' : view === 'quickbooks' ? 'Nothing has been imported from QuickBooks.' : 'No active transactions.'}
                 </p>
                 {(searching || view !== 'all') && (
                   <button
@@ -425,6 +444,7 @@ export default function TransactionsPage() {
                           {(g.name[0] || '?').toUpperCase()}
                         </span>
                         <span className="font-semibold text-slate-100 truncate">{g.name}</span>
+                        {g.qbOnly && <span className="shrink-0 rounded-full border border-emerald-600/50 bg-emerald-900/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">QuickBooks</span>}
                         <span className="text-xs text-slate-500">
                           {g.active.length > 0 ? `${g.active.length} active` : ''}
                           {g.active.length > 0 && g.closed.length > 0 ? ' · ' : ''}
