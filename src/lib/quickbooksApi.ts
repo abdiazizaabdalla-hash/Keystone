@@ -183,6 +183,27 @@ export async function ensureServiceItem(c: QbClient): Promise<string> {
 
 // ---- invoices and payments ----
 
+// The main Accounts Receivable account. A company with more than one A/R account (for example a sub-account such as
+// "Allowance for doubtful accounts") could otherwise get invoices posted to the wrong one. Cached for a few minutes;
+// on any problem it returns undefined and QuickBooks uses its own default.
+const arCache = new Map<string, { id: string | undefined; at: number }>();
+export async function findArAccountId(c: QbClient): Promise<string | undefined> {
+  const key = `${c.environment}:${c.realmId}`;
+  const hit = arCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.id;
+  let id: string | undefined;
+  try {
+    const accounts = await query<{ Id: string; Name: string; SubAccount?: boolean; Active?: boolean }>(c, 'Account', "select Id, Name, SubAccount, Active from Account where AccountType = 'Accounts Receivable' MAXRESULTS 20");
+    const top = accounts.filter((a) => a.Active !== false && !a.SubAccount);
+    const best = top.find((a) => /^accounts receivable/i.test(a.Name)) || top[0];
+    id = best?.Id;
+  } catch {
+    id = undefined;
+  }
+  arCache.set(key, { id, at: Date.now() });
+  return id;
+}
+
 export interface QbInvoiceInput {
   docNumber: string;
   customerId: string;
@@ -191,6 +212,7 @@ export interface QbInvoiceInput {
   date: string; // YYYY-MM-DD
   dueDate: string;
   description: string;
+  arAccountId?: string;
   note?: string;
 }
 
@@ -209,6 +231,7 @@ export async function createInvoice(c: QbClient, i: QbInvoiceInput): Promise<str
     TxnDate: i.date,
     DueDate: i.dueDate,
     CustomerRef: { value: i.customerId },
+    ...(i.arAccountId ? { ARAccountRef: { value: i.arAccountId } } : {}),
     PrivateNote: i.note || 'Created by Relay TC',
     Line: [
       {

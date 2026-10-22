@@ -109,7 +109,8 @@ export async function GET(request: NextRequest) {
 
     const { data: invoiceRows, error } = await query;
     if (error) throw error;
-    const invoices = (invoiceRows || []) as InvoiceRow[];
+    // $0 invoices are left out of the files: QuickBooks has nothing to record on them.
+    const invoices = ((invoiceRows || []) as InvoiceRow[]).filter((i) => Number(i.amount_owed) > 0);
 
     if (type === 'count') {
       // The count looks at every invoice in the date range, then reports how many the chosen filter keeps.

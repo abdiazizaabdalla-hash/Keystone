@@ -5,6 +5,7 @@ import {
   QbApiError,
   QbAuthError,
   createInvoice,
+  findArAccountId,
   createPayment,
   ensureServiceItem,
   findInvoiceByNumber,
@@ -168,6 +169,7 @@ export async function syncInvoiceToQuickBooks(invoiceId: string): Promise<SyncRe
             const { data: tx } = await supabaseServer.from('transactions').select('property_address, file_number').eq('id', invoice.transaction_id).maybeSingle();
             if (tx) description = `Transaction coordination fee - ${tx.property_address} (${tx.file_number})`;
           }
+          const arAccountId = await findArAccountId(client);
           qbInvoiceId = await createInvoice(client, {
             docNumber: invoice.invoice_number,
             customerId,
@@ -176,6 +178,7 @@ export async function syncInvoiceToQuickBooks(invoiceId: string): Promise<SyncRe
             date: day(invoice.invoice_date),
             dueDate: day(invoice.due_date),
             description,
+            arAccountId,
           });
         }
       }
