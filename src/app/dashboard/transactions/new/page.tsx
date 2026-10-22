@@ -399,7 +399,8 @@ export default function NewTransactionPage() {
         }
       }
 
-      router.push('/dashboard/transactions');
+      // Straight into the new deal (checklist, documents, dates), not the list of everything.
+      router.push(created?.id ? `/dashboard/transactions/${created.id}` : '/dashboard/transactions');
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
