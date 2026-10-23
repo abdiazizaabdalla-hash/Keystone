@@ -79,6 +79,10 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
         setMessage(
           'Google didn’t grant lasting access this time. Remove Relay TC under your Google Account’s third-party access, then connect again.'
         );
+      } else if (result === 'missing_permission') {
+        setMessage(
+          'Google Calendar wasn’t connected: the “View and edit events on all your calendars” box was not ticked. Connect again and tick that box on Google’s screen before clicking Continue.'
+        );
       } else if (result === 'error') {
         setMessage('Something went wrong connecting Google Calendar. Please try again.');
       }

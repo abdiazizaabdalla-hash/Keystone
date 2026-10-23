@@ -35,6 +35,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=no_refresh_token`);
     }
 
+    // Google's consent screen lets people untick individual permissions. If the calendar one was left
+    // off, the connection would look fine but could never create an event, so refuse it here.
+    const granted = String(tokens.scope || '').split(/\s+/);
+    if (!granted.includes('https://www.googleapis.com/auth/calendar.events')) {
+      return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=missing_permission`);
+    }
+
     const email = await getGoogleUserEmail(tokens.access_token);
 
     const { error: upsertError } = await supabaseServer.from('calendar_connections').upsert(
