@@ -48,7 +48,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
   const [status, setStatus] = useState<GoogleStatus | null>(null);
   const [feed, setFeed] = useState<FeedLinks | null>(null);
   const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState<'connect' | 'disconnect' | 'reset' | null>(null);
+  const [busy, setBusy] = useState<'connect' | 'disconnect' | 'reset' | 'sync' | null>(null);
   const [copied, setCopied] = useState(false);
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [savingPref, setSavingPref] = useState<keyof Prefs | null>(null);
@@ -124,6 +124,24 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
     } catch (err) {
       if (handleAuthError(err)) return;
       setMessage(err instanceof Error ? err.message : 'Error connecting to Google Calendar');
+      setBusy(null);
+    }
+  };
+
+  const syncNow = async () => {
+    setBusy('sync');
+    setMessage('');
+    try {
+      const res = await authFetch('/api/google-calendar/sync', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sync failed');
+      setMessage(data.message || 'Synced.');
+      const fresh = await authFetch('/api/google-calendar/status').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (fresh) setStatus({ connected: Boolean(fresh.connected), email: fresh.email || null, lastSyncedAt: fresh.lastSyncedAt || null, available: fresh.available !== false });
+    } catch (err) {
+      if (handleAuthError(err)) return;
+      setMessage(err instanceof Error ? err.message : 'Sync failed');
+    } finally {
       setBusy(null);
     }
   };
@@ -232,6 +250,15 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
               : 'Relay adds, updates and removes its own events on your primary calendar. It never reads your other events.'}
           </p>
           {status?.connected ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={syncNow}
+                disabled={busy !== null}
+                className="text-sm px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+              >
+                {busy === 'sync' ? 'Syncing…' : 'Sync now'}
+              </button>
             <button
               type="button"
               onClick={disconnect}
@@ -240,6 +267,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
             >
               {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
             </button>
+            </div>
           ) : (
             <button
               type="button"
