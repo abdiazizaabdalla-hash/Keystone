@@ -1,127 +1,112 @@
--- Sample data for the product screenshots, in the aabdiaziz47@gmail.com account ONLY
--- (user id 3853f16c-1775-4324-b0d5-0845eb99ce04). Everything is fictional: example.com emails,
--- made-up addresses and people. Dates are set relative to today, so run it the day you take screenshots.
--- Safe to run more than once: it removes its own earlier sample rows (file numbers starting SMP-,
--- listings whose notes are 'Sample data') and re-creates them. It never touches any other account.
+-- ONE script: wipes the aabdiaziz47@gmail.com account (user id 3853f16c-1775-4324-b0d5-0845eb99ce04) and fills it with clean,
+-- believable sample data for the product screenshots. Fictional people and made-up addresses in one market (Austin, TX area);
+-- example.com emails; every deadline sits in a sensible order after the acceptance date and before closing, relative to TODAY.
 --
--- Run in the Supabase SQL Editor (after add-closing-calendar-events.sql).
+-- WARNING: it permanently deletes that one account's deals, listings, invoices, contacts and agents first. It touches no other account.
+-- Safe to run more than once. Run in the Supabase SQL Editor (after add-closing-calendar-events.sql).
 
 do $$
 declare
   u uuid := '3853f16c-1775-4324-b0d5-0845eb99ce04';
   a_lena uuid; a_marcus uuid; a_ana uuid; a_sam uuid; a_priya uuid;
-  t record; tx uuid; d record; l uuid; n int;
+  t record; tx uuid; d record; l uuid; n int; a int; c int;
   steps text[] := array['Contract & File Setup','Earnest Money & Option','Inspection & Repairs','Title, Appraisal & Financing','Clear to Close','Closing & Post-Closing'];
+  stages text[] := array['Contract Pending','Contract & File Setup','Earnest Money & Option','Inspection & Repairs','Title, Appraisal & Financing','Clear to Close','Closed'];
 begin
-  -- ---------- clean up an earlier run ----------
-  delete from public.invoices where invoice_number like 'SMP-%';
-  delete from public.transactions where tc_user_id = u and file_number like 'SMP-%';
-  delete from public.listings where tc_user_id = u and notes = 'Sample data';
-  delete from public.contacts where tc_user_id = u and source = 'sample';
+  -- ---------- wipe this account ----------
+  delete from public.invoices where transaction_id in (select id from public.transactions where tc_user_id = u);
+  delete from public.transactions where tc_user_id = u;
+  delete from public.listings where tc_user_id = u;
+  delete from public.contacts where tc_user_id = u;
+  delete from public.agents where tc_user_id = u;
 
   -- ---------- agents ----------
-  insert into public.agents (tc_user_id, name, brokerage, commission_percent, email, phone)
-  select u, v.name, v.brokerage, 25, v.email, v.phone
-  from (values
-    ('Lena Park',     'Demo Realty Group',   'lena.park@example.com',   '(555) 010-1101'),
-    ('Marcus Bell',   'Harbor & Co Realty',  'marcus.bell@example.com', '(555) 010-1102'),
-    ('Ana Ortiz',     'Cedar Street Homes',  'ana.ortiz@example.com',   '(555) 010-1103'),
-    ('Sam Whitfield', 'Lakeside Properties', 'sam.whitfield@example.com','(555) 010-1104'),
-    ('Priya Nair',    'Orchard Lane Realty', 'priya.nair@example.com',  '(555) 010-1105')
-  ) as v(name, brokerage, email, phone)
-  where not exists (select 1 from public.agents x where x.tc_user_id = u and x.name = v.name);
+  insert into public.agents (tc_user_id, name, brokerage, commission_percent, email, phone) values
+    (u, 'Lena Park',     'Capital City Realty',    25, 'lena.park@example.com',     '(512) 555-0141'),
+    (u, 'Marcus Bell',   'Lakeline Properties',    25, 'marcus.bell@example.com',   '(512) 555-0142'),
+    (u, 'Ana Ortiz',     'Hill Country Homes',     25, 'ana.ortiz@example.com',     '(512) 555-0143'),
+    (u, 'Sam Whitfield', 'Lakeway Luxury Group',   25, 'sam.whitfield@example.com', '(512) 555-0144'),
+    (u, 'Priya Nair',    'Georgetown Home Co.',    25, 'priya.nair@example.com',    '(512) 555-0145');
+  select id into a_lena   from public.agents where tc_user_id = u and name = 'Lena Park';
+  select id into a_marcus from public.agents where tc_user_id = u and name = 'Marcus Bell';
+  select id into a_ana    from public.agents where tc_user_id = u and name = 'Ana Ortiz';
+  select id into a_sam    from public.agents where tc_user_id = u and name = 'Sam Whitfield';
+  select id into a_priya  from public.agents where tc_user_id = u and name = 'Priya Nair';
 
-  select id into a_lena   from public.agents where tc_user_id = u and name = 'Lena Park'     order by created_at limit 1;
-  select id into a_marcus from public.agents where tc_user_id = u and name = 'Marcus Bell'   order by created_at limit 1;
-  select id into a_ana    from public.agents where tc_user_id = u and name = 'Ana Ortiz'     order by created_at limit 1;
-  select id into a_sam    from public.agents where tc_user_id = u and name = 'Sam Whitfield' order by created_at limit 1;
-  select id into a_priya  from public.agents where tc_user_id = u and name = 'Priya Nair'    order by created_at limit 1;
-
-  -- ---------- transactions, checklists, critical dates ----------
-  -- done = how many checklist steps are complete; a = acceptance offset, c = closing offset (days from today)
+  -- ---------- deals ----------
+  -- a = days from today to the acceptance date; done = checklist steps complete (status follows it); closing = acceptance + 32 days
   for t in
     select * from (values
-      ('SMP-1001', '2218 Magnolia Ridge Lane',   a_lena,   412000, 'Inspection & Repairs',         2,  -9, 22),
-      ('SMP-1002', '905 Harbor View Court',      a_marcus, 689900, 'Title, Appraisal & Financing', 3, -21, 12),
-      ('SMP-1003', '41 Cedar Hollow Road',       a_ana,    355000, 'Contract & File Setup',        1,  -3, 35),
-      ('SMP-1004', '77 Lakeside Avenue',         a_sam,    514000, 'Clear to Close',               4, -32,  6),
-      ('SMP-1005', '1630 Pine Ridge Drive',      a_lena,   298500, 'Contract Pending',             0,   0, 40),
-      ('SMP-1006', '33 Orchard Lane',            a_priya,  447000, 'Contract & File Setup',        1,  -1, 28),
-      ('SMP-1007', '512 Bayview Terrace',        a_marcus, 603000, 'Closed',                       6, -60, -4)
-    ) as v(fn, addr, agent, price, status, done, a, c)
+      ('2026-1001', '2218 Magnolia Ridge Lane, Austin, TX 78704',   a_lena,   412000,  -9, 2),
+      ('2026-1002', '905 Harbor View Court, Austin, TX 78746',      a_marcus, 689900, -21, 3),
+      ('2026-1003', '41 Cedar Hollow Road, Cedar Park, TX 78613',   a_ana,    355000,  -3, 1),
+      ('2026-1004', '77 Lakeside Avenue, Lakeway, TX 78734',        a_sam,    514000, -26, 5),
+      ('2026-1005', '1630 Pine Ridge Drive, Round Rock, TX 78664',  a_lena,   298500,   0, 0),
+      ('2026-1006', '33 Orchard Lane, Georgetown, TX 78628',        a_priya,  447000,  -1, 1),
+      ('2026-0988', '512 Bayview Terrace, Austin, TX 78731',        a_marcus, 603000, -60, 6)
+    ) as v(fn, addr, agent, price, a, done)
   loop
+    a := t.a; c := a + 32;
     insert into public.transactions (tc_user_id, agent_id, file_number, property_address, purchase_price, status, acceptance_date, closing_date)
-    values (u, t.agent, t.fn, t.addr, t.price, t.status, current_date + t.a, current_date + t.c)
+    values (u, t.agent, t.fn, t.addr, t.price, stages[t.done + 1], current_date + a, current_date + c)
     returning id into tx;
 
+    -- checklist: each step has a due date that follows the contract timeline
     for n in 1..6 loop
       insert into public.tasks (transaction_id, name, completed, sort_order, due_date)
       values (tx, steps[n], n <= t.done, n - 1,
-        case n when 1 then current_date + t.a + 2 when 2 then current_date + t.a + 4 when 3 then current_date + t.a + 9
-                 when 4 then current_date + t.a + 18 when 5 then current_date + t.c - 3 else current_date + t.c end);
+        current_date + case n when 1 then a + 2 when 2 then a + 3 when 3 then a + 12 when 4 then a + 25 when 5 then c - 3 else c end);
     end loop;
 
-    if t.fn = 'SMP-1001' then
-      insert into public.transaction_key_dates (transaction_id, kind, label, due_date, completed, source) values
-        (tx,'earnest_money','Earnest money due',current_date - 6,true,'manual'),
-        (tx,'inspection','Inspection deadline',current_date + 3,false,'manual'),
-        (tx,'financing','Financing contingency',current_date + 6,false,'manual'),
-        (tx,'title_commitment','Title commitment due',current_date + 7,false,'manual'),
-        (tx,'appraisal','Appraisal deadline',current_date + 12,false,'manual');
-    elsif t.fn = 'SMP-1002' then
-      insert into public.transaction_key_dates (transaction_id, kind, label, due_date, completed, source) values
-        (tx,'appraisal','Appraisal deadline',current_date + 2,false,'manual'),
-        (tx,'financing','Financing contingency',current_date + 4,false,'manual'),
-        (tx,'title_commitment','Title commitment due',current_date + 5,false,'manual');
-    elsif t.fn = 'SMP-1003' then
-      insert into public.transaction_key_dates (transaction_id, kind, label, due_date, completed, source) values
-        (tx,'earnest_money','Earnest money due',current_date + 1,false,'manual'),
-        (tx,'inspection','Inspection deadline',current_date + 8,false,'manual');
-    elsif t.fn = 'SMP-1004' then
-      insert into public.transaction_key_dates (transaction_id, kind, label, due_date, completed, source) values
-        (tx,'title_commitment','Title commitment due',current_date + 1,false,'manual');
-    elsif t.fn = 'SMP-1005' then
-      insert into public.transaction_key_dates (transaction_id, kind, label, due_date, completed, source) values
-        (tx,'earnest_money','Earnest money due',current_date + 3,false,'manual');
-    elsif t.fn = 'SMP-1006' then
-      insert into public.transaction_key_dates (transaction_id, kind, label, due_date, completed, source) values
-        (tx,'inspection','Inspection deadline',current_date + 6,false,'manual');
-    end if;
+    -- critical dates in contract order; anything already past is marked done
+    insert into public.transaction_key_dates (transaction_id, kind, label, due_date, completed, source)
+    select tx, k.kind, k.label, current_date + a + k.off, (a + k.off) < 0, 'manual'
+    from (values
+      ('earnest_money',    'Earnest money due',      3),
+      ('inspection',       'Inspection deadline',   12),
+      ('appraisal',        'Appraisal deadline',    19),
+      ('financing',        'Financing contingency', 22),
+      ('title_commitment', 'Title commitment due',  25)
+    ) as k(kind, label, off);
+    insert into public.transaction_key_dates (transaction_id, kind, label, due_date, completed, source)
+    values (tx, 'custom', 'Final walkthrough', current_date + c - 1, (c - 1) < 0, 'manual');
 
-    -- invoices: the closed deal is paid, two open deals are waiting
-    if t.fn in ('SMP-1007','SMP-1004','SMP-1002') then
+    -- invoices: the closed deal is paid; two open deals are waiting
+    if t.fn in ('2026-0988', '2026-1004', '2026-1002') then
       insert into public.invoices (agent_id, transaction_id, amount_owed, invoice_number, invoice_date, due_date, paid, paid_at, paid_amount, sent_at, sent_to)
-      values (t.agent, tx, case t.fn when 'SMP-1002' then 450 else 400 end, 'SMP-INV-' || right(t.fn, 4),
-              now() - interval '20 days', current_date + case t.fn when 'SMP-1007' then -10 else 10 end,
-              t.fn = 'SMP-1007', case when t.fn = 'SMP-1007' then now() - interval '5 days' end,
-              case when t.fn = 'SMP-1007' then 400 end, now() - interval '20 days',
+      values (t.agent, tx, case t.fn when '2026-1002' then 450 else 400 end, 'INV-' || right(t.fn, 4),
+              now() - interval '12 days', current_date + case t.fn when '2026-0988' then -2 else 18 end,
+              t.fn = '2026-0988', case when t.fn = '2026-0988' then now() - interval '6 days' end,
+              case when t.fn = '2026-0988' then 400 end, now() - interval '12 days',
               (select email from public.agents where id = t.agent));
     end if;
   end loop;
 
   -- ---------- listings ----------
+  -- 1) preparing: checklist runs up to a go-live date two weeks out
   insert into public.listings (tc_user_id, agent_id, property_address, seller_name, seller_email, list_price, planned_list_date, expiration_date, mls_number, status, notes)
-  values (u, a_lena, '718 Willow Creek Lane', 'Jordan & Priya Shah', 'shah.family@example.com', 529000, current_date + 14, current_date + 104, null, 'preparing', 'Sample data')
+  values (u, a_lena, '718 Willow Creek Lane, Austin, TX 78759', 'Jordan & Priya Shah', 'shah.family@example.com', 529000, current_date + 14, current_date + 194, null, 'preparing', null)
   returning id into l;
   n := 0;
   for d in select * from (values
-      ('Listing agreement signed', true,  -10), ('Seller disclosures collected', true, -6), ('Photographer booked', true, -4),
-      ('Pre-listing inspection ordered', true, -2), ('Lockbox and signage', true, 0),
-      ('Professional photos delivered', false, 4), ('MLS description approved', false, 8),
-      ('Price review with seller', false, 11), ('Go live on MLS', false, 14)) as v(name, done, off)
+      ('Listing agreement signed',        true,  -12), ('Seller disclosures collected', true,  -8), ('Photographer booked',           true,  -5),
+      ('Pre-listing inspection ordered',  true,  -2),  ('Lockbox and signage',          true,   0),
+      ('Professional photos delivered',   false,  4),  ('MLS description approved',     false,  8),
+      ('Price review with seller',        false, 11),  ('Go live on MLS',               false, 14)) as v(name, done, off)
   loop
     n := n + 1;
     insert into public.listing_tasks (listing_id, name, due_date, completed, sort_order) values (l, d.name, current_date + d.off, d.done, n);
   end loop;
   insert into public.listing_dates (listing_id, label, due_date) values (l, 'Open house', current_date + 17), (l, 'Price review', current_date + 21);
 
+  -- 2) active, listed 10 days ago, with offers and showings
   insert into public.listings (tc_user_id, agent_id, property_address, seller_name, seller_email, list_price, planned_list_date, expiration_date, mls_number, status, notes)
-  values (u, a_marcus, '1204 Sycamore Drive', 'Elena Rossi', 'elena.rossi@example.com', 639000, current_date - 10, current_date + 80, 'MLS-2048817', 'active', 'Sample data')
+  values (u, a_marcus, '1204 Sycamore Drive, Cedar Park, TX 78613', 'Elena Rossi', 'elena.rossi@example.com', 639000, current_date - 10, current_date + 170, 'MLS-2048817', 'active', null)
   returning id into l;
   n := 0;
   for d in select * from (values
-      ('Listing agreement signed', true, -20), ('Photos and virtual tour', true, -14), ('Go live on MLS', true, -10),
-      ('First weekend of showings', true, -7), ('Seller update call', false, 2), ('Review offers with seller', false, 6)) as v(name, done, off)
+      ('Listing agreement signed',    true, -24), ('Photos and virtual tour',    true, -16), ('Go live on MLS',            true, -10),
+      ('First weekend of showings',   true,  -7), ('Seller update call',         false,  2), ('Review offers with seller', false,  4)) as v(name, done, off)
   loop
     n := n + 1;
     insert into public.listing_tasks (listing_id, name, due_date, completed, sort_order) values (l, d.name, current_date + d.off, d.done, n);
@@ -131,12 +116,13 @@ begin
     (l, 'M. Alvarez',  'Dana Cole',  628000, 'Conventional, 30-day close, inspection contingency.', 'countered', current_date - 3),
     (l, 'T. & R. Kim', 'Ravi Menon', 641500, 'Cash, 21-day close, no appraisal contingency.',        'received',  current_date - 1);
   insert into public.listing_showings (listing_id, showing_date, kind, visitor, interest, feedback) values
-    (l, current_date - 8, 'open_house', '14 groups',     'warm', 'Loved the kitchen; several asked about the school zone.'),
-    (l, current_date - 5, 'showing',    'Buyer agent Cole', 'hot',  'Second showing requested for this weekend.'),
-    (l, current_date - 2, 'showing',    'Buyer agent Menon','hot',  'Writing an offer tonight.');
+    (l, current_date - 8, 'open_house', '14 groups',        'warm', 'Loved the kitchen; several asked about the school zone.'),
+    (l, current_date - 5, 'showing',    'Dana Cole',        'hot',  'Second showing requested for this weekend.'),
+    (l, current_date - 2, 'showing',    'Ravi Menon',       'hot',  'Writing an offer tonight.');
 
+  -- 3) under offer: accepted offer, option period still running
   insert into public.listings (tc_user_id, agent_id, property_address, seller_name, seller_email, list_price, planned_list_date, expiration_date, mls_number, status, notes)
-  values (u, a_ana, '88 Heron Point Road', 'Walter & June Bishop', 'bishop.wj@example.com', 775000, current_date - 24, current_date + 66, 'MLS-2047102', 'under_offer', 'Sample data')
+  values (u, a_ana, '88 Heron Point Road, Lakeway, TX 78734', 'Walter & June Bishop', 'bishop.wj@example.com', 775000, current_date - 24, current_date + 156, 'MLS-2047102', 'under_offer', null)
   returning id into l;
   insert into public.listing_tasks (listing_id, name, due_date, completed, sort_order) values
     (l, 'Listing agreement signed', current_date - 30, true, 1), (l, 'Go live on MLS', current_date - 24, true, 2), (l, 'Accepted offer: send to title', current_date + 1, false, 3);
@@ -146,15 +132,15 @@ begin
 
   -- ---------- contacts ----------
   insert into public.contacts (tc_user_id, name, email, phone, company, role, source) values
-    (u, 'Hannah Reyes', 'hannah.reyes@example.com', '(555) 010-2201', 'Northshore Title',  'Title / escrow', 'sample'),
-    (u, 'Colin Brooks', 'colin.brooks@example.com', '(555) 010-2202', 'First Harbor Lending','Lender',        'sample'),
-    (u, 'Tamara Singh', 'tamara.singh@example.com', '(555) 010-2203', 'Pillar Inspections', 'Inspector',      'sample'),
-    (u, 'Gabe Lindqvist','gabe.l@example.com',      '(555) 010-2204', 'Lindqvist Appraisal','Appraiser',      'sample');
+    (u, 'Hannah Reyes',   'hannah.reyes@example.com', '(512) 555-0161', 'Northshore Title',     'Title / escrow', 'manual'),
+    (u, 'Colin Brooks',   'colin.brooks@example.com', '(512) 555-0162', 'First Harbor Lending', 'Lender',         'manual'),
+    (u, 'Tamara Singh',   'tamara.singh@example.com', '(512) 555-0163', 'Pillar Inspections',   'Inspector',      'manual'),
+    (u, 'Gabe Lindqvist', 'gabe.l@example.com',       '(512) 555-0164', 'Lindqvist Appraisal',  'Appraiser',      'manual');
 end $$;
 
 notify pgrst, 'reload schema';
 
-select 'deals' as what, count(*) from public.transactions where tc_user_id = '3853f16c-1775-4324-b0d5-0845eb99ce04' and file_number like 'SMP-%'
-union all select 'listings', count(*) from public.listings where tc_user_id = '3853f16c-1775-4324-b0d5-0845eb99ce04' and notes = 'Sample data'
-union all select 'invoices', count(*) from public.invoices where invoice_number like 'SMP-%'
-union all select 'contacts', count(*) from public.contacts where tc_user_id = '3853f16c-1775-4324-b0d5-0845eb99ce04' and source = 'sample';
+select 'deals' as what, count(*) from public.transactions where tc_user_id = '3853f16c-1775-4324-b0d5-0845eb99ce04'
+union all select 'listings', count(*) from public.listings where tc_user_id = '3853f16c-1775-4324-b0d5-0845eb99ce04'
+union all select 'invoices', count(*) from public.invoices i join public.transactions t on t.id = i.transaction_id where t.tc_user_id = '3853f16c-1775-4324-b0d5-0845eb99ce04'
+union all select 'agents', count(*) from public.agents where tc_user_id = '3853f16c-1775-4324-b0d5-0845eb99ce04';
