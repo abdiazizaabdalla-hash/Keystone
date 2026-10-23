@@ -121,16 +121,21 @@ function nextDay(isoDate: string): string {
   return d.toISOString().split('T')[0];
 }
 
-function eventBody(event: CalendarEventInput) {
-  return {
+function eventBody(event: CalendarEventInput, forUpdate = false) {
+  const body: Record<string, unknown> = {
     summary: event.summary,
     description: event.description,
     start: { date: event.dueDate },
     end: { date: nextDay(event.dueDate) },
-    // Relay only ever creates/updates/deletes events it made itself; this marks them so they are easy to recognize.
-    source: { title: 'Relay TC', url: 'https://www.relaytc.com' },
-    reminders: { useDefault: true },
   };
+  // Relay only ever creates/updates/deletes events it made itself; this marks them so they are easy to recognize.
+  // Reminders and source are set only when the event is created: re-sending reminders on an update makes
+  // Google reject it ("cannot specify both default reminders and overrides"), so edits leave them as they are.
+  if (!forUpdate) {
+    body.source = { title: 'Relay TC', url: 'https://www.relaytc.com' };
+    body.reminders = { useDefault: true };
+  }
+  return body;
 }
 
 /** Creates an all-day event on the connected TC's primary calendar. Returns the new event's id, to store on the task row so future syncs update it instead of creating a duplicate. */
@@ -159,7 +164,7 @@ export async function updateCalendarEvent(
   const response = await fetch(`${GOOGLE_CALENDAR_API_BASE}/${encodeURIComponent(eventId)}`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(eventBody(event)),
+    body: JSON.stringify(eventBody(event, true)),
   });
 
   if (response.ok) return;
