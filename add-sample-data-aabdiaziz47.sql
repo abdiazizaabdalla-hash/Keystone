@@ -38,7 +38,7 @@ begin
   for t in
     select * from (values
       ('2026-1001', '2218 Magnolia Ridge Lane, Austin, TX 78704',   a_lena,   412000,  -9, 2),
-      ('2026-1002', '905 Harbor View Court, Austin, TX 78746',      a_marcus, 689900, -21, 3),
+      ('2026-1002', '905 Harbor View Court, Austin, TX 78746',      a_marcus, 689900, -21, 4),
       ('2026-1003', '41 Cedar Hollow Road, Cedar Park, TX 78613',   a_ana,    355000,  -3, 1),
       ('2026-1004', '77 Lakeside Avenue, Lakeway, TX 78734',        a_sam,    514000, -26, 5),
       ('2026-1005', '1630 Pine Ridge Drive, Round Rock, TX 78664',  a_lena,   298500,   0, 0),
@@ -47,8 +47,8 @@ begin
     ) as v(fn, addr, agent, price, a, done)
   loop
     a := t.a; c := a + 32;
-    insert into public.transactions (tc_user_id, agent_id, file_number, property_address, purchase_price, status, acceptance_date, closing_date)
-    values (u, t.agent, t.fn, t.addr, t.price, stages[t.done + 1], current_date + a, current_date + c)
+    insert into public.transactions (tc_user_id, agent_id, file_number, property_address, purchase_price, status, acceptance_date, closing_date, inbound_token)
+    values (u, t.agent, t.fn, t.addr, t.price, stages[t.done + 1], current_date + a, current_date + c, lower(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)))
     returning id into tx;
 
     -- checklist: each step has a due date that follows the contract timeline
