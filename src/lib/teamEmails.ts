@@ -51,10 +51,10 @@ export async function sendTeamRemovedEmail(params: {
   const { toEmail, ownerLabel, appUrl } = params;
   const html = wrapper(
     "You've been removed from a team",
-    `<p><strong>${escapeHtml(ownerLabel)}</strong> removed you from their team on Relay TC. Your account has been
-     moved to the Starter plan, so you'll keep your own data, but any Team-plan features and access to
-     that team's workspace are no longer available.</p>
-     <p><a href="${appUrl}/dashboard/account" style="color: #b45309;">Review your plan</a></p>`
+    `<p><strong>${escapeHtml(ownerLabel)}</strong> removed you from their team on Relay TC, so your account has been
+     deactivated and you can no longer sign in. Nothing was deleted: your deals and data are kept, and
+     <strong>${escapeHtml(ownerLabel)}</strong> can turn your account back on by inviting you to the team again.</p>
+     <p><a href="${appUrl}" style="color: #b45309;">Relay TC</a></p>`
   );
 
   const resend = getResendClient();

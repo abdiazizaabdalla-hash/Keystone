@@ -56,7 +56,13 @@ export async function getUserFromRequest(request: NextRequest, options: { allowA
   // refreshes on Supabase's side.
   const bannedUntil = (user as unknown as { banned_until?: string | null }).banned_until;
   if (bannedUntil && new Date(bannedUntil) > new Date()) {
-    throw new AuthError('This account has been suspended. Contact support.', 401);
+    const deactivatedByTeam = typeof (user.app_metadata as { team_deactivated_by?: unknown } | null)?.team_deactivated_by === 'string';
+    throw new AuthError(
+      deactivatedByTeam
+        ? 'Your account was deactivated when you were removed from a team. Ask the team owner to invite you again.'
+        : 'This account has been suspended. Contact support.',
+      401
+    );
   }
 
   if (!options.allowAal1) {

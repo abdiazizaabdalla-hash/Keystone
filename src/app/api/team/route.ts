@@ -15,6 +15,9 @@ import {
   createInvite,
   addMemberToTeam,
   removeMemberFromTeam,
+  deactivateTeamMember,
+  reactivateTeamMember,
+  getTeamDeactivatedBy,
   findUserIdByEmail,
   getPaidSeatCount,
   addPaidSeat,
@@ -231,6 +234,10 @@ export async function POST(request: NextRequest) {
     // Look at the invitee BEFORE charging for a seat, so a rejected add
     // never costs the owner money.
     const existingUserId = await findUserIdByEmail(email);
+    // Someone THIS owner removed earlier: their account was deactivated, not deleted. Re-inviting
+    // them switches it back on and restores their own data, so the "account already has data" rule
+    // below does not apply to them.
+    let reactivating = false;
     if (existingUserId) {
       if (existingUserId === user.id) {
         return NextResponse.json({ error: "You're already on this team." }, { status: 409 });
@@ -238,6 +245,16 @@ export async function POST(request: NextRequest) {
       if (await getTeamForUser(existingUserId)) {
         return NextResponse.json({ error: 'That person is already on a team.' }, { status: 409 });
       }
+      const deactivatedBy = await getTeamDeactivatedBy(existingUserId);
+      if (deactivatedBy && deactivatedBy !== user.id) {
+        return NextResponse.json(
+          { error: 'That account was deactivated by a different team owner, so it cannot be added here.' },
+          { status: 409 }
+        );
+      }
+      reactivating = deactivatedBy === user.id;
+    }
+    if (existingUserId && !reactivating) {
       // Adding someone puts their agents, transactions and documents in
       // the owner's view and replaces their plan. That's only OK for an
       // account with nothing of its own yet (e.g. a teammate who signed
@@ -283,6 +300,7 @@ export async function POST(request: NextRequest) {
     const appUrl = request.nextUrl.origin;
 
     if (existingUserId) {
+      if (reactivating) await reactivateTeamMember(existingUserId);
       await addMemberToTeam(membership.team.id, existingUserId, 'member');
       // Grant the SAME plan id as the team owner -- 'team' or
       // 'brokerage' -- not a hardcoded 'team', since the caller here (an
@@ -377,6 +395,9 @@ export async function DELETE(request: NextRequest) {
     // retry the removal (setUserPlan is a plain overwrite, idempotent
     // either way).
     await setUserPlan(targetUserId, 'starter');
+    // Switch the account off (cannot sign in) BEFORE removing the membership row, so a failure here
+    // aborts the removal and the owner can simply retry. The owner can re-invite the same email later.
+    await deactivateTeamMember(targetUserId, user.id);
     await removeMemberFromTeam(membership.team.id, targetUserId);
 
     try {

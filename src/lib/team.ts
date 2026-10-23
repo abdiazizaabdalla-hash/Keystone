@@ -1,4 +1,5 @@
 import { supabaseServer } from './supabase';
+import { mergeAppMetadata } from './privileged';
 import { stripe } from './stripe';
 import { getStripeCustomerByUserId } from './stripeCustomers';
 import { getPlan, type PlanId } from './plans';
@@ -305,4 +306,29 @@ export async function dissolveTeamMembership(
   } else {
     await removeMemberFromTeam(membership.team.id, userId);
   }
+}
+
+// A person removed from a team is DEACTIVATED, not quietly dropped to Starter: they cannot sign in
+// (same indefinite ban the admin Suspend button uses; getUserFromRequest rejects banned accounts on
+// every request), their data is kept, and the owner who removed them can re-invite the same email to
+// switch the account back on. `team_deactivated_by` in app_metadata (server-only) records which owner.
+const INDEFINITE_BAN = '876000h';
+
+export async function deactivateTeamMember(userId: string, ownerId: string): Promise<void> {
+  await mergeAppMetadata(userId, { team_deactivated_by: ownerId });
+  const { error } = await supabaseServer.auth.admin.updateUserById(userId, { ban_duration: INDEFINITE_BAN });
+  if (error) throw error;
+}
+
+export async function reactivateTeamMember(userId: string): Promise<void> {
+  const { error } = await supabaseServer.auth.admin.updateUserById(userId, { ban_duration: 'none' });
+  if (error) throw error;
+  await mergeAppMetadata(userId, { team_deactivated_by: null });
+}
+
+/** The owner who deactivated this account by removing it from their team, if that is why it is switched off. */
+export async function getTeamDeactivatedBy(userId: string): Promise<string | null> {
+  const { data } = await supabaseServer.auth.admin.getUserById(userId);
+  const by = data?.user?.app_metadata?.team_deactivated_by;
+  return typeof by === 'string' ? by : null;
 }
