@@ -104,7 +104,7 @@ export default function KeyDatesPanel({
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [cal, setCal] = useState<{ ownerConnected: boolean; agents: { userId: string; email: string | null; connected: boolean }[]; agentNeedsInvite: boolean } | null>(null);
+  const [cal, setCal] = useState<{ available: boolean; ownerConnected: boolean; agents: { userId: string; email: string | null; connected: boolean; canConnect: boolean }[]; agentNeedsInvite: boolean } | null>(null);
   const [calBusy, setCalBusy] = useState<'sync' | 'invite' | null>(null);
   const [calMsg, setCalMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -267,7 +267,7 @@ export default function KeyDatesPanel({
           : 'Contract deadlines. You\u2019ll get a reminder 7, 3 and 1 days before, and daily once overdue.'}
       </p>
 
-      {manageCalendar && cal && (
+      {manageCalendar && cal && cal.available && (
         <div className="mb-3 p-3 bg-slate-700/30 border border-slate-600 rounded-lg">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-slate-300">
@@ -289,7 +289,7 @@ export default function KeyDatesPanel({
                   {calBusy === 'sync' ? 'Syncing…' : 'Sync dates to calendars now'}
                 </button>
               )}
-              {cal.agents.some((a) => !a.connected && a.email) && (
+              {cal.agents.some((a) => !a.connected && a.canConnect && a.email) && (
                 <button
                   type="button"
                   onClick={sendCalendarLink}

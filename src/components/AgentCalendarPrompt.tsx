@@ -26,7 +26,7 @@ export default function AgentCalendarPrompt() {
         const res = await authFetch('/api/google-calendar/status');
         if (!res.ok) return;
         const data = await res.json();
-        if (!data.connected) setShow(true);
+        if (!data.connected && data.available) setShow(true);
       } catch {
         // Cosmetic prompt only: stay hidden on any error.
       }

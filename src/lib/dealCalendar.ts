@@ -1,12 +1,17 @@
 import { supabaseServer } from '@/lib/supabase';
+import { googleCalendarAvailableFor } from '@/lib/googleCalendarAccess';
 
 export interface DealCalendarAgent {
   userId: string;
   email: string | null;
   connected: boolean;
+  /** Already connected, or on the Google Calendar allowlist (the connect button is hidden for everyone else until Google approves the app). */
+  canConnect: boolean;
 }
 
 export interface DealCalendarStatus {
+  /** False while Google verification is pending and this owner is not on the allowlist: the whole feature stays hidden. */
+  available: boolean;
   ownerConnected: boolean;
   agents: DealCalendarAgent[];
   /** The deal's agent record has no Relay login yet (they have not accepted the invite). */
@@ -14,7 +19,7 @@ export interface DealCalendarStatus {
 }
 
 /** Who on this deal has a connected Google Calendar. Only the deal's owner should be shown this (callers check). */
-export async function getDealCalendarStatus(transactionId: string, ownerId: string): Promise<DealCalendarStatus> {
+export async function getDealCalendarStatus(transactionId: string, ownerId: string, ownerEmail: string | null | undefined): Promise<DealCalendarStatus> {
   const [{ data: links }, { data: ownerConn }, { data: tx }] = await Promise.all([
     supabaseServer.from('transaction_agents').select('agent_user_id').eq('transaction_id', transactionId),
     supabaseServer.from('calendar_connections').select('tc_user_id').eq('tc_user_id', ownerId).eq('provider', 'google').maybeSingle(),
@@ -35,7 +40,8 @@ export async function getDealCalendarStatus(transactionId: string, ownerId: stri
     } catch {
       email = null;
     }
-    agents.push({ userId, email, connected: connected.has(userId) });
+    agents.push({ userId, email, connected: connected.has(userId), canConnect: connected.has(userId) || googleCalendarAvailableFor(email) });
   }
-  return { ownerConnected: Boolean(ownerConn), agents, agentNeedsInvite: ids.length === 0 && Boolean(tx?.agent_id) };
+  const ownerConnected = Boolean(ownerConn);
+  return { available: ownerConnected || googleCalendarAvailableFor(ownerEmail), ownerConnected, agents, agentNeedsInvite: ids.length === 0 && Boolean(tx?.agent_id) };
 }

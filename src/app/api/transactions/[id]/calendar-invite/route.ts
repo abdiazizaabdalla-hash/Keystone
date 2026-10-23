@@ -21,10 +21,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'You already sent this a few times. Try again in an hour.' }, { status: 429 });
     }
 
-    const status = await getDealCalendarStatus(id, user.id);
-    const targets = status.agents.filter((a) => !a.connected && a.email);
+    const status = await getDealCalendarStatus(id, user.id, user.email);
+    if (!status.available) return NextResponse.json({ error: 'Direct Google Calendar sync is not available yet.' }, { status: 403 });
+    const targets = status.agents.filter((a) => !a.connected && a.canConnect && a.email);
     if (targets.length === 0) {
-      return NextResponse.json({ error: status.agents.length ? 'Every agent on this deal already has a calendar connected.' : 'This agent has not accepted their Relay TC invite yet, so there is no login to send the calendar link to. Invite them to the deal first.' }, { status: 400 });
+      return NextResponse.json({ error: status.agents.length ? 'No agent on this deal can connect a Google Calendar right now.' : 'This agent has not accepted their Relay TC invite yet, so there is no login to send the calendar link to. Invite them to the deal first.' }, { status: 400 });
     }
 
     const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';

@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const r = await loadOwnedDeal(request, id);
     if ('error' in r) return r.error;
-    return NextResponse.json(await getDealCalendarStatus(id, r.user.id));
+    return NextResponse.json(await getDealCalendarStatus(id, r.user.id, r.user.email));
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error('Calendar status failed:', error);
@@ -39,11 +39,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const r = await loadOwnedDeal(request, id);
     if ('error' in r) return r.error;
+    const before = await getDealCalendarStatus(id, r.user.id, r.user.email);
+    if (!before.available) return NextResponse.json({ error: 'Direct Google Calendar sync is not available yet.' }, { status: 403 });
     if (!(await checkRateLimit(`deal-calendar-sync:${r.user.id}`, 20, 10 * 60))) {
       return NextResponse.json({ error: 'Too many syncs. Try again in a few minutes.' }, { status: 429 });
     }
     await syncTransactionCalendar(id);
-    const status = await getDealCalendarStatus(id, r.user.id);
+    const status = await getDealCalendarStatus(id, r.user.id, r.user.email);
     return NextResponse.json({ ok: true, ...status });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
