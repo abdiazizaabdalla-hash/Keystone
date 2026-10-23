@@ -269,16 +269,12 @@ export async function findUserIdByEmail(email: string): Promise<string | null> {
 }
 
 /**
- * The set of tc_user_ids whose agents/transactions a given user should see.
- * Team owners see their whole team's data; everyone else (including
- * regular team members) sees only their own — team members deliberately do
- * NOT see each other's pipeline, only the roster (see /api/team).
+ * The set of tc_user_ids whose agents/transactions/listings/contacts a given user should see.
+ * Always just the user themselves: every account's data stays private to that account, including
+ * for team owners (the team feature is the roster, billing and messaging -- not a shared pipeline).
+ * Every list/detail route goes through here, so this one rule keeps accounts from crossing.
  */
 export async function getVisibleTcUserIds(userId: string): Promise<string[]> {
-  const membership = await getTeamForUser(userId);
-  if (membership && membership.role === 'owner') {
-    return getTeamMemberUserIds(membership.team.id);
-  }
   return [userId];
 }
 
