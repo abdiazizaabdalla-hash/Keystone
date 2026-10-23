@@ -120,7 +120,7 @@ export async function syncTransactionCalendar(transactionId: string, options: { 
   try {
     const { data: tx } = await supabaseServer
       .from('transactions')
-      .select('id, file_number, property_address, agent_id, tc_user_id')
+      .select('id, file_number, property_address, agent_id, tc_user_id, closing_date, status')
       .eq('id', transactionId)
       .maybeSingle();
     if (!tx) return;
@@ -160,6 +160,7 @@ export async function syncTransactionCalendar(transactionId: string, options: { 
 
       const prefs = await getCalendarPrefs(userId);
       await syncKeyDatesForUser(accessToken, userId, label, dates, mappings, prefs);
+      await syncClosingForUser(accessToken, userId, transactionId, label, tx, dates, prefs);
       // Best effort: the column comes from add-calendar-sync.sql; an error here (not run yet) is ignored.
       await supabaseServer
         .from('calendar_connections')
@@ -224,6 +225,69 @@ export function queueBackfillUserCalendar(userId: string): void {
     after(() => backfillUserCalendar(userId));
   } catch {
     void backfillUserCalendar(userId);
+  }
+}
+
+/**
+ * The deal's closing day (transactions.closing_date) is shown on the deal as "Closing" but is not a
+ * row in transaction_key_dates, so it needs its own event. Skipped when a real "closing" key date
+ * exists (that one is synced above), when the deal is closed, or when the date has passed.
+ * Event ids live in transaction_closing_events (add-closing-calendar-events.sql); until that table
+ * exists this quietly does nothing.
+ */
+async function syncClosingForUser(
+  accessToken: string,
+  userId: string,
+  transactionId: string,
+  label: string,
+  tx: { closing_date?: string | null; status?: string | null },
+  dates: KeyDateRow[],
+  prefs: CalendarPrefs
+): Promise<void> {
+  try {
+    const { data: existing, error } = await supabaseServer
+      .from('transaction_closing_events')
+      .select('google_event_id')
+      .eq('transaction_id', transactionId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) return;
+
+    const hasClosingKeyDate = dates.some((d) => d.kind === 'closing');
+    const closing = tx.closing_date || null;
+    const wanted = Boolean(prefs.closing_date && closing && closing >= todayIso() && tx.status !== 'Closed' && !hasClosingKeyDate);
+
+    if (!wanted) {
+      if (existing) {
+        try {
+          await deleteCalendarEvent(accessToken, existing.google_event_id as string);
+        } catch (e) {
+          console.error('Failed to delete closing-day event (non-fatal):', e);
+        }
+        await supabaseServer.from('transaction_closing_events').delete().eq('transaction_id', transactionId).eq('user_id', userId);
+      }
+      return;
+    }
+
+    const input: CalendarEventInput = {
+      summary: `Closing — ${label}`,
+      description: `Closing day for ${label}, from Relay TC.`,
+      dueDate: closing as string,
+    };
+    if (existing) {
+      try {
+        await updateCalendarEvent(accessToken, existing.google_event_id as string, input);
+        return;
+      } catch (e) {
+        if (!(e instanceof CalendarEventNotFoundError)) throw e;
+      }
+    }
+    const eventId = await createCalendarEvent(accessToken, input);
+    await supabaseServer
+      .from('transaction_closing_events')
+      .upsert({ transaction_id: transactionId, user_id: userId, google_event_id: eventId }, { onConflict: 'transaction_id,user_id' });
+  } catch (error) {
+    console.error(`Failed to sync closing day for ${transactionId} / ${userId} (non-fatal):`, error);
   }
 }
 
@@ -354,6 +418,21 @@ export async function removeTransactionCalendarEvents(transactionId: string): Pr
 
     const { data: dates } = await supabaseServer.from('transaction_key_dates').select('id').eq('transaction_id', transactionId);
     for (const d of dates || []) await removeKeyDateCalendarEvents(d.id as string);
+
+    // Closing-day events (one per person who has it on their calendar).
+    const { data: closingRows } = await supabaseServer
+      .from('transaction_closing_events')
+      .select('user_id, google_event_id')
+      .eq('transaction_id', transactionId);
+    for (const row of closingRows || []) {
+      const token = await getAccessTokenFor(row.user_id as string);
+      if (!token) continue;
+      try {
+        await deleteCalendarEvent(token, row.google_event_id as string);
+      } catch (e) {
+        console.error('Failed to delete closing-day event (non-fatal):', e);
+      }
+    }
 
     const ownerId = tx ? await getOwnerTcUserId(tx) : null;
     if (!ownerId) return;

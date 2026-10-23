@@ -13,7 +13,7 @@ export const maxDuration = 60;
 const today = () => new Date().toISOString().split('T')[0];
 
 async function countEvents(userId: string, txIds: string[], listingIds: string[]) {
-  const [kd, tasks, ld] = await Promise.all([
+  const [kd, tasks, ld, closing] = await Promise.all([
     supabaseServer.from('key_date_calendar_events').select('*', { count: 'exact', head: true }).eq('user_id', userId),
     txIds.length
       ? supabaseServer.from('tasks').select('*', { count: 'exact', head: true }).in('transaction_id', txIds).not('google_event_id', 'is', null)
@@ -21,8 +21,9 @@ async function countEvents(userId: string, txIds: string[], listingIds: string[]
     listingIds.length
       ? supabaseServer.from('listing_dates').select('*', { count: 'exact', head: true }).in('listing_id', listingIds).not('google_event_id', 'is', null)
       : Promise.resolve({ count: 0 }),
+    supabaseServer.from('transaction_closing_events').select('*', { count: 'exact', head: true }).eq('user_id', userId),
   ]);
-  return (kd.count ?? 0) + (tasks.count ?? 0) + (ld.count ?? 0);
+  return (kd.count ?? 0) + (tasks.count ?? 0) + (ld.count ?? 0) + (closing.count ?? 0);
 }
 
 export async function POST(request: NextRequest) {
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
     const txIds = (tx || []).map((t) => t.id as string);
     const listingIds = (listings || []).map((l) => l.id as string);
     const now = today();
-    const [kd, tk, ld] = await Promise.all([
+    const [kd, tk, ld, cl] = await Promise.all([
       txIds.length
         ? supabaseServer.from('transaction_key_dates').select('*', { count: 'exact', head: true }).in('transaction_id', txIds).or('completed.is.null,completed.eq.false').gte('due_date', now)
         : Promise.resolve({ count: 0 }),
@@ -85,8 +86,11 @@ export async function POST(request: NextRequest) {
       listingIds.length
         ? supabaseServer.from('listing_dates').select('*', { count: 'exact', head: true }).in('listing_id', listingIds).gte('due_date', now)
         : Promise.resolve({ count: 0 }),
+      txIds.length
+        ? supabaseServer.from('transactions').select('*', { count: 'exact', head: true }).in('id', txIds).gte('closing_date', now).neq('status', 'Closed')
+        : Promise.resolve({ count: 0 }),
     ]);
-    const candidates = (kd.count ?? 0) + (tk.count ?? 0) + (ld.count ?? 0);
+    const candidates = (kd.count ?? 0) + (tk.count ?? 0) + (ld.count ?? 0) + (cl.count ?? 0);
 
     // 3) Send them.
     await backfillUserCalendar(user.id);
