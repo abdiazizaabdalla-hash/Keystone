@@ -48,7 +48,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
   const [status, setStatus] = useState<GoogleStatus | null>(null);
   const [feed, setFeed] = useState<FeedLinks | null>(null);
   const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState<'connect' | 'disconnect' | 'reset' | 'sync' | null>(null);
+  const [busy, setBusy] = useState<'connect' | 'disconnect' | 'remove' | 'reset' | 'sync' | null>(null);
   const [copied, setCopied] = useState(false);
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [savingPref, setSavingPref] = useState<keyof Prefs | null>(null);
@@ -146,18 +146,29 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
     }
   };
 
-  const disconnect = async () => {
-    if (!confirm('Disconnect Google Calendar? Relay will stop adding and updating events. Events already on your calendar stay until you delete them.')) return;
-    setBusy('disconnect');
+  const disconnect = async (removeEvents = false) => {
+    const question = removeEvents
+      ? 'Remove everything Relay added to your Google Calendar and disconnect? Only events Relay created are deleted — nothing else on your calendar is touched.'
+      : 'Disconnect Google Calendar? Relay will stop adding and updating events. Events already on your calendar stay until you delete them.';
+    if (!confirm(question)) return;
+    setBusy(removeEvents ? 'remove' : 'disconnect');
     setMessage('');
     try {
-      const res = await authFetch('/api/google-calendar/disconnect', { method: 'POST' });
+      const res = await authFetch('/api/google-calendar/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ removeEvents }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to disconnect Google Calendar');
       // Re-read the status so the card reflects whether the connect button is open to this user.
       const fresh = await authFetch('/api/google-calendar/status').then((r) => (r.ok ? r.json() : null)).catch(() => null);
       setStatus({ connected: false, email: null, available: fresh ? fresh.available !== false : true });
-      setMessage('Google Calendar disconnected.');
+      setMessage(
+        removeEvents
+          ? `Removed ${data.removed ?? 0} Relay event${data.removed === 1 ? '' : 's'} from your Google Calendar and disconnected.`
+          : 'Google Calendar disconnected.'
+      );
     } catch (err) {
       if (handleAuthError(err)) return;
       setMessage(err instanceof Error ? err.message : 'Error disconnecting Google Calendar');
@@ -261,11 +272,19 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
               </button>
             <button
               type="button"
-              onClick={disconnect}
-              disabled={busy === 'disconnect'}
+              onClick={() => disconnect(true)}
+              disabled={busy !== null}
+              className="text-sm px-4 py-2 border border-red-500/60 hover:border-red-400 text-red-300 hover:text-red-200 rounded-lg transition disabled:opacity-50"
+            >
+              {busy === 'remove' ? 'Removing…' : 'Remove Relay events & disconnect'}
+            </button>
+            <button
+              type="button"
+              onClick={() => disconnect(false)}
+              disabled={busy !== null}
               className="text-sm px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 rounded-lg transition disabled:opacity-50"
             >
-              {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
+              {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect only'}
             </button>
             </div>
           ) : (

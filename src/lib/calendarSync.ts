@@ -824,3 +824,105 @@ export async function recordAgentLoginEmail(userId: string, thenBackfill = false
     console.error('Recording the agent sign-in email failed (non-fatal):', error);
   }
 }
+
+/**
+ * Removes every event Relay created on this person's Google Calendar -- deal critical dates,
+ * closing days, checklist tasks, listing dates/steps/expiration and the agent-side listing
+ * events -- then forgets the ids. Used by "Remove Relay events & disconnect". Relay only ever
+ * deletes events whose ids it recorded itself; it never lists or touches anything else on the
+ * calendar. Call BEFORE the connection row is deleted (the access token is needed).
+ */
+export async function removeAllCalendarEventsForUser(userId: string): Promise<{ removed: number; failed: number }> {
+  const result = { removed: 0, failed: 0 };
+  try {
+    const accessToken = await getAccessTokenFor(userId);
+    if (!accessToken) return result;
+
+    const ids = new Set<string>();
+    const clearers: Array<() => PromiseLike<unknown>> = [];
+    const collect = (rows: { google_event_id?: unknown }[] | null | undefined) => {
+      for (const r of rows || []) if (typeof r.google_event_id === 'string' && r.google_event_id) ids.add(r.google_event_id);
+    };
+
+    // Events recorded per person (critical dates, closing days, agent-side listing events).
+    const [kd, closing, agentListing] = await Promise.all([
+      supabaseServer.from('key_date_calendar_events').select('google_event_id').eq('user_id', userId),
+      supabaseServer.from('transaction_closing_events').select('google_event_id').eq('user_id', userId),
+      supabaseServer.from('listing_agent_calendar_events').select('google_event_id').eq('user_id', userId),
+    ]);
+    collect(kd.data);
+    collect(closing.data);
+    collect(agentListing.data);
+    clearers.push(
+      () => supabaseServer.from('key_date_calendar_events').delete().eq('user_id', userId),
+      () => supabaseServer.from('transaction_closing_events').delete().eq('user_id', userId),
+      () => supabaseServer.from('listing_agent_calendar_events').delete().eq('user_id', userId)
+    );
+
+    // Checklist tasks on deals this person owns (directly, or through one of their agents).
+    const { data: myAgents } = await supabaseServer.from('agents').select('id').eq('tc_user_id', userId).limit(5000);
+    const agentIds = (myAgents || []).map((a) => a.id as string);
+    const txIds = new Set<string>();
+    const { data: ownedTx } = await supabaseServer.from('transactions').select('id').eq('tc_user_id', userId).limit(5000);
+    for (const t of ownedTx || []) txIds.add(t.id as string);
+    for (let i = 0; i < agentIds.length; i += 200) {
+      const { data: viaAgent } = await supabaseServer.from('transactions').select('id').in('agent_id', agentIds.slice(i, i + 200)).limit(5000);
+      for (const t of viaAgent || []) txIds.add(t.id as string);
+    }
+    const txList = [...txIds];
+    for (let i = 0; i < txList.length; i += 200) {
+      const chunk = txList.slice(i, i + 200);
+      const { data: tasks } = await supabaseServer.from('tasks').select('google_event_id').in('transaction_id', chunk).not('google_event_id', 'is', null);
+      collect(tasks);
+      clearers.push(() => supabaseServer.from('tasks').update({ google_event_id: null }).in('transaction_id', chunk).not('google_event_id', 'is', null));
+    }
+
+    // Listings this person owns: expiration, checklist steps, extra dates.
+    const { data: myListings } = await supabaseServer.from('listings').select('id, google_expiration_event_id').eq('tc_user_id', userId).limit(5000);
+    const listingIds = (myListings || []).map((l) => l.id as string);
+    for (const l of myListings || []) if (l.google_expiration_event_id) ids.add(l.google_expiration_event_id as string);
+    if (listingIds.length) {
+      clearers.push(() => supabaseServer.from('listings').update({ google_expiration_event_id: null }).eq('tc_user_id', userId));
+    }
+    for (let i = 0; i < listingIds.length; i += 200) {
+      const chunk = listingIds.slice(i, i + 200);
+      const [lt, ld] = await Promise.all([
+        supabaseServer.from('listing_tasks').select('google_event_id').in('listing_id', chunk).not('google_event_id', 'is', null),
+        supabaseServer.from('listing_dates').select('google_event_id').in('listing_id', chunk).not('google_event_id', 'is', null),
+      ]);
+      collect(lt.data);
+      collect(ld.data);
+      clearers.push(
+        () => supabaseServer.from('listing_tasks').update({ google_event_id: null }).in('listing_id', chunk).not('google_event_id', 'is', null),
+        () => supabaseServer.from('listing_dates').update({ google_event_id: null }).in('listing_id', chunk).not('google_event_id', 'is', null)
+      );
+    }
+
+    // Delete in small parallel batches (Google treats an already-deleted event as success).
+    const all = [...ids];
+    for (let i = 0; i < all.length; i += 5) {
+      const results = await Promise.allSettled(all.slice(i, i + 5).map((id) => deleteCalendarEvent(accessToken, id)));
+      for (const r of results) {
+        if (r.status === 'fulfilled') result.removed += 1;
+        else {
+          result.failed += 1;
+          console.error('Failed to delete a calendar event during removal (non-fatal):', r.reason);
+        }
+      }
+    }
+
+    // Forget the ids only when everything was removed, so a retry can finish the job.
+    if (result.failed === 0) {
+      for (const clear of clearers) {
+        try {
+          await clear();
+        } catch (error) {
+          console.error('Clearing stored calendar event ids failed (non-fatal):', error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Removing all calendar events failed (non-fatal):', error);
+  }
+  return result;
+}
