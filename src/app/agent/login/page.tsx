@@ -3,7 +3,6 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabaseBrowser as supabase } from '@/lib/supabaseClient';
 import { saveSession } from '@/lib/authClient';
 
 // Returning-agent login. Password is the default now that every agent
@@ -72,23 +71,22 @@ function AgentLoginContent() {
 
     try {
       setSubmitting(true);
-      const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: trimmed,
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: `${window.location.origin}/agent/accept`,
-        },
+      // Our own link: works for 30 minutes and can be opened more than once (a mail scanner opening it first does not
+      // use it up, which is what kept happening with a one-time link). The answer is the same whether or not the
+      // email has an agent account, so this never reveals who does.
+      const res = await fetch('/api/agent/login-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed }),
       });
-      // Never reveal whether the email has an account -- same
-      // no-enumeration approach as /auth/forgot-password. Supabase
-      // itself doesn't distinguish "no such user" from success here.
-      if (otpError && !/user not found/i.test(otpError.message)) {
-        throw otpError;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Request failed');
       }
       setSent(true);
     } catch (err) {
       console.error('Error sending agent login link:', err);
-      setError('Something went wrong sending your login link. Please try again.');
+      setError(err instanceof Error && err.message !== 'Request failed' ? err.message : 'Something went wrong sending your login link. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -156,7 +154,7 @@ function AgentLoginContent() {
             </form>
           ) : sent ? (
             <p className="text-slate-200 text-sm text-center">
-              If <strong>{email.trim()}</strong> has access to anything on Relay TC, a sign-in link is on its way.
+              If <strong>{email.trim()}</strong> has access to anything on Relay TC, a sign-in link is on its way. It works for 30 minutes and can be opened more than once.
               Check your inbox.
             </p>
           ) : (

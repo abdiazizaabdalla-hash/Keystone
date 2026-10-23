@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getPlanLimits } from '@/lib/plans';
-import { getVisibleTcUserIds, getTeamForUser } from '@/lib/team';
+import { getVisibleTcUserIds } from '@/lib/team';
 import {
   BASELINE_TEMPLATE_ID,
   BASELINE_CHECKLIST_TEMPLATE,
@@ -111,22 +111,7 @@ export async function POST(request: NextRequest) {
     const { user, isAdmin } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { agentId, fileNumber, propertyAddress, purchasePrice, templateId, acceptanceDate, closingDate, leaveUnassigned, allowDuplicate, fromListingId } = body;
-
-    // Brokerage/Team owner only: create the transaction without stamping
-    // a tc_user_id at all, for a deal that's come in but hasn't been
-    // handed to a specific TC yet. Shows up in the owner's "Unassigned"
-    // queue (see /api/team/unassigned) until someone claims it -- see
-    // add-brokerage-org.sql for why tc_user_id is nullable to begin with.
-    // Regular members can never do this; it's meaningless for a solo TC.
-    let assignUnassigned = false;
-    if (leaveUnassigned === true) {
-      const membership = await getTeamForUser(user.id);
-      if (!membership || membership.role !== 'owner') {
-        return NextResponse.json({ error: 'Only the team owner can leave a transaction unassigned' }, { status: 403 });
-      }
-      assignUnassigned = true;
-    }
+    const { agentId, fileNumber, propertyAddress, purchasePrice, templateId, acceptanceDate, closingDate, allowDuplicate, fromListingId } = body;
 
     if (!isAdmin) {
       const { data: agent } = await supabaseServer
@@ -233,7 +218,7 @@ export async function POST(request: NextRequest) {
         .from('transactions')
         .insert({
           agent_id: agentId,
-          tc_user_id: assignUnassigned ? null : user.id,
+          tc_user_id: user.id,
           file_number: fileNumber,
           property_address: propertyAddress,
           purchase_price: purchasePrice,
@@ -328,12 +313,12 @@ export async function POST(request: NextRequest) {
     // blocks or undoes the deal; the outcome comes back so the screen can say what happened.
     // A deal converted from this agent's own listing says so in the email.
     let fromListing = false;
-    if (typeof fromListingId === 'string' && fromListingId && !assignUnassigned) {
+    if (typeof fromListingId === 'string' && fromListingId) {
       const { data: src } = await supabaseServer.from('listings').select('tc_user_id, agent_id').eq('id', fromListingId).maybeSingle();
       const visibleForListing = await getVisibleTcUserIds(user.id);
       fromListing = Boolean(src && src.agent_id === transaction.agent_id && (isAdmin || visibleForListing.includes(src.tc_user_id as string)));
     }
-    const agentInvite = body.inviteAgent === false || assignUnassigned ? 'skipped' : await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, fromListing });
+    const agentInvite = body.inviteAgent === false ? 'skipped' : await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, fromListing });
     return NextResponse.json({ ...transaction, agentInvite }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

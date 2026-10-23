@@ -3,7 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getPlanLimits } from '@/lib/plans';
-import { getVisibleTcUserIds, getTeamIdForUser } from '@/lib/team';
+import { getVisibleTcUserIds } from '@/lib/team';
 import { getUserPlan } from '@/lib/privileged';
 import { autoAddContact } from '@/lib/contactsAuto';
 import { logAudit } from '@/lib/audit';
@@ -41,28 +41,7 @@ export async function POST(request: NextRequest) {
     const { user } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { name, brokerage, email, phone, flatFee, percentFee, brokerageAgentId } = body;
-
-    // Linking this TC-level contact to a brokerage_agents directory
-    // entry (see add-brokerage-agent-directory.sql) is how the
-    // brokerage's Agent Directory aggregates "this real person has N
-    // transactions across M TCs" -- it does NOT make the row itself
-    // shared/usable by other TCs; each TC still has their own contact
-    // (and their own fee terms) for the same real agent. Only valid for
-    // a directory entry that actually belongs to this user's own team.
-    let linkedBrokerageAgentId: string | null = null;
-    if (brokerageAgentId) {
-      const { data: directoryEntry } = await supabaseServer
-        .from('brokerage_agents')
-        .select('id, team_id')
-        .eq('id', brokerageAgentId)
-        .single();
-      const myTeamId = await getTeamIdForUser(user.id);
-      if (!directoryEntry || !myTeamId || directoryEntry.team_id !== myTeamId) {
-        return NextResponse.json({ error: 'Brokerage agent not found' }, { status: 404 });
-      }
-      linkedBrokerageAgentId = directoryEntry.id;
-    }
+    const { name, brokerage, email, phone, flatFee, percentFee } = body;
 
     // Plan-gated: Starter is capped at 3 agent profiles. Admins creating
     // agents for themselves are still subject to their own plan's limit —
@@ -91,7 +70,6 @@ export async function POST(request: NextRequest) {
       .from('agents')
       .insert({
         tc_user_id: user.id,
-        brokerage_agent_id: linkedBrokerageAgentId,
         name,
         brokerage: brokerage || null,
         email: email || null,

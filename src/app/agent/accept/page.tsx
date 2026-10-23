@@ -35,6 +35,38 @@ function AcceptContent() {
 
   useEffect(() => {
     const finish = async () => {
+      // Links we email ourselves carry a signed token in ?t=. It works for 30 minutes and can be opened more than once
+      // (a mail scanner opening it first does not use it up), so it is exchanged for a session here, not on the first GET.
+      const emailedToken = new URLSearchParams(window.location.search).get('t');
+      if (emailedToken) {
+        try {
+          const res = await fetch('/api/agent/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: emailedToken }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || !body.session?.access_token) {
+            setStatus('error');
+            setErrorMessage(body.error || 'We could not log you in. Please request a new link.');
+            return;
+          }
+          const { data, error } = await supabase.auth.setSession({
+            access_token: body.session.access_token,
+            refresh_token: body.session.refresh_token,
+          });
+          if (error || !data.session) throw error || new Error('Could not verify account');
+          saveSession(data.session.access_token, data.session.refresh_token, data.session.user.id);
+          window.history.replaceState(null, '', window.location.pathname);
+          router.replace(body.user?.hasPassword ? '/agent' : '/agent/welcome');
+        } catch (err) {
+          console.error('Error finishing agent login:', err);
+          setStatus('error');
+          setErrorMessage(err instanceof Error ? err.message : 'We could not log you in. Please request a new link.');
+        }
+        return;
+      }
+
       const hashParams = parseHashParams(window.location.hash);
 
       if (hashParams.error) {

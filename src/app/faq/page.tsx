@@ -76,7 +76,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Agent portal',
     q: 'How do I invite an agent?',
-    a: 'From a transaction’s page, enter the agent’s email and send the invite. They get a magic-link email — no password needed the first time — and set one up on their very first login. Access to that transaction only takes effect once they click the link.',
+    a: 'From a transaction’s page, enter the agent’s email and send the invite. They get an email to set up their account — no password needed the first time — and choose one on their very first login. Their sign-in links work for 30 minutes and can be opened more than once, so a mail app that previews the link will not break it; you can always ask for a new one.',
   },
   {
     category: 'Agent portal',
@@ -185,7 +185,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Teams',
     q: 'Can team members see each other’s transactions?',
-    a: 'No one sees anyone else’s work. Every coordinator on a team, including the owner, sees only their own transactions, agents and contacts, plus the team roster and team messages.',
+    a: 'No one sees anyone else’s work. Every coordinator on a team, including the owner, sees only their own transactions, agents and contacts, plus the team roster and team messages. The one exception is the team compliance report: the owner can download a spreadsheet showing where each member’s open files stand (stage, checklist progress, closing date, next deadline), with no prices, client names, documents or messages.',
   },
   {
     category: 'Teams',

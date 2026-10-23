@@ -15,20 +15,23 @@ interface Item {
   propertyAddress: string;
 }
 
-function chip(days: number): { text: string; cls: string } {
-  if (days < 0) return { text: `${-days}d overdue`, cls: 'bg-red-900/40 text-red-300 border-red-700' };
-  if (days === 0) return { text: 'Today', cls: 'bg-amber-900/40 text-amber-300 border-amber-700' };
-  if (days === 1) return { text: 'Tomorrow', cls: 'bg-amber-900/40 text-amber-300 border-amber-700' };
-  if (days <= 3) return { text: `In ${days} days`, cls: 'bg-amber-900/40 text-amber-300 border-amber-700' };
-  return { text: `In ${days} days`, cls: 'bg-blue-900/40 text-blue-300 border-blue-700' };
+function chip(days: number): { text: string; cls: string; dot: string } {
+  if (days < 0) return { text: `${-days}d overdue`, cls: 'bg-red-900/40 text-red-300 border-red-800', dot: 'bg-red-400' };
+  if (days === 0) return { text: 'Today', cls: 'bg-amber-900/40 text-amber-300 border-amber-800', dot: 'bg-amber-400' };
+  if (days === 1) return { text: 'Tomorrow', cls: 'bg-amber-900/40 text-amber-300 border-amber-800', dot: 'bg-amber-400' };
+  if (days <= 3) return { text: `${days} days`, cls: 'bg-amber-900/40 text-amber-300 border-amber-800', dot: 'bg-amber-400' };
+  return { text: `${days} days`, cls: 'bg-blue-900/40 text-blue-300 border-blue-800', dot: 'bg-blue-400' };
 }
 
-// "Critical dates" across every open deal: contract deadlines (inspection,
-// appraisal, financing, ...) that are overdue or due in the next two weeks.
-// Renders nothing until loaded, and nothing at all if there are none, so it
-// never adds an empty box to the dashboard.
+const COLLAPSED_ROWS = 8;
+
+// "Critical dates" across every open deal: contract deadlines (inspection, appraisal, financing, ...) that are
+// overdue or due in the next two weeks. Starts collapsed to one slim line with the counts that matter; open it
+// for one thin row per date. Renders nothing until loaded, and nothing at all if there are none, so it never
+// adds an empty box to the dashboard.
 export default function CriticalDatesCard() {
   const [items, setItems] = useState<Item[] | null>(null);
+  const [open, setOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
@@ -50,35 +53,70 @@ export default function CriticalDatesCard() {
   }, []);
 
   if (!items || items.length === 0) return null;
-  const visible = showAll ? items : items.slice(0, 6);
+
+  const overdue = items.filter((i) => i.daysUntil < 0).length;
+  const soon = items.filter((i) => i.daysUntil >= 0 && i.daysUntil <= 3).length;
+  const visible = showAll ? items : items.slice(0, COLLAPSED_ROWS);
 
   return (
-    <div className="mb-8 bg-gradient-to-br from-slate-800/80 to-slate-800/40 border border-slate-700 rounded-lg p-5">
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 className="text-lg font-semibold text-slate-100">Critical dates</h2>
-        <span className="text-xs text-slate-400">Overdue and next 14 days</span>
-      </div>
-      <ul className="divide-y divide-slate-700">
-        {visible.map((item) => {
-          const c = chip(item.daysUntil);
-          return (
-            <li key={item.id} className="py-2 flex items-center justify-between gap-3">
-              <Link href={`/dashboard/transactions/${item.transactionId}`} className="min-w-0 group">
-                <p className="text-sm text-slate-100 truncate group-hover:text-blue-300 transition">{item.label}</p>
-                <p className="text-xs text-slate-400 truncate">
-                  {item.fileNumber ? `${item.fileNumber} · ` : ''}
-                  {item.propertyAddress} · {formatDisplayDate(item.dueDate)}
-                </p>
-              </Link>
-              <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${c.cls}`}>{c.text}</span>
-            </li>
-          );
-        })}
-      </ul>
-      {items.length > 6 && (
-        <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-2 text-xs text-blue-400 hover:text-blue-300">
-          {showAll ? 'Show fewer' : `Show all ${items.length}`}
-        </button>
+    <div className="mb-6 bg-gradient-to-br from-slate-800/80 to-slate-800/40 border border-slate-700 rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-slate-800/60 transition"
+      >
+        <span className="flex items-center gap-3 min-w-0">
+          <svg className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+          </svg>
+          <span className="text-sm font-semibold text-slate-100">Critical dates</span>
+          <span className="hidden sm:inline text-xs text-slate-500">Overdue and next 14 days</span>
+        </span>
+        <span className="flex items-center gap-2 shrink-0 text-xs">
+          {overdue > 0 && <span className="px-2 py-0.5 rounded-full border bg-red-900/40 text-red-300 border-red-800">{overdue} overdue</span>}
+          {soon > 0 && <span className="px-2 py-0.5 rounded-full border bg-amber-900/40 text-amber-300 border-amber-800">{soon} within 3 days</span>}
+          <span className="text-slate-400">{items.length} total</span>
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t border-slate-700">
+          <ul className={`divide-y divide-slate-700/60 ${showAll ? 'max-h-[28rem] overflow-y-auto' : ''}`}>
+            {visible.map((item) => {
+              const c = chip(item.daysUntil);
+              return (
+                <li key={item.id}>
+                  <Link
+                    href={`/dashboard/transactions/${item.transactionId}`}
+                    className="group flex items-center gap-3 px-4 py-1.5 hover:bg-slate-800/60 transition"
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} aria-hidden="true" />
+                    <span className="text-sm text-slate-100 group-hover:text-blue-300 transition whitespace-nowrap">{item.label}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
+                      {item.fileNumber ? `${item.fileNumber} · ` : ''}
+                      {item.propertyAddress}
+                    </span>
+                    <span className="hidden sm:inline text-xs text-slate-400 whitespace-nowrap tabular-nums">{formatDisplayDate(item.dueDate)}</span>
+                    <span className={`text-[11px] leading-5 px-2 rounded-full border whitespace-nowrap shrink-0 ${c.cls}`}>{c.text}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="flex items-center justify-between gap-3 px-4 py-2 border-t border-slate-700/60 text-xs">
+            {items.length > COLLAPSED_ROWS ? (
+              <button type="button" onClick={() => setShowAll((v) => !v)} className="text-blue-400 hover:text-blue-300">
+                {showAll ? 'Show fewer' : `Show all ${items.length}`}
+              </button>
+            ) : (
+              <span />
+            )}
+            <Link href="/dashboard/calendar" className="text-slate-400 hover:text-slate-200">
+              Open calendar →
+            </Link>
+          </div>
+        </div>
       )}
     </div>
   );

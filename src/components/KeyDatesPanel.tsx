@@ -83,6 +83,7 @@ export default function KeyDatesPanel({
   closingDate,
   canEdit,
   readOnlyDates,
+  manageCalendar,
 }: {
   transactionId: string;
   propertyAddress: string;
@@ -91,6 +92,8 @@ export default function KeyDatesPanel({
   // Agent portal: dates are handed in by the page (already loaded with the
   // deal) and shown read-only, so the panel makes no requests of its own.
   readOnlyDates?: KeyDate[];
+  // Coordinator view of a deal they own: shows the calendar-sync row (sync to the agent's calendar now, send the connect link).
+  manageCalendar?: boolean;
 }) {
   const [dates, setDates] = useState<KeyDate[] | null>(readOnlyDates ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +104,61 @@ export default function KeyDatesPanel({
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [cal, setCal] = useState<{ ownerConnected: boolean; agents: { userId: string; email: string | null; connected: boolean }[]; agentNeedsInvite: boolean } | null>(null);
+  const [calBusy, setCalBusy] = useState<'sync' | 'invite' | null>(null);
+  const [calMsg, setCalMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const loadCal = useCallback(async () => {
+    try {
+      const res = await authFetch(`/api/transactions/${transactionId}/calendar-sync`);
+      if (res.ok) setCal(await res.json());
+    } catch {
+      // Cosmetic status only.
+    }
+  }, [transactionId]);
+
+  useEffect(() => {
+    if (!manageCalendar) return;
+    const t = setTimeout(loadCal, 0);
+    return () => clearTimeout(t);
+  }, [manageCalendar, loadCal]);
+
+  const syncCalendarNow = async () => {
+    setCalBusy('sync');
+    setCalMsg(null);
+    try {
+      const res = await authFetch(`/api/transactions/${transactionId}/calendar-sync`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to sync');
+      setCal(data);
+      const n = (data.agents as { connected: boolean }[]).filter((a) => a.connected).length;
+      setCalMsg({
+        ok: true,
+        text: n > 0 || data.ownerConnected
+          ? `Dates sent to ${[data.ownerConnected ? 'your calendar' : null, n > 0 ? `${n} agent calendar${n === 1 ? '' : 's'}` : null].filter(Boolean).join(' and ')}.`
+          : 'Nothing to sync yet: no calendar is connected.',
+      });
+    } catch (err) {
+      setCalMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to sync' });
+    } finally {
+      setCalBusy(null);
+    }
+  };
+
+  const sendCalendarLink = async () => {
+    setCalBusy('invite');
+    setCalMsg(null);
+    try {
+      const res = await authFetch(`/api/transactions/${transactionId}/calendar-invite`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send');
+      setCalMsg({ ok: true, text: `Calendar link emailed to ${data.sent} agent${data.sent === 1 ? '' : 's'}.` });
+    } catch (err) {
+      setCalMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to send' });
+    } finally {
+      setCalBusy(null);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -208,6 +266,44 @@ export default function KeyDatesPanel({
           ? 'Contract deadlines for this deal, kept up to date by your transaction coordinator.'
           : 'Contract deadlines. You\u2019ll get a reminder 7, 3 and 1 days before, and daily once overdue.'}
       </p>
+
+      {manageCalendar && cal && (
+        <div className="mb-3 p-3 bg-slate-700/30 border border-slate-600 rounded-lg">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-slate-300">
+              {cal.agents.length === 0
+                ? cal.agentNeedsInvite
+                  ? 'The agent has not joined Relay TC yet, so there is no calendar to sync. Invite them to the deal first.'
+                  : 'No agent is on this deal.'
+                : cal.agents.map((a) => `${a.email || 'Agent'}: ${a.connected ? 'calendar connected' : 'calendar not connected'}`).join(' · ')}
+              {cal.agents.length > 0 || cal.ownerConnected ? (cal.ownerConnected ? ' · Your calendar: connected' : ' · Your calendar: not connected (Settings)') : ''}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(cal.ownerConnected || cal.agents.some((a) => a.connected)) && (
+                <button
+                  type="button"
+                  onClick={syncCalendarNow}
+                  disabled={calBusy !== null}
+                  className="text-xs px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 transition"
+                >
+                  {calBusy === 'sync' ? 'Syncing…' : 'Sync dates to calendars now'}
+                </button>
+              )}
+              {cal.agents.some((a) => !a.connected && a.email) && (
+                <button
+                  type="button"
+                  onClick={sendCalendarLink}
+                  disabled={calBusy !== null}
+                  className="text-xs px-2.5 py-1 rounded border border-slate-500 text-slate-200 hover:bg-slate-600 disabled:opacity-50 transition"
+                >
+                  {calBusy === 'invite' ? 'Sending…' : 'Send agent the calendar link'}
+                </button>
+              )}
+            </div>
+          </div>
+          {calMsg && <p className={`text-xs mt-2 ${calMsg.ok ? 'text-emerald-300' : 'text-red-300'}`}>{calMsg.text}</p>}
+        </div>
+      )}
 
       {error && <p className="text-xs text-red-300 mb-3">{error}</p>}
 

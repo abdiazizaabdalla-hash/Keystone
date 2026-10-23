@@ -46,6 +46,20 @@ export async function sendAgentInviteEmail(params: {
   });
 }
 
+// The sign-in link an agent asks for on /agent/login. Works for `minutes` minutes and can be opened more than once,
+// so a mail app or security scanner opening it first does not use it up.
+export async function sendAgentLoginLinkEmail(params: { toEmail: string; loginUrl: string; minutes: number }) {
+  const { toEmail, loginUrl, minutes } = params;
+  const html = wrapper(
+    'Your Relay TC sign-in link',
+    `<p><a href="${loginUrl}" style="color: #b45309;">Sign in to Relay TC</a></p>
+     <p style="font-size: 13px; color: #555;">This link works for the next ${minutes} minutes and can be opened more than once. After that, ask for a new one on the sign-in page.
+     If you didn't ask for it, you can ignore this email.</p>`
+  );
+  const resend = getResendClient();
+  return resend.emails.send({ from: INVOICE_FROM_EMAIL, to: toEmail, subject: 'Your Relay TC sign-in link', html });
+}
+
 // Notifies whoever didn't send the most recent message in a transaction
 // thread -- TC or agent, whichever side the recipient is on. Non-fatal if
 // it fails, same as every other notification email in this codebase: the
@@ -121,4 +135,20 @@ export async function sendDirectMessageEmail(params: { toEmail: string; senderLa
     subject: `${senderLabel} sent you a message on Relay TC`,
     html,
   });
+}
+
+// Sent when a coordinator asks an agent to connect their Google Calendar so a deal's dates can land in it.
+export async function sendAgentCalendarInviteEmail(params: { toEmail: string; tcLabel: string; propertyAddress: string | null; settingsUrl: string }) {
+  const { toEmail, tcLabel, propertyAddress, settingsUrl } = params;
+  const where = propertyAddress ? ` for ${propertyAddress}` : '';
+  const html = wrapper(
+    'Connect your calendar to Relay TC',
+    `<p><strong>${escapeHtml(tcLabel)}</strong> would like to add the key dates${escapeHtml(where)} straight to your Google Calendar,
+     so inspection, financing and closing deadlines show up where you already look.</p>
+     <p><a href="${settingsUrl}" style="color: #b45309;">Connect your calendar</a></p>
+     <p style="font-size: 13px; color: #555;">You do it once: sign in, open Settings, and choose Connect Google Calendar. Every date on your deals is added right away,
+     and later changes follow automatically. You can disconnect at any time.</p>`
+  );
+  const resend = getResendClient();
+  return resend.emails.send({ from: INVOICE_FROM_EMAIL, to: toEmail, subject: `Add your deal dates to your calendar${propertyAddress ? ` (${propertyAddress})` : ''}`, html });
 }

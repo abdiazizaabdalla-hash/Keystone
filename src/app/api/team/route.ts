@@ -94,7 +94,6 @@ export async function GET(request: NextRequest) {
       team: {
         id: membership.team.id,
         name: membership.team.name,
-        defaultChecklistTemplateId: membership.team.default_checklist_template_id,
       },
       role: membership.role,
       // So the frontend can show Brokerage-only settings (workspace
@@ -137,11 +136,6 @@ export async function PATCH(request: NextRequest) {
     if (typeof body.name === 'string') {
       const trimmed = body.name.trim();
       updateFields.name = trimmed.length > 0 ? trimmed : null;
-    }
-
-    const isBrokerage = getUserPlan(user) === 'brokerage';
-    if (isBrokerage && body.defaultChecklistTemplateId !== undefined) {
-      updateFields.default_checklist_template_id = body.defaultChecklistTemplateId;
     }
 
     if (Object.keys(updateFields).length === 0) {

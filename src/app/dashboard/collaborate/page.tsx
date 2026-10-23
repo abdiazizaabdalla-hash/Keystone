@@ -22,7 +22,6 @@ interface PendingInvite {
 interface TeamInfo {
   id: string;
   name: string | null;
-  defaultChecklistTemplateId: string | null;
 }
 
 interface TeamResponse {
@@ -33,26 +32,6 @@ interface TeamResponse {
   seatPriceLabel?: string;
   members: Member[];
   pendingInvites: PendingInvite[];
-}
-
-interface UnassignedTransaction {
-  id: string;
-  fileNumber: string;
-  propertyAddress: string | null;
-  purchasePrice: number | null;
-  status: string;
-  createdAt: string;
-  agent: { name: string; email: string | null; phone: string | null; brokerage: string | null } | null;
-}
-
-interface DirectoryAgent {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  tcCount: number;
-  activeTransactions: number;
-  totalTransactions: number;
 }
 
 export default function CollaboratePage() {
@@ -66,99 +45,38 @@ export default function CollaboratePage() {
   const [inviteMessage, setInviteMessage] = useState('');
   const [removingId, setRemovingId] = useState<string | null>(null);
 
-  // Team/brokerage settings -- just the name for now. (No fee/invoicing
-  // defaults here: a brokerage isn't charging its own in-house agents a
-  // coordination fee, so there's nothing to default. A Brokerage-only
-  // default checklist template picker belongs here once template
-  // team-scoping has real UI -- see checklist_templates.team_id.)
+  // Team/brokerage settings: just the name.
   const [teamName, setTeamName] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
-  // Brokerage-only: which checklist template new transactions default to
-  // for the whole brokerage (see teams.default_checklist_template_id and
-  // the new-transaction page, which pre-selects this instead of
-  // Baseline). The list itself is whatever /api/checklist-templates
-  // already resolves for an owner -- their whole team's templates, per
-  // getVisibleTcUserIds.
-  const [availableTemplates, setAvailableTemplates] = useState<{ id: string; name: string; isBaseline: boolean }[]>([]);
-  const [defaultTemplateId, setDefaultTemplateId] = useState('');
   const [settingsMessage, setSettingsMessage] = useState('');
 
-  // Brokerage agent directory -- a roster of real agents associated
-  // with the brokerage itself, distinct from any TC's own per-
-  // transaction invoicing contacts and from the free agent-portal login
-  // (see add-brokerage-agent-directory.sql). Adding someone here never
-  // creates a Relay account.
-  const [directory, setDirectory] = useState<DirectoryAgent[]>([]);
-  const [newAgentName, setNewAgentName] = useState('');
-  const [newAgentEmail, setNewAgentEmail] = useState('');
-  const [addingAgent, setAddingAgent] = useState(false);
-  const [directoryMessage, setDirectoryMessage] = useState('');
+  // Owner-only team compliance report: a CSV of where every team member's open files stand right now.
+  const [downloadingReport, setDownloadingReport] = useState(false);
+  const [reportMessage, setReportMessage] = useState('');
 
-  // The brokerage/team's unassigned-transaction queue -- deals created
-  // with the API's leaveUnassigned flag (see POST /api/transactions)
-  // instead of being handed straight to the creator. The new-transaction
-  // form no longer offers that option, so this only lists deals that
-  // were already left unassigned. Owner-only, same as everything else
-  // on this page.
-  const [unassigned, setUnassigned] = useState<UnassignedTransaction[]>([]);
-  const [assigningId, setAssigningId] = useState<string | null>(null);
-  const [assignPicks, setAssignPicks] = useState<Record<string, string>>({});
-  const [unassignedMessage, setUnassignedMessage] = useState('');
-
-  const loadUnassigned = async () => {
+  const handleDownloadReport = async () => {
+    setDownloadingReport(true);
+    setReportMessage('');
     try {
-      const res = await authFetch('/api/team/unassigned');
-      const json = await res.json();
-      if (!res.ok) return;
-      setUnassigned(json as UnassignedTransaction[]);
-    } catch {
-      // Non-fatal -- the queue section just stays empty.
-    }
-  };
-
-  const handleAssign = async (transactionId: string) => {
-    const tcUserId = assignPicks[transactionId];
-    if (!tcUserId) {
-      setUnassignedMessage('Pick who should get this one first.');
-      return;
-    }
-    setAssigningId(transactionId);
-    setUnassignedMessage('');
-    try {
-      const res = await authFetch(`/api/team/unassigned/${transactionId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tcUserId }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to assign transaction');
-      setUnassigned((prev) => prev.filter((t) => t.id !== transactionId));
+      const res = await authFetch('/api/team/compliance-export');
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || 'Could not build the report');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `team-compliance-report-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setReportMessage('Downloaded.');
     } catch (err) {
-      setUnassignedMessage(err instanceof Error ? err.message : 'Failed to assign transaction');
+      setReportMessage(err instanceof Error ? err.message : 'Could not build the report');
     } finally {
-      setAssigningId(null);
-    }
-  };
-
-  const loadDirectory = async () => {
-    try {
-      const res = await authFetch('/api/team/agents');
-      const json = await res.json();
-      if (!res.ok) return;
-      setDirectory(json as DirectoryAgent[]);
-    } catch {
-      // Non-fatal -- the directory section just stays empty.
-    }
-  };
-
-  const loadTemplates = async () => {
-    try {
-      const res = await authFetch('/api/checklist-templates');
-      const json = await res.json();
-      if (!res.ok) return;
-      if (Array.isArray(json.templates)) setAvailableTemplates(json.templates);
-    } catch {
-      // Non-fatal -- the picker just stays empty.
+      setDownloadingReport(false);
     }
   };
 
@@ -169,14 +87,6 @@ export default function CollaboratePage() {
       if (!res.ok) throw new Error(json.error || 'Failed to load team');
       setData(json);
       setTeamName(json.team?.name || '');
-      setDefaultTemplateId(json.team?.defaultChecklistTemplateId || '');
-      if (json.role === 'owner') {
-        await loadUnassigned();
-      }
-      if (json.role === 'owner' && json.planId === 'brokerage') {
-        await loadDirectory();
-        await loadTemplates();
-      }
     } catch (err) {
       if (err instanceof AuthRequiredError) {
         router.push('/auth');
@@ -228,9 +138,6 @@ export default function CollaboratePage() {
     setSettingsMessage('');
     try {
       const payload: Record<string, unknown> = { name: teamName };
-      if (isBrokerage) {
-        payload.defaultChecklistTemplateId = defaultTemplateId || null;
-      }
       const res = await authFetch('/api/team', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -244,29 +151,6 @@ export default function CollaboratePage() {
       setSettingsMessage(err instanceof Error ? err.message : 'Failed to save settings');
     } finally {
       setSavingSettings(false);
-    }
-  };
-
-  const handleAddDirectoryAgent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAddingAgent(true);
-    setDirectoryMessage('');
-    try {
-      const res = await authFetch('/api/team/agents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newAgentName, email: newAgentEmail || undefined }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to add agent');
-      setNewAgentName('');
-      setNewAgentEmail('');
-      setDirectoryMessage(`${json.name} added to the brokerage's agent directory.`);
-      await loadDirectory();
-    } catch (err) {
-      setDirectoryMessage(err instanceof Error ? err.message : 'Failed to add agent');
-    } finally {
-      setAddingAgent(false);
     }
   };
 
@@ -330,7 +214,7 @@ export default function CollaboratePage() {
       </div>
       <p className="text-slate-400 mb-8">
         {isOwner
-          ? 'Your team roster, messages and seats. Each coordinator\u2019s deals, agents and contacts stay private to their own login.'
+          ? 'Your team roster, messages, seats and the team compliance report. Each coordinator\u2019s deals, agents and contacts stay private to their own login.'
           : 'Your team roster and messages. Your deals, agents and contacts stay private to your own login.'}
       </p>
 
@@ -357,31 +241,6 @@ export default function CollaboratePage() {
                 className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
-
-            {isBrokerage && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                  Default checklist template
-                </label>
-                <select
-                  value={defaultTemplateId}
-                  onChange={(e) => setDefaultTemplateId(e.target.value)}
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">Baseline (default)</option>
-                  {availableTemplates
-                    .filter((t) => !t.isBaseline)
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                </select>
-                <p className="text-xs text-slate-500 mt-1">
-                  New transactions across the brokerage start with this checklist instead of Baseline.
-                </p>
-              </div>
-            )}
 
             <button
               type="submit"
@@ -458,117 +317,25 @@ export default function CollaboratePage() {
         </div>
       </div>
 
-      {isOwner && unassigned.length > 0 && (
-        <div className="bg-gradient-to-br from-amber-900/30 to-slate-800 border border-amber-700/40 rounded-lg overflow-hidden mb-6">
-          <div className="px-6 py-4 border-b border-amber-700/30 flex items-center justify-between">
-            <div>
-              <h2 className="font-display font-semibold text-slate-100">Unassigned queue</h2>
-              <p className="text-sm text-slate-400 mt-1">
-                Deals that came in without a TC picked yet. Assign one to get it moving.
-              </p>
-            </div>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">
-              {unassigned.length}
-            </span>
-          </div>
-          <div className="divide-y divide-slate-700">
-            {unassigned.map((tx) => (
-              <div key={tx.id} className="px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
-                <div className="min-w-0">
-                  <div className="text-slate-100 font-medium truncate">
-                    {tx.fileNumber} &middot; {tx.propertyAddress || 'No address yet'}
-                  </div>
-                  <div className="text-xs text-slate-500 truncate">
-                    {tx.agent ? tx.agent.name : 'No agent on file'}
-                    {tx.agent?.brokerage ? ` · ${tx.agent.brokerage}` : ''}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <select
-                    value={assignPicks[tx.id] || ''}
-                    onChange={(e) => setAssignPicks((prev) => ({ ...prev, [tx.id]: e.target.value }))}
-                    className="bg-slate-600 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
-                  >
-                    <option value="">Assign to…</option>
-                    {data.members.map((member) => (
-                      <option key={member.userId} value={member.userId}>
-                        {member.name || member.email}
-                        {member.isYou ? ' (you)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => handleAssign(tx.id)}
-                    disabled={assigningId === tx.id}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
-                  >
-                    {assigningId === tx.id ? 'Assigning…' : 'Assign'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-          {unassignedMessage && (
-            <p className="px-6 py-3 text-sm text-amber-300 border-t border-amber-700/30">{unassignedMessage}</p>
-          )}
-        </div>
-      )}
-
-      {isOwner && isBrokerage && (
-        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
-          <div className="px-6 py-4 border-b border-slate-600 flex items-center justify-between">
-            <h2 className="font-display font-semibold text-slate-100">Brokerage agent directory</h2>
-            <span className="text-xs text-slate-400">{directory.length}</span>
-          </div>
-          <p className="px-6 pt-4 text-sm text-slate-400">
-            The brokerage&rsquo;s own agents -- separate from any TC&rsquo;s personal contacts, and from any Relay login.
-            Adding someone here doesn&rsquo;t create an account; they get the free agent portal only once a TC invites
-            them to a specific transaction.
+      {isOwner && (
+        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6 mb-6">
+          <h2 className="font-display font-semibold text-slate-100 mb-1">Team compliance report</h2>
+          <p className="text-sm text-slate-400 mb-4">
+            A spreadsheet (CSV) of where every team member&rsquo;s open files stand right now: stage, checklist progress,
+            closing date, next deadline and overdue deadlines. It is a status summary only &mdash; no prices, client names,
+            documents, messages or contacts. Only the team owner can download it.
           </p>
-
-          <div className="divide-y divide-slate-700 mt-2">
-            {directory.length === 0 && (
-              <p className="px-6 py-8 text-sm text-slate-500 text-center">No agents in the directory yet -- add one below.</p>
-            )}
-            {directory.map((agent) => (
-              <div key={agent.id} className="px-6 py-4 flex items-center justify-between gap-4">
-                <div>
-                  <span className="text-slate-100 font-medium">{agent.name}</span>
-                  {agent.email && <span className="ml-2 text-xs text-slate-500">{agent.email}</span>}
-                </div>
-                <div className="text-sm text-slate-400 text-right shrink-0">
-                  {agent.activeTransactions} active · {agent.totalTransactions} total
-                  {agent.tcCount > 0 && ` · ${agent.tcCount} TC${agent.tcCount === 1 ? '' : 's'}`}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <form onSubmit={handleAddDirectoryAgent} className="px-6 py-4 border-t border-slate-600 flex gap-3">
-            <input
-              type="text"
-              required
-              value={newAgentName}
-              onChange={(e) => setNewAgentName(e.target.value)}
-              placeholder="Agent name"
-              className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-            />
-            <input
-              type="email"
-              value={newAgentEmail}
-              onChange={(e) => setNewAgentEmail(e.target.value)}
-              placeholder="Email (optional)"
-              className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-            />
+          <div className="flex items-center gap-3 flex-wrap">
             <button
-              type="submit"
-              disabled={addingAgent}
+              type="button"
+              onClick={handleDownloadReport}
+              disabled={downloadingReport}
               className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
             >
-              {addingAgent ? 'Adding…' : 'Add to directory'}
+              {downloadingReport ? 'Building…' : 'Download team report (CSV)'}
             </button>
-          </form>
-          {directoryMessage && <p className="px-6 py-3 text-sm text-slate-300">{directoryMessage}</p>}
+            {reportMessage && <span className="text-sm text-slate-300">{reportMessage}</span>}
+          </div>
         </div>
       )}
 

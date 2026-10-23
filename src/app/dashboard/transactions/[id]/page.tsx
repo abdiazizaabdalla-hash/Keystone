@@ -2625,6 +2625,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             propertyAddress={transaction.property_address}
             closingDate={transaction.closing_date ?? null}
             canEdit={true}
+            manageCalendar
           />
         </div>
 
