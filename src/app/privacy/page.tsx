@@ -53,7 +53,7 @@ export default function PrivacyPage() {
         </ul>
         <p>
           Within Relay, what others can see follows the roles you set up: an agent you add sees the deals they are on, a team
-          owner sees their team&rsquo;s transactions, and a person you send a signature request to sees the document they are
+          member sees only their own deals (the team roster and team messages are shared), and a person you send a signature request to sees the document they are
           asked to sign. We may also disclose information when the law requires it or to protect people&rsquo;s safety and our
           rights, or as part of a merger or sale of the business (with notice to you).
         </p>

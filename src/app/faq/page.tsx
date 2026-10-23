@@ -185,7 +185,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Teams',
     q: 'Can team members see each other’s transactions?',
-    a: 'Only the team owner sees everyone’s work. A regular member sees their own transactions and agents, plus the team roster itself, but not a teammate’s pipeline.',
+    a: 'No one sees anyone else’s work. Every coordinator on a team, including the owner, sees only their own transactions, agents and contacts, plus the team roster and team messages.',
   },
   {
     category: 'Teams',

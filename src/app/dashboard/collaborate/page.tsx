@@ -5,23 +5,12 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import TeamMessaging from '@/components/TeamMessaging';
 
-interface MemberStats {
-  agents: number;
-  activeTransactions: number;
-  totalTransactions: number;
-  overdueCount: number;
-  dueTodayCount: number;
-  waitingOnCount: number;
-  closingSoonCount: number;
-}
-
 interface Member {
   userId: string;
   email: string;
   name: string;
   role: 'owner' | 'member';
   isYou: boolean;
-  stats?: MemberStats;
 }
 
 interface PendingInvite {
@@ -151,44 +140,6 @@ export default function CollaboratePage() {
     }
   };
 
-  const [exportingCompliance, setExportingCompliance] = useState(false);
-  const [exportError, setExportError] = useState('');
-
-  // Same blob-URL download pattern as the per-transaction compliance
-  // export (dashboard/transactions/[id]/page.tsx handleExportCompliance)
-  // -- GET /api/team/compliance-export is bearer-token authed like every
-  // other API route here, so a plain <a href> download link can't carry
-  // the Authorization header; this fetches it with authFetch instead and
-  // hands the browser the resulting blob.
-  const handleExportCompliance = async () => {
-    setExportError('');
-    setExportingCompliance(true);
-    try {
-      const res = await authFetch('/api/team/compliance-export');
-      if (!res.ok) {
-        const result = await res.json().catch(() => ({}));
-        throw new Error(result.error || 'Failed to generate compliance export');
-      }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `compliance-export-${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      if (err instanceof AuthRequiredError) {
-        router.push('/auth');
-        return;
-      }
-      setExportError(err instanceof Error ? err.message : 'Failed to generate compliance export');
-    } finally {
-      setExportingCompliance(false);
-    }
-  };
-
   const loadDirectory = async () => {
     try {
       const res = await authFetch('/api/team/agents');
@@ -238,7 +189,9 @@ export default function CollaboratePage() {
   };
 
   useEffect(() => {
-    load();
+    // Deferred so the initial fetch's setState is not a synchronous effect update.
+    const t = setTimeout(load, 0);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -374,21 +327,11 @@ export default function CollaboratePage() {
         <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100">
           {data.team.name || 'Collaborate'}
         </h1>
-        {isOwner && (
-          <button
-            onClick={handleExportCompliance}
-            disabled={exportingCompliance}
-            className="shrink-0 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 text-sm font-medium rounded-lg transition disabled:opacity-50"
-          >
-            {exportingCompliance ? 'Exporting…' : 'Export compliance CSV'}
-          </button>
-        )}
       </div>
-      {exportError && <p className="text-sm text-red-400 mb-2">{exportError}</p>}
       <p className="text-slate-400 mb-8">
         {isOwner
-          ? "Your team's roster and pipeline, all in one place."
-          : "Your team's roster. Only your team owner can see everyone's transaction details."}
+          ? 'Your team roster, messages and seats. Each coordinator\u2019s deals, agents and contacts stay private to their own login.'
+          : 'Your team roster and messages. Your deals, agents and contacts stay private to your own login.'}
       </p>
 
       <TeamMessaging members={data.members} isOwner={isOwner} />
@@ -464,14 +407,10 @@ export default function CollaboratePage() {
 
         <div className="divide-y divide-slate-700">
           {data.members.map((member) => {
-            const canDrillDown = isOwner && !!member.stats;
             return (
               <div
                 key={member.userId}
-                onClick={canDrillDown ? () => router.push(`/dashboard/collaborate/${member.userId}`) : undefined}
-                className={`px-6 py-4 flex items-center justify-between gap-4 ${
-                  canDrillDown ? 'cursor-pointer hover:bg-slate-600/30 transition' : ''
-                }`}
+                className="px-6 py-4 flex items-center justify-between gap-4"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -488,19 +427,8 @@ export default function CollaboratePage() {
                     </span>
                   </div>
                   {member.name && <div className="text-xs text-slate-500 truncate">{member.email}</div>}
-                  {isOwner && member.stats && (
-                    <div className="text-sm text-slate-400 mt-1">
-                      {member.stats.agents} agent{member.stats.agents === 1 ? '' : 's'} ·{' '}
-                      {member.stats.activeTransactions} active transaction
-                      {member.stats.activeTransactions === 1 ? '' : 's'} ·{' '}
-                      {member.stats.totalTransactions} total
-                    </div>
-                  )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  {canDrillDown && (
-                    <span className="text-xs text-blue-400 hidden sm:inline">View transactions ›</span>
-                  )}
                   {isOwner && !member.isYou && (
                     <button
                       onClick={(e) => {
@@ -583,70 +511,6 @@ export default function CollaboratePage() {
           {unassignedMessage && (
             <p className="px-6 py-3 text-sm text-amber-300 border-t border-amber-700/30">{unassignedMessage}</p>
           )}
-        </div>
-      )}
-
-      {isOwner && data.members.length > 1 && (
-        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
-          <div className="px-6 py-4 border-b border-slate-600">
-            <h2 className="font-display font-semibold text-slate-100">TC workload</h2>
-            <p className="text-sm text-slate-400 mt-1">
-              Who needs attention right now, across every TC on the {isBrokerage ? 'brokerage' : 'team'}.
-            </p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-slate-500 uppercase tracking-wider">
-                  <th className="text-left font-semibold px-6 py-2">TC</th>
-                  <th className="text-right font-semibold px-4 py-2">Active</th>
-                  <th className="text-right font-semibold px-4 py-2">Overdue</th>
-                  <th className="text-right font-semibold px-4 py-2">Due today</th>
-                  <th className="text-right font-semibold px-4 py-2">Waiting on</th>
-                  <th className="text-right font-semibold px-6 py-2">Closing soon</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700">
-                {[...data.members]
-                  .filter((member) => !!member.stats)
-                  .sort((a, b) => {
-                    const sa = a.stats!;
-                    const sb = b.stats!;
-                    return (
-                      sb.overdueCount - sa.overdueCount ||
-                      sb.dueTodayCount - sa.dueTodayCount ||
-                      sb.waitingOnCount - sa.waitingOnCount
-                    );
-                  })
-                  .map((member) => {
-                    const stats = member.stats!;
-                    return (
-                      <tr
-                        key={member.userId}
-                        onClick={() => router.push(`/dashboard/collaborate/${member.userId}`)}
-                        className="cursor-pointer hover:bg-slate-600/30 transition"
-                      >
-                        <td className="px-6 py-3 text-slate-200 font-medium truncate max-w-[12rem]">
-                          {member.name || member.email}
-                          {member.isYou && <span className="ml-1.5 text-xs text-slate-500">(you)</span>}
-                        </td>
-                        <td className="text-right px-4 py-3 text-slate-300">{stats.activeTransactions}</td>
-                        <td className={`text-right px-4 py-3 ${stats.overdueCount > 0 ? 'text-red-400 font-semibold' : 'text-slate-500'}`}>
-                          {stats.overdueCount}
-                        </td>
-                        <td className={`text-right px-4 py-3 ${stats.dueTodayCount > 0 ? 'text-amber-400 font-semibold' : 'text-slate-500'}`}>
-                          {stats.dueTodayCount}
-                        </td>
-                        <td className={`text-right px-4 py-3 ${stats.waitingOnCount > 0 ? 'text-blue-300' : 'text-slate-500'}`}>
-                          {stats.waitingOnCount}
-                        </td>
-                        <td className="text-right px-6 py-3 text-slate-300">{stats.closingSoonCount}</td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
 

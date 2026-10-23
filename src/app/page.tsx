@@ -24,9 +24,11 @@ export default function Home() {
       // true for them). Check which kind of session this actually is
       // before deciding where "already signed in" should go.
       router.push(decodeStoredRole() === 'agent' ? '/agent' : '/dashboard');
-    } else {
-      setChecking(false);
+      return;
     }
+    // Deferred so the state update is not a synchronous effect update.
+    const t = setTimeout(() => setChecking(false), 0);
+    return () => clearTimeout(t);
   }, [router]);
 
   if (checking) {
@@ -222,15 +224,17 @@ export default function Home() {
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <div>
-            <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">The transaction workspace</p>
-            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Every deal gets its own page.</h2>
-            <p className="text-slate-400">
-              Open a transaction and everything for that deal is right there, from the checklist
-              and documents to the messages, contacts, and invoice.
-            </p>
-          </div>
+        <ShotRow
+          name="transaction.jpg"
+          alt="A transaction page in Relay with critical dates, documents, the checklist, messages and the invoice for one deal"
+          reverse
+        >
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">The transaction workspace</p>
+          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Every deal gets its own page.</h2>
+          <p className="text-slate-400 mb-5">
+            Open a transaction and everything for that deal is right there, from the checklist
+            and documents to the messages, contacts, and invoice.
+          </p>
           <div className="grid sm:grid-cols-2 gap-3">
             {[
               'Checklist',
@@ -242,13 +246,13 @@ export default function Home() {
               'Invoice',
               'Payment status',
             ].map((line) => (
-              <div key={line} className="flex items-center gap-3 p-4 bg-slate-800/60 border border-slate-700 rounded-xl">
+              <div key={line} className="flex items-center gap-3 p-3 bg-slate-800/60 border border-slate-700 rounded-xl">
                 <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                 <span className="text-sm text-slate-300">{line}</span>
               </div>
             ))}
           </div>
-        </div>
+        </ShotRow>
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
@@ -427,7 +431,7 @@ export default function Home() {
             { title: "Daily digest", body: 'A morning email with overdue and due-today steps.' },
             { title: "Custom templates", body: 'Build checklists for different deal types, for deals and for listings. Pro and Team.' },
             { title: "Compliance report", body: 'Export a timestamped PDF of a deal’s documents, messages and checklist.' },
-            { title: "Team workspaces", body: 'Share a workspace with other coordinators. The owner sees the team’s files.' },
+            { title: "Team workspaces", body: 'Share a workspace and team messaging with other coordinators. Everyone’s deals, agents and contacts stay private to their own login.' },
             { title: "Payment tracking", body: 'See which invoices are paid and which are still outstanding.' },
             { title: "QuickBooks import and export", body: 'Download invoices, payments and agents for QuickBooks Online, or upload a QuickBooks export to bring invoices in.' },
             { title: "Calendar preferences", body: 'Pick which dates reach your calendar: critical dates, closing day, checklists or listing dates.' },
