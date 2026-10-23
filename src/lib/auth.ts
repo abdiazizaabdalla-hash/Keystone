@@ -67,7 +67,11 @@ export async function getUserFromRequest(request: NextRequest, options: { allowA
     }
   }
 
-  const isAdmin = isPlatformAdmin(user);
+  // Platform-admin powers apply ONLY to the /api/admin/* routes. Everywhere else the admin is
+  // treated like any other account, so their own Transactions, Invoices, Agents, QuickBooks
+  // export, search and messages show just their own (and their team's) data -- never other
+  // customers' records. (Previously the flag removed the ownership filter on ~30 routes.)
+  const isAdmin = isPlatformAdmin(user) && request.nextUrl.pathname.startsWith('/api/admin/');
 
   return { user, isAdmin };
 }
