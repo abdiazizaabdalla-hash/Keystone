@@ -22,11 +22,11 @@ begin
 
   -- ---------- agents ----------
   insert into public.agents (tc_user_id, name, brokerage, commission_percent, email, phone) values
-    (u, 'Lena Park',     'Capital City Realty',    25, 'lena.park@example.com',     '(512) 555-0141'),
-    (u, 'Marcus Bell',   'Lakeline Properties',    25, 'marcus.bell@example.com',   '(512) 555-0142'),
-    (u, 'Ana Ortiz',     'Hill Country Homes',     25, 'ana.ortiz@example.com',     '(512) 555-0143'),
-    (u, 'Sam Whitfield', 'Lakeway Luxury Group',   25, 'sam.whitfield@example.com', '(512) 555-0144'),
-    (u, 'Priya Nair',    'Georgetown Home Co.',    25, 'priya.nair@example.com',    '(512) 555-0145');
+    (u, 'Lena Park',     'Capital City Realty',     0, 'lena.park@example.com',     '(512) 555-0141'),
+    (u, 'Marcus Bell',   'Lakeline Properties',     0, 'marcus.bell@example.com',   '(512) 555-0142'),
+    (u, 'Ana Ortiz',     'Hill Country Homes',      0, 'ana.ortiz@example.com',     '(512) 555-0143'),
+    (u, 'Sam Whitfield', 'Lakeway Luxury Group',    0, 'sam.whitfield@example.com', '(512) 555-0144'),
+    (u, 'Priya Nair',    'Georgetown Home Co.',     0, 'priya.nair@example.com',    '(512) 555-0145');
   select id into a_lena   from public.agents where tc_user_id = u and name = 'Lena Park';
   select id into a_marcus from public.agents where tc_user_id = u and name = 'Marcus Bell';
   select id into a_ana    from public.agents where tc_user_id = u and name = 'Ana Ortiz';
