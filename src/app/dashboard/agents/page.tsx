@@ -94,6 +94,20 @@ export default function AgentsPage() {
     fetchDirectory();
   }, []);
 
+  // Arriving from a transaction ("View agent profile"): open that agent's row and scroll to it.
+  useEffect(() => {
+    if (loading || agents.length === 0) return;
+    const wanted = new URLSearchParams(window.location.search).get('agent');
+    if (!wanted || !agents.some((a) => a.id === wanted)) return;
+    const timer = setTimeout(() => {
+      setQuery('');
+      setSource('all');
+      setExpanded((prev) => (prev.has(wanted) ? prev : new Set(prev).add(wanted)));
+      setTimeout(() => document.getElementById(`agent-row-${wanted}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loading, agents]);
+
   // Non-fatal -- a 403 (no team) just leaves the picker hidden.
   const fetchDirectory = async () => {
     try {
@@ -506,7 +520,7 @@ export default function AgentsPage() {
               {visibleAgents.map((agent) => {
                 const open = expanded.has(agent.id);
                 return (
-                  <li key={agent.id}>
+                  <li key={agent.id} id={`agent-row-${agent.id}`}>
                     <button
                       type="button"
                       onClick={() => toggleExpanded(agent.id)}

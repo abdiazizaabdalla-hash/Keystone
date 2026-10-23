@@ -2339,12 +2339,28 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             {/* Agent */}
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent</p>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
-                  {agentName[0]}
+              {agent ? (
+                <Link
+                  href={`/dashboard/agents?agent=${agent.id}`}
+                  title="Open this agent's profile"
+                  className="group flex items-center gap-3 rounded-lg -mx-2 px-2 py-1 hover:bg-slate-700/50 transition"
+                >
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
+                    {agentName[0]}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold text-slate-100 group-hover:text-blue-300 transition">{agentName}</p>
+                    <p className="text-xs text-blue-400">View agent profile &rarr;</p>
+                  </div>
+                </Link>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
+                    {agentName[0]}
+                  </div>
+                  <p className="text-lg font-semibold text-slate-100">{agentName}</p>
                 </div>
-                <p className="text-lg font-semibold text-slate-100">{agentName}</p>
-              </div>
+              )}
             </div>
 
             {/* Purchase Price */}
