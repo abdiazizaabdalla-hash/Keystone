@@ -89,6 +89,9 @@ export default function ImportTransactionsPage() {
   const [createdAgentIds, setCreatedAgentIds] = useState<string[]>([]);
   const [undoing, setUndoing] = useState(false);
   const [undoNote, setUndoNote] = useState('');
+  // What is already in the account, so the preview can say which rows are new and which are already there.
+  const [existingAddrs, setExistingAddrs] = useState<Set<string>>(new Set());
+  const [knownAgents, setKnownAgents] = useState<AgentRecord[]>([]);
 
   const onFile = async (file: File | undefined) => {
     setError('');
@@ -107,6 +110,13 @@ export default function ImportTransactionsPage() {
     if (body.length > MAX_IMPORT_ROWS) {
       setError(`This file has ${body.length} rows. Import up to ${MAX_IMPORT_ROWS} at a time.`);
       return;
+    }
+    try {
+      const [agentsRes, txRes] = await Promise.all([authFetch('/api/agents'), authFetch('/api/transactions')]);
+      if (agentsRes.ok) setKnownAgents(await agentsRes.json());
+      if (txRes.ok) setExistingAddrs(new Set(((await txRes.json()) as TxRecord[]).map((t) => normalizeAddress(t.property_address || ''))));
+    } catch {
+      // The preview still works without it; the import itself checks again.
     }
     setFileName(file.name);
     setHeaders(head.map((h) => h.trim()));
@@ -137,12 +147,20 @@ export default function ImportTransactionsPage() {
       if (acc === null) problems.push('Acceptance date not understood');
       if (clo === null) problems.push('Closing date not understood');
       if (price === null) problems.push('Price not understood');
-      return { index: i + 2, r, address, problems, acc: acc || '', clo: clo || '', price: price === '' || price === null ? 0 : price };
+      const exists = Boolean(address) && existingAddrs.has(normalizeAddress(address));
+      const agentEmail = cell(r, 'agent_email').toLowerCase();
+      const newAgent =
+        Boolean(agentName || agentEmail) &&
+        !knownAgents.some((a) => (agentEmail && a.email && a.email.toLowerCase() === agentEmail) || (agentName && a.name.trim().toLowerCase() === agentName.toLowerCase()));
+      return { index: i + 2, r, address, problems, exists, newAgent, acc: acc || '', clo: clo || '', price: price === '' || price === null ? 0 : price };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, mapping]);
+  }, [rows, mapping, existingAddrs, knownAgents]);
 
   const blocking = prepared.filter((p) => p.problems.length > 0).length;
+  const alreadyIn = prepared.filter((p) => p.problems.length === 0 && p.exists).length;
+  const newDeals = prepared.length - blocking - alreadyIn;
+  const updateCountLabel = (n: number) => `${n} deal${n === 1 ? '' : 's'}`;
   const requiredMissing = mapping ? IMPORT_FIELDS.filter((f) => f.required && mapping[f.key] < 0) : [];
 
   const run = async () => {
@@ -336,22 +354,29 @@ export default function ImportTransactionsPage() {
 
       {mapping && !results && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <p className="text-slate-300">
-              <span className="font-semibold">{fileName}</span> · {rows.length} row{rows.length === 1 ? '' : 's'}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setMapping(null);
-                setRows([]);
-                setHeaders([]);
-              }}
-              disabled={running}
-              className="text-slate-400 hover:text-slate-200"
-            >
-              Choose a different file
-            </button>
+          <div className="flex items-center gap-4 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-4">
+            <div className="w-11 h-14 rounded-lg bg-slate-900 border border-slate-600 flex items-center justify-center text-[11px] font-bold text-blue-400">CSV</div>
+            <div className="min-w-0">
+              <p className="text-slate-100 font-semibold truncate">{fileName}</p>
+              <p className="text-xs text-slate-500">{rows.length} row{rows.length === 1 ? '' : 's'} · {headers.length} columns</p>
+            </div>
+            <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold border border-green-500/40 bg-green-500/10 text-green-300">{newDeals} new</span>
+              {alreadyIn > 0 && <span className="px-2.5 py-1 rounded-full text-xs font-semibold border border-slate-500/40 bg-slate-500/10 text-slate-300">{alreadyIn} already in Relay</span>}
+              {blocking > 0 && <span className="px-2.5 py-1 rounded-full text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-300">{blocking} need a fix</span>}
+              <button
+                type="button"
+                onClick={() => {
+                  setMapping(null);
+                  setRows([]);
+                  setHeaders([]);
+                }}
+                disabled={running}
+                className="ml-2 px-3 py-1.5 text-sm text-slate-300 border border-slate-600 hover:border-slate-500 rounded-lg transition"
+              >
+                Replace file
+              </button>
+            </div>
           </div>
 
           <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-5">
@@ -413,29 +438,38 @@ export default function ImportTransactionsPage() {
                 {blocking} row{blocking === 1 ? ' has' : 's have'} a problem and will be skipped. They are marked below.
               </p>
             )}
-            <div className="overflow-x-auto border border-slate-700 rounded-lg mb-4">
-              <table className="w-full text-xs">
+            <div className="overflow-x-auto border border-slate-700 rounded-xl mb-4 bg-slate-900/40">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left uppercase tracking-wider text-slate-500 border-b border-slate-700">
-                    <th className="px-3 py-2">Row</th>
-                    <th className="px-3 py-2">Address</th>
-                    <th className="px-3 py-2">Agent</th>
-                    <th className="px-3 py-2">Accepted</th>
-                    <th className="px-3 py-2">Closing</th>
-                    <th className="px-3 py-2">Price</th>
-                    <th className="px-3 py-2">Problems</th>
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500 border-b border-slate-700">
+                    <th className="px-4 py-2.5">Address</th>
+                    <th className="px-4 py-2.5">Agent</th>
+                    <th className="px-4 py-2.5">Price</th>
+                    <th className="px-4 py-2.5">Accepted</th>
+                    <th className="px-4 py-2.5">Closing</th>
+                    <th className="px-4 py-2.5">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {prepared.slice(0, 12).map((p) => (
-                    <tr key={p.index} className="border-b border-slate-700/60 last:border-0 text-slate-300">
-                      <td className="px-3 py-2">{p.index}</td>
-                      <td className="px-3 py-2 break-words">{p.address}</td>
-                      <td className="px-3 py-2">{cell(p.r, 'agent_name') || cell(p.r, 'agent_email')}</td>
-                      <td className="px-3 py-2">{p.acc}</td>
-                      <td className="px-3 py-2">{p.clo}</td>
-                      <td className="px-3 py-2">{p.price ? `$${Number(p.price).toLocaleString()}` : ''}</td>
-                      <td className="px-3 py-2 text-amber-300">{p.problems.join(', ')}</td>
+                    <tr key={p.index} className="border-b border-slate-800 last:border-0 text-slate-200">
+                      <td className="px-4 py-2.5 break-words">{p.address}</td>
+                      <td className="px-4 py-2.5">
+                        {cell(p.r, 'agent_name') || cell(p.r, 'agent_email')}
+                        {p.newAgent && <span className="ml-1.5 text-[11px] text-blue-300">new agent</span>}
+                      </td>
+                      <td className="px-4 py-2.5">{p.price ? `$${Number(p.price).toLocaleString()}` : ''}</td>
+                      <td className="px-4 py-2.5 text-slate-400">{p.acc}</td>
+                      <td className="px-4 py-2.5 text-slate-400">{p.clo}</td>
+                      <td className="px-4 py-2.5">
+                        {p.problems.length > 0 ? (
+                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-300" title={p.problems.join(', ')}>{p.problems[0]}</span>
+                        ) : p.exists ? (
+                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold border border-slate-500/40 bg-slate-500/10 text-slate-300">Already in Relay</span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold border border-green-500/40 bg-green-500/10 text-green-300">New</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -445,10 +479,10 @@ export default function ImportTransactionsPage() {
             <button
               type="button"
               onClick={run}
-              disabled={running || requiredMissing.length > 0 || prepared.length - blocking === 0}
+              disabled={running || requiredMissing.length > 0 || prepared.length - blocking - alreadyIn === 0}
               className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
             >
-              {running ? `Importing ${progress} of ${prepared.length}…` : `Import ${prepared.length - blocking} deal${prepared.length - blocking === 1 ? '' : 's'}`}
+              {running ? `Importing ${progress} of ${prepared.length}…` : `Import ${updateCountLabel(prepared.length - blocking - alreadyIn)}`}
             </button>
             {running && <p className="text-xs text-slate-500 mt-2">Keep this page open until it finishes.</p>}
           </div>

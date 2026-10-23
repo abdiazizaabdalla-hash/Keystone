@@ -115,7 +115,7 @@ interface ListingDoc {
   is_signed?: boolean | null;
 }
 
-const cardCls = 'bg-slate-800/50 border border-slate-700 rounded-lg p-5';
+const cardCls = 'bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-5';
 // Loose check that two addresses start with the same street number (used only to warn about a wrong contract).
 function sameStreetNumber(a: string, b: string): boolean {
   const num = (x: string) => (x.trim().match(/^\d+/) || [''])[0];
@@ -749,10 +749,22 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
       <div className="mt-3 mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
+          <span
+            className={`inline-block px-2.5 py-1 mb-2 rounded-full text-xs font-semibold border ${
+              listing.status === 'active'
+                ? 'bg-green-500/10 text-green-300 border-green-500/40'
+                : listing.status === 'under_offer'
+                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/40'
+                  : 'bg-blue-500/15 text-blue-300 border-blue-500/50'
+            }`}
+          >
+            {LISTING_STATUS_LABEL[listing.status as keyof typeof LISTING_STATUS_LABEL] || listing.status}
+          </span>
           <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 break-words">{listing.property_address}</h1>
           <p className="text-sm text-slate-400 mt-1">
-            {[listing.seller_name && `Seller: ${listing.seller_name}`, data.agent && `Agent: ${data.agent.name}`, money(listing.list_price)].filter(Boolean).join(' · ')}
+            {[listing.seller_name && `Seller: ${listing.seller_name}`, data.agent && `Agent: ${data.agent.name}`].filter(Boolean).join(' · ')}
           </p>
+          {money(listing.list_price) && <p className="text-2xl font-display text-blue-400 mt-1">{money(listing.list_price)}</p>}
           <p className="text-sm text-slate-400 mt-1">
             {(listing.status === 'active' || listing.status === 'under_offer') && daysOnMarket(listing.listed_on) !== null && (
               <span>
