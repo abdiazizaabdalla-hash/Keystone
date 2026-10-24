@@ -29,7 +29,7 @@ interface FormState {
 const EMPTY_FORM: FormState = { name: '', email: '', phone: '', company: '', role: '', notes: '', tags: '', newsletter: false };
 
 const inputCls =
-  'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
+  'w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -396,7 +396,7 @@ export default function ContactsPage() {
               setFormError('');
               setForm({ ...EMPTY_FORM });
             }}
-            className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition"
+            className="px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition"
           >
             + Add contact
           </button>
@@ -490,13 +490,13 @@ export default function ContactsPage() {
             type="button"
             onClick={importFromDeals}
             disabled={working}
-            className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
+            className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
           >
             Import from my deals
           </button>
         </div>
       ) : (
-        <div className="bg-slate-800/50 border border-slate-700 rounded-lg overflow-x-auto">
+        <div className="bg-white/5 border border-white/10 rounded-2xl overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wider text-slate-500 border-b border-slate-700">
@@ -622,7 +622,7 @@ export default function ContactsPage() {
             )}
             {formError && <p className="text-sm text-red-400">{formError}</p>}
             <div className="flex items-center gap-3 pt-1">
-              <button type="submit" disabled={saving} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+              <button type="submit" disabled={saving} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 {saving ? 'Saving…' : 'Save'}
               </button>
               <button type="button" onClick={() => setForm(null)} className="text-sm text-slate-400 hover:text-slate-200">

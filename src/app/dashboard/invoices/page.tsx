@@ -207,7 +207,7 @@ export default function InvoicesPage() {
   if (loading) {
     return (
       <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-center py-24">
             <div className="text-center">
               <div className="w-12 h-12 rounded-full border-4 border-slate-600 border-t-blue-400 animate-spin mx-auto mb-4" />
@@ -223,7 +223,7 @@ export default function InvoicesPage() {
     <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-6 md:mb-12">
+        <div className="mb-8 md:mb-10">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">Invoices</h1>
@@ -233,7 +233,7 @@ export default function InvoicesPage() {
               href="/dashboard/invoices/quickbooks"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 text-sm rounded-lg transition"
+              className="px-4 py-2 border border-white/10 hover:bg-white/5 text-slate-300 hover:text-slate-100 text-sm rounded-xl transition"
             >
               QuickBooks import / export
             </Link>
@@ -241,23 +241,23 @@ export default function InvoicesPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-12">
+        <div className="grid md:grid-cols-3 gap-6 mb-10">
           {/* Total Amount */}
-          <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
             <div className="text-sm text-slate-400 mb-2">Total Invoiced</div>
             <div className="text-3xl font-bold text-blue-400">${totalAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
             <div className="text-xs text-slate-500 mt-2">{invoices.length} invoices</div>
           </div>
 
           {/* Outstanding */}
-          <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
             <div className="text-sm text-slate-400 mb-2">Outstanding</div>
             <div className="text-3xl font-bold text-red-400">${outstandingAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
             <div className="text-xs text-slate-500 mt-2">{unpaidInvoices.length} unpaid</div>
           </div>
 
           {/* Received */}
-          <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
             <div className="text-sm text-slate-400 mb-2">Received</div>
             <div className="text-3xl font-bold text-green-400">${paidAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
             <div className="text-xs text-slate-500 mt-2">
@@ -267,34 +267,25 @@ export default function InvoicesPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6 mb-8">
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Search */}
-            <div>
-              <label className="text-sm text-slate-400 block mb-2">Search</label>
-              <input
-                type="text"
-                placeholder="Invoice #, Agent, File #..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-              />
-            </div>
-
-            {/* Status Filter */}
-            <div>
-              <label className="text-sm text-slate-400 block mb-2">Status</label>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as any)}
-                className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="all">All Invoices</option>
-                <option value="unpaid">Unpaid</option>
-                <option value="paid">Paid</option>
-              </select>
-            </div>
-          </div>
+        <div className="flex flex-col sm:flex-row gap-3 mb-8">
+          <input
+            type="text"
+            aria-label="Search invoices"
+            placeholder="Search invoice #, agent or file #"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+          />
+          <select
+            aria-label="Filter by status"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value as any)}
+            className="sm:w-48 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-slate-100 focus:border-blue-500 focus:outline-none"
+          >
+            <option value="all">All invoices</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="paid">Paid</option>
+          </select>
         </div>
 
         {error && (
@@ -305,7 +296,7 @@ export default function InvoicesPage() {
         )}
 
         {filteredInvoices.length === 0 ? (
-          <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-12 text-center">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-12 text-center">
             <svg className="w-16 h-16 text-slate-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
@@ -317,7 +308,7 @@ export default function InvoicesPage() {
           {/* Phones: one stacked card per invoice -- no sideways scroll. */}
           <div className="md:hidden space-y-3">
             {filteredInvoices.map((invoice) => (
-              <div key={invoice.id} className="bg-slate-700/50 border border-slate-600 rounded-lg p-4">
+              <div key={invoice.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
                 <div className="flex items-start justify-between gap-3">
                   <Link href={`/dashboard/invoices/${invoice.id}`} className="font-mono text-blue-400 font-semibold break-all">
                     {invoice.invoice_number}
@@ -348,7 +339,7 @@ export default function InvoicesPage() {
                         type="date"
                         value={dueDateDraft}
                         onChange={(e) => setDueDateDraft(e.target.value)}
-                        className="bg-slate-600 border border-slate-600 rounded-lg px-2 py-1.5 text-slate-100 text-base focus:border-blue-500 focus:outline-none"
+                        className="bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1.5 text-slate-100 text-base focus:border-blue-500 focus:outline-none"
                       />
                       <button
                         onClick={() => saveDueDate(invoice.id)}
@@ -389,7 +380,7 @@ export default function InvoicesPage() {
           </div>
 
           {/* Tablet and desktop: the original table, unchanged. */}
-          <div className="hidden md:block bg-slate-700/50 border border-slate-600 rounded-lg overflow-hidden">
+          <div className="hidden md:block bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -423,7 +414,7 @@ export default function InvoicesPage() {
                               type="date"
                               value={dueDateDraft}
                               onChange={(e) => setDueDateDraft(e.target.value)}
-                              className="bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-slate-100 text-sm focus:border-blue-500 focus:outline-none"
+                              className="bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-slate-100 text-sm focus:border-blue-500 focus:outline-none"
                             />
                             <button
                               onClick={() => saveDueDate(invoice.id)}

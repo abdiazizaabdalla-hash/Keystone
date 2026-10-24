@@ -303,7 +303,7 @@ export default function AgentsPage() {
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="shrink-0 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition shadow-lg"
+            className="shrink-0 px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition shadow-lg"
           >
             + Add Agent
           </button>
@@ -335,7 +335,7 @@ export default function AgentsPage() {
                 <select
                   value={selectedDirectoryId}
                   onChange={(e) => handlePickDirectoryAgent(e.target.value)}
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
                 >
                   <option value="">-- Not linked (new contact) --</option>
                   {directory.map((entry) => (
@@ -362,7 +362,7 @@ export default function AgentsPage() {
                   value={formData.name}
                   onChange={handleInputChange}
                   placeholder="John Smith"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                   required
                 />
               </div>
@@ -375,7 +375,7 @@ export default function AgentsPage() {
                   value={formData.brokerage}
                   onChange={handleInputChange}
                   placeholder="Coldwell Banker"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -387,7 +387,7 @@ export default function AgentsPage() {
                   value={formData.email}
                   onChange={handleInputChange}
                   placeholder="agent@example.com"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -397,7 +397,7 @@ export default function AgentsPage() {
                   name="phone"
                   value={formData.phone}
                   onValueChange={(v) => setFormData((prev) => ({ ...prev, phone: v }))}
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -411,7 +411,7 @@ export default function AgentsPage() {
                   onValueChange={(v) => setFormData((prev) => ({ ...prev, flatFee: v }))}
                   placeholder="400"
                   aria-label="Flat fee per deal"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 <p className="text-xs text-slate-500 mt-1">Fixed fee per transaction closed</p>
               </div>
@@ -430,7 +430,7 @@ export default function AgentsPage() {
                   step="0.01"
                   min="0"
                   max="100"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 <p className="text-xs text-slate-500 mt-1">Percentage of purchase price (optional)</p>
               </div>
@@ -440,7 +440,7 @@ export default function AgentsPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+                className="flex-1 px-4 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
               >
                 {isSubmitting ? 'Saving...' : editingId ? 'Update Agent' : 'Add Agent'}
               </button>
@@ -458,7 +458,7 @@ export default function AgentsPage() {
       )}
 
       {agents.length === 0 ? (
-        <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-12 text-center">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-12 text-center">
           <svg className="w-16 h-16 text-slate-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.856-1.487M15 10a3 3 0 11-6 0 3 3 0 016 0zM6 20a3 3 0 003-3v-2a3 3 0 00-3-3H3a3 3 0 00-3 3v2a3 3 0 003 3h3z" />
           </svg>
@@ -509,7 +509,7 @@ export default function AgentsPage() {
           </div>
 
           {visibleAgents.length === 0 ? (
-            <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-10 text-center">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-10 text-center">
               <p className="text-slate-300 font-medium">No agents match &ldquo;{query.trim()}&rdquo;</p>
               <button type="button" onClick={() => setQuery('')} className="mt-2 text-sm text-blue-400 hover:text-blue-300">
                 Clear search

@@ -201,7 +201,7 @@ export default function SearchPage() {
             placeholder="Search transactions, messages, documents, tasks..."
             autoFocus
             autoComplete="off"
-            className="w-full pl-12 pr-4 py-4 bg-slate-700/50 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
 
           {showRecents && recentSearches.length > 0 && (
@@ -211,7 +211,7 @@ export default function SearchPage() {
             // before the click on an item inside it ever registers.
             <div
               onMouseDown={(e) => e.preventDefault()}
-              className="absolute left-0 right-0 top-full mt-2 bg-slate-800 border border-slate-600 rounded-lg shadow-xl overflow-hidden z-10"
+              className="absolute left-0 right-0 top-full mt-2 bg-slate-800/70 border border-white/10 rounded-xl shadow-xl overflow-hidden z-10"
             >
               <div className="flex items-center justify-between px-4 py-2 border-b border-slate-700">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Recent</span>

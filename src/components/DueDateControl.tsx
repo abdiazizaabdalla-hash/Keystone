@@ -27,7 +27,7 @@ export default function DueDateControl({
   disabled?: boolean;
 }) {
   const inputClass =
-    'bg-slate-600 border border-slate-600 rounded-lg px-2 py-1.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none text-sm disabled:opacity-50';
+    'bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none text-sm disabled:opacity-50';
 
   const handleModeChange = (mode: DueDateMode) => {
     if (mode === 'fixed') {

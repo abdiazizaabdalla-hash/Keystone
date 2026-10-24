@@ -57,7 +57,7 @@ export default function AgentCalendarPrompt() {
           href="/agent/settings#calendar"
           target="_blank"
           rel="noopener noreferrer"
-          className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition"
+          className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition"
         >
           Set up calendar
         </Link>

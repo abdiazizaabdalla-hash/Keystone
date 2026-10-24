@@ -376,7 +376,7 @@ export default function Dashboard() {
           </div>
           <Link
             href="/dashboard/transactions/new"
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-blue-500/50"
+            className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-blue-500/50"
           >
             + New Deal
           </Link>
@@ -386,7 +386,7 @@ export default function Dashboard() {
           <p className="text-slate-400 mb-6">Start by creating your first deal to get organized</p>
           <Link
             href="/dashboard/transactions/new"
-            className="inline-block px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-lg transition hover:shadow-lg"
+            className="inline-block px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg transition hover:shadow-lg"
           >
             Create Your First Deal
           </Link>
@@ -396,24 +396,20 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="p-4 md:p-10 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Dashboard</h1>
-          <p className="text-slate-400">Welcome back to Relay TC</p>
+          <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Welcome back</h1>
+          <p className="text-slate-400">Here is what needs you today.</p>
         </div>
         <Link
           href="/dashboard/transactions/new"
-          className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-blue-500/50 text-center"
+          className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-500/20 text-center"
         >
-          + New Deal
+          + New deal
         </Link>
       </div>
-
-      <CriticalDatesCard />
-
-      <ListingsOverviewCard />
 
       {/* Needs Attention Today -- a cross-transaction triage view (fed by
           /api/dashboard/attention) so the first thing a TC sees is what
@@ -422,7 +418,7 @@ export default function Dashboard() {
           showing a loading skeleton, since the KPI row/table below
           already cover that moment. */}
       {attention && (
-        <div className="mb-8 bg-gradient-to-br from-slate-800/80 to-slate-800/40 border border-slate-700 rounded-lg p-5">
+        <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-semibold text-slate-100">Needs Attention Today</h2>
             {attention.totalNeedsAttention === 0 && (
@@ -559,15 +555,15 @@ export default function Dashboard() {
       )}
 
       {/* KPI row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-        <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
           <div className="text-xs text-slate-400 mb-1">Active Deals</div>
-          <div className="text-2xl font-bold text-blue-400">{stats.activeCount}</div>
+          <div className="text-3xl font-bold text-blue-400">{stats.activeCount}</div>
         </div>
 
-        <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
           <div className="text-xs text-slate-400 mb-1">Unpaid Invoices</div>
-          <div className={`text-2xl font-bold ${stats.overdueUnpaidCount > 0 ? 'text-red-400' : 'text-amber-400'}`}>
+          <div className={`text-3xl font-bold ${stats.overdueUnpaidCount > 0 ? 'text-red-400' : 'text-amber-400'}`}>
             {formatCurrency(stats.unpaidAmount)}
           </div>
           <div className="text-xs text-slate-500 mt-0.5">
@@ -578,18 +574,24 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
           <div className="text-xs text-slate-400 mb-1">Revenue This Month</div>
-          <div className="text-2xl font-bold text-green-400">{formatCurrency(stats.revenueThisMonth)}</div>
+          <div className="text-3xl font-bold text-green-400">{formatCurrency(stats.revenueThisMonth)}</div>
           <div className="text-xs text-slate-500 mt-1">{formatCurrency(stats.revenueAllTime)} received all time</div>
         </div>
+      </div>
 
-        <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4">
+      <details className="mb-8 group">
+        <summary className="cursor-pointer text-sm font-medium text-slate-400 hover:text-slate-200 transition list-none flex items-center gap-2">
+          <span className="group-open:rotate-90 transition-transform">›</span> More stats
+        </summary>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
           <div className="text-xs text-slate-400 mb-1">Closed This Month</div>
           <div className="text-2xl font-bold text-green-400">{stats.closedThisMonth}</div>
         </div>
 
-        <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
           <div className="text-xs text-slate-400 mb-1">Avg. Days to Close</div>
           <div className="text-2xl font-bold text-blue-400">
             {stats.avgDaysToClose !== null ? stats.avgDaysToClose : '—'}
@@ -599,11 +601,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
           <div className="text-xs text-slate-400 mb-1">Active Agents</div>
           <div className="text-2xl font-bold text-slate-200">{stats.totalAgents}</div>
         </div>
-      </div>
+        </div>
+      </details>
 
       {/* Active Transactions */}
       <div className="mb-10">
@@ -615,12 +618,12 @@ export default function Dashboard() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search property, file #, or agent..."
-              className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none w-full sm:w-64"
+              className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none w-full sm:w-64"
             />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+              className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-1.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
             >
               <option value="all">All Stages</option>
               {activeStatuses.map((s) => (
@@ -641,7 +644,7 @@ export default function Dashboard() {
         ) : (
           <>
             {/* Desktop table */}
-            <div className="hidden md:block bg-slate-800/40 border border-slate-700 rounded-lg overflow-hidden">
+            <div className="hidden md:block bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-700 bg-slate-800/60">
@@ -714,7 +717,7 @@ export default function Dashboard() {
                   <Link
                     key={tx.id}
                     href={`/dashboard/transactions/${tx.id}`}
-                    className="block bg-slate-800/40 border border-slate-700 rounded-lg p-4"
+                    className="block bg-white/5 border border-white/10 rounded-2xl p-4"
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="min-w-0">
@@ -761,11 +764,16 @@ export default function Dashboard() {
         )}
       </div>
 
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+        <CriticalDatesCard />
+        <ListingsOverviewCard />
+      </div>
+
       {/* Recently Closed snapshot */}
       {recentlyClosedRows.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold text-slate-100 mb-4">Recently Closed</h2>
-          <div className="bg-slate-800/40 border border-slate-700 rounded-lg divide-y divide-slate-700/60">
+          <div className="bg-white/5 border border-white/10 rounded-2xl divide-y divide-slate-700/60">
             {recentlyClosedRows.map((tx) => {
               const invoice = invoiceByTxId.get(tx.id);
               const isOverdue = !!invoice && !invoice.paid && !invoice.refunded && invoice.due_date < todayStr;

@@ -47,7 +47,7 @@ export default function ListingReadinessCard({ listing, agentName, docs, tasks, 
   };
 
   return (
-    <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6">
+    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
         <h2 className="text-lg font-bold text-slate-100">Ready to list</h2>
         <span className={`text-xs px-2 py-0.5 rounded-full border ${ready ? 'bg-green-500/15 text-green-300 border-green-500/30' : 'bg-amber-500/15 text-amber-300 border-amber-500/30'}`}>

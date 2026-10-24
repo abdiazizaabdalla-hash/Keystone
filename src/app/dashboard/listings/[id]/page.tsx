@@ -103,7 +103,7 @@ interface Detail {
 }
 
 const inputCls =
-  'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
+  'w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 const labelCls = 'block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5';
 interface ListingDoc {
   id: string;
@@ -115,7 +115,7 @@ interface ListingDoc {
   is_signed?: boolean | null;
 }
 
-const cardCls = 'bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-5';
+const cardCls = 'bg-white/5 border border-white/10 rounded-2xl p-5 md:p-6';
 // Loose check that two addresses start with the same street number (used only to warn about a wrong contract).
 function sameStreetNumber(a: string, b: string): boolean {
   const num = (x: string) => (x.trim().match(/^\d+/) || [''])[0];
@@ -128,9 +128,31 @@ const OFFER_LABEL: Record<string, string> = { received: 'Received', countered: '
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '');
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
+type ListingTab = 'overview' | 'checklist' | 'offers' | 'documents' | 'details';
+const LISTING_TABS: { id: ListingTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'checklist', label: 'Checklist' },
+  { id: 'offers', label: 'Offers & showings' },
+  { id: 'documents', label: 'Documents' },
+  { id: 'details', label: 'Details' },
+];
+
 export default function ListingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const [tab, setTab] = useState<ListingTab>('overview');
+  const selectTab = (next: ListingTab) => {
+    setTab(next);
+    try {
+      window.history.replaceState(null, '', `#${next}`);
+    } catch {
+      /* non-fatal */
+    }
+  };
+  useEffect(() => {
+    const h = window.location.hash.replace('#', '');
+    if (LISTING_TABS.some((t) => t.id === h)) setTab(h as ListingTab);
+  }, []);
   const [data, setData] = useState<Detail | null>(null);
   const [agents, setAgents] = useState<{ id: string; name: string; email?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -742,7 +764,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl">
+    <div className="p-4 md:p-10 max-w-5xl mx-auto">
       <Link href="/dashboard/listings" className="text-sm text-slate-400 hover:text-slate-200">
         ← Back to listings
       </Link>
@@ -787,7 +809,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="flex items-center gap-3">
           {converted ? (
-            <Link href={`/dashboard/transactions/${listing.converted_transaction_id}`} className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg">
+            <Link href={`/dashboard/transactions/${listing.converted_transaction_id}`} className="px-4 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg">
               Open the deal
             </Link>
           ) : (
@@ -795,7 +817,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <select
                 value={listing.status}
                 onChange={(e) => act(() => call('PATCH', `/api/listings/${id}`, { status: e.target.value }))}
-                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100"
+                className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100"
                 aria-label="Listing status"
               >
                 {LISTING_STATUSES.filter((s) => s !== 'converted').map((s) => (
@@ -823,48 +845,116 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
       {notice && <p className="mb-4 text-sm text-green-400">{notice}</p>}
 
-      {/* Key details at the top, like the transaction page. These inputs belong to the "More details" form below
-          (form="listing-details"), so one Save covers both. */}
-      <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="sm:col-span-2 lg:col-span-3">
-            <label className={labelCls}>Address</label>
-            <input form="listing-details" className={inputCls} value={det.propertyAddress} onChange={(e) => setDet({ ...det, propertyAddress: e.target.value })} required />
-          </div>
-          <div>
-            <label className={labelCls}>Listing agent</label>
-            <select form="listing-details" className={inputCls} value={det.agentId} onChange={(e) => setDet({ ...det, agentId: e.target.value })}>
-              <option value="">None yet</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls}>List price</label>
-            <MoneyInput form="listing-details" className={inputCls} aria-label="List price" value={det.listPrice} onValueChange={(v) => setDet({ ...det, listPrice: v })} />
-          </div>
-          <div>
-            <label className={labelCls}>Planned list date</label>
-            <input form="listing-details" className={inputCls} type="date" value={det.plannedListDate} onChange={(e) => setDet({ ...det, plannedListDate: e.target.value })} />
-          </div>
-          <div>
-            <label className={labelCls}>Listing expires</label>
-            <input form="listing-details" className={inputCls} type="date" value={det.expirationDate} onChange={(e) => setDet({ ...det, expirationDate: e.target.value })} />
-          </div>
-        </div>
-        <div className="mt-4 flex items-center gap-3">
-          <button type="submit" form="listing-details" disabled={savingDetails} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
-            {savingDetails ? 'Saving…' : 'Save details'}
+      {/* Tabs: one focused section at a time. Panels stay mounted (just hidden) so nothing is lost on switch. */}
+      <div role="tablist" aria-label="Listing sections" className="flex gap-1 overflow-x-auto mb-8 p-1 bg-white/5 border border-white/10 rounded-2xl">
+        {LISTING_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => selectTab(t.id)}
+            className={`px-4 md:px-5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
+              tab === t.id ? 'bg-blue-500 text-white shadow' : 'text-slate-300 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            {t.label}
           </button>
-          <p className="text-xs text-slate-500">Changing the planned list date moves every unfinished checklist step with it.</p>
-        </div>
+        ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="space-y-6 min-w-0">
+      <div className="space-y-6">
+        <div className={tab === 'overview' ? 'space-y-6' : 'hidden'}>
+          {data.agent && listing.share_with_agent !== false && <ListingThread endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} />}
+
+          {/* Ready to list: what is still missing before go-live */}
+          {['preparing', 'active'].includes(listing.status) && (
+            <ListingReadinessCard
+              listing={listing}
+              agentName={data.agent?.name ?? null}
+              docs={docs}
+              tasks={tasks}
+              dates={dates}
+              onWaive={(docsNotNeeded) => void act(() => call('PATCH', `/api/listings/${id}`, { docsNotNeeded }))}
+            />
+          )}
+
+          {/* Key dates */}
+          <div className={cardCls}>
+            <h2 className="text-lg font-bold text-slate-100 mb-3">Key dates</h2>
+            <ul className="space-y-1 text-sm mb-3">
+              {listing.planned_list_date && (
+                <li className="flex justify-between gap-3 text-slate-300">
+                  <span>Planned list date</span>
+                  <span>{formatDisplayDate(listing.planned_list_date)}</span>
+                </li>
+              )}
+              {listing.expiration_date && (
+                <li className="flex justify-between gap-3 text-slate-300">
+                  <span>Listing expires</span>
+                  <span>{formatDisplayDate(listing.expiration_date)}</span>
+                </li>
+              )}
+              {dates.map((d) => (
+                <li key={d.id} className="flex items-center justify-between gap-3 text-slate-300">
+                  <span className="break-words min-w-0">{d.label}</span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    {formatDisplayDate(d.due_date)}
+                    <button type="button" onClick={() => act(() => call('DELETE', `/api/listings/${id}/dates/${d.id}`))} className="text-slate-600 hover:text-red-300" aria-label={`Remove ${d.label}`}>
+                      ✕
+                    </button>
+                  </span>
+                </li>
+              ))}
+              {!listing.planned_list_date && !listing.expiration_date && dates.length === 0 && <li className="text-slate-500">No dates yet.</li>}
+            </ul>
+            <form
+              className="flex flex-wrap gap-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (await act(() => call('POST', `/api/listings/${id}/dates`, newDate))) setNewDate({ label: '', dueDate: '' });
+              }}
+            >
+              <input className={`${inputCls} flex-1 min-w-[8rem]`} placeholder="Open house, price review…" value={newDate.label} onChange={(e) => setNewDate({ ...newDate, label: e.target.value })} maxLength={120} />
+              <input className={`${inputCls} w-auto`} type="date" value={newDate.dueDate} onChange={(e) => setNewDate({ ...newDate, dueDate: e.target.value })} aria-label="Date" />
+              <button type="submit" disabled={!newDate.label.trim() || !newDate.dueDate} className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg disabled:opacity-50">
+                Add
+              </button>
+            </form>
+          </div>
+
+          {/* Communication -- offer emails forwarded to this listing's own address wait for review in the Offers card;
+              the address itself lives down here, like the deal page. Hidden until the inbound domain is configured. */}
+          {inboundAddress && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6">
+              <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
+              <p className="text-xs text-slate-400 mb-3">
+                Forward or CC offer emails for this listing here and they’ll wait in the Offers card for you to review. Nothing becomes an offer until you add it.
+              </p>
+              <div className="flex items-center gap-2 mb-2">
+                <code className="flex-1 min-w-0 truncate bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-blue-300">{inboundAddress}</code>
+                <button
+                  type="button"
+                  className="flex-shrink-0 px-3 py-2 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(inboundAddress);
+                      setCopiedAddr(true);
+                      setTimeout(() => setCopiedAddr(false), 2000);
+                    } catch {
+                      setNotice('Couldn’t copy automatically. Select the address and copy it by hand.');
+                    }
+                  }}
+                >
+                  {copiedAddr ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">{inbound.length === 0 ? 'No offer emails waiting.' : `${inbound.length} offer email${inbound.length === 1 ? '' : 's'} waiting in the Offers card.`}</p>
+            </div>
+          )}
+        </div>
+
+        <div className={tab === 'checklist' ? 'space-y-6' : 'hidden'}>
           {/* Checklist */}
           <div className={cardCls}>
             <div className="flex items-center justify-between gap-3 mb-3">
@@ -1000,6 +1090,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             </p>
           </div>
 
+        </div>
+
+        <div className={tab === 'offers' ? 'space-y-6' : 'hidden'}>
           {/* Offers */}
           <div className={cardCls}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -1136,7 +1229,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                     <select
                       value={o.status}
                       onChange={(e) => act(() => call('PATCH', `/api/listings/${id}/offers/${o.id}`, { status: e.target.value }))}
-                      className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-100"
+                      className="bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-100"
                       aria-label="Offer status"
                     >
                       {Object.entries(OFFER_LABEL).map(([k, v]) => (
@@ -1282,6 +1375,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             </form>
           </div>
 
+        </div>
+
+        <div className={tab === 'documents' ? 'space-y-6' : 'hidden'}>
           {/* Documents */}
           <div className={cardCls}>
             <h2 className="text-lg font-bold text-slate-100 mb-1">Documents</h2>
@@ -1416,38 +1512,49 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             {docError && <p className="text-sm text-red-400 mt-2">{docError}</p>}
           </div>
 
-          {/* Communication -- offer emails forwarded to this listing's own address wait for review in the Offers card;
-              the address itself lives down here, like the deal page. Hidden until the inbound domain is configured. */}
-          {inboundAddress && (
-            <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4 md:p-6">
-              <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
-              <p className="text-xs text-slate-400 mb-3">
-                Forward or CC offer emails for this listing here and they’ll wait in the Offers card for you to review. Nothing becomes an offer until you add it.
-              </p>
-              <div className="flex items-center gap-2 mb-2">
-                <code className="flex-1 min-w-0 truncate bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-blue-300">{inboundAddress}</code>
-                <button
-                  type="button"
-                  className="flex-shrink-0 px-3 py-2 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(inboundAddress);
-                      setCopiedAddr(true);
-                      setTimeout(() => setCopiedAddr(false), 2000);
-                    } catch {
-                      setNotice('Couldn’t copy automatically. Select the address and copy it by hand.');
-                    }
-                  }}
-                >
-                  {copiedAddr ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              <p className="text-xs text-slate-500">{inbound.length === 0 ? 'No offer emails waiting.' : `${inbound.length} offer email${inbound.length === 1 ? '' : 's'} waiting in the Offers card.`}</p>
-            </div>
-          )}
         </div>
 
-        <div className="space-y-6 min-w-0">
+        <div className={tab === 'details' ? 'space-y-6' : 'hidden'}>
+      {/* Key details at the top, like the transaction page. These inputs belong to the "More details" form below
+          (form="listing-details"), so one Save covers both. */}
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className={labelCls}>Address</label>
+            <input form="listing-details" className={inputCls} value={det.propertyAddress} onChange={(e) => setDet({ ...det, propertyAddress: e.target.value })} required />
+          </div>
+          <div>
+            <label className={labelCls}>Listing agent</label>
+            <select form="listing-details" className={inputCls} value={det.agentId} onChange={(e) => setDet({ ...det, agentId: e.target.value })}>
+              <option value="">None yet</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>List price</label>
+            <MoneyInput form="listing-details" className={inputCls} aria-label="List price" value={det.listPrice} onValueChange={(v) => setDet({ ...det, listPrice: v })} />
+          </div>
+          <div>
+            <label className={labelCls}>Planned list date</label>
+            <input form="listing-details" className={inputCls} type="date" value={det.plannedListDate} onChange={(e) => setDet({ ...det, plannedListDate: e.target.value })} />
+          </div>
+          <div>
+            <label className={labelCls}>Listing expires</label>
+            <input form="listing-details" className={inputCls} type="date" value={det.expirationDate} onChange={(e) => setDet({ ...det, expirationDate: e.target.value })} />
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button type="submit" form="listing-details" disabled={savingDetails} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+            {savingDetails ? 'Saving…' : 'Save details'}
+          </button>
+          <p className="text-xs text-slate-500">Changing the planned list date moves every unfinished checklist step with it.</p>
+        </div>
+      </div>
+
           {/* Details */}
           <form id="listing-details" onSubmit={saveDetails} className={`${cardCls} space-y-3`}>
             <h2 className="text-lg font-bold text-slate-100">More details</h2>
@@ -1534,68 +1641,10 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 <p className="text-[11px] text-slate-500 mt-1">Handing it over moves the listing to that teammate (and its calendar reminders to their calendar).</p>
               </div>
             )}
-            <button type="submit" disabled={savingDetails} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+            <button type="submit" disabled={savingDetails} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
               {savingDetails ? 'Saving…' : 'Save details'}
             </button>
           </form>
-
-          {data.agent && listing.share_with_agent !== false && <ListingThread endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} />}
-
-          {/* Key dates */}
-          <div className={cardCls}>
-            <h2 className="text-lg font-bold text-slate-100 mb-3">Key dates</h2>
-            <ul className="space-y-1 text-sm mb-3">
-              {listing.planned_list_date && (
-                <li className="flex justify-between gap-3 text-slate-300">
-                  <span>Planned list date</span>
-                  <span>{formatDisplayDate(listing.planned_list_date)}</span>
-                </li>
-              )}
-              {listing.expiration_date && (
-                <li className="flex justify-between gap-3 text-slate-300">
-                  <span>Listing expires</span>
-                  <span>{formatDisplayDate(listing.expiration_date)}</span>
-                </li>
-              )}
-              {dates.map((d) => (
-                <li key={d.id} className="flex items-center justify-between gap-3 text-slate-300">
-                  <span className="break-words min-w-0">{d.label}</span>
-                  <span className="flex items-center gap-2 shrink-0">
-                    {formatDisplayDate(d.due_date)}
-                    <button type="button" onClick={() => act(() => call('DELETE', `/api/listings/${id}/dates/${d.id}`))} className="text-slate-600 hover:text-red-300" aria-label={`Remove ${d.label}`}>
-                      ✕
-                    </button>
-                  </span>
-                </li>
-              ))}
-              {!listing.planned_list_date && !listing.expiration_date && dates.length === 0 && <li className="text-slate-500">No dates yet.</li>}
-            </ul>
-            <form
-              className="flex flex-wrap gap-2"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (await act(() => call('POST', `/api/listings/${id}/dates`, newDate))) setNewDate({ label: '', dueDate: '' });
-              }}
-            >
-              <input className={`${inputCls} flex-1 min-w-[8rem]`} placeholder="Open house, price review…" value={newDate.label} onChange={(e) => setNewDate({ ...newDate, label: e.target.value })} maxLength={120} />
-              <input className={`${inputCls} w-auto`} type="date" value={newDate.dueDate} onChange={(e) => setNewDate({ ...newDate, dueDate: e.target.value })} aria-label="Date" />
-              <button type="submit" disabled={!newDate.label.trim() || !newDate.dueDate} className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg disabled:opacity-50">
-                Add
-              </button>
-            </form>
-          </div>
-
-          {/* Ready to list: what is still missing before go-live */}
-          {['preparing', 'active'].includes(listing.status) && (
-            <ListingReadinessCard
-              listing={listing}
-              agentName={data.agent?.name ?? null}
-              docs={docs}
-              tasks={tasks}
-              dates={dates}
-              onWaive={(docsNotNeeded) => void act(() => call('PATCH', `/api/listings/${id}`, { docsNotNeeded }))}
-            />
-          )}
 
           {/* Contacts */}
           <div className={cardCls}>
@@ -1794,7 +1843,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             )}
             {relistError && <p className="text-sm text-red-400">{relistError}</p>}
             <div className="flex items-center gap-3 pt-1">
-              <button type="submit" disabled={relisting} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+              <button type="submit" disabled={relisting} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 {relisting ? 'Creating…' : 'Create new listing'}
               </button>
               <button type="button" onClick={() => setRelistOpen(false)} disabled={relisting} className="text-sm text-slate-400 hover:text-slate-200">
@@ -1857,7 +1906,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                   <li key={n}>{n}</li>
                 ))}
               </ul>
-              <Link href={`/dashboard/transactions/${dealCreated.txId}`} className="inline-block px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg">
+              <Link href={`/dashboard/transactions/${dealCreated.txId}`} className="inline-block px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg">
                 Open the deal
               </Link>
             </div>
@@ -1987,7 +2036,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             })()}
             {convertError && <p className="text-sm text-red-400">{convertError}</p>}
             <div className="flex items-center gap-3 pt-1">
-              <button type="submit" disabled={converting || Boolean(reading) || !conv.fileNumber.trim()} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+              <button type="submit" disabled={converting || Boolean(reading) || !conv.fileNumber.trim()} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 {converting ? 'Creating the deal…' : 'Create deal'}
               </button>
               <button type="button" onClick={() => setConvertOffer(null)} disabled={converting} className="text-sm text-slate-400 hover:text-slate-200">

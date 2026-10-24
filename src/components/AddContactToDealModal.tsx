@@ -120,7 +120,7 @@ export default function AddContactToDealModal({ person, onClose }: { person: Per
           value={role}
           onChange={(e) => setRole(e.target.value)}
           placeholder="Buyer, Lender, Photographer…"
-          className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none mb-3"
+          className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none mb-3"
         />
         <div className="flex items-center gap-1 mb-2">
           <button type="button" className={tabCls(tab === 'deals')} onClick={() => setTab('deals')}>
@@ -138,7 +138,7 @@ export default function AddContactToDealModal({ person, onClose }: { person: Per
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by address"
-          className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none mb-3"
+          className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none mb-3"
         />
         <div className="overflow-y-auto space-y-2 min-h-[8rem]">
           {loading && <p className="text-sm text-slate-400">Loading…</p>}

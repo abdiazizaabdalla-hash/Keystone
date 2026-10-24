@@ -60,7 +60,7 @@ export default function ListingsOverviewCard() {
   );
 
   return (
-    <div className="mb-8 bg-gradient-to-br from-slate-800/80 to-slate-800/40 border border-slate-700 rounded-lg p-5">
+    <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-5">
       <div className="flex items-center justify-between gap-3 mb-4">
         <h2 className="text-lg font-semibold text-slate-100">Listings</h2>
         <Link href="/dashboard/listings" className="text-sm text-blue-400 hover:text-blue-300">

@@ -93,7 +93,7 @@ export default function AccountSecuritySection() {
   if (enabled === null) return null;
 
   return (
-    <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-4 md:p-6 mt-6">
+    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6 mt-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-slate-100">Two-step sign-in</h2>
@@ -115,7 +115,7 @@ export default function AccountSecuritySection() {
           <button
             onClick={start}
             disabled={busy}
-            className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
           >
             {busy ? 'Starting…' : 'Set up'}
           </button>
@@ -145,13 +145,13 @@ export default function AccountSecuritySection() {
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               placeholder="123456"
-              className="w-36 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-center tracking-[0.3em] text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              className="w-36 bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-center tracking-[0.3em] text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               required
             />
             <button
               type="submit"
               disabled={busy || code.length !== 6}
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+              className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
             >
               {busy ? 'Checking…' : 'Turn on'}
             </button>

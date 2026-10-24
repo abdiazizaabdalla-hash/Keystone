@@ -62,7 +62,7 @@ export default function ListingThread({ endpoint, self, otherLabel }: { endpoint
   };
 
   return (
-    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-5">
+    <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
       <h2 className="text-lg font-bold text-slate-100">Messages with {otherLabel}</h2>
       <p className="text-xs text-slate-500 mb-3">Keep it short. {self === 'tc' ? 'The listing agent can see this whole thread, including earlier messages, and gets an email that says there is a new message (not the message itself).' : 'Your coordinator gets an email that says there is a new message.'}</p>
       {!available && <p className="text-sm text-slate-500">Messages will appear here once the latest database update has been run.</p>}
@@ -87,7 +87,7 @@ export default function ListingThread({ endpoint, self, otherLabel }: { endpoint
           </div>
           <form onSubmit={send} className="mt-3 space-y-2">
             <textarea
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               rows={2}
               maxLength={2000}
               placeholder="Write a message…"
@@ -95,7 +95,7 @@ export default function ListingThread({ endpoint, self, otherLabel }: { endpoint
               onChange={(e) => setText(e.target.value)}
             />
             {error && <p className="text-sm text-red-400">{error}</p>}
-            <button type="submit" disabled={sending || !text.trim()} className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+            <button type="submit" disabled={sending || !text.trim()} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
               {sending ? 'Sending…' : 'Send'}
             </button>
           </form>

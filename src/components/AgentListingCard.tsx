@@ -31,7 +31,7 @@ export default function AgentListingCard({ listing: l }: { listing: AgentListing
   return (
     <Link
       href={`/agent/listings/${l.id}`}
-      className="block text-left bg-slate-800/50 border border-slate-700 rounded-lg p-4 hover:bg-slate-700/40 transition"
+      className="block text-left bg-white/5 border border-white/10 rounded-2xl p-4 hover:bg-slate-700/40 transition"
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-slate-100 font-semibold leading-snug break-words">{l.propertyAddress}</p>

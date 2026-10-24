@@ -21,7 +21,7 @@ interface Props {
 }
 
 const inputCls =
-  'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
+  'w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 
 // A seller progress update drafted from what is logged on the listing. Edit it, pick who gets it, send.
 export default function SellerUpdateModal({ listingId, tcName, listing, showings, offers, priceChanges, dates, missingDocs, contacts, onClose, onSent }: Props) {
@@ -110,7 +110,7 @@ export default function SellerUpdateModal({ listingId, tcName, listing, showings
           <textarea className={`${inputCls} font-sans`} rows={16} value={body} maxLength={8000} onChange={(e) => setBody(e.target.value)} aria-label="Message" />
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button" onClick={send} disabled={sending || picked.size === 0 || !subject.trim() || !body.trim()} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+            <button type="button" onClick={send} disabled={sending || picked.size === 0 || !subject.trim() || !body.trim()} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
               {sending ? 'Sending…' : 'Send from Relay'}
             </button>
             <button

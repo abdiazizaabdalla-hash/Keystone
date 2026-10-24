@@ -498,7 +498,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
             status, dates -- just plain text instead of editable
             dropdowns/inputs. The Invoice section below is the one part
             of this card that isn't purely read-only. */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
           <div className="mb-4">
             <h1 className="text-xl font-display font-semibold text-slate-100">
               {transaction.propertyAddress || transaction.fileNumber}
@@ -578,7 +578,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                         type="button"
                         onClick={handleGeneratePayLink}
                         disabled={isGeneratingPayLink}
-                        className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 shrink-0"
+                        className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 shrink-0"
                       >
                         {isGeneratingPayLink ? 'Creating link…' : 'Pay Now'}
                       </button>
@@ -622,7 +622,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
             the right. Both stack full-width on mobile, in source order. */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
           <div className="lg:order-2 lg:self-start flex flex-col gap-8">
-            <section className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6 flex flex-col h-[28rem]">
+            <section className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col h-[28rem]">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-slate-100">Messages</h2>
                 <Link
@@ -667,7 +667,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               />
               {attachError && <p className="text-xs text-red-400 mb-2">{attachError}</p>}
               {pendingAttachment && (
-                <div className="flex items-center gap-2 mb-2 text-xs text-slate-300 bg-slate-700/50 border border-slate-600 rounded-lg px-2.5 py-1.5">
+                <div className="flex items-center gap-2 mb-2 text-xs text-slate-300 bg-white/5 border border-white/10 rounded-2xl px-2.5 py-1.5">
                   <span className="truncate flex-1">📎 {pendingAttachment.fileName}</span>
                   <button
                     type="button"
@@ -699,19 +699,19 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                     }
                   }}
                   placeholder={`Message ${transaction.tcLabel}…`}
-                  className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
+                  className="flex-1 bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
                 />
                 <button
                   onClick={handleSendMessage}
                   disabled={sendingMessage || (!messageDraft.trim() && !pendingAttachment)}
-                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
                 >
                   Send
                 </button>
               </div>
             </section>
 
-            <section className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+            <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <div className="mb-5">
                 <h2 className="text-lg font-bold text-slate-100 mb-1">Checklist</h2>
                 <p className="text-xs text-slate-500 mb-4">{transaction.checklistTemplateName || 'Baseline (default)'}</p>
@@ -724,7 +724,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                     </div>
                     <div className="w-full h-2 bg-slate-600 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
+                        className="h-full bg-blue-500 transition-all duration-300"
                         style={{ width: `${completionPercent}%` }}
                       />
                     </div>
@@ -780,7 +780,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               <p className="text-slate-500 text-xs mt-4">View-only -- your TC updates this checklist.</p>
             </section>
 
-            <section className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+            <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h2 className="text-lg font-bold text-slate-100 mb-4">Contacts</h2>
               <div className="space-y-4">
                 <div className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
@@ -806,27 +806,27 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                       value={newContactRole}
                       onChange={(e) => setNewContactRole(e.target.value)}
                       placeholder="Role (e.g. Lender)"
-                      className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
+                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
                     />
                     <input
                       type="text"
                       value={newContactName}
                       onChange={(e) => setNewContactName(e.target.value)}
                       placeholder="Name or company"
-                      className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                     />
                     <input
                       type="email"
                       value={newContactEmail}
                       onChange={(e) => setNewContactEmail(e.target.value)}
                       placeholder="Email"
-                      className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                     />
                     <PhoneInput
                       value={newContactPhone}
                       onValueChange={setNewContactPhone}
                       placeholder="Phone"
-                      className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                     />
                     {addContactError && <p className="text-[11px] text-red-400">{addContactError}</p>}
                     <div className="flex items-center gap-3">
@@ -870,7 +870,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
             </section>
           </div>
 
-          <section className="lg:order-1 bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8">
+          <section className="lg:order-1 bg-white/5 border border-white/10 rounded-2xl p-8">
             <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
             <p className="text-sm text-slate-400 mb-6">
               Organized by category, same as your TC sees it. Upload straight into a category, or view/download
@@ -893,7 +893,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                 value={docSearch}
                 onChange={(e) => setDocSearch(e.target.value)}
                 placeholder="Search documents by name, type, category, or checklist stage..."
-                className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
 

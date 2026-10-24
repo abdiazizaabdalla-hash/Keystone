@@ -30,7 +30,7 @@ interface Props {
 }
 
 const inputCls =
-  'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
+  'w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DEFAULT_SUBJECT = 'Signed: {{document}} - {{property}}';
 const DEFAULT_MESSAGE =
@@ -92,7 +92,7 @@ export default function ListingSignModal({ doc, seller, people, onClose, onSent 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center overflow-y-auto p-4" role="dialog" aria-modal="true" aria-label="Send for signature">
-      <div className="w-full max-w-2xl bg-slate-800 border border-slate-600 rounded-lg p-5 md:p-6 my-8">
+      <div className="w-full max-w-2xl bg-slate-800/70 border border-white/10 rounded-xl p-5 md:p-6 my-8">
         <div className="flex items-start justify-between gap-3 mb-1">
           <h2 className="text-lg font-bold text-slate-100">Send for signature</h2>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200" aria-label="Close">

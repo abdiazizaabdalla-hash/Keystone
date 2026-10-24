@@ -284,7 +284,7 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
           {downloadUrl && (
             <a
               href={downloadUrl}
-              className="inline-block px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
+              className="inline-block px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
             >
               Download signed PDF
             </a>
@@ -372,7 +372,7 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
           </div>
         )}
 
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6 space-y-5">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-5">
           <div className="flex gap-2">
             <button
               type="button"
@@ -460,7 +460,7 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
             type="button"
             onClick={handleSubmit}
             disabled={submitting || declining}
-            className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 disabled:opacity-50 text-white font-semibold rounded-lg transition"
+            className="w-full px-6 py-3 bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white font-semibold rounded-lg transition"
           >
             {submitting ? 'Submitting…' : 'Sign & Submit'}
           </button>
@@ -484,7 +484,7 @@ export default function SignPage({ params }: { params: Promise<{ token: string }
                 onChange={(e) => setDeclineReason(e.target.value)}
                 placeholder="Optional note to the sender"
                 rows={2}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
               {declineError && <p className="text-sm text-red-400">{declineError}</p>}
               <div className="flex gap-2">

@@ -151,11 +151,11 @@ export default function QuickBooksConnectCard() {
   if (status && !status.connected && !status.available) return null;
 
   const btn = 'text-sm px-4 py-2 rounded-lg transition disabled:opacity-50';
-  const primary = `${btn} bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold`;
+  const primary = `${btn} bg-blue-500 hover:bg-blue-400 text-white font-semibold`;
   const ghost = `${btn} border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100`;
 
   return (
-    <div id="quickbooks" className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+    <div id="quickbooks" className="bg-white/5 border border-white/10 rounded-2xl p-6">
       <div className="flex items-center justify-between gap-2 mb-1">
         <h2 className="text-lg font-bold text-slate-100">QuickBooks Online</h2>
         {status?.connected && !status.needsReconnect && (

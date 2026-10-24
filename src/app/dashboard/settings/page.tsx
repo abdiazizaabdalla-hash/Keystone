@@ -461,7 +461,7 @@ function SettingsContent() {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Jane Smith"
-              className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
             />
           </div>
         </div>
@@ -480,7 +480,7 @@ function SettingsContent() {
                 onValueChange={setDefaultFlatFee}
                 placeholder="400"
                 aria-label="Default flat fee per deal"
-                className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
 
@@ -495,7 +495,7 @@ function SettingsContent() {
                 step="0.01"
                 min="0"
                 max="100"
-                className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
           </div>
@@ -518,7 +518,7 @@ function SettingsContent() {
               step="1"
               min="1"
               max="365"
-              className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
             />
           </div>
         </div>
@@ -563,7 +563,7 @@ function SettingsContent() {
             type="button"
             onClick={saveDueDateWorkflow}
             disabled={isSavingDueDateWorkflow}
-            className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50 text-sm"
+            className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50 text-sm"
           >
             {isSavingDueDateWorkflow ? 'Saving...' : 'Save'}
           </button>
@@ -664,7 +664,7 @@ function SettingsContent() {
                   value={templateNameDraft}
                   onChange={(e) => setTemplateNameDraft(e.target.value)}
                   placeholder="e.g., Cash Deals"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -681,7 +681,7 @@ function SettingsContent() {
                       value={step.name}
                       onChange={(e) => updateStepDraft(index, e.target.value)}
                       placeholder={`Step ${index + 1}`}
-                      className="flex-1 min-w-[10rem] bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none text-sm"
+                      className="flex-1 min-w-[10rem] bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none text-sm"
                     />
                     <DueDateControl value={step.dueDate} onChange={(next) => updateStepDueDateDraft(index, next)} />
                     <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer shrink-0" title="Flag this step as required -- shown wherever this template is shown, not enforced on the deal itself">
@@ -737,7 +737,7 @@ function SettingsContent() {
                   type="button"
                   onClick={saveTemplate}
                   disabled={isSavingTemplate}
-                  className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50 text-sm"
+                  className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50 text-sm"
                 >
                   {isSavingTemplate ? 'Saving...' : 'Save Template'}
                 </button>
@@ -862,7 +862,7 @@ function SettingsContent() {
           <button
             type="submit"
             disabled={isSaving}
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+            className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
           >
             {isSaving ? 'Saving...' : 'Save Settings'}
           </button>

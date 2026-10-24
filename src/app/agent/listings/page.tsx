@@ -59,7 +59,7 @@ export default function AgentListingsPage() {
         ) : error ? (
           <p className="text-red-400 text-sm">{error}</p>
         ) : listings.length === 0 ? (
-          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-8 text-center">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
             <p className="text-slate-300">No listings yet.</p>
             <p className="text-slate-500 text-sm mt-1">
               When your TC starts a listing for you and shares it, it will show up here. Deals you are on are on your{' '}

@@ -47,7 +47,7 @@ interface Props {
 }
 
 const inputCls =
-  'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
+  'w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 const labelCls = 'block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1';
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -254,7 +254,7 @@ export default function OfferIntakeModal({ listingId, offer, initial, onClose, o
                 {files.map((f, i) => (
                   <li key={i} className="flex items-center gap-2 text-sm">
                     <span className="flex-1 min-w-0 truncate text-slate-200">{f.name}</span>
-                    <select value={kinds[i]} onChange={(e) => setKinds((prev) => prev.map((k, j) => (j === i ? (e.target.value as OfferDocKind) : k)))} className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-100">
+                    <select value={kinds[i]} onChange={(e) => setKinds((prev) => prev.map((k, j) => (j === i ? (e.target.value as OfferDocKind) : k)))} className="bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-100">
                       {OFFER_DOC_KINDS.map((k) => (
                         <option key={k} value={k}>
                           {OFFER_DOC_KIND_LABEL[k]}
@@ -268,7 +268,7 @@ export default function OfferIntakeModal({ listingId, offer, initial, onClose, o
             {error && <p className="text-sm text-red-400">{error}</p>}
             {stage === 'reading' && <p className="text-sm text-blue-300">Reading {files.length} file{files.length === 1 ? '' : 's'}… this can take up to a minute.</p>}
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button type="button" onClick={read} disabled={files.length === 0 || stage === 'reading'} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+              <button type="button" onClick={read} disabled={files.length === 0 || stage === 'reading'} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 Read the documents
               </button>
               <button
@@ -411,7 +411,7 @@ export default function OfferIntakeModal({ listingId, offer, initial, onClose, o
                       {files.map((f, i) => (
                         <li key={i} className="flex items-center gap-2 text-sm">
                           <span className="flex-1 min-w-0 truncate text-slate-300">{f.name}</span>
-                          <select value={kinds[i]} onChange={(e) => setKinds((prev) => prev.map((k, j) => (j === i ? (e.target.value as OfferDocKind) : k)))} className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-100">
+                          <select value={kinds[i]} onChange={(e) => setKinds((prev) => prev.map((k, j) => (j === i ? (e.target.value as OfferDocKind) : k)))} className="bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-100">
                             {OFFER_DOC_KINDS.map((k) => (
                               <option key={k} value={k}>
                                 {OFFER_DOC_KIND_LABEL[k]}
@@ -427,7 +427,7 @@ export default function OfferIntakeModal({ listingId, offer, initial, onClose, o
             </div>
 
             <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-t border-slate-700">
-              <button type="button" onClick={save} disabled={saving} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+              <button type="button" onClick={save} disabled={saving} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 {saving ? 'Saving…' : revision ? 'Save as a new version' : 'Save offer'}
               </button>
               <button type="button" onClick={() => setStage('pick')} disabled={saving} className="text-sm text-slate-400 hover:text-slate-200">

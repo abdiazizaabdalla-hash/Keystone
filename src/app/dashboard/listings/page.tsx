@@ -42,7 +42,7 @@ const SELLER_ROLE = /seller|owner|trustee|executor|principal/i;
 const normName = (v: string) => v.toLowerCase().replace(/[^a-z]/g, '');
 
 const inputCls =
-  'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
+  'w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 
 const STATUS_STYLE: Record<ListingStatus, string> = {
   preparing: 'bg-amber-900/30 text-amber-300 border-amber-700/50',
@@ -279,7 +279,7 @@ export default function ListingsPage() {
               setFormError('');
               setShowNew(true);
             }}
-            className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition"
+            className="px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition"
           >
             + New listing
           </button>
@@ -302,7 +302,7 @@ export default function ListingsPage() {
       </div>
 
       {visible.length === 0 ? (
-        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-8 text-center">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <p className="text-slate-300 mb-1">{listings.length === 0 ? 'No listings yet.' : 'No open listings.'}</p>
           <p className="text-sm text-slate-500">Start one when a listing agreement is signed. Relay adds the prep checklist and counts the days to your list date.</p>
         </div>
@@ -470,7 +470,7 @@ export default function ListingsPage() {
               </div>
             )}
             <div className="flex items-center gap-3 pt-1">
-              <button type="submit" disabled={saving} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+              <button type="submit" disabled={saving} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 {saving ? 'Creating…' : 'Create listing'}
               </button>
               <button type="button" onClick={() => { setShowNew(false); resetNew(); }} className="text-sm text-slate-400 hover:text-slate-200">

@@ -137,7 +137,7 @@ export default function AgentSettingsPage() {
                 invite list already reads (see api/messages, api/agent-invites,
                 etc.) -- changing it updates how every TC sees this agent,
                 not just this page. */}
-            <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h2 className="text-lg font-bold text-slate-100 mb-1">Profile</h2>
               <p className="text-sm text-slate-400 mb-5">
                 This is the name your TCs see on messages, deals, and invites.
@@ -152,7 +152,7 @@ export default function AgentSettingsPage() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Jane Smith"
-                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -172,7 +172,7 @@ export default function AgentSettingsPage() {
                 <button
                   type="submit"
                   disabled={savingName || fullName.trim() === savedName.trim()}
-                  className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+                  className="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
                 >
                   {savingName ? 'Saving…' : 'Save name'}
                 </button>
@@ -183,7 +183,7 @@ export default function AgentSettingsPage() {
                 passwordless emailed link instead (see /agent/login), so
                 this is "set one if you'd rather not wait on email every
                 time", not a requirement. */}
-            <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h2 className="text-lg font-bold text-slate-100 mb-1">Password</h2>
               <p className="text-sm text-slate-400 mb-5">
                 Set or change your password. You can still log in with an emailed link instead, any time.
@@ -198,7 +198,7 @@ export default function AgentSettingsPage() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="At least 8 characters"
-                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -210,7 +210,7 @@ export default function AgentSettingsPage() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Re-enter password"
-                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 {passwordError && <p className="text-red-400 text-sm">{passwordError}</p>}

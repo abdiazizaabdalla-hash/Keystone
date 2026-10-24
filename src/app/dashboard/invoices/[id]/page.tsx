@@ -373,7 +373,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         </Link>
 
         {/* Main Card */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
           <div className="flex items-start justify-between mb-8">
             <div>
               <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">{invoice.invoice_number}</h1>
@@ -415,7 +415,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                         type="date"
                         value={dueDateInput}
                         onChange={(e) => setDueDateInput(e.target.value)}
-                        className="bg-slate-600 border border-slate-600 rounded-lg px-3 py-1.5 text-slate-100 focus:border-blue-500 focus:outline-none"
+                        className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-1.5 text-slate-100 focus:border-blue-500 focus:outline-none"
                       />
                       <button
                         type="button"
@@ -486,7 +486,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         {/* Fee Calculation */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
           <h3 className="text-xl font-bold text-slate-100 mb-6">Fee Calculation</h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center pb-4 border-b border-slate-600">
@@ -517,7 +517,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         {/* Send to Agent */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
           <h3 className="text-xl font-bold text-slate-100 mb-2">Send to Agent</h3>
           <p className="text-sm text-slate-400 mb-6">
             Download the invoice as a PDF, or email it to the agent along with every document uploaded for this transaction.
@@ -563,7 +563,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             <button
               onClick={() => setShowSendForm((v) => !v)}
               disabled={!invoice.agent?.email}
-              className="px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-4 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Email Invoice &amp; Documents
             </button>
@@ -603,7 +603,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   onChange={(e) => setSendMessage(e.target.value)}
                   placeholder={`Attached is your invoice for ${invoice.transaction?.property_address || 'this transaction'}, along with the completed transaction documents.`}
                   rows={4}
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
               </div>
               <div className="flex gap-3">
@@ -627,7 +627,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         {/* Transaction Link */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
           <h3 className="text-xl font-bold text-slate-100 mb-6">Related Transaction</h3>
           <div className="space-y-4">
             <div>
@@ -648,7 +648,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         {/* Payment Section */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 mb-8">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
           <h3 className="text-xl font-bold text-slate-100 mb-6">Payment Status</h3>
           
           {invoice.refunded ? (

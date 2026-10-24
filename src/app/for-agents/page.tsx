@@ -79,7 +79,7 @@ export default function ForAgentsPage() {
             <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
             <Link
               href="/auth?mode=signup&plan=starter"
-              className="px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
+              className="px-3 sm:px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
             >
               Start free
             </Link>
@@ -101,7 +101,7 @@ export default function ForAgentsPage() {
         <div className="flex flex-wrap items-center justify-center gap-4">
           <Link
             href="/agent/login"
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10"
+            className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10"
           >
             Log in as an agent
           </Link>
@@ -194,7 +194,7 @@ export default function ForAgentsPage() {
         <div className="flex items-center justify-center gap-4 flex-wrap">
           <Link
             href="/agent/login"
-            className="inline-block px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
+            className="inline-block px-8 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
           >
             Log in as an agent
           </Link>

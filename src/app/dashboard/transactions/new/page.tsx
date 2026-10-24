@@ -455,7 +455,7 @@ export default function NewTransactionPage() {
         {/* AI Contract Intake -- optional, only shown once ANTHROPIC_API_KEY
             is configured server-side (see checkAiAvailability above). */}
         {aiAvailable && (
-          <div className="mb-8 bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+          <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-6">
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
                 <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
@@ -588,7 +588,7 @@ export default function NewTransactionPage() {
         )}
 
         {/* Form */}
-        <form onSubmit={(e) => handleSubmit(e)} className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 space-y-8">
+        <form onSubmit={(e) => handleSubmit(e)} className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-8">
           {/* Agent Selection */}
           <div>
             <label className="block text-sm font-semibold text-slate-200 mb-3">
@@ -778,7 +778,7 @@ export default function NewTransactionPage() {
             <button
               type="submit"
               disabled={submitting || agents.length === 0}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 disabled:from-slate-600 disabled:to-slate-600 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-blue-500/50 disabled:shadow-none"
+              className="flex-1 px-6 py-3 bg-blue-500 hover:bg-blue-400 disabled:from-slate-600 disabled:to-slate-600 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-blue-500/50 disabled:shadow-none"
             >
               {submitting ? (
                 <span className="flex items-center justify-center gap-2">

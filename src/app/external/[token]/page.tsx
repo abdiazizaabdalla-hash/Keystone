@@ -86,7 +86,7 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
             <div className="mt-6 text-center">
               <a
                 href={info.previewUrl}
-                className="inline-block px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
+                className="inline-block px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
               >
                 Download
               </a>
@@ -106,7 +106,7 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
           <h1 className="text-2xl font-display font-semibold text-slate-100">{info.propertyAddress}</h1>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6 space-y-4">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
           {info.acceptanceDate && (
             <div className="flex items-center justify-between border-b border-slate-600/50 pb-3">
               <span className="text-slate-300">Acceptance Date</span>

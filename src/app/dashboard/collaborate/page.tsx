@@ -238,14 +238,14 @@ export default function CollaboratePage() {
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
                 placeholder={isBrokerage ? 'Acme Realty' : "Sarah's Team"}
-                className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
 
             <button
               type="submit"
               disabled={savingSettings}
-              className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+              className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
             >
               {savingSettings ? 'Saving…' : 'Save'}
             </button>
@@ -330,7 +330,7 @@ export default function CollaboratePage() {
               type="button"
               onClick={handleDownloadReport}
               disabled={downloadingReport}
-              className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+              className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
             >
               {downloadingReport ? 'Building…' : 'Download team report (CSV)'}
             </button>
@@ -359,12 +359,12 @@ export default function CollaboratePage() {
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="teammate@example.com"
-              className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              className="flex-1 bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
             />
             <button
               type="submit"
               disabled={inviting}
-              className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+              className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
             >
               {inviting ? 'Inviting…' : 'Invite'}
             </button>

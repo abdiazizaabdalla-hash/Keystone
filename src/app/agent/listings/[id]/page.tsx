@@ -60,9 +60,9 @@ interface Contact {
 
 const DOC_TYPE_ORDER = ['Listing Agreement', 'Seller Disclosure', 'Purchase Contract', 'Other Contract Documents', 'General'];
 const sizeLabel = (n: number | null) => (n ? (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`) : '');
-const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
+const inputCls = 'w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '—');
-const card = 'bg-slate-800/50 border border-slate-700 rounded-lg p-5';
+const card = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 const OFFER_LABEL: Record<string, string> = { received: 'Received', countered: 'Countered', accepted: 'Accepted', rejected: 'Rejected', withdrawn: 'Withdrawn' };
 
 // The listing agent's read-only view of a listing their TC is running: where it stands, offers, showings,
@@ -380,7 +380,7 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
               <input className={inputCls} type="email" placeholder="Email" value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })} maxLength={254} />
               <PhoneInput className={inputCls} placeholder="Phone" value={contactForm.phone} onValueChange={(v) => setContactForm({ ...contactForm, phone: v })} />
               <div className="sm:col-span-2 flex items-center gap-3">
-                <button type="submit" disabled={addingContact} className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+                <button type="submit" disabled={addingContact} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                   {addingContact ? 'Adding…' : 'Add person'}
                 </button>
                 <span className="text-xs text-slate-500">Your coordinator sees who you add. Nobody is emailed.</span>

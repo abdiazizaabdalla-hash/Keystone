@@ -38,7 +38,7 @@ export default function PublicMobileMenu() {
       {open && (
         <div
           id="public-mobile-menu"
-          className="absolute left-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50"
+          className="absolute left-0 top-full mt-2 w-48 bg-white/5 border border-white/10 rounded-2xl shadow-xl overflow-hidden z-50"
         >
           {LINKS.map((link) => (
             <Link

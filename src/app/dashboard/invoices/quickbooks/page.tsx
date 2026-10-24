@@ -89,9 +89,9 @@ interface Pick {
 // Pick value meaning "make this QuickBooks customer a new agent".
 const NEW_AGENT = '__new__';
 
-const input = 'bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none';
-const card = 'bg-slate-700/50 border border-slate-600 rounded-lg p-6';
-const btnPrimary = 'px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50';
+const input = 'bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none';
+const card = 'bg-white/5 border border-white/10 rounded-2xl p-6';
+const btnPrimary = 'px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50';
 const btnGhost = 'px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 text-sm rounded-lg transition disabled:opacity-50';
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 

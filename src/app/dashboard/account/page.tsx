@@ -177,12 +177,12 @@ function AccountContent() {
         </div>
       )}
       {checkoutResult === 'cancelled' && (
-        <div className="mb-6 p-4 bg-slate-700/50 border border-slate-600 rounded-lg text-slate-300 text-sm">
+        <div className="mb-6 p-4 bg-white/5 border border-white/10 rounded-2xl text-slate-300 text-sm">
           Checkout was cancelled — no charge was made.
         </div>
       )}
 
-      <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6 mb-6 space-y-3">
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6 space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <span className="text-sm text-slate-400">Email</span>
           <span className="text-sm text-slate-100 break-all">{summary.email}</span>
@@ -234,7 +234,7 @@ function AccountContent() {
           <button
             onClick={() => startCheckout('starter')}
             disabled={redirecting !== null}
-            className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+            className="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
           >
             {redirecting === 'starter'
               ? 'Redirecting…'
@@ -246,7 +246,7 @@ function AccountContent() {
       )}
 
       {/* Billing actions */}
-      <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6 mb-6 space-y-4">
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6 space-y-4">
         <h2 className="text-lg font-display font-semibold text-slate-100">Billing</h2>
 
         {summary.billing.hasSubscription ? (
@@ -255,7 +255,7 @@ function AccountContent() {
             <button
               onClick={openBillingPortal}
               disabled={redirecting !== null}
-              className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap"
+              className="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap"
             >
               {redirecting === 'portal' ? 'Opening…' : 'Manage billing'}
             </button>
@@ -295,7 +295,7 @@ function AccountContent() {
 
       {/* Usage (Pro/Team perk) */}
       {summary.usage ? (
-        <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6 space-y-6">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-6">
           <h2 className="text-lg font-display font-semibold text-slate-100">Usage</h2>
           <UsageBar label="Agent profiles" used={summary.usage.agents} max={summary.usage.maxAgents} />
           <UsageBar
@@ -309,7 +309,7 @@ function AccountContent() {
           </div>
         </div>
       ) : (
-        <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-6 text-center">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
           <p className="text-sm text-slate-400">A detailed usage breakdown — agents, active transactions, and plan limits — is available on Pro and Team.</p>
         </div>
       )}

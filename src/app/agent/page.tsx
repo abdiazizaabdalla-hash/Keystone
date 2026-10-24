@@ -313,7 +313,7 @@ export default function AgentHubPage() {
                 { label: 'Active transactions', value: activeDeals, href: '#transactions', tone: 'text-blue-300' },
                 { label: 'Overdue steps', value: overdueSteps, href: '#transactions', tone: overdueSteps > 0 ? 'text-red-400' : 'text-slate-100' },
               ].map((t) => (
-                <a key={t.label} href={t.href} className="bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 hover:bg-slate-700/40 transition">
+                <a key={t.label} href={t.href} className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 hover:bg-slate-700/40 transition">
                   <p className={`text-2xl font-semibold ${t.tone}`}>{t.value}</p>
                   <p className="text-xs text-slate-400 mt-0.5">{t.label}</p>
                 </a>
@@ -333,7 +333,7 @@ export default function AgentHubPage() {
                 )}
               </div>
               {listings.length === 0 ? (
-                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 text-center">
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
                   <p className="text-slate-400 text-sm">No listings shared with you yet.</p>
                   <p className="text-slate-500 text-xs mt-1">When your TC starts a listing for you and shares it, it shows up here.</p>
                 </div>
@@ -358,7 +358,7 @@ export default function AgentHubPage() {
                 </h2>
               </div>
               {transactions.length === 0 ? (
-                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 text-center">
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
                   <p className="text-slate-400 text-sm">You aren&apos;t on any transactions yet.</p>
                   <p className="text-slate-500 text-xs mt-1">
                     {pendingInvites.length > 0 ? 'Accept the invite above to get started.' : "Once a transaction coordinator adds you to one, it'll show up here."}
@@ -372,7 +372,7 @@ export default function AgentHubPage() {
                       <Link
                         key={tx.id}
                         href={`/agent/transactions/${tx.id}`}
-                        className="block bg-slate-800/50 border border-slate-700 rounded-lg p-4 active:bg-slate-700/40 transition"
+                        className="block bg-white/5 border border-white/10 rounded-2xl p-4 active:bg-slate-700/40 transition"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-slate-100 font-semibold leading-snug break-words">{tx.propertyAddress || tx.fileNumber}</p>
@@ -388,7 +388,7 @@ export default function AgentHubPage() {
                   </div>
 
                   {/* Tablets and desktop: one clean table */}
-                  <div className="hidden md:block bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden">
+                  <div className="hidden md:block bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-slate-700 text-left">

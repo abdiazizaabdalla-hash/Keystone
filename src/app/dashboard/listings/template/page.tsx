@@ -12,7 +12,7 @@ interface Step {
 }
 
 const inputCls =
-  'bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
+  'bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 
 let counter = 0;
 const nextKey = () => ++counter;
@@ -208,7 +208,7 @@ export default function ListingTemplatePage() {
           type="button"
           onClick={save}
           disabled={saving || steps.length === 0 || steps.some((s) => !s.name.trim())}
-          className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
+          className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
         >
           {saving ? 'Saving…' : 'Save checklist'}
         </button>

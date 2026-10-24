@@ -1,18 +1,37 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,400..600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #08080b;
-  --foreground: #f2f2f4;
+  --background: #0c1636;
+  --foreground: #e8eefb;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-display: 'Fraunces', Georgia, serif;
+  --font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+
+  /* Simplified look: a deep navy ramp (replaces Tailwind's grey-blue slate
+     everywhere the app already uses slate-*), softer corners, and one
+     bright blue accent. */
+  --color-slate-50: #f5f8ff;
+  --color-slate-100: #e8eefb;
+  --color-slate-200: #d0dbf3;
+  --color-slate-300: #a9b9de;
+  --color-slate-400: #8ca0cd;
+  --color-slate-500: #66799f;
+  --color-slate-600: #3a4a78;
+  --color-slate-700: #26376a;
+  --color-slate-800: #17234c;
+  --color-slate-900: #0c1636;
+  --color-slate-950: #070d24;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-2xl: 1.5rem;
   --font-brand: 'Poppins', Arial, sans-serif;
 
   /* Relay TC "ink" palette — a custom near-black ramp (distinct from
@@ -33,6 +52,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
@@ -123,4 +143,13 @@ body {
 .doc-drop-over {
   border-color: #60a5fa !important;
   background-color: rgba(59, 130, 246, 0.1) !important;
+}
+
+/* App backdrop: deep navy with a soft blue glow, like the product mockups. */
+.app-bg {
+  background-color: var(--color-slate-900);
+  background-image:
+    radial-gradient(1100px 600px at 80% -10%, rgba(59, 130, 246, 0.16), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(99, 102, 241, 0.10), transparent 60%);
+  background-attachment: fixed;
 }

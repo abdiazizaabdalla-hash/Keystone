@@ -136,7 +136,7 @@ export default function DirectMessages({ self, loginPath }: { self: 'tc' | 'agen
         {conversations === null && !error && <p className="text-slate-500 text-sm">Loading…</p>}
 
         {conversations !== null && conversations.length === 0 && (
-          <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-8 text-center">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
             <p className="text-slate-400 text-sm">
               {self === 'tc'
                 ? 'No agents to message yet. Add an agent with an email address and they will show up here.'
@@ -147,7 +147,7 @@ export default function DirectMessages({ self, loginPath }: { self: 'tc' | 'agen
 
         {conversations !== null && conversations.length > 0 && (
           <div className="grid md:grid-cols-[18rem_1fr] gap-4">
-            <div className={`${selected ? 'hidden md:block' : ''} bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg divide-y divide-slate-600 self-start overflow-hidden`}>
+            <div className={`${selected ? 'hidden md:block' : ''} bg-white/5 border border-white/10 rounded-2xl divide-y divide-slate-600 self-start overflow-hidden`}>
               {conversations.map((c) => (
                 <button
                   key={c.key}
@@ -173,7 +173,7 @@ export default function DirectMessages({ self, loginPath }: { self: 'tc' | 'agen
               ))}
             </div>
 
-            <div className={`${selected ? '' : 'hidden md:flex'} bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg flex flex-col min-h-[24rem]`}>
+            <div className={`${selected ? '' : 'hidden md:flex'} bg-white/5 border border-white/10 rounded-2xl flex flex-col min-h-[24rem]`}>
               {!selected ? (
                 <p className="m-auto text-sm text-slate-500 p-6">Choose a conversation.</p>
               ) : (
@@ -205,9 +205,9 @@ export default function DirectMessages({ self, loginPath }: { self: 'tc' | 'agen
                       onChange={(e) => setText(e.target.value)}
                       maxLength={4000}
                       placeholder={`Message ${threadLabel || otherName}…`}
-                      className="flex-1 min-w-0 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                      className="flex-1 min-w-0 bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
                     />
-                    <button type="submit" disabled={sending || !text.trim()} className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+                    <button type="submit" disabled={sending || !text.trim()} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                       {sending ? 'Sending…' : 'Send'}
                     </button>
                   </form>

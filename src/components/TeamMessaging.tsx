@@ -371,7 +371,7 @@ export default function TeamMessaging({ members, isOwner }: { members: ChatMembe
                 type="button"
                 onClick={send}
                 disabled={sending || !draft.trim()}
-                className="shrink-0 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+                className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
               >
                 {sending ? 'Sending…' : 'Send'}
               </button>

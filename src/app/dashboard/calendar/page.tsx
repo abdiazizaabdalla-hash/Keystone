@@ -41,6 +41,7 @@ export default function CalendarPage() {
   const router = useRouter();
   const today = new Date();
   const todayIso = iso(today.getFullYear(), today.getMonth(), today.getDate());
+  const [showSettings, setShowSettings] = useState(false);
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [events, setEvents] = useState<CalEvent[]>([]);
@@ -164,26 +165,33 @@ export default function CalendarPage() {
   const openDayEvents = openDay ? byDay.get(openDay) || [] : [];
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl">
+    <div className="p-4 md:p-10 max-w-6xl mx-auto">
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <div className="mr-auto">
           <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100">Calendar</h1>
           <p className="text-slate-400 text-sm mt-1">Every date from your deals and listings, in one place.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => goMonth(-1)} aria-label="Previous month" className="px-3 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-700 transition">‹</button>
-          <button onClick={goToday} className="px-3 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-700 text-sm font-medium transition">Today</button>
-          <button onClick={() => goMonth(1)} aria-label="Next month" className="px-3 py-2 rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-700 transition">›</button>
+          <button onClick={() => goMonth(-1)} aria-label="Previous month" className="px-3 py-2 rounded-lg border border-white/10 text-slate-200 hover:bg-white/5 transition">‹</button>
+          <button onClick={goToday} className="px-3 py-2 rounded-lg border border-white/10 text-slate-200 hover:bg-white/5 text-sm font-medium transition">Today</button>
+          <button onClick={() => goMonth(1)} aria-label="Next month" className="px-3 py-2 rounded-lg border border-white/10 text-slate-200 hover:bg-white/5 transition">›</button>
           <span className="ml-2 min-w-[9rem] text-lg font-display font-semibold text-slate-100">{MONTHS[month]} {year}</span>
+          <button
+            onClick={() => setShowSettings((o) => !o)}
+            aria-expanded={showSettings}
+            className="ml-2 px-3 py-2 rounded-xl border border-white/10 text-slate-200 hover:bg-white/5 text-sm font-medium transition"
+          >
+            Calendar settings
+          </button>
         </div>
       </div>
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 
-      <div className="grid lg:grid-cols-[1fr_20rem] gap-6 items-start">
+      <div className="grid gap-6 items-start">
         <div>
           {/* Month grid (tablet and up) */}
-          <div className="hidden sm:block bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-3">
+          <div className="hidden sm:block bg-white/5 border border-white/10 rounded-2xl p-3">
             <div className="grid grid-cols-7 gap-1.5 mb-1.5">
               {DOW.map((d) => (
                 <div key={d} className="text-center text-xs text-slate-500 py-1">{d}</div>
@@ -234,7 +242,7 @@ export default function CalendarPage() {
           <div className="sm:hidden space-y-2">
             {monthEvents.length === 0 && !loading && <p className="text-slate-500 text-sm">Nothing on the calendar this month.</p>}
             {monthEvents.map((e) => (
-              <Link key={e.id} href={e.href} className="flex items-center gap-3 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5">
+              <Link key={e.id} href={e.href} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-3 py-2.5">
                 <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${KIND_BY[e.kind].dot}`} />
                 <span className="min-w-0">
                   <span className="block text-sm text-slate-100 truncate">{e.title}</span>
@@ -246,14 +254,14 @@ export default function CalendarPage() {
           </div>
 
           {openDay && (
-            <div className="mt-4 bg-slate-800 border border-slate-700 rounded-xl p-4">
+            <div className="mt-4 bg-white/5 border border-white/10 rounded-2xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-display font-semibold text-slate-100">{openDay}</h2>
                 <button onClick={() => setOpenDay(null)} className="text-xs text-slate-400 hover:text-slate-200">Close</button>
               </div>
               <div className="space-y-2">
                 {openDayEvents.map((e) => (
-                  <Link key={e.id} href={e.href} className="flex items-center gap-3 bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2">
+                  <Link key={e.id} href={e.href} className="flex items-center gap-3 bg-slate-950/40 border border-white/10 rounded-xl px-3 py-2">
                     <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${KIND_BY[e.kind].dot}`} />
                     <span className="text-sm text-slate-100">{e.title}</span>
                     <span className="ml-auto text-xs text-slate-500 truncate">{e.detail}</span>
@@ -265,12 +273,12 @@ export default function CalendarPage() {
           {loading && <p className="mt-3 text-xs text-slate-500">Loading…</p>}
         </div>
 
-        <aside className="space-y-4">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-5">
+        <aside className={showSettings ? 'grid md:grid-cols-2 gap-4' : 'hidden'}>
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-xs font-semibold tracking-wider text-slate-500 uppercase mb-3">What goes on my calendar</h2>
             <div className="space-y-2">
               {KINDS.map((k) => (
-                <label key={k.pref} className="flex items-start gap-3 bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2.5 cursor-pointer">
+                <label key={k.pref} className="flex items-start gap-3 bg-slate-950/40 border border-white/10 rounded-xl px-3 py-2.5 cursor-pointer">
                   <span className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 ${k.dot}`} />
                   <span className="min-w-0">
                     <span className="block text-sm text-slate-100">{k.label}</span>
@@ -288,10 +296,10 @@ export default function CalendarPage() {
             </div>
             <p className="text-xs text-slate-500 mt-3">These choices also decide what goes to your Google, Outlook or Apple calendar.</p>
           </div>
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-5">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-xs font-semibold tracking-wider text-slate-500 uppercase mb-2">Put it on your own calendar</h2>
             <p className="text-sm text-slate-400 mb-3">Add your private Relay calendar link to Google Calendar, Outlook or Apple Calendar, so dates show up where you already look.</p>
-            <Link href="/dashboard/settings" className="inline-block px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition">
+            <Link href="/dashboard/settings" className="inline-block px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">
               Calendar settings
             </Link>
           </div>

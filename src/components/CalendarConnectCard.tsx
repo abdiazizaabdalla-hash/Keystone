@@ -234,7 +234,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
   const googleShown = Boolean(status && (status.connected || status.available !== false));
 
   return (
-    <div id="calendar" className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-6">
+    <div id="calendar" className="bg-white/5 border border-white/10 rounded-2xl p-6">
       <h2 className="text-lg font-bold text-slate-100 mb-1">Calendar</h2>
       <p className="text-sm text-slate-400 mb-5">
         {audience === 'agent'
@@ -266,7 +266,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
                 type="button"
                 onClick={syncNow}
                 disabled={busy !== null}
-                className="text-sm px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+                className="text-sm px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
               >
                 {busy === 'sync' ? 'Syncing…' : 'Sync now'}
               </button>
@@ -292,7 +292,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
               type="button"
               onClick={connect}
               disabled={busy === 'connect' || status === null}
-              className="text-sm px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+              className="text-sm px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
             >
               {busy === 'connect' ? 'Opening Google…' : 'Connect Google Calendar'}
             </button>
@@ -312,7 +312,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
                   href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(feed.webcalUrl)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
+                  className="text-sm px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
                 >
                   Add to Google Calendar
                 </a>

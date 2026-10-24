@@ -26,7 +26,7 @@ import { PLANS, PUBLIC_PLANS, type PlanId } from '@/lib/plans';
 const TOTAL_STEPS = 7;
 
 const inputClass =
-  'w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
+  'w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 
 // Shared shell for every settings step (2-6): a step counter, title,
 // description, the step's own fields, an inline error, and Back/Continue
@@ -93,7 +93,7 @@ function SettingsStepShell({
             type="button"
             onClick={onContinue}
             disabled={continueDisabled || saving}
-            className="flex-1 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+            className="flex-1 px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
           >
             {saving ? 'Saving...' : continueLabel}
           </button>
@@ -515,7 +515,7 @@ function OnboardingContent() {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-6 py-12">
         {checkoutCancelled && (
-          <div className="max-w-3xl mx-auto mb-8 p-4 bg-slate-700/50 border border-slate-600 rounded-lg text-slate-300 text-sm text-center">
+          <div className="max-w-3xl mx-auto mb-8 p-4 bg-white/5 border border-white/10 rounded-2xl text-slate-300 text-sm text-center">
             Checkout was cancelled — no charge was made. Pick a plan below whenever you&apos;re ready.
           </div>
         )}
@@ -559,7 +559,7 @@ function OnboardingContent() {
                       onClick={() => handleSelectPlan(plan.id)}
                       className={`w-full py-3 rounded-lg font-semibold transition mb-8 disabled:opacity-50 ${
                         plan.popular
-                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white'
+                          ? 'bg-blue-500 hover:bg-blue-400 text-white'
                           : 'border border-slate-600 text-slate-300 hover:border-slate-500 hover:text-slate-100'
                       }`}
                     >
@@ -790,7 +790,7 @@ function OnboardingContent() {
                     </span>
                     <button
                       onClick={() => setCurrentStep(7)}
-                      className="w-full py-3 rounded-lg font-semibold transition bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white"
+                      className="w-full py-3 rounded-lg font-semibold transition bg-blue-500 hover:bg-blue-400 text-white"
                     >
                       Continue
                     </button>
@@ -799,7 +799,7 @@ function OnboardingContent() {
                   <button
                     onClick={handleConnectStripe}
                     disabled={isStartingStripeConnect}
-                    className="w-full py-3 rounded-lg font-semibold transition bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white disabled:opacity-50"
+                    className="w-full py-3 rounded-lg font-semibold transition bg-blue-500 hover:bg-blue-400 text-white disabled:opacity-50"
                   >
                     {isStartingStripeConnect
                       ? 'Opening...'
@@ -850,7 +850,7 @@ function OnboardingContent() {
 
             <div className="max-w-3xl mx-auto space-y-8">
               {/* Step 1: Add Agents */}
-              <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-8">
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
                 <div className="flex items-start gap-4 mb-4">
                   <div className="w-10 h-10 bg-blue-500/20 border border-blue-500 rounded-full flex items-center justify-center text-blue-400 font-bold">
                     1
@@ -871,7 +871,7 @@ function OnboardingContent() {
               </div>
 
               {/* Step 2: Create Transactions */}
-              <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-8">
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
                 <div className="flex items-start gap-4 mb-4">
                   <div className="w-10 h-10 bg-blue-500/20 border border-blue-500 rounded-full flex items-center justify-center text-blue-400 font-bold">
                     2
@@ -892,7 +892,7 @@ function OnboardingContent() {
               </div>
 
               {/* Step 3: Manage Invoices */}
-              <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-8">
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
                 <div className="flex items-start gap-4 mb-4">
                   <div className="w-10 h-10 bg-blue-500/20 border border-blue-500 rounded-full flex items-center justify-center text-blue-400 font-bold">
                     3
@@ -922,7 +922,7 @@ function OnboardingContent() {
                 </button>
                 <button
                   onClick={() => handleCompleteSetup()}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
+                  className="flex-1 px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
                 >
                   Go to Dashboard →
                 </button>

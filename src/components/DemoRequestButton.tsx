@@ -82,7 +82,7 @@ export default function DemoRequestButton({ className, label = 'Request a Demo' 
                 <button
                   type="button"
                   onClick={close}
-                  className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
+                  className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
                 >
                   Close
                 </button>
@@ -152,7 +152,7 @@ export default function DemoRequestButton({ className, label = 'Request a Demo' 
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full px-5 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+                    className="w-full px-5 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
                   >
                     {isSubmitting ? 'Sending…' : 'Send request'}
                   </button>

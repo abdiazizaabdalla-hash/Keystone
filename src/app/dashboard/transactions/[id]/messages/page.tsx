@@ -400,7 +400,7 @@ export default function TransactionMessagesPage({ params }: { params: Promise<{ 
           />
           {attachError && <p className="text-xs text-red-400 mb-2">{attachError}</p>}
           {pendingAttachment && (
-            <div className="flex items-center gap-2 mb-2 text-sm text-slate-300 bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 mb-2 text-sm text-slate-300 bg-white/5 border border-white/10 rounded-2xl px-3 py-2">
               <span className="truncate flex-1">📎 {pendingAttachment.fileName}</span>
               <button
                 type="button"
@@ -432,12 +432,12 @@ export default function TransactionMessagesPage({ params }: { params: Promise<{ 
                 }
               }}
               placeholder={`Message ${agentLabel}…`}
-              className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-4 py-3 text-slate-100 placeholder-slate-500 text-base focus:border-blue-500 focus:outline-none"
+              className="flex-1 bg-slate-800/70 border border-white/10 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 text-base focus:border-blue-500 focus:outline-none"
             />
             <button
               onClick={handleSendMessage}
               disabled={sendingMessage || (!messageDraft.trim() && !pendingAttachment)}
-              className="px-5 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+              className="px-5 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
             >
               Send
             </button>

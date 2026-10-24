@@ -350,7 +350,7 @@ export default function TransactionsPage() {
             </Link>
             <Link
               href="/dashboard/transactions/new"
-              className="shrink-0 px-4 py-2.5 md:px-5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition shadow-lg whitespace-nowrap"
+              className="shrink-0 px-4 py-2.5 md:px-5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition shadow-lg whitespace-nowrap"
             >
               + New Deal
             </Link>
@@ -369,7 +369,7 @@ export default function TransactionsPage() {
             <p className="text-slate-400 mb-6">Start by creating your first deal to get organized</p>
             <Link
               href="/dashboard/transactions/new"
-              className="inline-block px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-lg transition hover:shadow-lg"
+              className="inline-block px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg transition hover:shadow-lg"
             >
               Create Your First Deal
             </Link>

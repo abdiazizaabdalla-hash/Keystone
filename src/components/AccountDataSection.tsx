@@ -60,7 +60,7 @@ export default function AccountDataSection({ deletionRequestedAt }: { deletionRe
   };
 
   return (
-    <div className="bg-slate-700/50 border border-slate-600 rounded-lg p-4 md:p-6 mt-6">
+    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6 mt-6">
       <h2 className="text-lg font-semibold text-slate-100 mb-1">Your data</h2>
       <p className="text-sm text-slate-400 mb-4">
         You own what you put into Relay. See our{' '}

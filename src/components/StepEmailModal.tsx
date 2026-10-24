@@ -348,7 +348,7 @@ export default function StepEmailModal(props: Props) {
   };
 
   const inputCls =
-    'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
+    'w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label={`Email for ${stepName}`}>
@@ -372,7 +372,7 @@ export default function StepEmailModal(props: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="mt-5 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg"
+              className="mt-5 px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg"
             >
               Done
             </button>
@@ -427,7 +427,7 @@ export default function StepEmailModal(props: Props) {
                 type="button"
                 onClick={saveTemplate}
                 disabled={busy !== null || !rawSubject.trim() || !rawBody.trim() || (creating && !newName.trim())}
-                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
+                className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50"
               >
                 {busy === 'save' ? 'Saving…' : creating ? 'Save new template' : 'Save template'}
               </button>
@@ -515,7 +515,7 @@ export default function StepEmailModal(props: Props) {
                 type="button"
                 onClick={send}
                 disabled={busy !== null || unresolved || recipientsNow.length === 0 || !subject.trim() || !body.trim()}
-                className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                className="px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
               >
                 {busy === 'send' ? 'Sending…' : 'Send email'}
               </button>

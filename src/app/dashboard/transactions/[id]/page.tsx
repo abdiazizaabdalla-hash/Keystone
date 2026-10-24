@@ -197,9 +197,32 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
+type TxTab = 'overview' | 'checklist' | 'documents' | 'messages' | 'people';
+const TX_TABS: { id: TxTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'checklist', label: 'Checklist' },
+  { id: 'documents', label: 'Documents' },
+  { id: 'messages', label: 'Messages' },
+  { id: 'people', label: 'Contacts' },
+];
+
 export default function TransactionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const resolvedParams = use(params);
+  const [tab, setTab] = useState<TxTab>('overview');
+  const selectTab = (next: TxTab) => {
+    setTab(next);
+    try {
+      window.history.replaceState(null, '', `#${next}`);
+    } catch {
+      /* non-fatal */
+    }
+  };
+  // Deep links like /dashboard/transactions/<id>#documents open that tab.
+  useEffect(() => {
+    const h = window.location.hash.replace('#', '');
+    if (TX_TABS.some((t) => t.id === h)) setTab(h as TxTab);
+  }, []);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -1802,7 +1825,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
               <span className="text-xs text-slate-500">{doc.document_type || 'General'}</span>
               {doc.task_id && taskNameById[doc.task_id] && (
-                <span className="text-xs px-2 py-0.5 bg-slate-600 border border-slate-600 rounded-full text-slate-300">
+                <span className="text-xs px-2 py-0.5 bg-slate-800/70 border border-white/10 rounded-full text-slate-300">
                   {taskNameById[doc.task_id]}
                 </span>
               )}
@@ -1940,14 +1963,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 value={signerNameDraft}
                 onChange={(e) => setSignerNameDraft(e.target.value)}
                 placeholder="Signer name"
-                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
               <input
                 type="email"
                 value={signerEmailDraft}
                 onChange={(e) => setSignerEmailDraft(e.target.value)}
                 placeholder="Signer email"
-                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
             {extraSignersDraft.map((signer, i) => (
@@ -1959,7 +1982,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     setExtraSignersDraft((prev) => prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))
                   }
                   placeholder={`Signer ${i + 2} name`}
-                  className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 <input
                   type="email"
@@ -1968,7 +1991,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     setExtraSignersDraft((prev) => prev.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))
                   }
                   placeholder={`Signer ${i + 2} email`}
-                  className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 <button
                   type="button"
@@ -2020,7 +2043,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                           setExtraSignersDraft((prev) => [...prev, { name: pick.name, email: pick.email }]);
                         }
                       }}
-                      className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+                      className="bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
                     >
                       <option value="">Add from this deal&apos;s contacts…</option>
                       {available.map((p, idx) => (
@@ -2134,7 +2157,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                         setCopyRecipientsDraft((prev) => prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))
                       }
                       placeholder="Name"
-                      className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                     />
                     <input
                       type="email"
@@ -2143,7 +2166,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                         setCopyRecipientsDraft((prev) => prev.map((x, j) => (j === i ? { ...x, email: e.target.value } : x)))
                       }
                       placeholder="Email"
-                      className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                     />
                     <input
                       type="text"
@@ -2152,7 +2175,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                         setCopyRecipientsDraft((prev) => prev.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))
                       }
                       placeholder="Title (e.g. Lender)"
-                      className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                     />
                     <button
                       type="button"
@@ -2178,14 +2201,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   value={copySubjectDraft}
                   onChange={(e) => setCopySubjectDraft(e.target.value)}
                   placeholder="Email subject"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 <textarea
                   value={copyMessageDraft}
                   onChange={(e) => setCopyMessageDraft(e.target.value)}
                   rows={5}
                   placeholder="Email message"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 <p className="text-xs text-slate-500">
                   Fills in automatically: {'{{recipient_name}}'}, {'{{recipient_title}}'}, {'{{document}}'}, {'{{property}}'}, {'{{file_number}}'}, {'{{signer}}'}, {'{{signed_date}}'}. Max 10 people. Replies go to you.
@@ -2297,8 +2320,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   };
 
   return (
-    <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen px-4 py-6 md:px-8 md:py-12">
+      <div className="max-w-5xl mx-auto">
         {/* Back Button */}
         <Link href="/dashboard/transactions" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -2308,7 +2331,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         </Link>
 
         {/* Main Card */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-8 mb-8">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8 mb-8">
           <div className="mb-8">
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
@@ -2335,7 +2358,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             <p className="text-slate-400 break-words">{transaction.property_address}</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 pt-6 border-t border-slate-600">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8 pt-6 border-t border-white/10">
             {/* Agent */}
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent</p>
@@ -2376,7 +2399,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 value={transaction.status}
                 onChange={(e) => handleStatusChange(e.target.value)}
                 disabled={isUpdatingStatus}
-                className="bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50 cursor-pointer"
+                className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50 cursor-pointer"
               >
                 {stagesForTaskNames(tasks.map((t) => t.name)).map((status) => (
                   <option key={status} value={status}>
@@ -2386,6 +2409,39 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               </select>
             </div>
 
+          </div>
+
+        </div>
+
+        {/* Tabs: one focused section at a time instead of one long page.
+            Every panel stays mounted (just hidden) so drafts, uploads and
+            polling keep their state when you switch tabs. */}
+        <div role="tablist" aria-label="Transaction sections" className="flex gap-1 overflow-x-auto mb-8 p-1 bg-white/5 border border-white/10 rounded-2xl">
+          {TX_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              onClick={() => selectTab(t.id)}
+              className={`px-4 md:px-5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
+                tab === t.id ? 'bg-blue-500 text-white shadow' : 'text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              {t.label}
+              {t.id === 'checklist' && tasks.length > 0 ? (
+                <span className={`ml-2 text-xs ${tab === t.id ? 'text-blue-100' : 'text-slate-400'}`}>
+                  {completedCount}/{tasks.length}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+
+        <div className={tab === 'overview' ? 'space-y-8' : 'hidden'}>
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-8">
+            <h2 className="text-lg font-bold text-slate-100 mb-5">Key dates</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Acceptance / Closing Dates -- editable here, not just at
                 creation. Changing either recomputes the checklist's due
                 dates on the server (see handleDateFieldChange). */}
@@ -2400,7 +2456,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   }
                 }}
                 disabled={savingDateField === 'acceptanceDate'}
-                className="bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
               />
             </div>
             <div>
@@ -2414,11 +2470,21 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   }
                 }}
                 disabled={savingDateField === 'closingDate'}
-                className="bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
               />
             </div>
+            </div>
           </div>
+          <KeyDatesPanel
+            transactionId={transaction.id}
+            propertyAddress={transaction.property_address}
+            closingDate={transaction.closing_date ?? null}
+            canEdit={true}
+            manageCalendar
+          />
 
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-8">
+            <h2 className="text-lg font-bold text-slate-100 mb-5">Invoice</h2>
           {/* Invoice: no longer gated on the deal being manually walked to
               Closed via the checklist -- some TCs don't want to check off
               every item by hand. Once Closed (by either path), the plain
@@ -2428,7 +2494,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               same as the Status dropdown) and invoices it right after.
               Never auto-generated on any plan -- always a deliberate
               click either way. */}
-          <div className="pt-6 mt-6 border-t border-slate-600">
+          <div className="">
             {invoice ? (
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-4">
@@ -2513,7 +2579,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     <button
                       onClick={handleCreateInvoice}
                       disabled={isCreatingInvoice}
-                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                      className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
                     >
                       {isCreatingInvoice ? 'Creating…' : 'Create Invoice'}
                     </button>
@@ -2521,7 +2587,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     <button
                       onClick={handleCloseAndCreateInvoice}
                       disabled={isClosingAndInvoicing}
-                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap"
+                      className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap"
                     >
                       {isClosingAndInvoicing ? 'Closing…' : 'Mark as Closed & Create Invoice'}
                     </button>
@@ -2532,222 +2598,178 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             )}
           </div>
 
-          {/* Agent portal access: invite the agent (or anyone else who
-              needs it) onto this deal's read-only portal -- checklist
-              status, documents, and the message thread below. Free for
-              them, scoped to just this transaction. */}
-          <div className="pt-6 mt-6 border-t border-slate-600">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent Portal Access</p>
-            <p className="text-xs text-slate-500 mb-3">
-              Give someone a free, view-only login scoped to this deal -- checklist status, documents, and
-              messaging. No password for them to set; they just click the emailed link.
+          </div>
+        {/* Communication -- emails forwarded/CC'd to this transaction's
+            own inbound address land here (see src/app/api/email/inbound/
+            route.ts). Deliberately placed at the very bottom of the page,
+            below everything else and its own full-width section rather
+            than living in the primary right-hand column -- this is an
+            optional, low-priority tool (manual CC/forward, not automatic
+            capture), not something every TC is funneled into using.
+            Hidden entirely (not just the address) until
+            NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN is actually set -- no TC
+            should ever see a backend setup/env-var message; it either
+            works or it isn't there yet. */}
+        {inboundDomain && (
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6 mt-8">
+            <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
+            <p className="text-xs text-slate-400 mb-3">
+              Forward or CC emails about this deal here and they&apos;ll show up below — no need to change how you
+              already send email.
             </p>
 
-            {(acceptedAgentUsers.length > 0 || agentInvites.length > 0) && (
-              <div className="space-y-1.5 mb-3">
-                {acceptedAgentUsers.map((a) => (
-                  <div key={a.userId} className="flex items-center gap-2 text-sm">
-                    <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                    <span className="text-slate-200">{a.email}</span>
-                    <span className="text-slate-500 text-xs">has access</span>
-                  </div>
-                ))}
-                {agentInvites
-                  .filter((inv) => inv.status !== 'accepted')
-                  .map((inv) => (
-                    <div key={inv.id} className="flex items-center gap-2 text-sm">
-                      <span className="w-2 h-2 rounded-full bg-slate-500 shrink-0" />
-                      <span className="text-slate-300">{inv.email}</span>
-                      <span className="text-slate-500 text-xs">invited, not yet accepted</span>
-                    </div>
-                  ))}
-              </div>
-            )}
-
-            {allAgents.length > 0 && (() => {
-              // Emails that already have access or a pending invite --
-              // shown but not selectable, so nobody is invited twice.
-              const alreadyHave = new Set([
-                ...acceptedAgentUsers.map((a) => a.email.toLowerCase()),
-                ...agentInvites.map((i) => i.email.toLowerCase()),
-              ]);
-              // This deal's own agent first, then the rest alphabetically.
-              const sortedAgents = [...allAgents].sort((a, b) => {
-                if (a.id === transaction.agent_id) return -1;
-                if (b.id === transaction.agent_id) return 1;
-                return a.name.localeCompare(b.name);
-              });
-              return (
-                <select
-                  value=""
-                  onChange={(e) => {
-                    const picked = allAgents.find((a) => a.id === e.target.value);
-                    if (picked?.email) setInviteEmailDraft(picked.email);
-                  }}
-                  className="w-full mb-2 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">Choose from your agents…</option>
-                  {sortedAgents.map((a) => {
-                    const email = a.email?.trim();
-                    const invited = !!email && alreadyHave.has(email.toLowerCase());
-                    return (
-                      <option key={a.id} value={a.id} disabled={!email || invited}>
-                        {a.name}
-                        {a.id === transaction.agent_id ? ' (this deal)' : ''}
-                        {!email ? ' — no email on file' : invited ? ' — already invited' : ` — ${email}`}
-                      </option>
-                    );
-                  })}
-                </select>
-              );
-            })()}
-            <div className="flex flex-wrap gap-2">
-              <input
-                type="email"
-                value={inviteEmailDraft}
-                onChange={(e) => setInviteEmailDraft(e.target.value)}
-                placeholder="or type any email address"
-                className="flex-1 min-w-[12rem] bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
-              />
+            <div className={`flex items-center gap-2 ${inboundCopyFailed ? 'mb-1' : 'mb-4'}`}>
+              <code className="flex-1 min-w-0 truncate bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-blue-300">
+                {inboundAddress}
+              </code>
               <button
-                onClick={handleInviteAgent}
-                disabled={isInvitingAgent || !inviteEmailDraft.trim()}
-                className="px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-100 text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                type="button"
+                onClick={handleCopyInboundAddress}
+                className="flex-shrink-0 px-3 py-2 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition"
               >
-                {isInvitingAgent ? 'Sending…' : 'Invite'}
+                {copiedInboundAddress ? 'Copied!' : 'Copy'}
               </button>
             </div>
-            {inviteMessage && <p className="text-xs text-slate-400 mt-2">{inviteMessage}</p>}
-          </div>
-
-          <KeyDatesPanel
-            transactionId={transaction.id}
-            propertyAddress={transaction.property_address}
-            closingDate={transaction.closing_date ?? null}
-            canEdit={true}
-            manageCalendar
-          />
-        </div>
-
-        {/* Checklist + Documents, side by side on desktop: documents are
-            the primary view (wide, left), the checklist is compact
-            (narrow, right) so both are usable without scrolling past one
-            to reach the other. Both stack full-width on mobile, in source
-            order (checklist first, documents below). */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 mt-8">
-
-        {/* Tasks Section + Contacts, stacked together in the
-            narrow right column on desktop (this wrapper carries the
-            order/self-start that used to live on the Checklist div
-            directly, since it's now the thing actually placed in the
-            grid). Both still stack full-width on mobile in source order. */}
-        <div className="lg:order-2 lg:self-start flex flex-col gap-8">
-        {/* Messages: compact preview of the latest message plus a link to
-            the full-page DM-style portal (dashboard/transactions/[id]/
-            messages/page.tsx) -- larger bubbles, an avatar + name on every
-            message, read/reply in a dedicated view instead of this narrow
-            column. See fetchMessages/messages state above, still used here
-            to drive the preview and the unread-feeling "latest line". */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6 flex flex-col h-[28rem]">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-slate-100">Messages</h2>
-            {acceptedAgentUsers.length > 0 && (
-              <Link
-                href={`/dashboard/transactions/${resolvedParams.id}/messages`}
-                className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
-              >
-                Open Messages →
-              </Link>
+            {inboundCopyFailed && (
+              <p className="text-xs text-amber-400 mb-3">
+                Couldn&apos;t copy automatically — select the address above and copy it manually.
+              </p>
             )}
-          </div>
-          {acceptedAgentUsers.length === 0 ? (
-            <p className="text-slate-500 text-sm">
-              Invite an agent above to start a conversation here -- it stays on this deal instead of your
-              regular inbox.
-            </p>
-          ) : (
-            <>
-              <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
-                {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet -- say hello.</p>}
-                {messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.sender_role === 'tc' ? 'justify-end' : 'justify-start'}`}>
+
+            {emails.length === 0 ? (
+              <p className="text-xs text-slate-500">No emails forwarded to this deal yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {emails.map((email) => {
+                  const isExpanded = expandedEmailId === email.id;
+                  const attachmentCount = email.attachments.length;
+                  return (
                     <div
-                      className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                        m.sender_role === 'tc' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
-                      }`}
+                      key={email.id}
+                      className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden"
                     >
-                      {m.body && <p>{m.body}</p>}
-                      {m.attachment && (
-                        <a
-                          href={m.attachment.url || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`flex items-center gap-1.5 text-xs underline underline-offset-2 ${
-                            m.sender_role === 'tc' ? 'text-blue-100' : 'text-blue-300'
-                          } ${m.body ? 'mt-1.5' : ''}`}
-                        >
-                          📎 {m.attachment.fileName}
-                        </a>
+                      <div className="flex items-stretch">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedEmailId(isExpanded ? null : email.id)}
+                        className="flex-1 min-w-0 text-left px-3 py-2 hover:bg-slate-700/50 transition"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-slate-200 truncate">
+                            {email.subject || '(no subject)'}
+                          </p>
+                          <span className="text-xs text-slate-500 flex-shrink-0 whitespace-nowrap">
+                            {formatDisplayDate(email.received_at.slice(0, 10), { month: '2-digit', day: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-slate-400 truncate">{email.from_name || email.from_email}</p>
+                          {attachmentCount > 0 && (
+                            <span className="text-xs text-slate-500 flex-shrink-0">📎 {attachmentCount}</span>
+                          )}
+                        </div>
+                        {!isExpanded && email.body_text && (
+                          <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{email.body_text}</p>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEmail(email.id)}
+                        disabled={deletingEmailId === email.id}
+                        className="flex-shrink-0 px-3 text-xs text-slate-500 hover:text-red-400 hover:bg-slate-700/50 border-l border-slate-600 transition disabled:opacity-50"
+                        title="Delete this forwarded email"
+                        aria-label="Delete this forwarded email"
+                      >
+                        {deletingEmailId === email.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="px-3 pb-3 border-t border-slate-600">
+                          <p className="text-xs text-slate-500 mt-2 mb-2">
+                            From{' '}
+                            {email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email} ·{' '}
+                            {new Date(email.received_at).toLocaleString()}
+                          </p>
+
+                          {email.body_html ? (
+                            <div
+                              className="email-body text-xs"
+                              // Sanitized server-side on every read (see
+                              // GET /api/email/inbound, src/lib/emailHtml.ts)
+                              // before it ever reaches this component --
+                              // this inbound address is unauthenticated, so
+                              // the HTML here is attacker-controlled by
+                              // default.
+                              dangerouslySetInnerHTML={{ __html: email.body_html }}
+                            />
+                          ) : email.body_text ? (
+                            <p className="text-xs text-slate-300 whitespace-pre-wrap">{email.body_text}</p>
+                          ) : (
+                            <p className="text-xs text-slate-500 italic">No readable content in this email.</p>
+                          )}
+
+                          {attachmentCount > 0 && (
+                            <div className="mt-3 space-y-1.5">
+                              {email.attachments.map((att) => (
+                                <div
+                                  key={att.id}
+                                  draggable
+                                  onDragStart={(e) => startDocDrag(e, att.id)}
+                                  title="Drag onto a Documents category to file it there"
+                                  className="flex items-center gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-3 py-2 hover:border-slate-500 transition cursor-grab active:cursor-grabbing"
+                                >
+                                  <DragHandle label={`Drag ${att.fileName} to a Documents category`} />
+                                  <a
+                                    href={att.url || '#'}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    draggable={false}
+                                    className="min-w-0 flex-1 flex items-center justify-between gap-3"
+                                  >
+                                    <span className="text-blue-400 hover:text-blue-300 truncate text-xs">📄 {att.fileName}</span>
+                                    <span className="text-xs text-slate-500 flex-shrink-0">
+                                      {att.fileSize ? `${(att.fileSize / 1024).toFixed(0)} KB` : ''}
+                                    </span>
+                                  </a>
+                                  <MoveMenu
+                                    onMove={(categoryKey) => void handleMoveDocument(att.id, categoryKey)}
+                                    label={`Move ${att.fileName} to a Documents category`}
+                                    options={DOCUMENT_CATEGORIES.filter((c) => c.key !== (documents.find((d) => d.id === att.id)?.category || DEFAULT_CATEGORY_KEY)).map((c) => ({ value: c.key, label: c.label }))}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-              <input
-                ref={messageFileInputRef}
-                type="file"
-                accept="application/pdf,image/*,.doc,.docx"
-                className="hidden"
-                onChange={handleAttachFileSelected}
-              />
-              {attachError && <p className="text-xs text-red-400 mb-2">{attachError}</p>}
-              {pendingAttachment && (
-                <div className="flex items-center gap-2 mb-2 text-xs text-slate-300 bg-slate-700/50 border border-slate-600 rounded-lg px-2.5 py-1.5">
-                  <span className="truncate flex-1">📎 {pendingAttachment.fileName}</span>
-                  <button
-                    type="button"
-                    onClick={() => setPendingAttachment(null)}
-                    className="text-slate-500 hover:text-red-400 transition flex-shrink-0"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => messageFileInputRef.current?.click()}
-                  disabled={isAttachingFile}
-                  title="Attach a file"
-                  className="px-3 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-200 rounded-lg transition disabled:opacity-50 flex-shrink-0"
-                >
-                  {isAttachingFile ? '…' : '📎'}
-                </button>
-                <input
-                  type="text"
-                  value={messageDraft}
-                  onChange={(e) => setMessageDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  placeholder="Message the agent…"
-                  className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={sendingMessage || (!messageDraft.trim() && !pendingAttachment)}
-                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
-                >
-                  Send
-                </button>
-              </div>
-            </>
-          )}
+            )}
+          </div>
+        )}
+
+        {/* Danger Zone */}
+        <div className="bg-red-950/20 border border-red-900/50 rounded-lg p-4 md:p-8 mt-8">
+          <h2 className="text-xl font-bold text-red-300 mb-2">Danger Zone</h2>
+          <p className="text-sm text-slate-400 mb-6">
+            Permanently delete this transaction, its checklist, uploaded documents, and any invoice generated from it.
+          </p>
+          <button
+            onClick={handleDeleteTransaction}
+            disabled={isDeletingTransaction}
+            className="px-4 py-2 bg-red-900/40 hover:bg-red-900/70 border border-red-800 text-red-300 hover:text-red-100 rounded-lg transition font-medium disabled:opacity-50"
+          >
+            {isDeletingTransaction ? 'Deleting...' : 'Delete Transaction'}
+          </button>
         </div>
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6">
+
+        </div>
+
+        <div className={tab === 'checklist' ? '' : 'hidden'}>
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6">
           <div className="mb-5">
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-lg font-bold text-slate-100">Checklist</h2>
@@ -2763,7 +2785,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 <select
                   value={templateSelection}
                   onChange={(e) => setTemplateSelection(e.target.value)}
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1.5 text-xs text-slate-100 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-slate-100 focus:border-blue-500 focus:outline-none"
                 >
                   {templates.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -2815,7 +2837,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 </div>
                 <div className="w-full h-2 bg-slate-600 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
+                    className="h-full bg-blue-500 transition-all duration-300"
                     style={{ width: `${completionPercent}%` }}
                   />
                 </div>
@@ -2965,7 +2987,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                       onChange={(e) => setEditingWaitingOnValue(e.target.value)}
                       placeholder="e.g. Lender, Title, Buyer"
                       autoFocus
-                      className="flex-1 min-w-[140px] bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                      className="flex-1 min-w-[140px] bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                     />
                     {['Lender', 'Title', 'Buyer', 'Seller', 'Inspector'].map((suggestion) => (
                       <button
@@ -3000,10 +3022,257 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
 
+        </div>
+
+        <div className={tab === 'documents' ? '' : 'hidden'}>
+        {/* Documents Section (primary view, left column on desktop) */}
+        <div className="lg:order-1 bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8">
+          <input
+            ref={categoryFileInputRef}
+            type="file"
+            accept="application/pdf,image/*,.doc,.docx"
+            onChange={handleDirectFileSelected}
+            className="hidden"
+          />
+          <div className="flex items-start justify-between gap-4 mb-2">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
+              <p className="text-sm text-slate-400">
+                Organized by category — a document can optionally be tagged with a checklist stage, but
+                doesn&apos;t have to be.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowUploadForm((prev) => !prev)}
+              className="flex-shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg text-sm transition"
+            >
+              {showUploadForm ? 'Cancel' : '+ Upload Document'}
+            </button>
+          </div>
+
+          {showUploadForm && (
+            <form
+              onSubmit={handleUploadSubmit}
+              className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-800/50 border border-slate-600 rounded-lg p-5 my-6"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Category</label>
+                <select
+                  value={uploadCategory}
+                  onChange={(e) => handleUploadCategoryChange(e.target.value)}
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                >
+                  {DOCUMENT_CATEGORIES.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Document Type</label>
+                <select
+                  value={uploadDocType}
+                  onChange={(e) => setUploadDocType(e.target.value)}
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                >
+                  {typesForCategory(uploadCategory).map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                  Checklist Stage <span className="normal-case text-slate-500">(optional)</span>
+                </label>
+                <select
+                  value={uploadStageTaskId}
+                  onChange={(e) => setUploadStageTaskId(e.target.value)}
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">None</option>
+                  {tasks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">File</label>
+                <input
+                  type="file"
+                  required
+                  accept="application/pdf,image/*,.doc,.docx"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  className="w-full text-sm text-slate-300 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-600 file:text-slate-200 hover:file:bg-slate-600 file:cursor-pointer"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-2 text-sm text-slate-300 select-none cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={uploadRequiresSignature}
+                    onChange={(e) => setUploadRequiresSignature(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                  />
+                  This document needs a signature
+                  <span className="text-xs text-slate-500">
+                    (uncheck for photos, printouts, or anything that won&apos;t be signed)
+                  </span>
+                </label>
+              </div>
+
+              <div className="md:col-span-2">
+                <button
+                  type="submit"
+                  disabled={uploadingSlot === 'upload' || !uploadFile}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg text-sm transition disabled:opacity-50"
+                >
+                  {uploadingSlot === 'upload' ? 'Uploading...' : 'Upload'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className="mb-6">
+            <input
+              type="text"
+              value={docSearch}
+              onChange={(e) => setDocSearch(e.target.value)}
+              placeholder="Search documents by name, type, category, or checklist stage..."
+              className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="space-y-3">
+            {renderDocumentCategories()}
+            {docSearch && filteredDocuments.length === 0 && (
+              <p className="text-sm text-slate-500 italic">No documents match "{docSearch}".</p>
+            )}
+          </div>
+        </div>
+        </div>
+
+        <div className={tab === 'messages' ? '' : 'hidden'}>
+        {/* Messages: compact preview of the latest message plus a link to
+            the full-page DM-style portal (dashboard/transactions/[id]/
+            messages/page.tsx) -- larger bubbles, an avatar + name on every
+            message, read/reply in a dedicated view instead of this narrow
+            column. See fetchMessages/messages state above, still used here
+            to drive the preview and the unread-feeling "latest line". */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6 flex flex-col h-[34rem]">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-slate-100">Messages</h2>
+            {acceptedAgentUsers.length > 0 && (
+              <Link
+                href={`/dashboard/transactions/${resolvedParams.id}/messages`}
+                className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
+              >
+                Open Messages →
+              </Link>
+            )}
+          </div>
+          {acceptedAgentUsers.length === 0 ? (
+            <p className="text-slate-500 text-sm">
+              Invite an agent above to start a conversation here -- it stays on this deal instead of your
+              regular inbox.
+            </p>
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
+                {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet -- say hello.</p>}
+                {messages.map((m) => (
+                  <div key={m.id} className={`flex ${m.sender_role === 'tc' ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                        m.sender_role === 'tc' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
+                      }`}
+                    >
+                      {m.body && <p>{m.body}</p>}
+                      {m.attachment && (
+                        <a
+                          href={m.attachment.url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`flex items-center gap-1.5 text-xs underline underline-offset-2 ${
+                            m.sender_role === 'tc' ? 'text-blue-100' : 'text-blue-300'
+                          } ${m.body ? 'mt-1.5' : ''}`}
+                        >
+                          📎 {m.attachment.fileName}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <input
+                ref={messageFileInputRef}
+                type="file"
+                accept="application/pdf,image/*,.doc,.docx"
+                className="hidden"
+                onChange={handleAttachFileSelected}
+              />
+              {attachError && <p className="text-xs text-red-400 mb-2">{attachError}</p>}
+              {pendingAttachment && (
+                <div className="flex items-center gap-2 mb-2 text-xs text-slate-300 bg-white/5 border border-white/10 rounded-2xl px-2.5 py-1.5">
+                  <span className="truncate flex-1">📎 {pendingAttachment.fileName}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPendingAttachment(null)}
+                    className="text-slate-500 hover:text-red-400 transition flex-shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => messageFileInputRef.current?.click()}
+                  disabled={isAttachingFile}
+                  title="Attach a file"
+                  className="px-3 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-200 rounded-lg transition disabled:opacity-50 flex-shrink-0"
+                >
+                  {isAttachingFile ? '…' : '📎'}
+                </button>
+                <input
+                  type="text"
+                  value={messageDraft}
+                  onChange={(e) => setMessageDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Message the agent…"
+                  className="flex-1 bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={sendingMessage || (!messageDraft.trim() && !pendingAttachment)}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                >
+                  Send
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+        </div>
+
+        <div className={tab === 'people' ? 'space-y-8' : 'hidden'}>
         {/* Contacts: the agent (read-only, from the agents record)
             plus any other parties for this deal, typed in by hand. Sits
             directly under the Checklist card via the shared wrapper above. */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6">
           <div className="flex items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-bold text-slate-100">Contacts</h2>
             <ContactPicker
@@ -3053,7 +3322,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                       onChange={(e) => handleContactChange(contact.id, 'role', e.target.value)}
                       onBlur={(e) => handleContactBlur(contact.id, 'role', e.target.value)}
                       placeholder="Role (e.g. Buyer)"
-                      className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
+                      className="flex-1 bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
                     />
                     <button
                       type="button"
@@ -3069,7 +3338,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     onChange={(e) => handleContactChange(contact.id, 'name', e.target.value)}
                     onBlur={(e) => handleContactBlur(contact.id, 'name', e.target.value)}
                     placeholder="Name or company"
-                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                   />
                   <input
                     type="email"
@@ -3077,7 +3346,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     onChange={(e) => handleContactChange(contact.id, 'email', formatEmailInput(e.target.value))}
                     onBlur={(e) => handleContactBlur(contact.id, 'email', e.target.value)}
                     placeholder="Email"
-                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                   />
                   <input
                     type="tel"
@@ -3086,7 +3355,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     onChange={(e) => handleContactChange(contact.id, 'phone', formatPhoneInput(e.target.value))}
                     onBlur={(e) => handleContactBlur(contact.id, 'phone', e.target.value)}
                     placeholder="Phone"
-                    className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                    className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                   />
                   <div className="flex items-center justify-between">
                     {savingContactId === contact.id ? (
@@ -3158,7 +3427,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     value={draft.role}
                     onChange={(e) => handleDraftContactChange(draft.draftId, 'role', e.target.value)}
                     placeholder="Role (e.g. Buyer)"
-                    className="flex-1 bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
+                    className="flex-1 bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
                   />
                   <button
                     type="button"
@@ -3173,14 +3442,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   value={draft.name}
                   onChange={(e) => handleDraftContactChange(draft.draftId, 'name', e.target.value)}
                   placeholder="Name or company"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 <input
                   type="email"
                   value={draft.email}
                   onChange={(e) => handleDraftContactChange(draft.draftId, 'email', formatEmailInput(e.target.value))}
                   placeholder="Email"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 <input
                   type="tel"
@@ -3188,7 +3457,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   value={draft.phone}
                   onChange={(e) => handleDraftContactChange(draft.draftId, 'phone', formatPhoneInput(e.target.value))}
                   placeholder="Phone"
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
                 />
                 {savingContactId === draft.draftId && (
                   <p className="text-[11px] text-slate-500">Saving...</p>
@@ -3206,11 +3475,102 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </button>
         </div>
 
+
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-8">
+            <h2 className="text-lg font-bold text-slate-100 mb-5">Agent portal access</h2>
+          {/* Agent portal access: invite the agent (or anyone else who
+              needs it) onto this deal's read-only portal -- checklist
+              status, documents, and the message thread below. Free for
+              them, scoped to just this transaction. */}
+          <div>
+                        <p className="text-xs text-slate-500 mb-3">
+              Give someone a free login scoped to this deal -- checklist status, documents, and
+              messaging. No password for them to set; they just click the emailed link.
+            </p>
+
+            {(acceptedAgentUsers.length > 0 || agentInvites.length > 0) && (
+              <div className="space-y-1.5 mb-3">
+                {acceptedAgentUsers.map((a) => (
+                  <div key={a.userId} className="flex items-center gap-2 text-sm">
+                    <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                    <span className="text-slate-200">{a.email}</span>
+                    <span className="text-slate-500 text-xs">has access</span>
+                  </div>
+                ))}
+                {agentInvites
+                  .filter((inv) => inv.status !== 'accepted')
+                  .map((inv) => (
+                    <div key={inv.id} className="flex items-center gap-2 text-sm">
+                      <span className="w-2 h-2 rounded-full bg-slate-500 shrink-0" />
+                      <span className="text-slate-300">{inv.email}</span>
+                      <span className="text-slate-500 text-xs">invited, not yet accepted</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {allAgents.length > 0 && (() => {
+              // Emails that already have access or a pending invite --
+              // shown but not selectable, so nobody is invited twice.
+              const alreadyHave = new Set([
+                ...acceptedAgentUsers.map((a) => a.email.toLowerCase()),
+                ...agentInvites.map((i) => i.email.toLowerCase()),
+              ]);
+              // This deal's own agent first, then the rest alphabetically.
+              const sortedAgents = [...allAgents].sort((a, b) => {
+                if (a.id === transaction.agent_id) return -1;
+                if (b.id === transaction.agent_id) return 1;
+                return a.name.localeCompare(b.name);
+              });
+              return (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const picked = allAgents.find((a) => a.id === e.target.value);
+                    if (picked?.email) setInviteEmailDraft(picked.email);
+                  }}
+                  className="w-full mb-2 bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 text-sm focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">Choose from your agents…</option>
+                  {sortedAgents.map((a) => {
+                    const email = a.email?.trim();
+                    const invited = !!email && alreadyHave.has(email.toLowerCase());
+                    return (
+                      <option key={a.id} value={a.id} disabled={!email || invited}>
+                        {a.name}
+                        {a.id === transaction.agent_id ? ' (this deal)' : ''}
+                        {!email ? ' — no email on file' : invited ? ' — already invited' : ` — ${email}`}
+                      </option>
+                    );
+                  })}
+                </select>
+              );
+            })()}
+            <div className="flex flex-wrap gap-2">
+              <input
+                type="email"
+                value={inviteEmailDraft}
+                onChange={(e) => setInviteEmailDraft(e.target.value)}
+                placeholder="or type any email address"
+                className="flex-1 min-w-[12rem] bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
+              />
+              <button
+                onClick={handleInviteAgent}
+                disabled={isInvitingAgent || !inviteEmailDraft.trim()}
+                className="px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-100 text-sm font-semibold rounded-lg transition disabled:opacity-50"
+              >
+                {isInvitingAgent ? 'Sending…' : 'Invite'}
+              </button>
+            </div>
+            {inviteMessage && <p className="text-xs text-slate-400 mt-2">{inviteMessage}</p>}
+          </div>
+
+          </div>
         {/* External Access: magic links for a lender, title company, or
             inspector -- one document, or just this deal's key dates, no
             login required on their end. See /api/transactions/[id]/
             external-links and the public /external/[token] page. */}
-        <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-6">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-slate-100">External Access</h2>
             <button
@@ -3249,7 +3609,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 <select
                   value={newLinkDocumentId}
                   onChange={(e) => setNewLinkDocumentId(e.target.value)}
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
                 >
                   <option value="">Choose a document...</option>
                   {documents.map((d) => (
@@ -3265,14 +3625,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 value={newLinkRecipientLabel}
                 onChange={(e) => setNewLinkRecipientLabel(e.target.value)}
                 placeholder="Note for yourself (e.g. Wells Fargo -- lender), optional"
-                className="w-full bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
 
               <button
                 type="button"
                 onClick={handleCreateExternalLink}
                 disabled={isCreatingLink}
-                className="w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
               >
                 {isCreatingLink ? 'Creating...' : 'Create Link'}
               </button>
@@ -3340,310 +3700,6 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           )}
         </div>
         </div>
-
-        {/* Documents Section (primary view, left column on desktop) */}
-        <div className="lg:order-1 bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600 rounded-lg p-4 md:p-8">
-          <input
-            ref={categoryFileInputRef}
-            type="file"
-            accept="application/pdf,image/*,.doc,.docx"
-            onChange={handleDirectFileSelected}
-            className="hidden"
-          />
-          <div className="flex items-start justify-between gap-4 mb-2">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
-              <p className="text-sm text-slate-400">
-                Organized by category — a document can optionally be tagged with a checklist stage, but
-                doesn&apos;t have to be.
-              </p>
-            </div>
-            <button
-              onClick={() => setShowUploadForm((prev) => !prev)}
-              className="flex-shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg text-sm transition"
-            >
-              {showUploadForm ? 'Cancel' : '+ Upload Document'}
-            </button>
-          </div>
-
-          {showUploadForm && (
-            <form
-              onSubmit={handleUploadSubmit}
-              className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-800/50 border border-slate-600 rounded-lg p-5 my-6"
-            >
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Category</label>
-                <select
-                  value={uploadCategory}
-                  onChange={(e) => handleUploadCategoryChange(e.target.value)}
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
-                >
-                  {DOCUMENT_CATEGORIES.map((c) => (
-                    <option key={c.key} value={c.key}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Document Type</label>
-                <select
-                  value={uploadDocType}
-                  onChange={(e) => setUploadDocType(e.target.value)}
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
-                >
-                  {typesForCategory(uploadCategory).map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                  Checklist Stage <span className="normal-case text-slate-500">(optional)</span>
-                </label>
-                <select
-                  value={uploadStageTaskId}
-                  onChange={(e) => setUploadStageTaskId(e.target.value)}
-                  className="w-full bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">None</option>
-                  {tasks.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">File</label>
-                <input
-                  type="file"
-                  required
-                  accept="application/pdf,image/*,.doc,.docx"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  className="w-full text-sm text-slate-300 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-600 file:text-slate-200 hover:file:bg-slate-600 file:cursor-pointer"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="flex items-center gap-2 text-sm text-slate-300 select-none cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={uploadRequiresSignature}
-                    onChange={(e) => setUploadRequiresSignature(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
-                  />
-                  This document needs a signature
-                  <span className="text-xs text-slate-500">
-                    (uncheck for photos, printouts, or anything that won&apos;t be signed)
-                  </span>
-                </label>
-              </div>
-
-              <div className="md:col-span-2">
-                <button
-                  type="submit"
-                  disabled={uploadingSlot === 'upload' || !uploadFile}
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg text-sm transition disabled:opacity-50"
-                >
-                  {uploadingSlot === 'upload' ? 'Uploading...' : 'Upload'}
-                </button>
-              </div>
-            </form>
-          )}
-
-          <div className="mb-6">
-            <input
-              type="text"
-              value={docSearch}
-              onChange={(e) => setDocSearch(e.target.value)}
-              placeholder="Search documents by name, type, category, or checklist stage..."
-              className="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-
-          <div className="space-y-3">
-            {renderDocumentCategories()}
-            {docSearch && filteredDocuments.length === 0 && (
-              <p className="text-sm text-slate-500 italic">No documents match "{docSearch}".</p>
-            )}
-          </div>
-        </div>
-
-        </div>
-
-        {/* Communication -- emails forwarded/CC'd to this transaction's
-            own inbound address land here (see src/app/api/email/inbound/
-            route.ts). Deliberately placed at the very bottom of the page,
-            below everything else and its own full-width section rather
-            than living in the primary right-hand column -- this is an
-            optional, low-priority tool (manual CC/forward, not automatic
-            capture), not something every TC is funneled into using.
-            Hidden entirely (not just the address) until
-            NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN is actually set -- no TC
-            should ever see a backend setup/env-var message; it either
-            works or it isn't there yet. */}
-        {inboundDomain && (
-          <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-4 md:p-6 mt-8">
-            <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
-            <p className="text-xs text-slate-400 mb-3">
-              Forward or CC emails about this deal here and they&apos;ll show up below — no need to change how you
-              already send email.
-            </p>
-
-            <div className={`flex items-center gap-2 ${inboundCopyFailed ? 'mb-1' : 'mb-4'}`}>
-              <code className="flex-1 min-w-0 truncate bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-xs text-blue-300">
-                {inboundAddress}
-              </code>
-              <button
-                type="button"
-                onClick={handleCopyInboundAddress}
-                className="flex-shrink-0 px-3 py-2 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition"
-              >
-                {copiedInboundAddress ? 'Copied!' : 'Copy'}
-              </button>
-            </div>
-            {inboundCopyFailed && (
-              <p className="text-xs text-amber-400 mb-3">
-                Couldn&apos;t copy automatically — select the address above and copy it manually.
-              </p>
-            )}
-
-            {emails.length === 0 ? (
-              <p className="text-xs text-slate-500">No emails forwarded to this deal yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {emails.map((email) => {
-                  const isExpanded = expandedEmailId === email.id;
-                  const attachmentCount = email.attachments.length;
-                  return (
-                    <div
-                      key={email.id}
-                      className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden"
-                    >
-                      <div className="flex items-stretch">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedEmailId(isExpanded ? null : email.id)}
-                        className="flex-1 min-w-0 text-left px-3 py-2 hover:bg-slate-700/50 transition"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-slate-200 truncate">
-                            {email.subject || '(no subject)'}
-                          </p>
-                          <span className="text-xs text-slate-500 flex-shrink-0 whitespace-nowrap">
-                            {formatDisplayDate(email.received_at.slice(0, 10), { month: '2-digit', day: '2-digit' })}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <p className="text-xs text-slate-400 truncate">{email.from_name || email.from_email}</p>
-                          {attachmentCount > 0 && (
-                            <span className="text-xs text-slate-500 flex-shrink-0">📎 {attachmentCount}</span>
-                          )}
-                        </div>
-                        {!isExpanded && email.body_text && (
-                          <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{email.body_text}</p>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteEmail(email.id)}
-                        disabled={deletingEmailId === email.id}
-                        className="flex-shrink-0 px-3 text-xs text-slate-500 hover:text-red-400 hover:bg-slate-700/50 border-l border-slate-600 transition disabled:opacity-50"
-                        title="Delete this forwarded email"
-                        aria-label="Delete this forwarded email"
-                      >
-                        {deletingEmailId === email.id ? 'Deleting…' : 'Delete'}
-                      </button>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="px-3 pb-3 border-t border-slate-600">
-                          <p className="text-xs text-slate-500 mt-2 mb-2">
-                            From{' '}
-                            {email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email} ·{' '}
-                            {new Date(email.received_at).toLocaleString()}
-                          </p>
-
-                          {email.body_html ? (
-                            <div
-                              className="email-body text-xs"
-                              // Sanitized server-side on every read (see
-                              // GET /api/email/inbound, src/lib/emailHtml.ts)
-                              // before it ever reaches this component --
-                              // this inbound address is unauthenticated, so
-                              // the HTML here is attacker-controlled by
-                              // default.
-                              dangerouslySetInnerHTML={{ __html: email.body_html }}
-                            />
-                          ) : email.body_text ? (
-                            <p className="text-xs text-slate-300 whitespace-pre-wrap">{email.body_text}</p>
-                          ) : (
-                            <p className="text-xs text-slate-500 italic">No readable content in this email.</p>
-                          )}
-
-                          {attachmentCount > 0 && (
-                            <div className="mt-3 space-y-1.5">
-                              {email.attachments.map((att) => (
-                                <div
-                                  key={att.id}
-                                  draggable
-                                  onDragStart={(e) => startDocDrag(e, att.id)}
-                                  title="Drag onto a Documents category to file it there"
-                                  className="flex items-center gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-3 py-2 hover:border-slate-500 transition cursor-grab active:cursor-grabbing"
-                                >
-                                  <DragHandle label={`Drag ${att.fileName} to a Documents category`} />
-                                  <a
-                                    href={att.url || '#'}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    draggable={false}
-                                    className="min-w-0 flex-1 flex items-center justify-between gap-3"
-                                  >
-                                    <span className="text-blue-400 hover:text-blue-300 truncate text-xs">📄 {att.fileName}</span>
-                                    <span className="text-xs text-slate-500 flex-shrink-0">
-                                      {att.fileSize ? `${(att.fileSize / 1024).toFixed(0)} KB` : ''}
-                                    </span>
-                                  </a>
-                                  <MoveMenu
-                                    onMove={(categoryKey) => void handleMoveDocument(att.id, categoryKey)}
-                                    label={`Move ${att.fileName} to a Documents category`}
-                                    options={DOCUMENT_CATEGORIES.filter((c) => c.key !== (documents.find((d) => d.id === att.id)?.category || DEFAULT_CATEGORY_KEY)).map((c) => ({ value: c.key, label: c.label }))}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Danger Zone */}
-        <div className="bg-red-950/20 border border-red-900/50 rounded-lg p-4 md:p-8 mt-8">
-          <h2 className="text-xl font-bold text-red-300 mb-2">Danger Zone</h2>
-          <p className="text-sm text-slate-400 mb-6">
-            Permanently delete this transaction, its checklist, uploaded documents, and any invoice generated from it.
-          </p>
-          <button
-            onClick={handleDeleteTransaction}
-            disabled={isDeletingTransaction}
-            className="px-4 py-2 bg-red-900/40 hover:bg-red-900/70 border border-red-800 text-red-300 hover:text-red-100 rounded-lg transition font-medium disabled:opacity-50"
-          >
-            {isDeletingTransaction ? 'Deleting...' : 'Delete Transaction'}
-          </button>
-        </div>
-
         {emailTask && transaction && (
           <StepEmailModal
             key={emailTask.id}

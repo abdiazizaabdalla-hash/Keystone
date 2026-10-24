@@ -90,7 +90,7 @@ export default function PricingPage() {
             <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
             <Link
               href="/auth?mode=signup&plan=starter"
-              className="px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
+              className="px-3 sm:px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
             >
               Start free
             </Link>
@@ -132,7 +132,7 @@ export default function PricingPage() {
                 href={`/auth?mode=signup&plan=${plan.id}`}
                 className={`block text-center py-3 rounded-lg font-semibold transition mb-8 ${
                   plan.popular
-                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white'
+                    ? 'bg-blue-500 hover:bg-blue-400 text-white'
                     : 'border border-slate-600 text-slate-200 hover:border-slate-500'
                 }`}
               >
@@ -229,7 +229,7 @@ export default function PricingPage() {
         <div className="flex items-center justify-center gap-4 flex-wrap">
           <Link
             href="/auth?mode=signup&plan=starter"
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
+            className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
           >
             Start free
           </Link>

@@ -68,7 +68,7 @@ function savePreset(headers: string[], mapping: Record<ImportFieldKey, number>) 
   }
 }
 
-const selectCls = 'bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none w-full';
+const selectCls = 'bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none w-full';
 
 export default function ImportTransactionsPage() {
   const router = useRouter();
@@ -344,7 +344,7 @@ export default function ImportTransactionsPage() {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg"
+            className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg"
           >
             Choose a file
           </button>
@@ -354,7 +354,7 @@ export default function ImportTransactionsPage() {
 
       {mapping && !results && (
         <div className="space-y-6">
-          <div className="flex items-center gap-4 bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-4">
+          <div className="flex items-center gap-4 bg-white/5 border border-white/10 rounded-2xl p-4">
             <div className="w-11 h-14 rounded-lg bg-slate-900 border border-slate-600 flex items-center justify-center text-[11px] font-bold text-blue-400">CSV</div>
             <div className="min-w-0">
               <p className="text-slate-100 font-semibold truncate">{fileName}</p>
@@ -379,7 +379,7 @@ export default function ImportTransactionsPage() {
             </div>
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-5">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-bold text-slate-100 mb-1">1. Match your columns</h2>
             <p className="text-sm text-slate-400 mb-4">
               {usedPreset ? 'Using the column match you saved from your last import of this kind of file. ' : 'We guessed from the column names. '}
@@ -411,7 +411,7 @@ export default function ImportTransactionsPage() {
             </div>
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-5">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-bold text-slate-100 mb-3">2. Options</h2>
             <label className="flex items-center gap-2 text-sm text-slate-300 mb-3 cursor-pointer">
               <input type="checkbox" checked={createAgents} onChange={(e) => setCreateAgents(e.target.checked)} className="accent-blue-500" />
@@ -428,7 +428,7 @@ export default function ImportTransactionsPage() {
             </label>
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-5">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-bold text-slate-100 mb-1">3. Check and import</h2>
             {requiredMissing.length > 0 && (
               <p className="text-sm text-amber-300 mb-3">Choose a column for: {requiredMissing.map((f) => f.label).join(', ')}.</p>
@@ -480,7 +480,7 @@ export default function ImportTransactionsPage() {
               type="button"
               onClick={run}
               disabled={running || requiredMissing.length > 0 || prepared.length - blocking - alreadyIn === 0}
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition disabled:opacity-50"
+              className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
             >
               {running ? `Importing ${progress} of ${prepared.length}…` : `Import ${updateCountLabel(prepared.length - blocking - alreadyIn)}`}
             </button>
@@ -490,7 +490,7 @@ export default function ImportTransactionsPage() {
       )}
 
       {results && (
-        <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-5">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
           <h2 className="text-lg font-bold text-slate-100 mb-1">
             {created} deal{created === 1 ? '' : 's'} imported
           </h2>
@@ -508,7 +508,7 @@ export default function ImportTransactionsPage() {
               ))}
           </ul>
           <div className="flex items-center gap-4">
-            <Link href="/dashboard/transactions" className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg">
+            <Link href="/dashboard/transactions" className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg">
               Go to my deals
             </Link>
             <button

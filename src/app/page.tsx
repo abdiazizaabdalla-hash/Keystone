@@ -70,7 +70,7 @@ export default function Home() {
             <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
             <Link
               href="/auth?mode=signup&plan=starter"
-              className="px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
+              className="px-3 sm:px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
             >
               Start free
             </Link>
@@ -99,7 +99,7 @@ export default function Home() {
           <div className="flex flex-wrap items-center gap-4">
             <Link
               href="/auth?mode=signup&plan=starter"
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10"
+              className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10"
             >
               Start free
             </Link>
@@ -135,7 +135,7 @@ export default function Home() {
                 <span className="text-blue-400 font-semibold">67%</span>
               </div>
               <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-                <div className="h-full w-2/3 bg-gradient-to-r from-blue-500 to-blue-600" />
+                <div className="h-full w-2/3 bg-blue-500" />
               </div>
             </div>
             <div className="space-y-2">
@@ -198,8 +198,9 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="listings.jpg"
-          alt="A listing in Relay with its checklist, offers, showings and documents"
+          name="listings-illustration.jpg"
+          alt="Illustration of a Relay listing with a pre-listing checklist, a side-by-side offer comparison, showings, documents, and a one-click convert to deal"
+          caption="Illustration of the workflow."
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Listings</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Start before the contract.</h2>
@@ -341,8 +342,9 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="calendar.jpg"
-          alt="Relay key dates and checklist due dates added to a Google, Outlook or Apple calendar" reverse
+          name="calendar-illustration.jpg"
+          alt="Illustration of Relay dates on a calendar with Add to Google Calendar, Outlook and Apple Calendar buttons and a private calendar link" reverse
+          caption="Illustration of the workflow."
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Calendar</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Your deadlines, on the calendar you already use.</h2>
@@ -366,8 +368,9 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="import.jpg"
-          alt="Importing deals from a spreadsheet into Relay and building a contact list"
+          name="import-illustration.jpg"
+          alt="Illustration of importing deals from a CSV with column matching and a preview, next to a contacts list that fills itself"
+          caption="Illustration of the workflow."
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Bring your work with you</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Move over in an afternoon.</h2>
@@ -390,8 +393,9 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="quickbooks.jpg"
-          alt="The QuickBooks import and export page in Relay, with downloads for invoices, payments and agents, and an upload for QuickBooks invoices"
+          name="invoicing-illustration.jpg"
+          alt="Illustration of downloading Relay invoices as QuickBooks import files and uploading a QuickBooks export with every match shown before saving"
+          caption="Illustration of the workflow."
           reverse
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Invoicing</p>
@@ -480,7 +484,7 @@ export default function Home() {
           <div className="flex flex-wrap items-center gap-4">
             <Link
               href="/auth?mode=signup&plan=starter"
-              className="inline-block px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg transition"
+              className="inline-block px-8 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
             >
               Start free
             </Link>
