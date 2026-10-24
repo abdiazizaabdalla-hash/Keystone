@@ -21,6 +21,8 @@ interface Transaction {
   next_due_date?: string | null;
   /** How many incomplete tasks on this deal are already past their due_date. */
   overdue_count?: number;
+  tasks_total?: number;
+  tasks_done?: number;
   /** 'quickbooks' when the deal was created by a QuickBooks import. */
   source?: string | null;
 }
@@ -39,21 +41,8 @@ export default function TransactionsPage() {
   const [agents, setAgents] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'active' | 'attention' | 'closed' | 'quickbooks' | 'all'>('active');
-  // Which agent groups are folded away, which "Closed" lists are open, and which deals are expanded.
-  const [folded, setFolded] = useState<Set<string>>(new Set());
-  const [closedOpen, setClosedOpen] = useState<Set<string>>(new Set());
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const flip = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) =>
-    setter((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
   useEffect(() => {
     fetchData();
   }, []);
@@ -133,59 +122,37 @@ export default function TransactionsPage() {
     return <span className="text-xs text-slate-500 whitespace-nowrap">Due {formatDisplayDate(tx.next_due_date)}</span>;
   };
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (!confirm('Delete this transaction? This also removes its checklist, uploaded documents, and any invoice generated from it. This cannot be undone.')) {
-      return;
-    }
-
-    try {
-      setDeletingId(id);
-      const response = await authFetch(`/api/transactions?id=${id}`, { method: 'DELETE' });
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || 'Failed to delete transaction');
-      }
-      setTransactions((prev) => prev.filter((t) => t.id !== id));
-    } catch (error) {
-      if (error instanceof AuthRequiredError) {
-        router.push('/auth');
-        return;
-      }
-      alert(error instanceof Error ? error.message : 'Failed to delete transaction');
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   const searching = query.trim().length > 0;
 
-  // Deals grouped by agent, each split into active and closed. Agents with active deals come first, then A to Z.
-  const groups = useMemo(() => {
+  const STATUS_STYLE: Record<string, string> = {
+    Closed: 'bg-green-500/10 text-green-300 border-green-500/40',
+    'Under Contract': 'bg-blue-500/15 text-blue-300 border-blue-500/50',
+    'Contract Pending': 'bg-amber-500/10 text-amber-300 border-amber-500/40',
+  };
+
+  const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const byAgent = new Map<string, Transaction[]>();
-    for (const tx of transactions) {
-      const isClosed = tx.status === 'Closed';
-      const qb = isQb(tx);
-      // QuickBooks imports have their own tab; the everyday views leave them out (All shows everything).
-      if (view === 'quickbooks' ? !qb : view !== 'all' && qb) continue;
-      if (view === 'active' && isClosed) continue;
-      if (view === 'closed' && !isClosed) continue;
-      if (view === 'attention' && (isClosed || !(tx.overdue_count && tx.overdue_count > 0))) continue;
-      const agentName = agents.get(tx.agent_id) || 'Unknown agent';
-      if (q && !`${agentName} ${tx.property_address || ''} ${tx.file_number || ''} ${tx.status || ''} ${qb ? 'quickbooks' : ''}`.toLowerCase().includes(q)) continue;
-      const list = byAgent.get(tx.agent_id) || [];
-      list.push(tx);
-      byAgent.set(tx.agent_id, list);
-    }
     const dueKey = (t: Transaction) => t.next_due_date || '9999-12-31';
-    return [...byAgent.entries()]
-      .map(([agentId, list]) => {
-        const active = list.filter((t) => t.status !== 'Closed').sort((a, b) => dueKey(a).localeCompare(dueKey(b)) || b.created_at.localeCompare(a.created_at));
-        const closed = list.filter((t) => t.status === 'Closed').sort((a, b) => (b.closing_date || b.created_at).localeCompare(a.closing_date || a.created_at));
-        return { agentId, name: agents.get(agentId) || 'Unknown agent', active, closed, overdue: active.reduce((n, t) => n + (t.overdue_count || 0), 0), qbOnly: list.length > 0 && list.every(isQb) };
+    return transactions
+      .filter((tx) => {
+        const isClosed = tx.status === 'Closed';
+        const qb = isQb(tx);
+        // QuickBooks imports have their own filter; the everyday views leave them out (All shows everything).
+        if (view === 'quickbooks' ? !qb : view !== 'all' && qb) return false;
+        if (view === 'active' && isClosed) return false;
+        if (view === 'closed' && !isClosed) return false;
+        if (view === 'attention' && (isClosed || !(tx.overdue_count && tx.overdue_count > 0))) return false;
+        if (!q) return true;
+        const agentName = agents.get(tx.agent_id) || '';
+        return `${agentName} ${tx.property_address || ''} ${tx.file_number || ''} ${tx.status || ''} ${qb ? 'quickbooks' : ''}`.toLowerCase().includes(q);
       })
-      .sort((a, b) => Number(b.active.length > 0) - Number(a.active.length > 0) || a.name.localeCompare(b.name));
+      .sort((a, b) => {
+        const ac = a.status === 'Closed';
+        const bc = b.status === 'Closed';
+        if (ac !== bc) return ac ? 1 : -1;
+        if (ac) return (b.closing_date || b.created_at).localeCompare(a.closing_date || a.created_at);
+        return dueKey(a).localeCompare(dueKey(b)) || b.created_at.localeCompare(a.created_at);
+      });
   }, [transactions, agents, query, view]);
 
   const totals = useMemo(() => {
@@ -200,296 +167,163 @@ export default function TransactionsPage() {
     };
   }, [transactions]);
 
-
   if (loading) {
     return (
-      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center py-24">
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full border-4 border-slate-600 border-t-blue-400 animate-spin mx-auto mb-4" />
-              <p className="text-slate-400">Loading transactions...</p>
-            </div>
-          </div>
-        </div>
+      <div className="p-4 md:p-10 max-w-5xl mx-auto">
+        <p className="text-slate-400">Loading transactions…</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-red-900/30 border border-red-700 rounded-lg p-6">
-            <h2 className="text-lg font-bold text-red-300 mb-2">Error Loading Transactions</h2>
-            <p className="text-red-200 mb-4">{error}</p>
-            <p className="text-red-300 text-sm">
-              💡 If you see "permission denied", run the Supabase SQL grant statements in your Supabase dashboard.
-            </p>
-          </div>
+      <div className="p-4 md:p-10 max-w-5xl mx-auto">
+        <div className="bg-red-900/30 border border-red-700 rounded-2xl p-6">
+          <h2 className="text-lg font-bold text-red-300 mb-2">Error Loading Transactions</h2>
+          <p className="text-red-200 mb-4">{error}</p>
+          <p className="text-red-300 text-sm">
+            💡 If you see &quot;permission denied&quot;, run the Supabase SQL grant statements in your Supabase dashboard.
+          </p>
         </div>
       </div>
     );
   }
 
-  const statusDot = (status: string) => {
-    switch (status) {
-      case 'Closed':
-        return 'bg-green-400';
-      case 'Contract Pending':
-        return 'bg-yellow-400';
-      case 'Under Contract':
-        return 'bg-blue-400';
-      default:
-        return 'bg-slate-400';
-    }
-  };
-
-  const renderDeal = (tx: Transaction) => {
-    const open = expanded.has(tx.id);
-    const closed = tx.status === 'Closed';
-    const price = tx.purchase_price ? `$${Number(tx.purchase_price).toLocaleString()}` : '—';
-    return (
-      <li key={tx.id} className="border-t border-slate-700/60 first:border-t-0">
-        <div className="flex items-center hover:bg-slate-700/30 transition">
-          <Link href={`/dashboard/transactions/${tx.id}`} className="flex-1 min-w-0 flex items-center gap-3 pl-4 py-3">
-            <span className={`h-2 w-2 shrink-0 rounded-full ${statusDot(tx.status)}`} title={tx.status} aria-hidden="true" />
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-2 min-w-0">
-                <span className={`truncate text-sm font-medium ${closed ? 'text-slate-400' : 'text-slate-100'}`}>{tx.property_address || 'No address'}</span>
-                {isQb(tx) && <span className="shrink-0 rounded-full border border-emerald-600/50 bg-emerald-900/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">QuickBooks</span>}
-              </span>
-              <span className="block truncate text-xs text-slate-500">
-                {tx.status}
-                {tx.file_number ? ` · File ${tx.file_number}` : ''}
-              </span>
-            </span>
-            <span className="hidden sm:block shrink-0">{getDueBadge(tx)}</span>
-          </Link>
-          <button
-            type="button"
-            onClick={() => flip(setExpanded, tx.id)}
-            aria-expanded={open}
-            aria-controls={`deal-${tx.id}`}
-            aria-label={open ? 'Hide details' : 'Show details'}
-            className="shrink-0 px-4 py-3 text-slate-500 hover:text-slate-200 transition"
-          >
-            <svg className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        </div>
-
-        {open && (
-          <div id={`deal-${tx.id}`} className="pb-4 pl-9 pr-4">
-            <div className="sm:hidden mb-2">{getDueBadge(tx)}</div>
-            <dl className="grid gap-x-8 gap-y-3 text-sm grid-cols-2 lg:grid-cols-3">
-              <div>
-                <dt className="text-xs text-slate-500">Price</dt>
-                <dd className="mt-0.5 font-semibold text-blue-400">{price}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">Accepted</dt>
-                <dd className="mt-0.5 text-slate-200">{tx.acceptance_date ? formatDisplayDate(tx.acceptance_date) : '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">Closing</dt>
-                <dd className="mt-0.5 text-slate-200">{tx.closing_date ? formatDisplayDate(tx.closing_date) : '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">Next step due</dt>
-                <dd className="mt-0.5 text-slate-200">{!closed && tx.next_due_date ? formatDisplayDate(tx.next_due_date) : '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">File number</dt>
-                <dd className="mt-0.5 font-mono text-slate-200 break-all">{tx.file_number || '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">Checklist</dt>
-                <dd className="mt-0.5 text-slate-200 break-words">{tx.checklist_template_name || 'Baseline'}</dd>
-              </div>
-            </dl>
-            <div className="mt-3 flex items-center gap-4">
-              <Link href={`/dashboard/transactions/${tx.id}`} className="text-sm font-medium text-blue-400 hover:text-blue-300">
-                Open transaction →
-              </Link>
-              <button
-                onClick={(e) => handleDelete(e, tx.id)}
-                disabled={deletingId === tx.id}
-                className="text-sm text-slate-500 hover:text-red-400 transition disabled:opacity-50"
-              >
-                {deletingId === tx.id ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        )}
-      </li>
-    );
-  };
-
-  const tabs: { id: typeof view; label: string; count: number }[] = [
-    { id: 'active', label: 'Active', count: totals.active },
-    ...(totals.overdue > 0 ? [{ id: 'attention' as const, label: 'Needs attention', count: totals.overdue }] : []),
-    { id: 'closed', label: 'Closed', count: totals.closed },
-    ...(totals.quickbooks > 0 ? [{ id: 'quickbooks' as const, label: 'QuickBooks', count: totals.quickbooks }] : []),
-    { id: 'all', label: 'All', count: totals.all },
+  const filters: { id: typeof view; label: string }[] = [
+    { id: 'active', label: `Open (${totals.active})` },
+    ...(totals.overdue > 0 ? [{ id: 'attention' as const, label: `Needs attention (${totals.overdue})` }] : []),
+    { id: 'closed', label: `Closed (${totals.closed})` },
+    ...(totals.quickbooks > 0 ? [{ id: 'quickbooks' as const, label: `QuickBooks (${totals.quickbooks})` }] : []),
+    { id: 'all', label: 'All' },
   ];
 
   return (
-    <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100">Transactions</h1>
-          <div className="flex items-center gap-3 shrink-0">
-            <Link
-              href="/dashboard/transactions/import"
-              className="hidden sm:inline-block text-sm text-slate-300 hover:text-slate-100 border border-slate-600 hover:border-slate-500 rounded-lg px-4 py-2.5 transition whitespace-nowrap"
-            >
-              Import CSV
-            </Link>
-            <Link
-              href="/dashboard/transactions/new"
-              className="shrink-0 px-4 py-2.5 md:px-5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition shadow-lg whitespace-nowrap"
-            >
-              + New Deal
-            </Link>
-          </div>
+    <div className="p-4 md:p-10 max-w-5xl mx-auto">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Transactions</h1>
+          <p className="text-slate-400">Every deal from contract to closing, with the next step due.</p>
         </div>
-
-        {/* Empty State */}
-        {transactions.length === 0 ? (
-          <div className="bg-slate-700/50 border border-dashed border-slate-600 rounded-lg p-8 md:p-16 text-center">
-            <div className="w-16 h-16 bg-slate-600/50 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-slate-300 mb-2">No transactions yet</h3>
-            <p className="text-slate-400 mb-6">Start by creating your first deal to get organized</p>
-            <Link
-              href="/dashboard/transactions/new"
-              className="inline-block px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg transition hover:shadow-lg"
-            >
-              Create Your First Deal
-            </Link>
-          </div>
-        ) : (
-          <>
-            {/* One row of controls: what to show, and search. */}
-            <div className="mb-5 flex flex-wrap items-center gap-3">
-              <div className="inline-flex rounded-lg border border-slate-600 bg-slate-800/60 p-0.5" role="tablist" aria-label="Show transactions">
-                {tabs.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={view === t.id}
-                    onClick={() => setView(t.id)}
-                    className={`px-3 py-1.5 text-sm rounded-md transition whitespace-nowrap ${
-                      view === t.id ? 'bg-slate-600 text-white font-medium' : t.id === 'attention' ? 'text-red-300 hover:text-red-200' : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    {t.label} <span className="text-xs opacity-70">{t.count}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="relative flex-1 min-w-[12rem]">
-                <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
-                </svg>
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search agent, address or file number"
-                  aria-label="Search transactions"
-                  className="w-full bg-slate-700/60 border border-slate-600 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {groups.length === 0 ? (
-              <div className="bg-slate-700/40 border border-slate-600 rounded-lg p-10 text-center">
-                <p className="text-slate-300 font-medium">
-                  {searching ? `Nothing matches “${query.trim()}”` : view === 'attention' ? 'Nothing is overdue.' : view === 'closed' ? 'No closed transactions yet.' : view === 'quickbooks' ? 'Nothing has been imported from QuickBooks.' : 'No active transactions.'}
-                </p>
-                {(searching || view !== 'all') && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuery('');
-                      setView('all');
-                    }}
-                    className="mt-2 text-sm text-blue-400 hover:text-blue-300"
-                  >
-                    Show everything
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {groups.map((g) => {
-                  const isFolded = !searching && folded.has(g.agentId);
-                  const showClosed = searching || view === 'closed' || closedOpen.has(g.agentId);
-                  return (
-                    <section key={g.agentId}>
-                      <button
-                        type="button"
-                        onClick={() => flip(setFolded, g.agentId)}
-                        aria-expanded={!isFolded}
-                        className="w-full flex items-center gap-3 px-1 pb-2 text-left group"
-                      >
-                        <span className="w-7 h-7 shrink-0 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-xs font-bold text-white">
-                          {(g.name[0] || '?').toUpperCase()}
-                        </span>
-                        <span className="font-semibold text-slate-100 truncate">{g.name}</span>
-                        {g.qbOnly && <span className="shrink-0 rounded-full border border-emerald-600/50 bg-emerald-900/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">QuickBooks</span>}
-                        <span className="text-xs text-slate-500">
-                          {g.active.length > 0 ? `${g.active.length} active` : ''}
-                          {g.active.length > 0 && g.closed.length > 0 ? ' · ' : ''}
-                          {g.closed.length > 0 ? `${g.closed.length} closed` : ''}
-                        </span>
-                        {g.overdue > 0 && <span className="text-xs font-medium text-red-400">{g.overdue} overdue</span>}
-                        <svg className={`ml-auto h-4 w-4 shrink-0 text-slate-600 group-hover:text-slate-400 transition-transform ${isFolded ? '-rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-
-                      {!isFolded && (
-                        <div className="rounded-xl border border-slate-600 bg-slate-800/40 overflow-hidden">
-                          {g.active.length > 0 && <ul>{g.active.map(renderDeal)}</ul>}
-
-                          {g.closed.length > 0 && (
-                            <div className={g.active.length > 0 ? 'border-t border-slate-700' : ''}>
-                              {view !== 'closed' && (
-                                <button
-                                  type="button"
-                                  onClick={() => flip(setClosedOpen, g.agentId)}
-                                  aria-expanded={showClosed}
-                                  className="w-full flex items-center justify-between px-4 py-2.5 text-left text-xs font-medium text-slate-500 hover:text-slate-300 transition"
-                                >
-                                  <span>
-                                    {showClosed ? 'Hide' : 'Show'} {g.closed.length} closed
-                                  </span>
-                                  <svg className={`h-3.5 w-3.5 transition-transform ${showClosed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                  </svg>
-                                </button>
-                              )}
-                              {showClosed && <ul className={view !== 'closed' ? 'border-t border-slate-700/60' : ''}>{g.closed.map(renderDeal)}</ul>}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </section>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/dashboard/transactions/import" className="hidden sm:inline text-sm text-slate-400 hover:text-slate-200">
+            Import CSV
+          </Link>
+          <Link
+            href="/dashboard/transactions/new"
+            className="px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition whitespace-nowrap"
+          >
+            + New deal
+          </Link>
+        </div>
       </div>
+
+      {transactions.length === 0 ? (
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+          <p className="text-slate-300 mb-1">No transactions yet.</p>
+          <p className="text-sm text-slate-500 mb-5">Start a deal when a contract is accepted. Relay adds the checklist and counts the days to closing.</p>
+          <Link href="/dashboard/transactions/new" className="inline-block px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition">
+            Create your first deal
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm" role="tablist" aria-label="Show transactions">
+              {filters.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === f.id}
+                  onClick={() => setView(f.id)}
+                  className={`px-3 py-1.5 rounded-full border transition ${
+                    view === f.id
+                      ? 'border-blue-500 text-blue-300 bg-blue-900/20'
+                      : f.id === 'attention'
+                        ? 'border-red-500/40 text-red-300 hover:text-red-200'
+                        : 'border-white/10 text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search agent, address or file number"
+              aria-label="Search transactions"
+              className="flex-1 min-w-[12rem] bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+
+          {visible.length === 0 ? (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+              <p className="text-slate-300 mb-1">
+                {searching ? `Nothing matches “${query.trim()}”` : view === 'attention' ? 'Nothing is overdue.' : view === 'closed' ? 'No closed transactions yet.' : view === 'quickbooks' ? 'Nothing has been imported from QuickBooks.' : 'No open transactions.'}
+              </p>
+              {(searching || view !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery('');
+                    setView('all');
+                  }}
+                  className="text-sm text-blue-400 hover:text-blue-300"
+                >
+                  Show everything
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {visible.map((tx) => {
+                const total = tx.tasks_total ?? 0;
+                const done = tx.tasks_done ?? 0;
+                const pct = total ? Math.round((done / total) * 100) : 0;
+                const closed = tx.status === 'Closed';
+                const agentName = agents.get(tx.agent_id);
+                const price = tx.purchase_price ? `$${Number(tx.purchase_price).toLocaleString()}` : null;
+                return (
+                  <Link
+                    key={tx.id}
+                    href={`/dashboard/transactions/${tx.id}`}
+                    className="block bg-white/5 border border-white/10 hover:border-white/25 rounded-2xl p-5 transition"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className={`font-semibold break-words ${closed ? 'text-slate-400' : 'text-slate-100'}`}>{tx.property_address || 'No address'}</p>
+                        <p className="text-xs text-slate-500">
+                          {[agentName && `Agent: ${agentName}`, tx.file_number && `File ${tx.file_number}`, price].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isQb(tx) && <span className="rounded-full border border-emerald-600/50 bg-emerald-900/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">QuickBooks</span>}
+                        <span className={`text-xs px-2.5 py-0.5 rounded-full border ${STATUS_STYLE[tx.status] || 'bg-slate-500/10 text-slate-300 border-slate-500/40'}`}>{tx.status}</span>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-400">
+                      {total > 0 && (
+                        <>
+                          <span>
+                            {done}/{total} steps done
+                          </span>
+                          <span className="w-28 h-1.5 rounded-full bg-white/10 overflow-hidden" aria-hidden>
+                            <span className="block h-full bg-blue-500" style={{ width: `${pct}%` }} />
+                          </span>
+                        </>
+                      )}
+                      {tx.closing_date && <span>{closed ? 'Closed' : 'Closing'} {formatDisplayDate(tx.closing_date)}</span>}
+                      {!closed && getDueBadge(tx)}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -87,12 +87,35 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // Checklist progress (steps done / total) for the list's progress bars.
+    // Paged because Supabase caps a single select at 1000 rows.
+    const progressByTx = new Map<string, { total: number; done: number }>();
+    for (let from = 0; ; from += 1000) {
+      const { data: page } = await supabaseServer
+        .from('tasks')
+        .select('transaction_id, completed')
+        .in('transaction_id', txIds)
+        .order('id')
+        .range(from, from + 999);
+      (page || []).forEach((t) => {
+        const id = t.transaction_id as string;
+        const cur = progressByTx.get(id) || { total: 0, done: 0 };
+        cur.total += 1;
+        if (t.completed) cur.done += 1;
+        progressByTx.set(id, cur);
+      });
+      if (!page || page.length < 1000) break;
+    }
+
     const enriched = data.map((t) => {
       const summary = summaryByTx.get(t.id as string);
+      const progress = progressByTx.get(t.id as string);
       return {
         ...t,
         next_due_date: summary?.nextDueDate ?? null,
         overdue_count: summary?.overdueCount ?? 0,
+        tasks_total: progress?.total ?? 0,
+        tasks_done: progress?.done ?? 0,
       };
     });
 
