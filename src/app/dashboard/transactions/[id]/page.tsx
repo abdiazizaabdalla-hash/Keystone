@@ -197,6 +197,44 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
+function OverviewSection({
+  title,
+  summary,
+  tone = 'default',
+  action,
+  children,
+}: {
+  title: string;
+  summary?: React.ReactNode;
+  tone?: 'default' | 'danger';
+  action?: { label: string; onClick: () => void };
+  children: React.ReactNode;
+}) {
+  return (
+    <details
+      className={`group rounded-2xl border ${
+        tone === 'danger' ? 'bg-red-950/20 border-red-900/50' : 'bg-white/5 border-white/10'
+      }`}
+    >
+      <summary className="flex items-center gap-4 px-5 py-4 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        <span className={`font-semibold ${tone === 'danger' ? 'text-red-300' : 'text-slate-100'}`}>{title}</span>
+        {summary ? <span className="text-sm text-slate-400 truncate min-w-0">{summary}</span> : null}
+        <svg className="w-4 h-4 ml-auto shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </summary>
+      <div className="px-5 pb-5">
+        {children}
+        {action && (
+          <button type="button" onClick={action.onClick} className="mt-4 text-sm font-medium text-blue-400 hover:text-blue-300 transition">
+            {action.label} →
+          </button>
+        )}
+      </div>
+    </details>
+  );
+}
+
 type TxTab = 'overview' | 'checklist' | 'documents' | 'messages' | 'people';
 const TX_TABS: { id: TxTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -2319,6 +2357,17 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     });
   };
 
+  const incompleteTasks = tasks
+    .filter((t) => !t.completed)
+    .sort((x, y) => (x.due_date || '9999').localeCompare(y.due_date || '9999'));
+  const nextTask = incompleteTasks[0];
+  const keyDatesSummary = [
+    transaction.acceptance_date ? `Accepted ${formatDisplayDate(transaction.acceptance_date, { month: 'short', day: 'numeric' })}` : null,
+    transaction.closing_date ? `Closing ${formatDisplayDate(transaction.closing_date, { month: 'short', day: 'numeric' })}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <div className="min-h-screen px-4 py-6 md:px-8 md:py-12">
       <div className="max-w-5xl mx-auto">
@@ -2438,9 +2487,83 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           ))}
         </div>
 
-        <div className={tab === 'overview' ? 'space-y-8' : 'hidden'}>
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-8">
-            <h2 className="text-lg font-bold text-slate-100 mb-5">Key dates</h2>
+        <div className={tab === 'overview' ? 'space-y-3' : 'hidden'}>
+          <OverviewSection
+            title="Checklist"
+            summary={tasks.length === 0 ? 'No steps yet' : `${completedCount} of ${tasks.length} done${nextTask ? ` · Next: ${nextTask.name}${nextTask.due_date ? ` (${formatDisplayDate(nextTask.due_date, { month: 'short', day: 'numeric' })})` : ''}` : ' · All done'}`}
+            action={{ label: 'Open checklist', onClick: () => selectTab('checklist') }}
+          >
+            {incompleteTasks.length === 0 ? (
+              <p className="text-sm text-slate-400">Every step is done.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {incompleteTasks.slice(0, 5).map((t) => (
+                  <li key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="text-slate-200 truncate">{t.name}</span>
+                    <span className="text-slate-500 shrink-0">{t.due_date ? formatDisplayDate(t.due_date, { month: 'short', day: 'numeric' }) : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewSection>
+
+          <OverviewSection
+            title="Documents"
+            summary={`${documents.length} file${documents.length === 1 ? '' : 's'}`}
+            action={{ label: 'Open documents', onClick: () => selectTab('documents') }}
+          >
+            {documents.length === 0 ? (
+              <p className="text-sm text-slate-400">No documents yet.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {[...documents].sort((x, y) => y.created_at.localeCompare(x.created_at)).slice(0, 5).map((d) => (
+                  <li key={d.id} className="py-2.5 text-sm text-slate-200 truncate">📄 {d.file_name}</li>
+                ))}
+              </ul>
+            )}
+          </OverviewSection>
+
+          <OverviewSection
+            title="Messages"
+            summary={messages.length === 0 ? 'No messages yet' : messages[messages.length - 1].body || 'Attachment'}
+            action={{ label: 'Open messages', onClick: () => selectTab('messages') }}
+          >
+            {messages.length === 0 ? (
+              <p className="text-sm text-slate-400">Nothing yet. Invite your agent on the Contacts tab to start a conversation.</p>
+            ) : (
+              <ul className="space-y-3">
+                {messages.slice(-3).map((m) => (
+                  <li key={m.id} className="text-sm">
+                    <p className="text-xs text-slate-500">{m.sender_role === 'tc' ? 'You' : agentName} · {new Date(m.created_at).toLocaleDateString()}</p>
+                    <p className="text-slate-200 line-clamp-2">{m.body || '📎 Attachment'}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewSection>
+
+          <OverviewSection
+            title="Contacts"
+            summary={`${agent ? agentName : 'No agent'}${contacts.length ? ` + ${contacts.length} other${contacts.length === 1 ? '' : 's'}` : ''}`}
+            action={{ label: 'Open contacts', onClick: () => selectTab('people') }}
+          >
+            <ul className="divide-y divide-white/10">
+              {agent && (
+                <li className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <span className="text-slate-200">{agentName}</span>
+                  <span className="text-slate-500">Agent</span>
+                </li>
+              )}
+              {contacts.filter((c) => c.name || c.email).map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <span className="text-slate-200 truncate">{c.name || c.email}</span>
+                  <span className="text-slate-500 shrink-0">{c.role || ''}</span>
+                </li>
+              ))}
+            </ul>
+          </OverviewSection>
+
+          <OverviewSection title="Key dates" summary={keyDatesSummary}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Acceptance / Closing Dates -- editable here, not just at
                 creation. Changing either recomputes the checklist's due
@@ -2474,7 +2597,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               />
             </div>
             </div>
-          </div>
+          <div className="mt-6">
           <KeyDatesPanel
             transactionId={transaction.id}
             propertyAddress={transaction.property_address}
@@ -2482,9 +2605,10 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             canEdit={true}
             manageCalendar
           />
+          </div>
+          </OverviewSection>
 
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-8">
-            <h2 className="text-lg font-bold text-slate-100 mb-5">Invoice</h2>
+          <OverviewSection title="Invoice" summary={invoice ? `${invoice.invoice_number} · $${invoice.amount_owed.toLocaleString()} · ${invoice.paid ? 'Paid' : 'Unpaid'}` : 'Not created yet'}>
           {/* Invoice: no longer gated on the deal being manually walked to
               Closed via the checklist -- some TCs don't want to check off
               every item by hand. Once Closed (by either path), the plain
@@ -2597,174 +2721,19 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               </div>
             )}
           </div>
-
-          </div>
-        {/* Communication -- emails forwarded/CC'd to this transaction's
-            own inbound address land here (see src/app/api/email/inbound/
-            route.ts). Deliberately placed at the very bottom of the page,
-            below everything else and its own full-width section rather
-            than living in the primary right-hand column -- this is an
-            optional, low-priority tool (manual CC/forward, not automatic
-            capture), not something every TC is funneled into using.
-            Hidden entirely (not just the address) until
-            NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN is actually set -- no TC
-            should ever see a backend setup/env-var message; it either
-            works or it isn't there yet. */}
-        {inboundDomain && (
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6 mt-8">
-            <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
-            <p className="text-xs text-slate-400 mb-3">
-              Forward or CC emails about this deal here and they&apos;ll show up below — no need to change how you
-              already send email.
-            </p>
-
-            <div className={`flex items-center gap-2 ${inboundCopyFailed ? 'mb-1' : 'mb-4'}`}>
-              <code className="flex-1 min-w-0 truncate bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-blue-300">
-                {inboundAddress}
-              </code>
-              <button
-                type="button"
-                onClick={handleCopyInboundAddress}
-                className="flex-shrink-0 px-3 py-2 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition"
-              >
-                {copiedInboundAddress ? 'Copied!' : 'Copy'}
-              </button>
-            </div>
-            {inboundCopyFailed && (
-              <p className="text-xs text-amber-400 mb-3">
-                Couldn&apos;t copy automatically — select the address above and copy it manually.
-              </p>
-            )}
-
-            {emails.length === 0 ? (
-              <p className="text-xs text-slate-500">No emails forwarded to this deal yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {emails.map((email) => {
-                  const isExpanded = expandedEmailId === email.id;
-                  const attachmentCount = email.attachments.length;
-                  return (
-                    <div
-                      key={email.id}
-                      className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden"
-                    >
-                      <div className="flex items-stretch">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedEmailId(isExpanded ? null : email.id)}
-                        className="flex-1 min-w-0 text-left px-3 py-2 hover:bg-slate-700/50 transition"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-slate-200 truncate">
-                            {email.subject || '(no subject)'}
-                          </p>
-                          <span className="text-xs text-slate-500 flex-shrink-0 whitespace-nowrap">
-                            {formatDisplayDate(email.received_at.slice(0, 10), { month: '2-digit', day: '2-digit' })}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <p className="text-xs text-slate-400 truncate">{email.from_name || email.from_email}</p>
-                          {attachmentCount > 0 && (
-                            <span className="text-xs text-slate-500 flex-shrink-0">📎 {attachmentCount}</span>
-                          )}
-                        </div>
-                        {!isExpanded && email.body_text && (
-                          <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{email.body_text}</p>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteEmail(email.id)}
-                        disabled={deletingEmailId === email.id}
-                        className="flex-shrink-0 px-3 text-xs text-slate-500 hover:text-red-400 hover:bg-slate-700/50 border-l border-slate-600 transition disabled:opacity-50"
-                        title="Delete this forwarded email"
-                        aria-label="Delete this forwarded email"
-                      >
-                        {deletingEmailId === email.id ? 'Deleting…' : 'Delete'}
-                      </button>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="px-3 pb-3 border-t border-slate-600">
-                          <p className="text-xs text-slate-500 mt-2 mb-2">
-                            From{' '}
-                            {email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email} ·{' '}
-                            {new Date(email.received_at).toLocaleString()}
-                          </p>
-
-                          {email.body_html ? (
-                            <div
-                              className="email-body text-xs"
-                              // Sanitized server-side on every read (see
-                              // GET /api/email/inbound, src/lib/emailHtml.ts)
-                              // before it ever reaches this component --
-                              // this inbound address is unauthenticated, so
-                              // the HTML here is attacker-controlled by
-                              // default.
-                              dangerouslySetInnerHTML={{ __html: email.body_html }}
-                            />
-                          ) : email.body_text ? (
-                            <p className="text-xs text-slate-300 whitespace-pre-wrap">{email.body_text}</p>
-                          ) : (
-                            <p className="text-xs text-slate-500 italic">No readable content in this email.</p>
-                          )}
-
-                          {attachmentCount > 0 && (
-                            <div className="mt-3 space-y-1.5">
-                              {email.attachments.map((att) => (
-                                <div
-                                  key={att.id}
-                                  draggable
-                                  onDragStart={(e) => startDocDrag(e, att.id)}
-                                  title="Drag onto a Documents category to file it there"
-                                  className="flex items-center gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-3 py-2 hover:border-slate-500 transition cursor-grab active:cursor-grabbing"
-                                >
-                                  <DragHandle label={`Drag ${att.fileName} to a Documents category`} />
-                                  <a
-                                    href={att.url || '#'}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    draggable={false}
-                                    className="min-w-0 flex-1 flex items-center justify-between gap-3"
-                                  >
-                                    <span className="text-blue-400 hover:text-blue-300 truncate text-xs">📄 {att.fileName}</span>
-                                    <span className="text-xs text-slate-500 flex-shrink-0">
-                                      {att.fileSize ? `${(att.fileSize / 1024).toFixed(0)} KB` : ''}
-                                    </span>
-                                  </a>
-                                  <MoveMenu
-                                    onMove={(categoryKey) => void handleMoveDocument(att.id, categoryKey)}
-                                    label={`Move ${att.fileName} to a Documents category`}
-                                    options={DOCUMENT_CATEGORIES.filter((c) => c.key !== (documents.find((d) => d.id === att.id)?.category || DEFAULT_CATEGORY_KEY)).map((c) => ({ value: c.key, label: c.label }))}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Danger Zone */}
-        <div className="bg-red-950/20 border border-red-900/50 rounded-lg p-4 md:p-8 mt-8">
-          <h2 className="text-xl font-bold text-red-300 mb-2">Danger Zone</h2>
-          <p className="text-sm text-slate-400 mb-6">
+          </OverviewSection>
+        <OverviewSection title="Delete this deal" tone="danger">
+          <p className="text-sm text-slate-400 mb-5">
             Permanently delete this transaction, its checklist, uploaded documents, and any invoice generated from it.
           </p>
           <button
             onClick={handleDeleteTransaction}
             disabled={isDeletingTransaction}
-            className="px-4 py-2 bg-red-900/40 hover:bg-red-900/70 border border-red-800 text-red-300 hover:text-red-100 rounded-lg transition font-medium disabled:opacity-50"
+            className="px-4 py-2 bg-red-900/40 hover:bg-red-900/70 border border-red-800 text-red-300 hover:text-red-100 rounded-xl transition font-medium disabled:opacity-50"
           >
             {isDeletingTransaction ? 'Deleting...' : 'Delete Transaction'}
           </button>
-        </div>
+        </OverviewSection>
 
         </div>
 
@@ -3024,7 +2993,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
         </div>
 
-        <div className={tab === 'documents' ? '' : 'hidden'}>
+        <div className={tab === 'documents' ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start' : 'hidden'}>
         {/* Documents Section (primary view, left column on desktop) */}
         <div className="lg:order-1 bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8">
           <input
@@ -3158,6 +3127,192 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             )}
           </div>
         </div>
+          <div className="space-y-6 min-w-0">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold text-slate-100">Messages</h2>
+                <button type="button" onClick={() => selectTab('messages')} className="text-sm text-blue-400 hover:text-blue-300 font-medium transition">
+                  Open →
+                </button>
+              </div>
+              {messages.length === 0 ? (
+                <p className="text-sm text-slate-500">No messages yet.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {messages.slice(-4).map((m) => (
+                    <li key={m.id} className="text-sm">
+                      <p className="text-xs text-slate-500">{m.sender_role === 'tc' ? 'You' : agentName} · {new Date(m.created_at).toLocaleDateString()}</p>
+                      {m.body && <p className="text-slate-200 line-clamp-2">{m.body}</p>}
+                      {m.attachment && (
+                        <div
+                          draggable={Boolean(m.attachment_document_id)}
+                          onDragStart={(e) => {
+                            if (m.attachment_document_id) startDocDrag(e, m.attachment_document_id);
+                          }}
+                          title={m.attachment_document_id ? 'Drag onto a Documents category to file it there' : undefined}
+                          className={`mt-1 flex items-center gap-2 bg-slate-800/50 border border-white/10 rounded-xl px-3 py-2 ${m.attachment_document_id ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                        >
+                          <span className="text-xs text-blue-300 truncate">📎 {m.attachment.fileName}</span>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+        {/* Communication -- emails forwarded/CC'd to this transaction's
+              own inbound address land here (see src/app/api/email/inbound/
+              route.ts). Deliberately placed at the very bottom of the page,
+              below everything else and its own full-width section rather
+              than living in the primary right-hand column -- this is an
+              optional, low-priority tool (manual CC/forward, not automatic
+              capture), not something every TC is funneled into using.
+              Hidden entirely (not just the address) until
+              NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN is actually set -- no TC
+              should ever see a backend setup/env-var message; it either
+              works or it isn't there yet. */}
+          {inboundDomain && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+              <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
+              <p className="text-xs text-slate-400 mb-3">
+                Forward or CC emails about this deal here and they&apos;ll show up below — no need to change how you
+                already send email.
+              </p>
+
+              <div className={`flex items-center gap-2 ${inboundCopyFailed ? 'mb-1' : 'mb-4'}`}>
+                <code className="flex-1 min-w-0 truncate bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-blue-300">
+                  {inboundAddress}
+                </code>
+                <button
+                  type="button"
+                  onClick={handleCopyInboundAddress}
+                  className="flex-shrink-0 px-3 py-2 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition"
+                >
+                  {copiedInboundAddress ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              {inboundCopyFailed && (
+                <p className="text-xs text-amber-400 mb-3">
+                  Couldn&apos;t copy automatically — select the address above and copy it manually.
+                </p>
+              )}
+
+              {emails.length === 0 ? (
+                <p className="text-xs text-slate-500">No emails forwarded to this deal yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {emails.map((email) => {
+                    const isExpanded = expandedEmailId === email.id;
+                    const attachmentCount = email.attachments.length;
+                    return (
+                      <div
+                        key={email.id}
+                        className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden"
+                      >
+                        <div className="flex items-stretch">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedEmailId(isExpanded ? null : email.id)}
+                          className="flex-1 min-w-0 text-left px-3 py-2 hover:bg-slate-700/50 transition"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-medium text-slate-200 truncate">
+                              {email.subject || '(no subject)'}
+                            </p>
+                            <span className="text-xs text-slate-500 flex-shrink-0 whitespace-nowrap">
+                              {formatDisplayDate(email.received_at.slice(0, 10), { month: '2-digit', day: '2-digit' })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-xs text-slate-400 truncate">{email.from_name || email.from_email}</p>
+                            {attachmentCount > 0 && (
+                              <span className="text-xs text-slate-500 flex-shrink-0">📎 {attachmentCount}</span>
+                            )}
+                          </div>
+                          {!isExpanded && email.body_text && (
+                            <p className="text-xs text-slate-500 mt-1.5 line-clamp-2">{email.body_text}</p>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEmail(email.id)}
+                          disabled={deletingEmailId === email.id}
+                          className="flex-shrink-0 px-3 text-xs text-slate-500 hover:text-red-400 hover:bg-slate-700/50 border-l border-slate-600 transition disabled:opacity-50"
+                          title="Delete this forwarded email"
+                          aria-label="Delete this forwarded email"
+                        >
+                          {deletingEmailId === email.id ? 'Deleting…' : 'Delete'}
+                        </button>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="px-3 pb-3 border-t border-slate-600">
+                            <p className="text-xs text-slate-500 mt-2 mb-2">
+                              From{' '}
+                              {email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email} ·{' '}
+                              {new Date(email.received_at).toLocaleString()}
+                            </p>
+
+                            {email.body_html ? (
+                              <div
+                                className="email-body text-xs"
+                                // Sanitized server-side on every read (see
+                                // GET /api/email/inbound, src/lib/emailHtml.ts)
+                                // before it ever reaches this component --
+                                // this inbound address is unauthenticated, so
+                                // the HTML here is attacker-controlled by
+                                // default.
+                                dangerouslySetInnerHTML={{ __html: email.body_html }}
+                              />
+                            ) : email.body_text ? (
+                              <p className="text-xs text-slate-300 whitespace-pre-wrap">{email.body_text}</p>
+                            ) : (
+                              <p className="text-xs text-slate-500 italic">No readable content in this email.</p>
+                            )}
+
+                            {attachmentCount > 0 && (
+                              <div className="mt-3 space-y-1.5">
+                                {email.attachments.map((att) => (
+                                  <div
+                                    key={att.id}
+                                    draggable
+                                    onDragStart={(e) => startDocDrag(e, att.id)}
+                                    title="Drag onto a Documents category to file it there"
+                                    className="flex items-center gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-3 py-2 hover:border-slate-500 transition cursor-grab active:cursor-grabbing"
+                                  >
+                                    <DragHandle label={`Drag ${att.fileName} to a Documents category`} />
+                                    <a
+                                      href={att.url || '#'}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      draggable={false}
+                                      className="min-w-0 flex-1 flex items-center justify-between gap-3"
+                                    >
+                                      <span className="text-blue-400 hover:text-blue-300 truncate text-xs">📄 {att.fileName}</span>
+                                      <span className="text-xs text-slate-500 flex-shrink-0">
+                                        {att.fileSize ? `${(att.fileSize / 1024).toFixed(0)} KB` : ''}
+                                      </span>
+                                    </a>
+                                    <MoveMenu
+                                      onMove={(categoryKey) => void handleMoveDocument(att.id, categoryKey)}
+                                      label={`Move ${att.fileName} to a Documents category`}
+                                      options={DOCUMENT_CATEGORIES.filter((c) => c.key !== (documents.find((d) => d.id === att.id)?.category || DEFAULT_CATEGORY_KEY)).map((c) => ({ value: c.key, label: c.label }))}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          </div>
         </div>
 
         <div className={tab === 'messages' ? '' : 'hidden'}>
@@ -3181,7 +3336,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
           {acceptedAgentUsers.length === 0 ? (
             <p className="text-slate-500 text-sm">
-              Invite an agent above to start a conversation here -- it stays on this deal instead of your
+              Invite an agent on the Contacts tab to start a conversation here -- it stays on this deal instead of your
               regular inbox.
             </p>
           ) : (
