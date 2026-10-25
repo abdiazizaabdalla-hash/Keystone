@@ -58,7 +58,6 @@ interface Contact {
   addedByAgent: boolean;
 }
 
-const DOC_TYPE_ORDER = ['Listing Agreement', 'Seller Disclosure', 'Purchase Contract', 'Other Contract Documents', 'General'];
 const sizeLabel = (n: number | null) => (n ? (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`) : '');
 const inputCls = 'w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '—');
@@ -199,9 +198,6 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
   const { listing, offers, showings, priceChanges, dates, checklist, contacts, documents } = data;
   const today = new Date().toISOString().slice(0, 10);
   const doneCount = checklist.filter((t) => t.completed).length;
-  const docGroups = [...new Set(documents.map((d) => d.documentType))].sort(
-    (a, b) => (DOC_TYPE_ORDER.indexOf(a) === -1 ? 99 : DOC_TYPE_ORDER.indexOf(a)) - (DOC_TYPE_ORDER.indexOf(b) === -1 ? 99 : DOC_TYPE_ORDER.indexOf(b))
-  );
 
   const facts: { label: string; value: string }[] = [
     { label: 'Seller', value: listing.sellerName || '—' },
