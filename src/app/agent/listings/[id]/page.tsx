@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import ListingThread from '@/components/ListingThread';
-import OverviewSection from '@/components/OverviewSection';
 import { LISTING_DOC_TYPES, LISTING_STATUS_LABEL, daysOnMarket, SHOWING_INTEREST_LABEL, SHOWING_KIND_LABEL, type ListingStatus } from '@/lib/listingsShared';
 
 interface Detail {
@@ -66,18 +65,8 @@ const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}`
 const card = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 const OFFER_LABEL: Record<string, string> = { received: 'Received', countered: 'Countered', accepted: 'Accepted', rejected: 'Rejected', withdrawn: 'Withdrawn' };
 
-// The listing agent's read-only view of a listing their TC is running: where it stands, offers, showings,
-// price history and key dates. Notes stay with the TC.
-type AgentListingTab = 'overview' | 'checklist' | 'offers' | 'documents' | 'messages' | 'people';
-const AGENT_LISTING_TABS: { id: AgentListingTab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'checklist', label: 'Checklist' },
-  { id: 'offers', label: 'Offers & showings' },
-  { id: 'documents', label: 'Documents' },
-  { id: 'messages', label: 'Messages' },
-  { id: 'people', label: 'People' },
-];
-
+// The listing agent's view of a listing their TC is running, laid out like their deal page: the facts up top,
+// Documents wide on the left, and Messages, Checklist and People in the narrow column on the right.
 export default function AgentListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -89,19 +78,6 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
   const [showContactForm, setShowContactForm] = useState(false);
   const [contactError, setContactError] = useState('');
   const [docError, setDocError] = useState('');
-  const [tab, setTab] = useState<AgentListingTab>('overview');
-  const selectTab = (next: AgentListingTab) => {
-    setTab(next);
-    try {
-      window.history.replaceState(null, '', `#${next}`);
-    } catch {
-      /* non-fatal */
-    }
-  };
-  useEffect(() => {
-    const h = window.location.hash.replace('#', '');
-    if (AGENT_LISTING_TABS.some((t) => t.id === h)) setTab(h as AgentListingTab);
-  }, []);
   // Uploading a document: pick an area (or drop a file on it); moving and deleting stay with the coordinator.
   const docInputRef = useRef<HTMLInputElement>(null);
   const pendingDocType = useRef<string>('General');
@@ -227,189 +203,92 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
     (a, b) => (DOC_TYPE_ORDER.indexOf(a) === -1 ? 99 : DOC_TYPE_ORDER.indexOf(a)) - (DOC_TYPE_ORDER.indexOf(b) === -1 ? 99 : DOC_TYPE_ORDER.indexOf(b))
   );
 
-  return (
-    <div className="p-4 md:p-10 max-w-5xl mx-auto">
-      <Link href="/agent/listings" className="text-sm text-slate-400 hover:text-slate-200">
-        ← Back to listings
-      </Link>
+  const facts: { label: string; value: string }[] = [
+    { label: 'Seller', value: listing.sellerName || '—' },
+    { label: 'Planned list date', value: listing.plannedListDate ? formatDisplayDate(listing.plannedListDate) : '—' },
+    { label: 'Listing expires', value: listing.expirationDate ? formatDisplayDate(listing.expirationDate) : '—' },
+  ];
+  const dom = listing.status === 'active' || listing.status === 'under_offer' ? daysOnMarket(listing.listedOn) : null;
 
-      <div className="mt-3 mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 break-words">{listing.propertyAddress}</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            {[listing.sellerName && `Seller: ${listing.sellerName}`, `Managed by ${data.tcLabel}`, money(listing.listPrice)].filter(Boolean).join(' · ')}
-          </p>
-          <p className="text-sm text-slate-400 mt-1">
-            {(listing.status === 'active' || listing.status === 'under_offer') && daysOnMarket(listing.listedOn) !== null && (
-              <span>
-                {daysOnMarket(listing.listedOn)} day{daysOnMarket(listing.listedOn) === 1 ? '' : 's'} on market
-                {listing.mlsUrl || listing.mlsNumber ? ' · ' : ''}
-              </span>
-            )}
-            {listing.mlsUrl ? (
-              <a href={listing.mlsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
-                View listing{listing.mlsNumber ? ` (MLS ${listing.mlsNumber})` : ''}
-              </a>
-            ) : listing.mlsNumber ? (
-              `MLS ${listing.mlsNumber}`
-            ) : null}
-          </p>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 px-6 py-12">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <Link href="/agent/listings" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium">
+            ← Your listings
+          </Link>
         </div>
-        <span className="px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-sm text-slate-100">{LISTING_STATUS_LABEL[listing.status]}</span>
-      </div>
 
         {listing.convertedTransactionId && (
           <Link
             href={`/agent/transactions/${listing.convertedTransactionId}`}
-            className="flex items-center justify-between gap-3 bg-emerald-900/20 border border-emerald-700/50 rounded-lg px-4 py-3 text-sm hover:bg-emerald-900/30 transition"
+            className="flex items-center justify-between gap-3 bg-emerald-900/20 border border-emerald-700/50 rounded-2xl px-4 py-3 text-sm hover:bg-emerald-900/30 transition mb-6"
           >
             <span className="text-slate-200">This listing is now under contract.</span>
             <span className="text-emerald-300 shrink-0">Open the deal →</span>
           </Link>
         )}
 
+        {/* The same facts card the deal page has: address, who coordinates it, then the headline details and key dates. */}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
+          <div className="mb-4">
+            <h1 className="text-xl font-display font-semibold text-slate-100 break-words">{listing.propertyAddress}</h1>
+            <p className="text-slate-500 text-sm mt-0.5">Coordinated by {data.tcLabel}</p>
+          </div>
 
-      <div role="tablist" aria-label="Listing sections" className="flex gap-1 overflow-x-auto mb-8 p-1 bg-white/5 border border-white/10 rounded-2xl">
-        {AGENT_LISTING_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            onClick={() => selectTab(t.id)}
-            className={`px-4 md:px-5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
-              tab === t.id ? 'bg-blue-500 text-white shadow' : 'text-slate-300 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className={tab === 'overview' ? 'space-y-3' : 'hidden'}>
-        <OverviewSection
-          title="Key dates"
-          defaultOpen
-          summary={[listing.plannedListDate ? `${listing.plannedListDate > today ? 'List' : 'Listed'} ${formatDisplayDate(listing.plannedListDate, { month: 'short', day: 'numeric' })}` : null, listing.expirationDate ? `Expires ${formatDisplayDate(listing.expirationDate, { month: 'short', day: 'numeric' })}` : null].filter(Boolean).join(' · ')}
-        >
-<ul className="text-sm space-y-1">
-            {listing.plannedListDate && (
-              <li className="flex justify-between gap-3 text-slate-300">
-                <span>{listing.plannedListDate > today ? 'Planned list date' : 'List date'}</span>
-                <span>{formatDisplayDate(listing.plannedListDate)}</span>
-              </li>
-            )}
-            {listing.expirationDate && (
-              <li className="flex justify-between gap-3 text-slate-300">
-                <span>Listing expires</span>
-                <span>{formatDisplayDate(listing.expirationDate)}</span>
-              </li>
-            )}
-            {dates.map((d) => (
-              <li key={d.id} className="flex justify-between gap-3 text-slate-300">
-                <span>{d.label}</span>
-                <span>{formatDisplayDate(d.due_date)}</span>
-              </li>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-slate-600">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">List Price</p>
+              <p className="text-2xl font-bold text-blue-400">{money(listing.listPrice)}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Status</p>
+              <p className="text-slate-100 font-medium">
+                {LISTING_STATUS_LABEL[listing.status]}
+                {dom !== null && <span className="text-slate-400 font-normal"> · {dom} day{dom === 1 ? '' : 's'} on market</span>}
+              </p>
+            </div>
+            {facts.map((f) => (
+              <div key={f.label}>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{f.label}</p>
+                <p className="text-slate-100">{f.value}</p>
+              </div>
             ))}
-            {!listing.plannedListDate && !listing.expirationDate && dates.length === 0 && <li className="text-slate-500">No dates yet.</li>}
-          </ul>
-                </OverviewSection>
+            {(listing.mlsUrl || listing.mlsNumber) && (
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">MLS</p>
+                {listing.mlsUrl ? (
+                  <a href={listing.mlsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
+                    {listing.mlsNumber ? `MLS ${listing.mlsNumber}` : 'View listing'} ↗
+                  </a>
+                ) : (
+                  <p className="text-slate-100">MLS {listing.mlsNumber}</p>
+                )}
+              </div>
+            )}
+          </div>
 
-        <OverviewSection
-          title="Checklist"
-          summary={checklist.length === 0 ? 'No steps yet' : `${doneCount} of ${checklist.length} done`}
-          action={{ label: 'Open checklist', onClick: () => selectTab('checklist') }}
-        >
-          {checklist.filter((t) => !t.completed).length === 0 ? (
-            <p className="text-sm text-slate-400">Every step is done.</p>
-          ) : (
-            <ul className="divide-y divide-white/10">
-              {checklist.filter((t) => !t.completed).slice(0, 5).map((t) => (
-                <li key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                  <span className="text-slate-200 truncate">{t.name}</span>
-                  <span className="text-slate-500 shrink-0">{t.dueDate ? formatDisplayDate(t.dueDate, { month: 'short', day: 'numeric' }) : ''}</span>
-                </li>
-              ))}
-            </ul>
+          {dates.length > 0 && (
+            <div className="pt-6 mt-6 border-t border-slate-600">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Key dates</p>
+              <ul className="text-sm space-y-1">
+                {dates.map((d) => (
+                  <li key={d.id} className="flex justify-between gap-3 text-slate-300">
+                    <span>{d.label}</span>
+                    <span>{formatDisplayDate(d.due_date)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
-        </OverviewSection>
+        </div>
 
-        <OverviewSection
-          title="Offers"
-          summary={offers.length === 0 ? 'No offers yet' : `${offers.length} offer${offers.length === 1 ? '' : 's'}`}
-          action={{ label: 'Open offers', onClick: () => selectTab('offers') }}
-        >
-          {offers.length === 0 ? (
-            <p className="text-sm text-slate-400">No offers yet.</p>
-          ) : (
-            <ul className="divide-y divide-white/10">
-              {offers.slice(0, 5).map((o) => (
-                <li key={o.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                  <span className="text-slate-200 truncate">{o.buyerName || 'Buyer'}</span>
-                  <span className="text-slate-400 shrink-0">{money(o.offerPrice)} · {OFFER_LABEL[o.status] || o.status}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </OverviewSection>
+        {/* Same grid as the deal page: wide column on the left, Messages + Checklist + People stacked on the right. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
+          <div className="lg:order-2 lg:self-start flex flex-col gap-8">
+            <ListingThread endpoint={`/api/agent/listings/${id}/comments`} self="agent" otherLabel={data.tcLabel} />
 
-        <OverviewSection
-          title="Showings"
-          summary={showings.length === 0 ? 'None yet' : `${showings.length} logged`}
-          action={{ label: 'Open showings', onClick: () => selectTab('offers') }}
-        >
-          {showings.length === 0 ? (
-            <p className="text-sm text-slate-400">Nothing logged yet.</p>
-          ) : (
-            <ul className="divide-y divide-white/10">
-              {showings.slice(0, 5).map((sh) => (
-                <li key={sh.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                  <span className="text-slate-200 truncate">{sh.visitor || SHOWING_KIND_LABEL[sh.kind as keyof typeof SHOWING_KIND_LABEL] || 'Showing'}</span>
-                  <span className="text-slate-500 shrink-0">{formatDisplayDate(sh.showing_date, { month: 'short', day: 'numeric' })}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </OverviewSection>
-
-        <OverviewSection
-          title="Documents"
-          summary={`${documents.length} file${documents.length === 1 ? '' : 's'}`}
-          action={{ label: 'Open documents', onClick: () => selectTab('documents') }}
-        >
-          {documents.length === 0 ? (
-            <p className="text-sm text-slate-400">No documents yet.</p>
-          ) : (
-            <ul className="divide-y divide-white/10">
-              {documents.slice(0, 5).map((d) => (
-                <li key={d.id} className="py-2.5 text-sm text-slate-200 truncate">📄 {d.fileName}</li>
-              ))}
-            </ul>
-          )}
-        </OverviewSection>
-
-        <OverviewSection
-          title="People"
-          summary={contacts.length === 0 ? 'Nobody added yet' : `${contacts.length} on this listing`}
-          action={{ label: 'Open people', onClick: () => selectTab('people') }}
-        >
-          {contacts.length === 0 ? (
-            <p className="text-sm text-slate-400">Nobody added yet.</p>
-          ) : (
-            <ul className="divide-y divide-white/10">
-              {contacts.filter((c) => c.name || c.email).slice(0, 6).map((c) => (
-                <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                  <span className="text-slate-200 truncate">{c.name || c.email}</span>
-                  <span className="text-slate-500 shrink-0">{c.role || ''}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </OverviewSection>
-      </div>
-
-      <div className={tab === 'checklist' ? '' : 'hidden'}>
-          <div className={card}>
+            <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
             <div className="flex items-center justify-between gap-3 mb-3">
               <h2 className="text-lg font-bold text-slate-100">Checklist</h2>
               <span className="text-xs text-slate-400">
@@ -432,80 +311,67 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
                 );
               })}
             </ul>
-            <p className="text-xs text-slate-500 mt-3">Your coordinator keeps this up to date. Message them if something needs to change.</p>
-          </div>
-      </div>
+              <p className="text-xs text-slate-500 mt-3">Your coordinator keeps this up to date. Message them if something needs to change.</p>
+            </section>
 
-      <div className={tab === 'offers' ? 'space-y-6' : 'hidden'}>
-        <div className={card}>
-          <h2 className="text-lg font-bold text-slate-100 mb-3">Offers</h2>
-          {offers.length === 0 && <p className="text-sm text-slate-500">No offers yet.</p>}
-          <div className="space-y-3">
-            {offers.map((o) => (
-              <div key={o.id} className="border border-slate-600 rounded-lg p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <p className="text-slate-100 font-medium break-words">
-                    {o.buyerName || 'Buyer'} {o.offerPrice ? <span className="text-slate-300">· {money(o.offerPrice)}</span> : null}
-                  </p>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">{OFFER_LABEL[o.status] || o.status}</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  {[
-                    o.buyerAgent && `Agent: ${o.buyerAgent}`,
-                    o.receivedOn && `Received ${formatDisplayDate(o.receivedOn)}`,
-                    o.financing,
-                    o.earnestMoney ? `Earnest ${money(o.earnestMoney)}` : '',
-                    o.optionDays != null ? `${o.optionDays}-day option` : '',
-                    o.closingDate ? `Closing ${formatDisplayDate(o.closingDate)}` : '',
-                    o.sellerConcessions ? `Seller pays ${money(o.sellerConcessions)}` : '',
-                    o.offerExpires ? `Expires ${o.offerExpires}` : '',
-                    o.possession ? `Possession: ${o.possession}` : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
-                {o.contingencies && <p className="text-xs text-slate-400 mt-1 whitespace-pre-wrap break-words">Contingencies: {o.contingencies}</p>}
-                {o.terms && <p className="text-sm text-slate-400 mt-2 whitespace-pre-wrap break-words">{o.terms}</p>}
-              </div>
-            ))}
+            <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="text-lg font-bold text-slate-100">People</h2>
+            <button type="button" onClick={() => setShowContactForm((v) => !v)} className="text-xs font-semibold text-blue-400 hover:text-blue-300">
+              {showContactForm ? 'Cancel' : '+ Add a person'}
+            </button>
           </div>
-        </div>
-        <div className={card}>
-          <h2 className="text-lg font-bold text-slate-100 mb-1">Showings and feedback</h2>
-          <p className="text-xs text-slate-500 mb-3">{showings.length} logged</p>
-          {showings.length === 0 && <p className="text-sm text-slate-500">Nothing logged yet.</p>}
+          {contacts.length === 0 && <p className="text-sm text-slate-500">Nobody added yet.</p>}
           <ul className="space-y-2">
-            {showings.map((sh) => (
-              <li key={sh.id} className="text-sm border border-slate-600 rounded-lg px-3 py-2">
-                <p className="text-slate-200 break-words">
-                  <span className="font-medium">{formatDisplayDate(sh.showing_date)}</span>
-                  <span className="text-slate-500"> · {SHOWING_KIND_LABEL[sh.kind as keyof typeof SHOWING_KIND_LABEL] || 'Showing'}</span>
-                  {sh.visitor ? <span className="text-slate-400"> · {sh.visitor}</span> : null}
-                  {sh.interest ? <span className="text-slate-400"> · {SHOWING_INTEREST_LABEL[sh.interest]}</span> : null}
-                </p>
-                {sh.feedback && <p className="text-slate-400 mt-1 whitespace-pre-wrap break-words">{sh.feedback}</p>}
+            {contacts.map((c) => (
+              <li key={c.id} className="flex items-start justify-between gap-3 border border-slate-600 rounded-lg px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="text-slate-100 break-words">
+                    {c.name || c.email || c.phone}
+                    {c.role && <span className="text-slate-400"> · {c.role}</span>}
+                  </p>
+                  <p className="text-xs text-slate-400 break-words">
+                    {c.email && (
+                      <a href={`mailto:${c.email}`} className="hover:text-slate-200">
+                        {c.email}
+                      </a>
+                    )}
+                    {c.email && c.phone ? ' · ' : ''}
+                    {c.phone && (
+                      <a href={`tel:${c.phone}`} className="hover:text-slate-200">
+                        {c.phone}
+                      </a>
+                    )}
+                  </p>
+                </div>
+                {c.addedByAgent && (
+                  <button type="button" onClick={() => removeContact(c.id)} className="text-xs text-slate-500 hover:text-red-400 shrink-0">
+                    Remove
+                  </button>
+                )}
               </li>
             ))}
           </ul>
-        </div>
-        {priceChanges.length > 0 && (
-          <div className={card}>
-            <h2 className="text-lg font-bold text-slate-100 mb-3">Price history</h2>
-            <ul className="text-sm space-y-1 text-slate-300">
-              {priceChanges.map((pc) => (
-                <li key={pc.id}>
-                  <span className="text-slate-500">{formatDisplayDate(pc.changed_on)}</span> · {pc.old_price ? `${money(pc.old_price)} → ` : ''}
-                  <span className="font-medium text-slate-100">{money(pc.new_price)}</span>
-                  {pc.note ? <span className="text-slate-500"> — {pc.note}</span> : null}
-                </li>
-              ))}
-            </ul>
+          {contactError && <p className="text-sm text-red-400 mt-2">{contactError}</p>}
+          {showContactForm && (
+            <form onSubmit={addContact} className="mt-3 grid gap-2 sm:grid-cols-2">
+              <input className={inputCls} placeholder="Name" value={contactForm.name} onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })} maxLength={200} />
+              <input className={inputCls} placeholder="Role (lender, stager, co-owner…)" value={contactForm.role} onChange={(e) => setContactForm({ ...contactForm, role: e.target.value })} maxLength={60} />
+              <input className={inputCls} type="email" placeholder="Email" value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })} maxLength={254} />
+              <PhoneInput className={inputCls} placeholder="Phone" value={contactForm.phone} onValueChange={(v) => setContactForm({ ...contactForm, phone: v })} />
+              <div className="sm:col-span-2 flex items-center gap-3">
+                <button type="submit" disabled={addingContact} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+                  {addingContact ? 'Adding…' : 'Add person'}
+                </button>
+                <span className="text-xs text-slate-500">Your coordinator sees who you add. Nobody is emailed.</span>
+              </div>
+            </form>
+          )}
+            </section>
           </div>
-        )}
-      </div>
 
-      <div className={tab === 'documents' ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start' : 'hidden'}>
-        <div className={card}>
+          <div className="lg:order-1 flex flex-col gap-8">
+            <section className="bg-white/5 border border-white/10 rounded-2xl p-8">
           <input
             ref={docInputRef}
             type="file"
@@ -518,7 +384,7 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
           />
           <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
           <p className="text-sm text-slate-400 mb-6">
-            Organized by area, same as your coordinator sees it. Upload into an area or drag a file onto it (up to 4 MB each). Moving or removing a document stays with your coordinator.
+            Organized by area, same as your coordinator sees it. Upload into an area or drag a file onto it (up to 4 MB each). To move or remove a document, message your coordinator.
           </p>
           {docError && <p className="text-sm text-red-400 mb-3">{docError}</p>}
           <div className="space-y-3">
@@ -598,75 +464,74 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
               );
             })}
           </div>
-        </div>
+            </section>
 
         <div className={card}>
-          <h2 className="text-lg font-bold text-slate-100 mb-1">Need a change?</h2>
-          <p className="text-sm text-slate-400 mb-3">Your coordinator can move or remove documents. Message them and they will sort it out.</p>
-          <button type="button" onClick={() => selectTab('messages')} className="text-sm font-medium text-blue-400 hover:text-blue-300 transition">
-            Open messages →
-          </button>
-        </div>
-      </div>
-
-      <div className={tab === 'messages' ? '' : 'hidden'}>
-        <ListingThread endpoint={`/api/agent/listings/${id}/comments`} self="agent" otherLabel={data.tcLabel} />
-      </div>
-
-      <div className={tab === 'people' ? '' : 'hidden'}>
-        <div className={card}>
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="text-lg font-bold text-slate-100">People</h2>
-            <button type="button" onClick={() => setShowContactForm((v) => !v)} className="text-xs font-semibold text-blue-400 hover:text-blue-300">
-              {showContactForm ? 'Cancel' : '+ Add a person'}
-            </button>
-          </div>
-          {contacts.length === 0 && <p className="text-sm text-slate-500">Nobody added yet.</p>}
-          <ul className="space-y-2">
-            {contacts.map((c) => (
-              <li key={c.id} className="flex items-start justify-between gap-3 border border-slate-600 rounded-lg px-3 py-2 text-sm">
-                <div className="min-w-0">
-                  <p className="text-slate-100 break-words">
-                    {c.name || c.email || c.phone}
-                    {c.role && <span className="text-slate-400"> · {c.role}</span>}
+          <h2 className="text-lg font-bold text-slate-100 mb-3">Offers</h2>
+          {offers.length === 0 && <p className="text-sm text-slate-500">No offers yet.</p>}
+          <div className="space-y-3">
+            {offers.map((o) => (
+              <div key={o.id} className="border border-slate-600 rounded-lg p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-slate-100 font-medium break-words">
+                    {o.buyerName || 'Buyer'} {o.offerPrice ? <span className="text-slate-300">· {money(o.offerPrice)}</span> : null}
                   </p>
-                  <p className="text-xs text-slate-400 break-words">
-                    {c.email && (
-                      <a href={`mailto:${c.email}`} className="hover:text-slate-200">
-                        {c.email}
-                      </a>
-                    )}
-                    {c.email && c.phone ? ' · ' : ''}
-                    {c.phone && (
-                      <a href={`tel:${c.phone}`} className="hover:text-slate-200">
-                        {c.phone}
-                      </a>
-                    )}
-                  </p>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">{OFFER_LABEL[o.status] || o.status}</span>
                 </div>
-                {c.addedByAgent && (
-                  <button type="button" onClick={() => removeContact(c.id)} className="text-xs text-slate-500 hover:text-red-400 shrink-0">
-                    Remove
-                  </button>
-                )}
+                <p className="text-xs text-slate-400 mt-1">
+                  {[
+                    o.buyerAgent && `Agent: ${o.buyerAgent}`,
+                    o.receivedOn && `Received ${formatDisplayDate(o.receivedOn)}`,
+                    o.financing,
+                    o.earnestMoney ? `Earnest ${money(o.earnestMoney)}` : '',
+                    o.optionDays != null ? `${o.optionDays}-day option` : '',
+                    o.closingDate ? `Closing ${formatDisplayDate(o.closingDate)}` : '',
+                    o.sellerConcessions ? `Seller pays ${money(o.sellerConcessions)}` : '',
+                    o.offerExpires ? `Expires ${o.offerExpires}` : '',
+                    o.possession ? `Possession: ${o.possession}` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+                {o.contingencies && <p className="text-xs text-slate-400 mt-1 whitespace-pre-wrap break-words">Contingencies: {o.contingencies}</p>}
+                {o.terms && <p className="text-sm text-slate-400 mt-2 whitespace-pre-wrap break-words">{o.terms}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className={card}>
+          <h2 className="text-lg font-bold text-slate-100 mb-1">Showings and feedback</h2>
+          <p className="text-xs text-slate-500 mb-3">{showings.length} logged</p>
+          {showings.length === 0 && <p className="text-sm text-slate-500">Nothing logged yet.</p>}
+          <ul className="space-y-2">
+            {showings.map((sh) => (
+              <li key={sh.id} className="text-sm border border-slate-600 rounded-lg px-3 py-2">
+                <p className="text-slate-200 break-words">
+                  <span className="font-medium">{formatDisplayDate(sh.showing_date)}</span>
+                  <span className="text-slate-500"> · {SHOWING_KIND_LABEL[sh.kind as keyof typeof SHOWING_KIND_LABEL] || 'Showing'}</span>
+                  {sh.visitor ? <span className="text-slate-400"> · {sh.visitor}</span> : null}
+                  {sh.interest ? <span className="text-slate-400"> · {SHOWING_INTEREST_LABEL[sh.interest]}</span> : null}
+                </p>
+                {sh.feedback && <p className="text-slate-400 mt-1 whitespace-pre-wrap break-words">{sh.feedback}</p>}
               </li>
             ))}
           </ul>
-          {contactError && <p className="text-sm text-red-400 mt-2">{contactError}</p>}
-          {showContactForm && (
-            <form onSubmit={addContact} className="mt-3 grid gap-2 sm:grid-cols-2">
-              <input className={inputCls} placeholder="Name" value={contactForm.name} onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })} maxLength={200} />
-              <input className={inputCls} placeholder="Role (lender, stager, co-owner…)" value={contactForm.role} onChange={(e) => setContactForm({ ...contactForm, role: e.target.value })} maxLength={60} />
-              <input className={inputCls} type="email" placeholder="Email" value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })} maxLength={254} />
-              <PhoneInput className={inputCls} placeholder="Phone" value={contactForm.phone} onValueChange={(v) => setContactForm({ ...contactForm, phone: v })} />
-              <div className="sm:col-span-2 flex items-center gap-3">
-                <button type="submit" disabled={addingContact} className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
-                  {addingContact ? 'Adding…' : 'Add person'}
-                </button>
-                <span className="text-xs text-slate-500">Your coordinator sees who you add. Nobody is emailed.</span>
-              </div>
-            </form>
-          )}
+        </div>
+        {priceChanges.length > 0 && (
+          <div className={card}>
+            <h2 className="text-lg font-bold text-slate-100 mb-3">Price history</h2>
+            <ul className="text-sm space-y-1 text-slate-300">
+              {priceChanges.map((pc) => (
+                <li key={pc.id}>
+                  <span className="text-slate-500">{formatDisplayDate(pc.changed_on)}</span> · {pc.old_price ? `${money(pc.old_price)} → ` : ''}
+                  <span className="font-medium text-slate-100">{money(pc.new_price)}</span>
+                  {pc.note ? <span className="text-slate-500"> — {pc.note}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+          </div>
         </div>
       </div>
     </div>
