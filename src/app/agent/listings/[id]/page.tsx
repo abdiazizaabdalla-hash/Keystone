@@ -1,13 +1,14 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import PhoneInput from '@/components/PhoneInput';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import ListingThread from '@/components/ListingThread';
-import { LISTING_STATUS_LABEL, daysOnMarket, SHOWING_INTEREST_LABEL, SHOWING_KIND_LABEL, type ListingStatus } from '@/lib/listingsShared';
+import OverviewSection from '@/components/OverviewSection';
+import { LISTING_DOC_TYPES, LISTING_STATUS_LABEL, daysOnMarket, SHOWING_INTEREST_LABEL, SHOWING_KIND_LABEL, type ListingStatus } from '@/lib/listingsShared';
 
 interface Detail {
   listing: {
@@ -67,6 +68,16 @@ const OFFER_LABEL: Record<string, string> = { received: 'Received', countered: '
 
 // The listing agent's read-only view of a listing their TC is running: where it stands, offers, showings,
 // price history and key dates. Notes stay with the TC.
+type AgentListingTab = 'overview' | 'checklist' | 'offers' | 'documents' | 'messages' | 'people';
+const AGENT_LISTING_TABS: { id: AgentListingTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'checklist', label: 'Checklist' },
+  { id: 'offers', label: 'Offers & showings' },
+  { id: 'documents', label: 'Documents' },
+  { id: 'messages', label: 'Messages' },
+  { id: 'people', label: 'People' },
+];
+
 export default function AgentListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -78,6 +89,24 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
   const [showContactForm, setShowContactForm] = useState(false);
   const [contactError, setContactError] = useState('');
   const [docError, setDocError] = useState('');
+  const [tab, setTab] = useState<AgentListingTab>('overview');
+  const selectTab = (next: AgentListingTab) => {
+    setTab(next);
+    try {
+      window.history.replaceState(null, '', `#${next}`);
+    } catch {
+      /* non-fatal */
+    }
+  };
+  useEffect(() => {
+    const h = window.location.hash.replace('#', '');
+    if (AGENT_LISTING_TABS.some((t) => t.id === h)) setTab(h as AgentListingTab);
+  }, []);
+  // Uploading a document: pick an area (or drop a file on it); moving and deleting stay with the coordinator.
+  const docInputRef = useRef<HTMLInputElement>(null);
+  const pendingDocType = useRef<string>('General');
+  const [uploadTarget, setUploadTarget] = useState<string | null>(null);
+  const [collapsedDocs, setCollapsedDocs] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     (async () => {
@@ -97,6 +126,34 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
       }
     })();
   }, [id, router]);
+
+  const triggerDocUpload = (type: string) => {
+    pendingDocType.current = type;
+    if (docInputRef.current) docInputRef.current.value = '';
+    docInputRef.current?.click();
+  };
+
+  const uploadDocs = async (files: FileList | File[] | null, type: string) => {
+    if (!files || files.length === 0) return;
+    setUploadTarget(type);
+    setDocError('');
+    try {
+      for (const file of Array.from(files)) {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('documentType', type);
+        const res = await authFetch(`/api/agent/listings/${id}/documents`, { method: 'POST', body: form });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(`${file.name}: ${json.error || 'upload failed'}`);
+        setData((d) => (d ? { ...d, documents: [json, ...d.documents] } : d));
+      }
+    } catch (err) {
+      if (err instanceof AuthRequiredError) return router.push('/agent/login');
+      setDocError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploadTarget(null);
+    }
+  };
 
   const addContact = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,7 +228,7 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
   );
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl">
+    <div className="p-4 md:p-10 max-w-5xl mx-auto">
       <Link href="/agent/listings" className="text-sm text-slate-400 hover:text-slate-200">
         ← Back to listings
       </Link>
@@ -212,8 +269,146 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
         )}
 
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="space-y-6 min-w-0">
+      <div role="tablist" aria-label="Listing sections" className="flex gap-1 overflow-x-auto mb-8 p-1 bg-white/5 border border-white/10 rounded-2xl">
+        {AGENT_LISTING_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => selectTab(t.id)}
+            className={`px-4 md:px-5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
+              tab === t.id ? 'bg-blue-500 text-white shadow' : 'text-slate-300 hover:bg-white/5 hover:text-white'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className={tab === 'overview' ? 'space-y-3' : 'hidden'}>
+        <OverviewSection
+          title="Key dates"
+          defaultOpen
+          summary={[listing.plannedListDate ? `${listing.plannedListDate > today ? 'List' : 'Listed'} ${formatDisplayDate(listing.plannedListDate, { month: 'short', day: 'numeric' })}` : null, listing.expirationDate ? `Expires ${formatDisplayDate(listing.expirationDate, { month: 'short', day: 'numeric' })}` : null].filter(Boolean).join(' · ')}
+        >
+<ul className="text-sm space-y-1">
+            {listing.plannedListDate && (
+              <li className="flex justify-between gap-3 text-slate-300">
+                <span>{listing.plannedListDate > today ? 'Planned list date' : 'List date'}</span>
+                <span>{formatDisplayDate(listing.plannedListDate)}</span>
+              </li>
+            )}
+            {listing.expirationDate && (
+              <li className="flex justify-between gap-3 text-slate-300">
+                <span>Listing expires</span>
+                <span>{formatDisplayDate(listing.expirationDate)}</span>
+              </li>
+            )}
+            {dates.map((d) => (
+              <li key={d.id} className="flex justify-between gap-3 text-slate-300">
+                <span>{d.label}</span>
+                <span>{formatDisplayDate(d.due_date)}</span>
+              </li>
+            ))}
+            {!listing.plannedListDate && !listing.expirationDate && dates.length === 0 && <li className="text-slate-500">No dates yet.</li>}
+          </ul>
+                </OverviewSection>
+
+        <OverviewSection
+          title="Checklist"
+          summary={checklist.length === 0 ? 'No steps yet' : `${doneCount} of ${checklist.length} done`}
+          action={{ label: 'Open checklist', onClick: () => selectTab('checklist') }}
+        >
+          {checklist.filter((t) => !t.completed).length === 0 ? (
+            <p className="text-sm text-slate-400">Every step is done.</p>
+          ) : (
+            <ul className="divide-y divide-white/10">
+              {checklist.filter((t) => !t.completed).slice(0, 5).map((t) => (
+                <li key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <span className="text-slate-200 truncate">{t.name}</span>
+                  <span className="text-slate-500 shrink-0">{t.dueDate ? formatDisplayDate(t.dueDate, { month: 'short', day: 'numeric' }) : ''}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </OverviewSection>
+
+        <OverviewSection
+          title="Offers"
+          summary={offers.length === 0 ? 'No offers yet' : `${offers.length} offer${offers.length === 1 ? '' : 's'}`}
+          action={{ label: 'Open offers', onClick: () => selectTab('offers') }}
+        >
+          {offers.length === 0 ? (
+            <p className="text-sm text-slate-400">No offers yet.</p>
+          ) : (
+            <ul className="divide-y divide-white/10">
+              {offers.slice(0, 5).map((o) => (
+                <li key={o.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <span className="text-slate-200 truncate">{o.buyerName || 'Buyer'}</span>
+                  <span className="text-slate-400 shrink-0">{money(o.offerPrice)} · {OFFER_LABEL[o.status] || o.status}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </OverviewSection>
+
+        <OverviewSection
+          title="Showings"
+          summary={showings.length === 0 ? 'None yet' : `${showings.length} logged`}
+          action={{ label: 'Open showings', onClick: () => selectTab('offers') }}
+        >
+          {showings.length === 0 ? (
+            <p className="text-sm text-slate-400">Nothing logged yet.</p>
+          ) : (
+            <ul className="divide-y divide-white/10">
+              {showings.slice(0, 5).map((sh) => (
+                <li key={sh.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <span className="text-slate-200 truncate">{sh.visitor || SHOWING_KIND_LABEL[sh.kind as keyof typeof SHOWING_KIND_LABEL] || 'Showing'}</span>
+                  <span className="text-slate-500 shrink-0">{formatDisplayDate(sh.showing_date, { month: 'short', day: 'numeric' })}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </OverviewSection>
+
+        <OverviewSection
+          title="Documents"
+          summary={`${documents.length} file${documents.length === 1 ? '' : 's'}`}
+          action={{ label: 'Open documents', onClick: () => selectTab('documents') }}
+        >
+          {documents.length === 0 ? (
+            <p className="text-sm text-slate-400">No documents yet.</p>
+          ) : (
+            <ul className="divide-y divide-white/10">
+              {documents.slice(0, 5).map((d) => (
+                <li key={d.id} className="py-2.5 text-sm text-slate-200 truncate">📄 {d.fileName}</li>
+              ))}
+            </ul>
+          )}
+        </OverviewSection>
+
+        <OverviewSection
+          title="People"
+          summary={contacts.length === 0 ? 'Nobody added yet' : `${contacts.length} on this listing`}
+          action={{ label: 'Open people', onClick: () => selectTab('people') }}
+        >
+          {contacts.length === 0 ? (
+            <p className="text-sm text-slate-400">Nobody added yet.</p>
+          ) : (
+            <ul className="divide-y divide-white/10">
+              {contacts.filter((c) => c.name || c.email).slice(0, 6).map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <span className="text-slate-200 truncate">{c.name || c.email}</span>
+                  <span className="text-slate-500 shrink-0">{c.role || ''}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </OverviewSection>
+      </div>
+
+      <div className={tab === 'checklist' ? '' : 'hidden'}>
           <div className={card}>
             <div className="flex items-center justify-between gap-3 mb-3">
               <h2 className="text-lg font-bold text-slate-100">Checklist</h2>
@@ -239,6 +434,9 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
             </ul>
             <p className="text-xs text-slate-500 mt-3">Your coordinator keeps this up to date. Message them if something needs to change.</p>
           </div>
+      </div>
+
+      <div className={tab === 'offers' ? 'space-y-6' : 'hidden'}>
         <div className={card}>
           <h2 className="text-lg font-bold text-slate-100 mb-3">Offers</h2>
           {offers.length === 0 && <p className="text-sm text-slate-500">No offers yet.</p>}
@@ -272,7 +470,6 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
             ))}
           </div>
         </div>
-
         <div className={card}>
           <h2 className="text-lg font-bold text-slate-100 mb-1">Showings and feedback</h2>
           <p className="text-xs text-slate-500 mb-3">{showings.length} logged</p>
@@ -291,7 +488,6 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
             ))}
           </ul>
         </div>
-
         {priceChanges.length > 0 && (
           <div className={card}>
             <h2 className="text-lg font-bold text-slate-100 mb-3">Price history</h2>
@@ -306,34 +502,118 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
             </ul>
           </div>
         )}
+      </div>
 
-        </div>
-        <div className="space-y-6 min-w-0">
+      <div className={tab === 'documents' ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start' : 'hidden'}>
         <div className={card}>
-          <h2 className="text-lg font-bold text-slate-100 mb-3">Key dates</h2>
-          <ul className="text-sm space-y-1">
-            {listing.plannedListDate && (
-              <li className="flex justify-between gap-3 text-slate-300">
-                <span>{listing.plannedListDate > today ? 'Planned list date' : 'List date'}</span>
-                <span>{formatDisplayDate(listing.plannedListDate)}</span>
-              </li>
-            )}
-            {listing.expirationDate && (
-              <li className="flex justify-between gap-3 text-slate-300">
-                <span>Listing expires</span>
-                <span>{formatDisplayDate(listing.expirationDate)}</span>
-              </li>
-            )}
-            {dates.map((d) => (
-              <li key={d.id} className="flex justify-between gap-3 text-slate-300">
-                <span>{d.label}</span>
-                <span>{formatDisplayDate(d.due_date)}</span>
-              </li>
-            ))}
-            {!listing.plannedListDate && !listing.expirationDate && dates.length === 0 && <li className="text-slate-500">No dates yet.</li>}
-          </ul>
+          <input
+            ref={docInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              void uploadDocs(e.target.files, pendingDocType.current);
+              e.target.value = '';
+            }}
+          />
+          <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
+          <p className="text-sm text-slate-400 mb-6">
+            Organized by area, same as your coordinator sees it. Upload into an area or drag a file onto it (up to 4 MB each). Moving or removing a document stays with your coordinator.
+          </p>
+          {docError && <p className="text-sm text-red-400 mb-3">{docError}</p>}
+          <div className="space-y-3">
+            {LISTING_DOC_TYPES.map((type) => {
+              const inType = documents.filter((d) => d.documentType === type);
+              const folded = collapsedDocs[type];
+              return (
+                <div
+                  key={type}
+                  onDragOver={(e) => {
+                    if (!Array.prototype.includes.call(e.dataTransfer?.types || [], 'Files')) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'copy';
+                    e.currentTarget.classList.add('doc-drop-over');
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.classList.remove('doc-drop-over');
+                  }}
+                  onDrop={(e) => {
+                    e.currentTarget.classList.remove('doc-drop-over');
+                    if (!Array.prototype.includes.call(e.dataTransfer?.types || [], 'Files')) return;
+                    e.preventDefault();
+                    void uploadDocs(e.dataTransfer.files, type);
+                  }}
+                  className="border rounded-xl overflow-hidden bg-white/5 border-white/10"
+                >
+                  <div className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/5 transition">
+                    <button
+                      type="button"
+                      onClick={() => setCollapsedDocs((prev) => ({ ...prev, [type]: !prev[type] }))}
+                      aria-expanded={!folded}
+                      className="flex-1 flex items-center justify-between text-left min-w-0"
+                    >
+                      <span className="font-semibold text-slate-200">{type}</span>
+                      <span className="flex items-center gap-2 text-xs text-slate-400 ml-3">
+                        {inType.length} document{inType.length === 1 ? '' : 's'}
+                        <svg className={`w-4 h-4 transition-transform ${folded ? '' : 'rotate-180'}`} fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => triggerDocUpload(type)}
+                      disabled={uploadTarget !== null}
+                      className="flex-shrink-0 text-xs px-2.5 py-1 border border-white/10 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition disabled:opacity-50"
+                    >
+                      {uploadTarget === type ? 'Uploading…' : '+ Upload'}
+                    </button>
+                  </div>
+                  {!folded && (
+                    <div className="px-4 pb-4">
+                      {inType.length === 0 ? (
+                        <p className="text-sm text-slate-500 italic">Nothing here yet. Upload or drag a file onto this area.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {inType.map((d) => (
+                            <li key={d.id}>
+                              <button
+                                type="button"
+                                onClick={() => openDocument(d.id)}
+                                className="w-full text-left flex items-center justify-between gap-3 bg-slate-800/50 border border-white/10 rounded-xl px-3 py-2.5 text-sm hover:bg-white/5 transition"
+                              >
+                                <span className="text-blue-400 break-words min-w-0">
+                                  {d.fileName}
+                                  {d.isSigned && <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300">Signed</span>}
+                                </span>
+                                <span className="text-xs text-slate-500 shrink-0">{[sizeLabel(d.fileSize), formatDisplayDate(d.createdAt.slice(0, 10))].filter(Boolean).join(' · ')}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
+        <div className={card}>
+          <h2 className="text-lg font-bold text-slate-100 mb-1">Need a change?</h2>
+          <p className="text-sm text-slate-400 mb-3">Your coordinator can move or remove documents. Message them and they will sort it out.</p>
+          <button type="button" onClick={() => selectTab('messages')} className="text-sm font-medium text-blue-400 hover:text-blue-300 transition">
+            Open messages →
+          </button>
+        </div>
+      </div>
+
+      <div className={tab === 'messages' ? '' : 'hidden'}>
+        <ListingThread endpoint={`/api/agent/listings/${id}/comments`} self="agent" otherLabel={data.tcLabel} />
+      </div>
+
+      <div className={tab === 'people' ? '' : 'hidden'}>
         <div className={card}>
           <div className="flex items-center justify-between gap-3 mb-3">
             <h2 className="text-lg font-bold text-slate-100">People</h2>
@@ -387,41 +667,6 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
               </div>
             </form>
           )}
-        </div>
-
-        <div className={card}>
-          <h2 className="text-lg font-bold text-slate-100 mb-3">Documents</h2>
-          {documents.length === 0 && <p className="text-sm text-slate-500">No documents yet.</p>}
-          {docError && <p className="text-sm text-red-400 mb-2">{docError}</p>}
-          <div className="space-y-4">
-            {docGroups.map((type) => (
-              <div key={type}>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">{type}</p>
-                <ul className="space-y-1.5">
-                  {documents
-                    .filter((d) => d.documentType === type)
-                    .map((d) => (
-                      <li key={d.id}>
-                        <button
-                          type="button"
-                          onClick={() => openDocument(d.id)}
-                          className="w-full text-left flex items-center justify-between gap-3 border border-slate-600 rounded-lg px-3 py-2 text-sm hover:bg-slate-600/30 transition"
-                        >
-                          <span className="text-slate-200 break-words min-w-0">
-                            {d.fileName}
-                            {d.isSigned && <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300">Signed</span>}
-                          </span>
-                          <span className="text-xs text-slate-500 shrink-0">{[sizeLabel(d.fileSize), formatDisplayDate(d.createdAt.slice(0, 10))].filter(Boolean).join(' · ')}</span>
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <ListingThread endpoint={`/api/agent/listings/${id}/comments`} self="agent" otherLabel={data.tcLabel} />
         </div>
       </div>
     </div>
