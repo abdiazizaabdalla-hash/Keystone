@@ -41,7 +41,7 @@ export default function CalendarPage() {
   const router = useRouter();
   const today = new Date();
   const todayIso = iso(today.getFullYear(), today.getMonth(), today.getDate());
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(true);
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [events, setEvents] = useState<CalEvent[]>([]);
@@ -181,15 +181,15 @@ export default function CalendarPage() {
             aria-expanded={showSettings}
             className="ml-2 px-3 py-2 rounded-xl border border-white/10 text-slate-200 hover:bg-white/5 text-sm font-medium transition"
           >
-            Calendar settings
+            {showSettings ? 'Hide settings' : 'Calendar settings'}
           </button>
         </div>
       </div>
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 
-      <div className="grid gap-6 items-start">
-        <div>
+      <div className={`grid gap-6 items-start ${showSettings ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : ''}`}>
+        <div className="min-w-0">
           {/* Month grid (tablet and up) */}
           <div className="hidden sm:block bg-white/5 border border-white/10 rounded-2xl p-3">
             <div className="grid grid-cols-7 gap-1.5 mb-1.5">
@@ -273,7 +273,7 @@ export default function CalendarPage() {
           {loading && <p className="mt-3 text-xs text-slate-500">Loading…</p>}
         </div>
 
-        <aside className={showSettings ? 'grid md:grid-cols-2 gap-4' : 'hidden'}>
+        <aside className={showSettings ? 'space-y-4' : 'hidden'} aria-label="Calendar settings">
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-xs font-semibold tracking-wider text-slate-500 uppercase mb-3">What goes on my calendar</h2>
             <div className="space-y-2">

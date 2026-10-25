@@ -37,14 +37,16 @@ export async function GET(request: NextRequest) {
     let shared: Record<string, unknown>[] = [];
     const teamId = await getUserTeamId(user.id);
     if (teamId) {
-      const { data: theirs, error: teamError } = await supabaseServer
+      const { data: theirsRaw, error: teamError } = await supabaseServer
         .from('contacts')
         .select('*')
         .eq('team_id', teamId)
         .neq('tc_user_id', user.id)
         .order('name', { ascending: true })
         .limit(MAX_CONTACTS);
-      if (teamError) throw teamError;
+      // If sharing has not been set up in the database yet, show your own contacts rather than nothing.
+      if (teamError) console.error('Team contacts unavailable (has add-contacts-team-sharing.sql been run?):', teamError.message);
+      const theirs = teamError ? [] : theirsRaw;
       const names = new Map<string, string>();
       for (const ownerId of new Set((theirs || []).map((c) => c.tc_user_id as string))) {
         const { data: owner } = await supabaseServer.auth.admin.getUserById(ownerId);
