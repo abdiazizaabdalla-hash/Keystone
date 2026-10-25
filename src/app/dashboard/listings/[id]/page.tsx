@@ -538,7 +538,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                   ? { ok: false, text: `${portal.agentEmail} is already a coordinator login, not an agent login, so it cannot open the agent portal. Put a different email on the agent record, then send the invite.`, action: { label: 'Fix on the Agents page', run: () => router.push('/dashboard/agents') } }
                   : portal.visibleToAgent === false
                     ? { ok: false, text: `${portal.agentEmail} has a login, but this listing is not coming back for it. Check that the agent record's email matches the email they sign in with exactly, and that this listing's agent is that record.`, action: { label: 'Check the Agents page', run: () => router.push('/dashboard/agents') } }
-                    : { ok: true, text: `${data.agent.name} can see this listing in their portal under Listings (signing in as ${portal.agentEmail}).`, action: resendAction };
+                    : portal.login === 'unknown'
+                      ? { ok: false, text: `The listing is set up for ${portal.agentEmail}, but I could not confirm that email has a login. Make sure the agent signs in with exactly that email.`, action: resendAction }
+                      : { ok: true, text: `${data.agent.name} can see this listing in their portal under Listings (signing in as ${portal.agentEmail}).`, action: resendAction };
   const priceChanges = data.priceChanges || [];
   const activity = data.activity || [];
   const hotCount = showings.filter((sh) => sh.interest === 'hot').length;
