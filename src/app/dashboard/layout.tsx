@@ -84,8 +84,7 @@ const NAV_ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
-// Everyday work stays in the main menu; everything else lives under "More"
-// so the sidebar isn't a wall of links.
+// Everyday work first; the rest follows below a divider.
 const PRIMARY_NAV = [
   { href: '/dashboard', label: 'Home', icon: 'dashboard' },
   { href: '/dashboard/transactions', label: 'Transactions', icon: 'transactions' },
@@ -170,7 +169,6 @@ export default function DashboardLayout({
   const [teamUnread, setTeamUnread] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
-  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     if (!isTeamPlan(plan)) return;
@@ -314,8 +312,6 @@ export default function DashboardLayout({
     { href: '/dashboard/account', label: 'Account', icon: 'account' },
     ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin', icon: 'admin' }] : []),
   ];
-  // Keep "More" open automatically when you're on one of its pages.
-  const moreOpenEffective = moreOpen || moreItems.some((i) => isActivePath(pathname, i.href));
 
   if (isLoading) {
     return (
@@ -478,23 +474,9 @@ export default function DashboardLayout({
             />
           ))}
 
-          {!collapsed && (
-            <button
-              type="button"
-              onClick={() => setMoreOpen((o) => !o)}
-              aria-expanded={moreOpenEffective}
-              className="w-full flex items-center justify-between px-4 pt-5 pb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200 transition"
-            >
-              <span>More</span>
-              <svg className={`w-4 h-4 transition-transform ${moreOpenEffective ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          )}
-          {collapsed && <div className="my-3 border-t border-white/10" />}
+          <div className="my-3 border-t border-white/10" />
 
-          {(moreOpenEffective || collapsed) &&
-            moreItems.map((item) => (
+          {moreItems.map((item) => (
               <NavLink
                 key={item.href}
                 href={item.href}

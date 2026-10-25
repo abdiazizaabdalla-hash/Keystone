@@ -77,6 +77,10 @@ function buildIcs(address: string, dates: KeyDate[]): string {
   return lines.join('\r\n');
 }
 
+// Hidden until Google approves the Calendar integration. Flip to true (and set
+// GOOGLE_CALENDAR_PUBLIC on the server) once approved.
+const SHOW_GOOGLE_CALENDAR_SYNC = false;
+
 export default function KeyDatesPanel({
   transactionId,
   propertyAddress,
@@ -267,7 +271,7 @@ export default function KeyDatesPanel({
           : 'Contract deadlines. You\u2019ll get a reminder 7, 3 and 1 days before, and daily once overdue.'}
       </p>
 
-      {manageCalendar && cal && cal.available && (
+      {SHOW_GOOGLE_CALENDAR_SYNC && manageCalendar && cal && cal.available && (
         <div className="mb-3 p-3 bg-slate-700/30 border border-slate-600 rounded-lg">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-slate-300">

@@ -202,16 +202,19 @@ function OverviewSection({
   summary,
   tone = 'default',
   action,
+  defaultOpen = false,
   children,
 }: {
   title: string;
   summary?: React.ReactNode;
   tone?: 'default' | 'danger';
   action?: { label: string; onClick: () => void };
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <details
+      open={defaultOpen || undefined}
       className={`group rounded-2xl border ${
         tone === 'danger' ? 'bg-red-950/20 border-red-900/50' : 'bg-white/5 border-white/10'
       }`}
@@ -2488,82 +2491,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         </div>
 
         <div className={tab === 'overview' ? 'space-y-3' : 'hidden'}>
-          <OverviewSection
-            title="Checklist"
-            summary={tasks.length === 0 ? 'No steps yet' : `${completedCount} of ${tasks.length} done${nextTask ? ` · Next: ${nextTask.name}${nextTask.due_date ? ` (${formatDisplayDate(nextTask.due_date, { month: 'short', day: 'numeric' })})` : ''}` : ' · All done'}`}
-            action={{ label: 'Open checklist', onClick: () => selectTab('checklist') }}
-          >
-            {incompleteTasks.length === 0 ? (
-              <p className="text-sm text-slate-400">Every step is done.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {incompleteTasks.slice(0, 5).map((t) => (
-                  <li key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                    <span className="text-slate-200 truncate">{t.name}</span>
-                    <span className="text-slate-500 shrink-0">{t.due_date ? formatDisplayDate(t.due_date, { month: 'short', day: 'numeric' }) : ''}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
-
-          <OverviewSection
-            title="Documents"
-            summary={`${documents.length} file${documents.length === 1 ? '' : 's'}`}
-            action={{ label: 'Open documents', onClick: () => selectTab('documents') }}
-          >
-            {documents.length === 0 ? (
-              <p className="text-sm text-slate-400">No documents yet.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {[...documents].sort((x, y) => y.created_at.localeCompare(x.created_at)).slice(0, 5).map((d) => (
-                  <li key={d.id} className="py-2.5 text-sm text-slate-200 truncate">📄 {d.file_name}</li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
-
-          <OverviewSection
-            title="Messages"
-            summary={messages.length === 0 ? 'No messages yet' : messages[messages.length - 1].body || 'Attachment'}
-            action={{ label: 'Open messages', onClick: () => selectTab('messages') }}
-          >
-            {messages.length === 0 ? (
-              <p className="text-sm text-slate-400">Nothing yet. Invite your agent on the Contacts tab to start a conversation.</p>
-            ) : (
-              <ul className="space-y-3">
-                {messages.slice(-3).map((m) => (
-                  <li key={m.id} className="text-sm">
-                    <p className="text-xs text-slate-500">{m.sender_role === 'tc' ? 'You' : agentName} · {new Date(m.created_at).toLocaleDateString()}</p>
-                    <p className="text-slate-200 line-clamp-2">{m.body || '📎 Attachment'}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
-
-          <OverviewSection
-            title="Contacts"
-            summary={`${agent ? agentName : 'No agent'}${contacts.length ? ` + ${contacts.length} other${contacts.length === 1 ? '' : 's'}` : ''}`}
-            action={{ label: 'Open contacts', onClick: () => selectTab('people') }}
-          >
-            <ul className="divide-y divide-white/10">
-              {agent && (
-                <li className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                  <span className="text-slate-200">{agentName}</span>
-                  <span className="text-slate-500">Agent</span>
-                </li>
-              )}
-              {contacts.filter((c) => c.name || c.email).map((c) => (
-                <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                  <span className="text-slate-200 truncate">{c.name || c.email}</span>
-                  <span className="text-slate-500 shrink-0">{c.role || ''}</span>
-                </li>
-              ))}
-            </ul>
-          </OverviewSection>
-
-          <OverviewSection title="Key dates" summary={keyDatesSummary}>
+          <OverviewSection title="Key dates" summary={keyDatesSummary} defaultOpen>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Acceptance / Closing Dates -- editable here, not just at
                 creation. Changing either recomputes the checklist's due
@@ -2608,7 +2536,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
           </OverviewSection>
 
-          <OverviewSection title="Invoice" summary={invoice ? `${invoice.invoice_number} · $${invoice.amount_owed.toLocaleString()} · ${invoice.paid ? 'Paid' : 'Unpaid'}` : 'Not created yet'}>
+          <OverviewSection defaultOpen title="Invoice" summary={invoice ? `${invoice.invoice_number} · $${invoice.amount_owed.toLocaleString()} · ${invoice.paid ? 'Paid' : 'Unpaid'}` : 'Not created yet'}>
           {/* Invoice: no longer gated on the deal being manually walked to
               Closed via the checklist -- some TCs don't want to check off
               every item by hand. Once Closed (by either path), the plain
@@ -2722,6 +2650,81 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             )}
           </div>
           </OverviewSection>
+          <OverviewSection
+            title="Checklist"
+            summary={tasks.length === 0 ? 'No steps yet' : `${completedCount} of ${tasks.length} done${nextTask ? ` · Next: ${nextTask.name}${nextTask.due_date ? ` (${formatDisplayDate(nextTask.due_date, { month: 'short', day: 'numeric' })})` : ''}` : ' · All done'}`}
+            action={{ label: 'Open checklist', onClick: () => selectTab('checklist') }}
+          >
+            {incompleteTasks.length === 0 ? (
+              <p className="text-sm text-slate-400">Every step is done.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {incompleteTasks.slice(0, 5).map((t) => (
+                  <li key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="text-slate-200 truncate">{t.name}</span>
+                    <span className="text-slate-500 shrink-0">{t.due_date ? formatDisplayDate(t.due_date, { month: 'short', day: 'numeric' }) : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewSection>
+
+          <OverviewSection
+            title="Documents"
+            summary={`${documents.length} file${documents.length === 1 ? '' : 's'}`}
+            action={{ label: 'Open documents', onClick: () => selectTab('documents') }}
+          >
+            {documents.length === 0 ? (
+              <p className="text-sm text-slate-400">No documents yet.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {[...documents].sort((x, y) => y.created_at.localeCompare(x.created_at)).slice(0, 5).map((d) => (
+                  <li key={d.id} className="py-2.5 text-sm text-slate-200 truncate">📄 {d.file_name}</li>
+                ))}
+              </ul>
+            )}
+          </OverviewSection>
+
+          <OverviewSection
+            title="Messages"
+            summary={messages.length === 0 ? 'No messages yet' : messages[messages.length - 1].body || 'Attachment'}
+            action={{ label: 'Open messages', onClick: () => selectTab('messages') }}
+          >
+            {messages.length === 0 ? (
+              <p className="text-sm text-slate-400">Nothing yet. Invite your agent on the Contacts tab to start a conversation.</p>
+            ) : (
+              <ul className="space-y-3">
+                {messages.slice(-3).map((m) => (
+                  <li key={m.id} className="text-sm">
+                    <p className="text-xs text-slate-500">{m.sender_role === 'tc' ? 'You' : agentName} · {new Date(m.created_at).toLocaleDateString()}</p>
+                    <p className="text-slate-200 line-clamp-2">{m.body || '📎 Attachment'}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewSection>
+
+          <OverviewSection
+            title="Contacts"
+            summary={`${agent ? agentName : 'No agent'}${contacts.length ? ` + ${contacts.length} other${contacts.length === 1 ? '' : 's'}` : ''}`}
+            action={{ label: 'Open contacts', onClick: () => selectTab('people') }}
+          >
+            <ul className="divide-y divide-white/10">
+              {agent && (
+                <li className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <span className="text-slate-200">{agentName}</span>
+                  <span className="text-slate-500">Agent</span>
+                </li>
+              )}
+              {contacts.filter((c) => c.name || c.email).map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <span className="text-slate-200 truncate">{c.name || c.email}</span>
+                  <span className="text-slate-500 shrink-0">{c.role || ''}</span>
+                </li>
+              ))}
+            </ul>
+          </OverviewSection>
+
         <OverviewSection title="Delete this deal" tone="danger">
           <p className="text-sm text-slate-400 mb-5">
             Permanently delete this transaction, its checklist, uploaded documents, and any invoice generated from it.
@@ -2995,7 +2998,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
         <div className={tab === 'documents' ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start' : 'hidden'}>
         {/* Documents Section (primary view, left column on desktop) */}
-        <div className="lg:order-1 bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8">
           <input
             ref={categoryFileInputRef}
             type="file"
