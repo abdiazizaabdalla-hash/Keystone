@@ -27,7 +27,7 @@ export default function ContactEditModal({
   onSaved: (saved: ContactRow) => void;
   onAuthError?: (err: unknown) => boolean;
   /** starting values for a new contact, for example the organization they are being added to */
-  defaults?: { organizationId?: string; company?: string };
+  defaults?: { organizationId?: string; company?: string; shared?: boolean };
   /** the TC is on a team, so the contact can be shared with it */
   hasTeam?: boolean;
   /** false when editing a contact a teammate shared: the newsletter flag and sharing stay with its owner */
@@ -44,7 +44,7 @@ export default function ContactEditModal({
     notes: contact?.notes || '',
     tags: (contact?.tags || []).join(', '),
     newsletter: contact?.newsletter || false,
-    shared: Boolean(contact?.team_id),
+    shared: Boolean(contact?.team_id) || Boolean(defaults?.shared),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

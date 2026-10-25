@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { cleanTags, MAX_TAGS_PER_CONTACT, UUID_RE, type ContactRow } from '@/lib/contactsCrm';
-import { canAccessContact, getUserTeamId } from '@/lib/contactGuard';
+import { canAccessContact, getUserTeamId, contactsFail } from '@/lib/contactGuard';
 import { shareContactsToTeam } from '@/lib/contactSync';
 
 // One action applied to many selected contacts:
@@ -106,7 +106,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
-    console.error('Error applying bulk contact action:', error);
-    return NextResponse.json({ error: 'Failed to update contacts' }, { status: 500 });
+    return contactsFail(error, 'update contacts');
   }
 }

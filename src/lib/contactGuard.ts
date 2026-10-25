@@ -18,6 +18,15 @@ export async function requireContactsUser(request: NextRequest, opts: { write?: 
 export function contactsFail(error: unknown, what: string) {
   if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
+  // A column or table from one of the contacts SQL scripts is missing: say so, instead of a vague failure.
+  const e = error as { code?: string; message?: string } | null;
+  if (e && typeof e === 'object' && (e.code === '42703' || e.code === '42P01' || /team_id|contact_type|contact_activity|contact_reminders/.test(e.message || ''))) {
+    console.error(`Error ${what} (database script missing):`, error);
+    return NextResponse.json(
+      { error: 'Your database is missing a Contacts update. Run add-contacts-relationships.sql and add-contacts-team-sharing.sql in the Supabase SQL editor, then reload.', code: 'database_update_needed' },
+      { status: 503 }
+    );
+  }
   console.error(`Error ${what}:`, error);
   return NextResponse.json({ error: `Failed to ${what}` }, { status: 500 });
 }

@@ -14,11 +14,12 @@ export async function GET(request: NextRequest) {
     const teamId = await getUserTeamId(user.id);
     if (!teamId) return NextResponse.json({ hasTeam: false, canShare: 0, canCopy: 0, sharedByMe: 0 });
 
-    const [{ data: mine }, { data: theirs }, { data: teamAll }] = await Promise.all([
+    const [{ data: mine, error: e1 }, { data: theirs, error: e2 }, { data: teamAll, error: e3 }] = await Promise.all([
       supabaseServer.from('contacts').select('email, name, team_id').eq('tc_user_id', user.id).limit(5000),
       supabaseServer.from('contacts').select('email, name').eq('team_id', teamId).neq('tc_user_id', user.id).limit(5000),
       supabaseServer.from('contacts').select('email, name').eq('team_id', teamId).limit(10000),
     ]);
+    if (e1 || e2 || e3) throw e1 || e2 || e3;
     const onTeam = new Set((teamAll || []).map((c) => keyOf(c as Keyed)));
     const mineKeys = new Set((mine || []).map((c) => keyOf(c as Keyed)));
     return NextResponse.json({
