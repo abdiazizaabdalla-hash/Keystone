@@ -2,7 +2,7 @@
 
 import MoneyInput from '@/components/MoneyInput';
 import PhoneInput from '@/components/PhoneInput';
-import { use, useCallback, useEffect, useState } from 'react';
+import { use, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
@@ -16,6 +16,7 @@ import StepEmailModal from '@/components/StepEmailModal';
 import OfferIntakeModal from '@/components/OfferIntakeModal';
 import OfferHistory from '@/components/OfferHistory';
 import ListingThread from '@/components/ListingThread';
+import OverviewSection from '@/components/OverviewSection';
 import SellerUpdateModal from '@/components/SellerUpdateModal';
 import ListingReadinessCard from '@/components/ListingReadinessCard';
 import ListingSignModal, { type ListingSigningRequest } from '@/components/ListingSignModal';
@@ -128,12 +129,13 @@ const OFFER_LABEL: Record<string, string> = { received: 'Received', countered: '
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '');
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-type ListingTab = 'overview' | 'checklist' | 'offers' | 'documents' | 'details';
+type ListingTab = 'overview' | 'checklist' | 'offers' | 'documents' | 'messages' | 'details';
 const LISTING_TABS: { id: ListingTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'checklist', label: 'Checklist' },
   { id: 'offers', label: 'Offers & showings' },
   { id: 'documents', label: 'Documents' },
+  { id: 'messages', label: 'Messages' },
   { id: 'details', label: 'Details' },
 ];
 
@@ -193,6 +195,16 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [signingDoc, setSigningDoc] = useState<ListingDoc | null>(null);
   const [docType, setDocType] = useState('General');
   const [uploading, setUploading] = useState(false);
+  // Which area an upload is going into, and which areas are folded away (same idea as a deal's Documents).
+  const docInputRef = useRef<HTMLInputElement>(null);
+  const pendingDocType = useRef<string>('General');
+  const [uploadTarget, setUploadTarget] = useState<string | null>(null);
+  const [collapsedDocs, setCollapsedDocs] = useState<Record<string, boolean>>({});
+  const triggerDocUpload = (type: string) => {
+    pendingDocType.current = type;
+    if (docInputRef.current) docInputRef.current.value = '';
+    docInputRef.current?.click();
+  };
   const [docError, setDocError] = useState('');
 
   // Offer emails held for review, seller update, relist
@@ -429,6 +441,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const uploadDocs = async (files: FileList | null, typeOverride?: string) => {
     if (!files || files.length === 0) return;
     setUploading(true);
+    setUploadTarget(typeOverride || docType);
     setDocError('');
     try {
       for (const file of Array.from(files)) {
@@ -447,6 +460,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       await loadDocs();
     } finally {
       setUploading(false);
+      setUploadTarget(null);
     }
   };
 
@@ -504,6 +518,16 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
   const { listing, tasks, offers, contacts, dates } = data;
   const showings = data.showings || [];
+  // Why a listing does or doesn't show in the agent's portal, in plain words, with the fix next to it.
+  const portalStatus: { ok: boolean; text: string; action?: { label: string; run: () => void } } = !data.agent
+    ? { ok: false, text: "No listing agent is chosen, so this listing can't appear in anyone's agent portal.", action: { label: 'Choose an agent', run: () => selectTab('details') } }
+    : portal && !portal.agentEmail
+      ? { ok: false, text: `${data.agent.name} has no email on file, so there is no portal login to show this listing in.`, action: { label: 'Fix on the Agents page', run: () => router.push('/dashboard/agents') } }
+      : listing.share_with_agent === false
+        ? { ok: false, text: 'Sharing with the agent is off, so the agent cannot see this listing.', action: { label: 'Turn it on in Details', run: () => selectTab('details') } }
+        : portal && !portal.invitedAt
+          ? { ok: false, text: `No portal invite has gone out from here yet. If ${data.agent.name} already signs in to Relay with ${portal.agentEmail}, the listing is already in their portal. If not, send them the invite.`, action: { label: invitingPortal ? 'Sending…' : 'Send portal invite', run: () => void invitePortal() } }
+          : { ok: true, text: `${data.agent.name} can see this listing in their portal under Listings${portal?.agentEmail ? ` (signing in as ${portal.agentEmail})` : ''}.`, action: portal?.agentEmail ? { label: invitingPortal ? 'Sending…' : 'Resend invite', run: () => void invitePortal() } : undefined };
   const priceChanges = data.priceChanges || [];
   const activity = data.activity || [];
   const hotCount = showings.filter((sh) => sh.interest === 'hot').length;
@@ -864,24 +888,28 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div className="space-y-6">
-        <div className={tab === 'overview' ? 'space-y-6' : 'hidden'}>
-          {data.agent && listing.share_with_agent !== false && <ListingThread endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} />}
+        <div className={tab === 'overview' ? 'space-y-3' : 'hidden'}>
+          <div className={`rounded-2xl border p-5 ${portalStatus.ok ? 'bg-green-500/5 border-green-500/30' : 'bg-amber-500/5 border-amber-500/30'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-100">{portalStatus.ok ? 'Visible to your agent' : 'Not visible to your agent yet'}</p>
+                <p className="text-sm text-slate-400 mt-0.5">{portalStatus.text}</p>
+                {portalMsg && <p className="text-xs text-slate-400 mt-1">{portalMsg}</p>}
+              </div>
+              {portalStatus.action && (
+                <button
+                  type="button"
+                  onClick={portalStatus.action.run}
+                  disabled={invitingPortal}
+                  className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
+                >
+                  {portalStatus.action.label}
+                </button>
+              )}
+            </div>
+          </div>
 
-          {/* Ready to list: what is still missing before go-live */}
-          {['preparing', 'active'].includes(listing.status) && (
-            <ListingReadinessCard
-              listing={listing}
-              agentName={data.agent?.name ?? null}
-              docs={docs}
-              tasks={tasks}
-              dates={dates}
-              onWaive={(docsNotNeeded) => void act(() => call('PATCH', `/api/listings/${id}`, { docsNotNeeded }))}
-            />
-          )}
-
-          {/* Key dates */}
-          <div className={cardCls}>
-            <h2 className="text-lg font-bold text-slate-100 mb-3">Key dates</h2>
+          <OverviewSection title="Key dates" defaultOpen summary={[listing.planned_list_date ? `List ${formatDisplayDate(listing.planned_list_date, { month: 'short', day: 'numeric' })}` : null, listing.expiration_date ? `Expires ${formatDisplayDate(listing.expiration_date, { month: 'short', day: 'numeric' })}` : null].filter(Boolean).join(' · ')}>
             <ul className="space-y-1 text-sm mb-3">
               {listing.planned_list_date && (
                 <li className="flex justify-between gap-3 text-slate-300">
@@ -921,35 +949,121 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 Add
               </button>
             </form>
-          </div>
+          </OverviewSection>
 
-          {/* Communication -- offer emails forwarded to this listing's own address wait for review in the Offers card;
-              the address itself lives down here, like the deal page. Hidden until the inbound domain is configured. */}
-          {inboundAddress && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6">
-              <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
-              <p className="text-xs text-slate-400 mb-3">
-                Forward or CC offer emails for this listing here and they’ll wait in the Offers card for you to review. Nothing becomes an offer until you add it.
-              </p>
-              <div className="flex items-center gap-2 mb-2">
-                <code className="flex-1 min-w-0 truncate bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-blue-300">{inboundAddress}</code>
-                <button
-                  type="button"
-                  className="flex-shrink-0 px-3 py-2 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(inboundAddress);
-                      setCopiedAddr(true);
-                      setTimeout(() => setCopiedAddr(false), 2000);
-                    } catch {
-                      setNotice('Couldn’t copy automatically. Select the address and copy it by hand.');
-                    }
-                  }}
-                >
-                  {copiedAddr ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              <p className="text-xs text-slate-500">{inbound.length === 0 ? 'No offer emails waiting.' : `${inbound.length} offer email${inbound.length === 1 ? '' : 's'} waiting in the Offers card.`}</p>
+          {/* Ready to list: what is still missing before go-live */}
+          {['preparing', 'active'].includes(listing.status) && (
+            <ListingReadinessCard
+              listing={listing}
+              agentName={data.agent?.name ?? null}
+              docs={docs}
+              tasks={tasks}
+              dates={dates}
+              onWaive={(docsNotNeeded) => void act(() => call('PATCH', `/api/listings/${id}`, { docsNotNeeded }))}
+            />
+          )}
+
+
+          <OverviewSection
+            title="Checklist"
+            summary={tasks.length === 0 ? 'No steps yet' : `${tasks.filter((t) => t.completed).length} of ${tasks.length} done`}
+            action={{ label: 'Open checklist', onClick: () => selectTab('checklist') }}
+          >
+            {tasks.filter((t) => !t.completed).length === 0 ? (
+              <p className="text-sm text-slate-400">Every step is done.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {tasks.filter((t) => !t.completed).slice(0, 5).map((t) => (
+                  <li key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="text-slate-200 truncate">{t.name}</span>
+                    <span className="text-slate-500 shrink-0">{t.due_date ? formatDisplayDate(t.due_date, { month: 'short', day: 'numeric' }) : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewSection>
+
+          <OverviewSection
+            title="Offers"
+            summary={offers.length === 0 ? 'No offers yet' : `${offers.length} offer${offers.length === 1 ? '' : 's'}${offers.some((o) => o.status === 'received' || o.status === 'countered') ? ' · some still open' : ''}`}
+            action={{ label: 'Open offers', onClick: () => selectTab('offers') }}
+          >
+            {offers.length === 0 ? (
+              <p className="text-sm text-slate-400">Offers you add or forward in will show here.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {offers.slice(0, 5).map((o) => (
+                  <li key={o.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="text-slate-200 truncate">{o.buyer_name || 'Buyer'}</span>
+                    <span className="text-slate-400 shrink-0">{money(o.offer_price) || '—'} · {o.status}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewSection>
+
+          <OverviewSection
+            title="Showings"
+            summary={showings.length === 0 ? 'None yet' : `${showings.length} showing${showings.length === 1 ? '' : 's'}${hotCount > 0 ? ` · ${hotCount} hot` : ''}`}
+            action={{ label: 'Open showings', onClick: () => selectTab('offers') }}
+          >
+            {showings.length === 0 ? (
+              <p className="text-sm text-slate-400">Showings and open houses you log will show here.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {showings.slice(0, 5).map((sh) => (
+                  <li key={sh.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="text-slate-200 truncate">{sh.visitor || sh.kind || 'Showing'}</span>
+                    <span className="text-slate-500 shrink-0">{sh.showing_date ? formatDisplayDate(sh.showing_date, { month: 'short', day: 'numeric' }) : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewSection>
+
+          <OverviewSection
+            title="Documents"
+            summary={`${docs.length} file${docs.length === 1 ? '' : 's'}`}
+            action={{ label: 'Open documents', onClick: () => selectTab('documents') }}
+          >
+            {docs.length === 0 ? (
+              <p className="text-sm text-slate-400">No documents yet.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {docs.slice(0, 5).map((d) => (
+                  <li key={d.id} className="py-2.5 text-sm text-slate-200 truncate">📄 {d.file_name}</li>
+                ))}
+              </ul>
+            )}
+          </OverviewSection>
+
+          <OverviewSection
+            title="People"
+            summary={contacts.length === 0 ? 'None yet' : `${contacts.length} on this listing`}
+            action={{ label: 'Open details', onClick: () => selectTab('details') }}
+          >
+            {contacts.length === 0 ? (
+              <p className="text-sm text-slate-400">Sellers and other people you add show here.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {contacts.filter((c) => c.name || c.email).slice(0, 6).map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="text-slate-200 truncate">{c.name || c.email}</span>
+                    <span className="text-slate-500 shrink-0">{c.role || ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewSection>
+        </div>
+
+        <div className={tab === 'messages' ? '' : 'hidden'}>
+          {data.agent && listing.share_with_agent !== false ? (
+            <ListingThread endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} />
+          ) : (
+            <div className={cardCls}>
+              <h2 className="text-lg font-bold text-slate-100 mb-1">Messages</h2>
+              <p className="text-sm text-slate-400">Choose a listing agent and turn on sharing in Details to message them here.</p>
             </div>
           )}
         </div>
@@ -1377,11 +1491,21 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
         </div>
 
-        <div className={tab === 'documents' ? 'space-y-6' : 'hidden'}>
+        <div className={tab === 'documents' ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start' : 'hidden'}>
           {/* Documents */}
           <div className={cardCls}>
-            <h2 className="text-lg font-bold text-slate-100 mb-1">Documents</h2>
-            <p className="text-xs text-slate-500 mb-3">Listing agreement, disclosures, photos. Drop the signed purchase contract under Purchase Contract any time and it fills in the deal when you convert. Everything here is copied onto the deal.</p>
+            <input
+              ref={docInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                void uploadDocs(e.target.files, pendingDocType.current);
+                e.target.value = '';
+              }}
+            />
+            <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
+            <p className="text-sm text-slate-400 mb-6">Organized by area, like a deal. Upload into an area, or drag files from your computer or documents between areas. The signed purchase contract goes under Purchase Contract and fills in the deal when you convert. Everything here is copied onto the deal.</p>
             <div className="space-y-3 mb-3">
               {LISTING_DOC_TYPES.map((type) => {
                 const inType = docs.filter((d) => d.document_type === type);
@@ -1408,18 +1532,41 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                         void uploadDocs(e.dataTransfer.files, type);
                       }
                     }}
-                    className="rounded-lg border border-slate-700 bg-slate-900/30 px-3 py-2"
+                    className="border rounded-xl overflow-hidden bg-white/5 border-white/10"
                   >
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                      {type} <span className="font-normal normal-case text-slate-500">· {inType.length}</span>
-                    </p>
+                    <div className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/5 transition">
+                      <button
+                        type="button"
+                        onClick={() => setCollapsedDocs((prev) => ({ ...prev, [type]: !prev[type] }))}
+                        aria-expanded={!collapsedDocs[type]}
+                        className="flex-1 flex items-center justify-between text-left min-w-0"
+                      >
+                        <span className="font-semibold text-slate-200">{type}</span>
+                        <span className="flex items-center gap-2 text-xs text-slate-400 ml-3">
+                          {inType.length} document{inType.length === 1 ? '' : 's'}
+                          <svg className={`w-4 h-4 transition-transform ${collapsedDocs[type] ? '' : 'rotate-180'}`} fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => triggerDocUpload(type)}
+                        disabled={uploading}
+                        className="flex-shrink-0 text-xs px-2.5 py-1 border border-white/10 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition disabled:opacity-50"
+                      >
+                        {uploading && uploadTarget === type ? 'Uploading…' : '+ Upload'}
+                      </button>
+                    </div>
+                    {!collapsedDocs[type] && (
+                    <div className="px-4 pb-4">
                     <ul className="space-y-2 text-sm">
                       {inType.map((d) => (
                         <li
                           key={d.id}
                           draggable
                           onDragStart={(e) => startDocDrag(e, d.id)}
-                          className="flex items-start gap-3 cursor-grab active:cursor-grabbing"
+                          className="flex items-start gap-3 cursor-grab active:cursor-grabbing bg-slate-800/50 border border-white/10 rounded-xl px-3 py-2.5"
                         >
                           <DragHandle label={`Drag ${d.file_name} to another area`} />
                           <div className="min-w-0 flex-1">
@@ -1482,36 +1629,47 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                           </div>
                         </li>
                       ))}
-                      {inType.length === 0 && <li className="text-xs text-slate-600">Nothing here. Drag a file or document onto this area.</li>}
+                      {inType.length === 0 && <li className="text-sm text-slate-500 italic">Nothing here yet. Upload or drag a file onto this area.</li>}
                     </ul>
+                    </div>
+                    )}
                   </div>
                 );
               })}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <select className={`${inputCls} sm:w-auto`} value={docType} onChange={(e) => setDocType(e.target.value)}>
-                {LISTING_DOC_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-              <label className={`px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm rounded-lg cursor-pointer ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                {uploading ? 'Uploading…' : 'Upload files'}
-                <input
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    uploadDocs(e.target.files);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            </div>
             {docError && <p className="text-sm text-red-400 mt-2">{docError}</p>}
           </div>
-
+          <div className="space-y-6 min-w-0">
+          {/* Communication -- offer emails forwarded to this listing's own address wait for review in the Offers card;
+              the address itself lives down here, like the deal page. Hidden until the inbound domain is configured. */}
+          {inboundAddress && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+              <h2 className="text-lg font-bold text-slate-100 mb-1">Communication</h2>
+              <p className="text-xs text-slate-400 mb-3">
+                Forward or CC offer emails for this listing here and they’ll wait in the Offers card for you to review. Nothing becomes an offer until you add it.
+              </p>
+              <div className="flex items-center gap-2 mb-2">
+                <code className="flex-1 min-w-0 truncate bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-blue-300">{inboundAddress}</code>
+                <button
+                  type="button"
+                  className="flex-shrink-0 px-3 py-2 text-xs border border-slate-600 hover:border-slate-500 text-slate-300 rounded-lg transition"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(inboundAddress);
+                      setCopiedAddr(true);
+                      setTimeout(() => setCopiedAddr(false), 2000);
+                    } catch {
+                      setNotice('Couldn’t copy automatically. Select the address and copy it by hand.');
+                    }
+                  }}
+                >
+                  {copiedAddr ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">{inbound.length === 0 ? 'No offer emails waiting.' : `${inbound.length} offer email${inbound.length === 1 ? '' : 's'} waiting in the Offers card.`}</p>
+            </div>
+          )}
+          </div>
         </div>
 
         <div className={tab === 'details' ? 'space-y-6' : 'hidden'}>
