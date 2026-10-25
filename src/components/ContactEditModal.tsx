@@ -15,6 +15,7 @@ export default function ContactEditModal({
   onClose,
   onSaved,
   onAuthError,
+  defaults,
 }: {
   /** null to add a new contact */
   contact: ContactRow | null;
@@ -23,14 +24,16 @@ export default function ContactEditModal({
   onClose: () => void;
   onSaved: (saved: ContactRow) => void;
   onAuthError?: (err: unknown) => boolean;
+  /** starting values for a new contact, for example the organization they are being added to */
+  defaults?: { organizationId?: string; company?: string };
 }) {
   const [form, setForm] = useState({
     contactType: (contact?.contact_type === 'organization' ? 'organization' : 'person') as 'person' | 'organization',
     name: contact?.name || '',
     email: contact?.email || '',
     phone: contact?.phone || '',
-    company: contact?.company || '',
-    organizationId: contact?.organization_id || '',
+    company: contact?.company || defaults?.company || '',
+    organizationId: contact?.organization_id || defaults?.organizationId || '',
     role: contact?.role || '',
     notes: contact?.notes || '',
     tags: (contact?.tags || []).join(', '),

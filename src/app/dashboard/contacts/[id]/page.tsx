@@ -43,7 +43,10 @@ export default function ContactProfilePage({ params }: { params: Promise<{ id: s
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activity, setActivity] = useState<ContactActivityRow[]>([]);
   const [reminders, setReminders] = useState<ContactReminderRow[]>([]);
-  const [organizations, setOrganizations] = useState<ContactRow[]>([]);
+  const [allContacts, setAllContacts] = useState<ContactRow[]>([]);
+  const [addingPerson, setAddingPerson] = useState(false);
+  const [linkId, setLinkId] = useState('');
+  const [linking, setLinking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
@@ -84,7 +87,7 @@ export default function ContactProfilePage({ params }: { params: Promise<{ id: s
       ]);
       setActivity(actRes.activity || []);
       setReminders(remRes.reminders || []);
-      setOrganizations(Array.isArray(orgRes) ? orgRes.filter((c: ContactRow) => c.contact_type === 'organization') : []);
+      setAllContacts(Array.isArray(orgRes) ? orgRes : []);
       setError('');
     } catch (err) {
       if (handleAuth(err)) return;
@@ -166,6 +169,48 @@ export default function ContactProfilePage({ params }: { params: Promise<{ id: s
       await loadProfile();
     } catch (err) {
       if (!handleAuth(err)) setError(err instanceof Error ? err.message : 'Failed to delete');
+    }
+  };
+
+  const organizations = useMemo(() => allContacts.filter((c) => c.contact_type === 'organization'), [allContacts]);
+  // People who could be added to this organization: not organizations, and not already here.
+  const linkable = useMemo(
+    () => allContacts.filter((c) => c.contact_type !== 'organization' && c.id !== id && c.organization_id !== id).sort((a, b) => (a.name || a.email || '').localeCompare(b.name || b.email || '')),
+    [allContacts, id]
+  );
+
+  const linkExisting = async () => {
+    const person = allContacts.find((c) => c.id === linkId);
+    if (!person) return;
+    setLinking(true);
+    setError('');
+    try {
+      // The contact API saves the whole record, so send the person's current details with the new organization.
+      await call(
+        `/api/contacts/${person.id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: person.name,
+            email: person.email,
+            phone: person.phone,
+            company: person.company || profile?.contact.name || '',
+            role: person.role,
+            notes: person.notes,
+            tags: person.tags,
+            newsletter: person.newsletter,
+            contactType: 'person',
+            organizationId: id,
+          }),
+        },
+        'Failed to add this person'
+      );
+      setLinkId('');
+      await loadAll();
+    } catch (err) {
+      if (!handleAuth(err)) setError(err instanceof Error ? err.message : 'Failed to add this person');
+    } finally {
+      setLinking(false);
     }
   };
 
@@ -445,9 +490,9 @@ export default function ContactProfilePage({ params }: { params: Promise<{ id: s
             <section className={cardCls}>
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">People ({profile.people.length})</h2>
               {profile.people.length === 0 ? (
-                <p className="text-sm text-slate-500">No one is linked here yet. Edit a person and choose this organization under “Works at”.</p>
+                <p className="text-sm text-slate-500 mb-3">No one is linked here yet.</p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-y-2 mb-3">
                   {profile.people.map((p) => (
                     <li key={p.id}>
                       <Link href={`/dashboard/contacts/${p.id}`} className="text-sm text-blue-400 hover:text-blue-300">
@@ -457,6 +502,29 @@ export default function ContactProfilePage({ params }: { params: Promise<{ id: s
                     </li>
                   ))}
                 </ul>
+              )}
+              <button type="button" onClick={() => setAddingPerson(true)} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">
+                + Add person
+              </button>
+              {linkable.length > 0 && (
+                <div className="mt-3 flex gap-2">
+                  <select value={linkId} onChange={(e) => setLinkId(e.target.value)} className={inputCls} aria-label="Add an existing contact">
+                    <option value="">Or add an existing contact…</option>
+                    {linkable.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name || c.email}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={linkExisting}
+                    disabled={!linkId || linking}
+                    className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg disabled:opacity-50 transition shrink-0"
+                  >
+                    {linking ? 'Adding…' : 'Add'}
+                  </button>
+                </div>
               )}
             </section>
           )}
@@ -471,6 +539,19 @@ export default function ContactProfilePage({ params }: { params: Promise<{ id: s
           onAuthError={handleAuth}
           onSaved={async () => {
             setEditing(false);
+            await loadAll();
+          }}
+        />
+      )}
+      {addingPerson && (
+        <ContactEditModal
+          contact={null}
+          organizations={organizations}
+          defaults={{ organizationId: id, company: contact.name }}
+          onClose={() => setAddingPerson(false)}
+          onAuthError={handleAuth}
+          onSaved={async () => {
+            setAddingPerson(false);
             await loadAll();
           }}
         />
