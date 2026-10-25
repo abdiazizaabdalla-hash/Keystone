@@ -510,7 +510,15 @@ export default function ContactsPage() {
             </thead>
             <tbody>
               {visible.map((c) => (
-                <tr key={c.id} className="border-b border-slate-700/60 last:border-0 hover:bg-slate-700/20">
+                <tr
+                  key={c.id}
+                  onClick={(e) => {
+                    // Clicking anywhere on the row opens the profile, except on its own links, buttons and checkbox.
+                    if ((e.target as HTMLElement).closest('a, button, input, label, select, textarea')) return;
+                    router.push(`/dashboard/contacts/${c.id}`);
+                  }}
+                  className="border-b border-slate-700/60 last:border-0 hover:bg-slate-700/20 cursor-pointer"
+                >
                   <td className="px-4 py-3">
                     <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSelect(c.id)} className="accent-blue-500" aria-label={`Select ${c.name || c.email}`} />
                   </td>
