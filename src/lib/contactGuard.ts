@@ -23,7 +23,7 @@ export function contactsFail(error: unknown, what: string) {
   if (e && typeof e === 'object' && (e.code === '42703' || e.code === '42P01' || /team_id|contact_type|contact_activity|contact_reminders/.test(e.message || ''))) {
     console.error(`Error ${what} (database script missing):`, error);
     return NextResponse.json(
-      { error: 'Your database is missing a Contacts update. Run add-contacts-relationships.sql and add-contacts-team-sharing.sql in the Supabase SQL editor, then reload.', code: 'database_update_needed' },
+      { error: 'Your database is missing a Contacts update. Run add-contacts-relationships.sql and add-contacts-team-sharing.sql in the Supabase SQL editor, then run: notify pgrst, \'reload schema\'; and reload. (Database said: ' + String(e.message || e.code || 'unknown').slice(0, 200) + ')', code: 'database_update_needed' },
       { status: 503 }
     );
   }
