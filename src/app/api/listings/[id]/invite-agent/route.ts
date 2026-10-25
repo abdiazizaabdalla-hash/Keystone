@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
 import { requireListingAccess } from '@/lib/listings';
+import { getAgentListingRowsDetailed } from '@/lib/agentListings';
+import { hasAgentRole } from '@/lib/privileged';
 import { sendListingPortalInvite, type ListingInviteOutcome } from '@/lib/agentInvite';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { logAudit } from '@/lib/audit';
@@ -29,12 +31,43 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .like('summary', `Invited % (${String(agent?.email || '').trim().toLowerCase()}) to the agent portal`)
       .order('created_at', { ascending: false })
       .limit(1);
+    // Run the same lookup the agent's Listings tab runs, so the TC can see exactly why a listing is or isn't there.
+    const email = String(agent?.email || '').trim().toLowerCase();
+    let visible = false;
+    let lookupError: string | null = null;
+    let login: 'none' | 'agent' | 'other' | 'unknown' = 'unknown';
+    if (email.includes('@')) {
+      const res = await getAgentListingRowsDetailed(email);
+      lookupError = res.error;
+      visible = res.rows.some((r) => r.id === id);
+      try {
+        for (let page = 1; page <= 5; page++) {
+          const { data: users } = await supabaseServer.auth.admin.listUsers({ page, perPage: 1000 });
+          const list = users?.users || [];
+          const match = list.find((u) => (u.email || '').trim().toLowerCase() === email);
+          if (match) {
+            login = hasAgentRole(match) ? 'agent' : 'other';
+            break;
+          }
+          if (list.length < 1000) {
+            login = 'none';
+            break;
+          }
+        }
+      } catch {
+        login = 'unknown';
+      }
+    }
     return NextResponse.json({
       hasAgent: Boolean(agent),
       agentName: agent?.name ?? null,
       agentEmail: agent?.email ?? null,
       shared: listing.share_with_agent === true,
       invitedAt: last?.[0]?.created_at ?? null,
+      visibleToAgent: visible,
+      lookupError,
+      login,
+      listingStatus: listing.status ?? null,
     });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });

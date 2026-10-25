@@ -165,7 +165,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [det, setDet] = useState({ propertyAddress: '', agentId: '', sellerName: '', sellerEmail: '', sellerPhone: '', listPrice: '', plannedListDate: '', expirationDate: '', mlsNumber: '', mlsUrl: '', notes: '', shareWithAgent: true, notifyAgent: false, listedOn: '', tcUserId: '' });
   const [savingDetails, setSavingDetails] = useState(false);
   // Has the listing's agent been given a portal login? (the listing only shows in their portal once they can sign in)
-  const [portal, setPortal] = useState<{ hasAgent: boolean; agentName: string | null; agentEmail: string | null; shared: boolean; invitedAt: string | null } | null>(null);
+  const [portal, setPortal] = useState<{ hasAgent: boolean; agentName: string | null; agentEmail: string | null; shared: boolean; invitedAt: string | null; visibleToAgent?: boolean; lookupError?: string | null; login?: 'none' | 'agent' | 'other' | 'unknown'; listingStatus?: string | null } | null>(null);
   const [invitingPortal, setInvitingPortal] = useState(false);
   const [portalMsg, setPortalMsg] = useState('');
 
@@ -519,15 +519,26 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const { listing, tasks, offers, contacts, dates } = data;
   const showings = data.showings || [];
   // Why a listing does or doesn't show in the agent's portal, in plain words, with the fix next to it.
+  const resendAction = portal?.agentEmail ? { label: invitingPortal ? 'Sending…' : 'Resend invite', run: () => void invitePortal() } : undefined;
   const portalStatus: { ok: boolean; text: string; action?: { label: string; run: () => void } } = !data.agent
     ? { ok: false, text: "No listing agent is chosen, so this listing can't appear in anyone's agent portal.", action: { label: 'Choose an agent', run: () => selectTab('details') } }
-    : portal && !portal.agentEmail
-      ? { ok: false, text: `${data.agent.name} has no email on file, so there is no portal login to show this listing in.`, action: { label: 'Fix on the Agents page', run: () => router.push('/dashboard/agents') } }
-      : listing.share_with_agent === false
-        ? { ok: false, text: 'Sharing with the agent is off, so the agent cannot see this listing.', action: { label: 'Turn it on in Details', run: () => selectTab('details') } }
-        : portal && !portal.invitedAt
-          ? { ok: false, text: `No portal invite has gone out from here yet. If ${data.agent.name} already signs in to Relay with ${portal.agentEmail}, the listing is already in their portal. If not, send them the invite.`, action: { label: invitingPortal ? 'Sending…' : 'Send portal invite', run: () => void invitePortal() } }
-          : { ok: true, text: `${data.agent.name} can see this listing in their portal under Listings${portal?.agentEmail ? ` (signing in as ${portal.agentEmail})` : ''}.`, action: portal?.agentEmail ? { label: invitingPortal ? 'Sending…' : 'Resend invite', run: () => void invitePortal() } : undefined };
+    : !portal
+      ? { ok: false, text: 'Checking the agent portal…' }
+      : !portal.agentEmail
+        ? { ok: false, text: `${data.agent.name} has no email on file, so there is no portal login to show this listing in.`, action: { label: 'Fix on the Agents page', run: () => router.push('/dashboard/agents') } }
+        : !portal.shared
+          ? { ok: false, text: 'Sharing with the agent is off, so the agent cannot see this listing.', action: { label: 'Turn it on in Details', run: () => selectTab('details') } }
+          : portal.lookupError
+            ? { ok: false, text: `The agent portal could not load listings (${portal.lookupError}). A database update is probably missing: run add-listing-extras.sql and add-listing-agent-access.sql in Supabase.` }
+            : portal.listingStatus === 'withdrawn'
+              ? { ok: false, text: 'This listing is marked withdrawn, and withdrawn listings are hidden from the agent portal.', action: { label: 'Change status in Details', run: () => selectTab('details') } }
+              : portal.login === 'none'
+                ? { ok: false, text: `${portal.agentEmail} has no Relay login yet, so there is nothing for them to sign in to. Send the portal invite.`, action: { label: invitingPortal ? 'Sending…' : 'Send portal invite', run: () => void invitePortal() } }
+                : portal.login === 'other'
+                  ? { ok: false, text: `${portal.agentEmail} is already a coordinator login, not an agent login, so it cannot open the agent portal. Put a different email on the agent record, then send the invite.`, action: { label: 'Fix on the Agents page', run: () => router.push('/dashboard/agents') } }
+                  : portal.visibleToAgent === false
+                    ? { ok: false, text: `${portal.agentEmail} has a login, but this listing is not coming back for it. Check that the agent record's email matches the email they sign in with exactly, and that this listing's agent is that record.`, action: { label: 'Check the Agents page', run: () => router.push('/dashboard/agents') } }
+                    : { ok: true, text: `${data.agent.name} can see this listing in their portal under Listings (signing in as ${portal.agentEmail}).`, action: resendAction };
   const priceChanges = data.priceChanges || [];
   const activity = data.activity || [];
   const hotCount = showings.filter((sh) => sh.interest === 'hot').length;

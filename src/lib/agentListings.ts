@@ -10,11 +10,11 @@ import { isAgentUser } from '@/lib/agentPortal';
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
-export async function getAgentListingRows(email: string | null | undefined) {
+export async function getAgentListingRowsDetailed(email: string | null | undefined): Promise<{ rows: Record<string, unknown>[]; error: string | null }> {
   const e = (email || '').trim().toLowerCase();
-  if (!e) return [];
+  if (!e) return { rows: [], error: null };
   const { data: agents } = await supabaseServer.from('agents').select('id, tc_user_id').ilike('email', escapeLike(e)).limit(200);
-  if (!agents || agents.length === 0) return [];
+  if (!agents || agents.length === 0) return { rows: [], error: null };
   const { data: listings, error } = await supabaseServer
     .from('listings')
     .select('*')
@@ -26,9 +26,13 @@ export async function getAgentListingRows(email: string | null | undefined) {
   if (error) {
     // add-listings.sql / add-listing-extras.sql not run yet
     console.error('getAgentListingRows failed (ignored):', error.message);
-    return [];
+    return { rows: [], error: error.message };
   }
-  return listings || [];
+  return { rows: (listings || []) as Record<string, unknown>[], error: null };
+}
+
+export async function getAgentListingRows(email: string | null | undefined) {
+  return (await getAgentListingRowsDetailed(email)).rows as Record<string, any>[]; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 /** An agent is signed in and this listing is one that is shared with them. Same lookup as the list, so the rules can't drift. */
