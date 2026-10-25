@@ -35,7 +35,9 @@ export default function AgentTransactionsPage() {
   const multiTc = useMemo(() => new Set(transactions.map((t) => t.tcLabel).filter(Boolean)).size > 1, [transactions]);
   const openCount = transactions.filter((t) => t.status !== 'Closed').length;
   const closedCount = transactions.length - openCount;
-  const shown = transactions.filter((t) => (filter === 'all' ? true : filter === 'closed' ? t.status === 'Closed' : t.status !== 'Closed'));
+  // Nothing open? Show everything instead of an empty "Open" view.
+  const view = filter === 'open' && openCount === 0 ? 'all' : filter;
+  const shown = transactions.filter((t) => (view === 'all' ? true : view === 'closed' ? t.status === 'Closed' : t.status !== 'Closed'));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 px-4 py-6 md:px-6 md:py-12">
@@ -56,7 +58,7 @@ export default function AgentTransactionsPage() {
               type="button"
               onClick={() => setFilter(key)}
               className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition ${
-                filter === key ? 'bg-blue-500 text-white' : 'bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10'
+                view === key ? 'bg-blue-500 text-white' : 'bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10'
               }`}
             >
               {label}
