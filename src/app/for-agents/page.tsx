@@ -121,12 +121,12 @@ export default function ForAgentsPage() {
       <section className="max-w-3xl mx-auto px-6 pb-20">
         <div className="rounded-xl border border-slate-700 overflow-hidden shadow-2xl bg-slate-800">
           <img
-            src="/screenshots/agent-full-view.jpg"
-            alt="An agent's view of a transaction in Relay: documents organized by category, a message thread with the TC, checklist progress, and contacts, all on one page"
+            src="/screenshots/portal-illustration.jpg"
+            alt="Illustration of the agent portal for one deal: documents organized by category and a message thread with the TC"
             className="w-full h-auto block"
           />
         </div>
-        <p className="text-xs text-slate-500 mt-3 text-center">Everything for one deal, on one page</p>
+        <p className="text-xs text-slate-500 mt-3 text-center">Everything for one deal, on one page. Illustration of the workflow.</p>
       </section>
 
       {/* Features */}

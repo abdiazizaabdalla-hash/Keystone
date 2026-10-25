@@ -171,9 +171,9 @@ export default function Home() {
 
       <section id="how-it-works" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="contract-intake.jpg"
-          alt="Uploading a purchase contract in Relay so the deal details can be read from it"
-          wide
+          name="intake-illustration.jpg"
+          alt="Illustration of uploading a purchase contract in Relay and reviewing the address, price, key dates and people read from it before creating the transaction"
+          caption="Illustration of the workflow."
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">AI contract intake</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Start with the contract, not a blank transaction.</h2>
@@ -226,8 +226,9 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="transaction.jpg"
-          alt="A transaction page in Relay with critical dates, documents, the checklist, messages and the invoice for one deal"
+          name="transaction-illustration.jpg"
+          alt="Illustration of a Relay transaction page with tabs for the checklist, documents, messages and contacts, plus key dates and the invoice"
+          caption="Illustration of the workflow."
           reverse
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">The transaction workspace</p>
@@ -258,8 +259,9 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="checklist.jpg"
-          alt="A transaction checklist in Relay with steps like Contract & File Setup and Inspection & Repairs, a progress bar, and due dates"
+          name="checklist-illustration.jpg"
+          alt="Illustration of a Relay transaction checklist with grouped steps, due dates, a progress bar, and a step waiting on title"
+          caption="Illustration of the workflow."
           reverse
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Workflow</p>
@@ -283,8 +285,9 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="agent-full-view.jpg"
-          alt="The agent portal view of a transaction, with documents by category, a message thread, checklist progress, and contacts"
+          name="portal-illustration.jpg"
+          alt="Illustration of the agent portal for one deal, with documents by category and a message thread with the transaction coordinator"
+          caption="Illustration of the workflow."
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Agent portal</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Give your agents their own view of the deal.</h2>
@@ -317,9 +320,9 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="invoice.jpg"
-          alt="The Invoices page in Relay showing total invoiced, outstanding, and received amounts"
-          wide
+          name="invoice-illustration.jpg"
+          alt="Illustration of the Relay Invoices page with total invoiced, outstanding and received amounts and a list of paid, unpaid and overdue invoices"
+          caption="Illustration of the workflow."
           reverse
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Invoicing</p>
