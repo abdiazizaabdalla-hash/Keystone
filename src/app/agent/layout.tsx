@@ -88,7 +88,8 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   const isInvoices = pathname.startsWith('/agent/invoices');
   const isSettings = pathname.startsWith('/agent/settings');
   const isListings = pathname.startsWith('/agent/listings');
-  const isDeals = !isMessages && !isInvoices && !isSettings && !isListings;
+  const isTransactions = pathname.startsWith('/agent/transactions');
+  const isDeals = !isMessages && !isInvoices && !isSettings && !isListings && !isTransactions;
 
   const handleLogout = () => {
     clearSession();
@@ -124,6 +125,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
           <div className="absolute left-0 right-0 top-full bg-slate-800 border-b border-slate-700 shadow-xl px-3 pb-3 space-y-1">
             {[
               { href: '/agent', label: 'Dashboard', active: isDeals },
+              { href: '/agent/transactions', label: 'Transactions', active: isTransactions },
               { href: '/agent/listings', label: 'Listings', active: isListings },
               { href: '/agent/messages', label: 'Messages', active: isMessages },
               { href: '/agent/invoices', label: 'Invoices', active: isInvoices },
@@ -206,6 +208,18 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
                 <path d="M13 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2h-2z" />
                 <path d="M5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5z" />
                 <path d="M13 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2h-2z" />
+              </svg>
+            }
+          />
+          <SideLink
+            href="/agent/transactions"
+            label="Transactions"
+            collapsed={collapsed}
+            active={isTransactions}
+            icon={
+              <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
               </svg>
             }
           />

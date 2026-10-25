@@ -88,6 +88,7 @@ export default function KeyDatesPanel({
   canEdit,
   readOnlyDates,
   manageCalendar,
+  readOnlyBlurb,
 }: {
   transactionId: string;
   propertyAddress: string;
@@ -98,6 +99,8 @@ export default function KeyDatesPanel({
   readOnlyDates?: KeyDate[];
   // Coordinator view of a deal they own: shows the calendar-sync row (sync to the agent's calendar now, send the connect link).
   manageCalendar?: boolean;
+  // Read-only wording override (the listing page says "listing" instead of "deal").
+  readOnlyBlurb?: string;
 }) {
   const [dates, setDates] = useState<KeyDate[] | null>(readOnlyDates ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -267,7 +270,7 @@ export default function KeyDatesPanel({
       </div>
       <p className="text-xs text-slate-500 mb-3">
         {readOnlyDates
-          ? 'Contract deadlines for this deal, kept up to date by your transaction coordinator.'
+          ? readOnlyBlurb || 'Contract deadlines for this deal, kept up to date by your transaction coordinator.'
           : 'Contract deadlines. You\u2019ll get a reminder 7, 3 and 1 days before, and daily once overdue.'}
       </p>
 
@@ -327,7 +330,7 @@ export default function KeyDatesPanel({
             </div>
           )}
           {dates.length === 0 && !closingDate && (
-            <p className="text-sm text-slate-400 col-span-full">No critical dates yet. Upload a contract when creating a deal, or add them by hand.</p>
+            <p className="text-sm text-slate-400 col-span-full">{readOnlyDates ? 'No critical dates yet.' : 'No critical dates yet. Upload a contract when creating a deal, or add them by hand.'}</p>
           )}
           {dates.map((d) => {
             const b = badge(d);

@@ -20,7 +20,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       supabaseServer.from('listing_documents').select('id, file_name, document_type, content_type, file_size, is_signed, created_at').eq('listing_id', id).order('created_at', { ascending: false }),
     ]);
 
+    const { data: agentRow } = listing.agent_id
+      ? await supabaseServer.from('agents').select('name').eq('id', listing.agent_id as string).maybeSingle()
+      : { data: null };
+
     return NextResponse.json({
+      agentName: (agentRow?.name as string | undefined) || null,
       listing: {
         id: listing.id,
         propertyAddress: listing.property_address,

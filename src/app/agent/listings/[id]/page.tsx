@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import ListingThread from '@/components/ListingThread';
+import KeyDatesPanel from '@/components/KeyDatesPanel';
 import { LISTING_DOC_TYPES, LISTING_STATUS_LABEL, daysOnMarket, SHOWING_INTEREST_LABEL, SHOWING_KIND_LABEL, type ListingStatus } from '@/lib/listingsShared';
 
 interface Detail {
@@ -24,6 +25,7 @@ interface Detail {
     convertedTransactionId?: string | null;
   };
   tcLabel: string;
+  agentName?: string | null;
   dates: { id: string; label: string; due_date: string }[];
   offers: {
     id: string;
@@ -199,12 +201,17 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
   const today = new Date().toISOString().slice(0, 10);
   const doneCount = checklist.filter((t) => t.completed).length;
 
-  const facts: { label: string; value: string }[] = [
-    { label: 'Seller', value: listing.sellerName || '—' },
-    { label: 'Planned list date', value: listing.plannedListDate ? formatDisplayDate(listing.plannedListDate) : '—' },
-    { label: 'Listing expires', value: listing.expirationDate ? formatDisplayDate(listing.expirationDate) : '—' },
-  ];
   const dom = listing.status === 'active' || listing.status === 'under_offer' ? daysOnMarket(listing.listedOn) : null;
+  const agentName = data.agentName || 'You';
+  // The listing's own dates become the same Critical Dates cards the deal page shows.
+  const keyDates = [
+    listing.plannedListDate ? { id: 'planned-list', label: listing.plannedListDate > today ? 'Planned list date' : 'List date', due_date: listing.plannedListDate } : null,
+    listing.expirationDate ? { id: 'expires', label: 'Listing expires', due_date: listing.expirationDate } : null,
+    ...dates.map((d) => ({ id: d.id, label: d.label, due_date: d.due_date })),
+  ]
+    .filter((d): d is { id: string; label: string; due_date: string } => d !== null)
+    .sort((x, y) => x.due_date.localeCompare(y.due_date))
+    .map((d) => ({ ...d, kind: 'listing', completed: false, source: 'listing' }));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 px-6 py-12">
@@ -234,9 +241,20 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-slate-600">
             <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent</p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0">
+                  {agentName[0]}
+                </div>
+                <p className="text-lg font-semibold text-slate-100">{agentName}</p>
+              </div>
+            </div>
+
+            <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">List Price</p>
               <p className="text-2xl font-bold text-blue-400">{money(listing.listPrice)}</p>
             </div>
+
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Status</p>
               <p className="text-slate-100 font-medium">
@@ -244,39 +262,42 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
                 {dom !== null && <span className="text-slate-400 font-normal"> · {dom} day{dom === 1 ? '' : 's'} on market</span>}
               </p>
             </div>
-            {facts.map((f) => (
-              <div key={f.label}>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{f.label}</p>
-                <p className="text-slate-100">{f.value}</p>
-              </div>
-            ))}
-            {(listing.mlsUrl || listing.mlsNumber) && (
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">MLS</p>
-                {listing.mlsUrl ? (
-                  <a href={listing.mlsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
-                    {listing.mlsNumber ? `MLS ${listing.mlsNumber}` : 'View listing'} ↗
-                  </a>
-                ) : (
-                  <p className="text-slate-100">MLS {listing.mlsNumber}</p>
-                )}
-              </div>
-            )}
+
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Planned List Date</p>
+              <p className="text-slate-100">{listing.plannedListDate ? formatDisplayDate(listing.plannedListDate) : '—'}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Listing Expires</p>
+              <p className="text-slate-100">{listing.expirationDate ? formatDisplayDate(listing.expirationDate) : '—'}</p>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Seller</p>
+              <p className="text-slate-100">{listing.sellerName || '—'}</p>
+              {(listing.mlsUrl || listing.mlsNumber) && (
+                <p className="text-xs mt-1">
+                  {listing.mlsUrl ? (
+                    <a href={listing.mlsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
+                      {listing.mlsNumber ? `MLS ${listing.mlsNumber}` : 'View listing'} ↗
+                    </a>
+                  ) : (
+                    <span className="text-slate-500">MLS {listing.mlsNumber}</span>
+                  )}
+                </p>
+              )}
+            </div>
           </div>
 
-          {dates.length > 0 && (
-            <div className="pt-6 mt-6 border-t border-slate-600">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Key dates</p>
-              <ul className="text-sm space-y-1">
-                {dates.map((d) => (
-                  <li key={d.id} className="flex justify-between gap-3 text-slate-300">
-                    <span>{d.label}</span>
-                    <span>{formatDisplayDate(d.due_date)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <KeyDatesPanel
+            transactionId={listing.id}
+            propertyAddress={listing.propertyAddress}
+            closingDate={null}
+            canEdit={false}
+            readOnlyDates={keyDates}
+            readOnlyBlurb="Key dates for this listing, kept up to date by your transaction coordinator."
+          />
         </div>
 
         {/* Same grid as the deal page: wide column on the left, Messages + Checklist + People stacked on the right. */}
