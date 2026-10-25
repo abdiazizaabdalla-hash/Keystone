@@ -27,6 +27,21 @@ Migration: `add-contacts-relationships.sql` (run after `add-contacts-crm.sql`).
 - Follow-up reminders per contact, plus a Follow-ups panel at the top of Contacts.
 - "Last communicated" counts only recorded interactions, never notes.
 
+## Built: team-shared contacts
+
+Migration: `add-contacts-team-sharing.sql` (run after `add-contacts-relationships.sql`).
+
+- Contacts are personal by default. The owner opts a contact in with "Share with team"
+  (edit form, or bulk "Share with team" / "Stop sharing").
+- A shared contact is visible to and editable by every team member. It always stays on the
+  owner's account: a teammate who "deletes" it only takes it off the team list, and
+  stopping sharing or the team ending returns it to the owner's personal list.
+- Notes, activity and follow-ups stay private to whoever wrote them, even on shared contacts.
+  The newsletter flag stays with the owner.
+- "Sync contacts" works both ways: share my contacts with the team (all, or one tag), and copy
+  team contacts into my own list. It never overwrites, and skips anyone already on the other side.
+- One shared contact per email per team. Shared contacts cannot be merged until unshared.
+
 ## Later (layer 3: insight)
 - Agent activity dashboard: transactions per agent over time, closed volume, active now.
 - Simple, transparent follow-up suggestions (rule-based, always showing the rule), for example

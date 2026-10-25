@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
-import { requireContactsUser, contactsFail, loadOwnedContact } from '@/lib/contactGuard';
+import { requireContactsUser, contactsFail, loadAccessibleContact } from '@/lib/contactGuard';
 import { ACTIVITY_KINDS, UUID_RE, type ActivityKind } from '@/lib/contactsCrm';
 
 const MAX_PER_CONTACT = 1000;
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const user = await requireContactsUser(request);
-    if (!(await loadOwnedContact(user.id, id))) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+    if (!(await loadAccessibleContact(user.id, id))) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     const { data, error } = await supabaseServer
       .from('contact_activity')
       .select('id, contact_id, kind, body, occurred_at, created_at')
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id } = await params;
     const user = await requireContactsUser(request, { write: true });
-    if (!(await loadOwnedContact(user.id, id))) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+    if (!(await loadAccessibleContact(user.id, id))) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     const body = await request.json().catch(() => ({}));
     const kind = ACTIVITY_KINDS.includes(body.kind) ? (body.kind as ActivityKind) : 'note';
     const text = typeof body.body === 'string' ? body.body.trim().slice(0, 4000) : '';

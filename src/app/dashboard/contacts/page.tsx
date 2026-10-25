@@ -10,6 +10,7 @@ import { tidyTags } from '@/lib/contactCategories';
 import AddContactToDealModal from '@/components/AddContactToDealModal';
 import ContactEditModal from '@/components/ContactEditModal';
 import DuplicateContactsModal from '@/components/DuplicateContactsModal';
+import SyncContactsModal from '@/components/SyncContactsModal';
 import { dueLabel, todayLocal } from '@/lib/contactDates';
 
 // Contacts: the TC's address book. Everyone in their business in one place, with
@@ -37,6 +38,9 @@ export default function ContactsPage() {
   const [typeFilter, setTypeFilter] = useState<'all' | 'person' | 'organization'>('all');
   const [followUps, setFollowUps] = useState<{ id: string; contact_id: string; due_on: string; note: string | null; contact_name: string }[]>([]);
   const [showDupes, setShowDupes] = useState(false);
+  const [showSync, setShowSync] = useState(false);
+  const [hasTeam, setHasTeam] = useState(false);
+  const [scope, setScope] = useState<'all' | 'mine' | 'shared'>('all');
   const [working, setWorking] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -86,6 +90,20 @@ export default function ContactsPage() {
     const t = setTimeout(loadFollowUps, 0);
     return () => clearTimeout(t);
   }, [loadFollowUps]);
+
+  // Whether this account is on a team (shows the sharing controls). A nicety: it quietly stays off if the check fails.
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      try {
+        const res = await authFetch('/api/contacts/sync');
+        const data = await res.json();
+        if (res.ok) setHasTeam(Boolean(data.hasTeam));
+      } catch {
+        /* ignore */
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
   const completeFollowUp = async (contactId: string, reminderId: string) => {
     try {
@@ -143,15 +161,18 @@ export default function ContactsPage() {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return contacts.filter((c) => {
-      if (newsletterOnly && !c.newsletter) return false;
+      if (newsletterOnly && (!c.newsletter || c.is_mine === false)) return false;
       if (typeFilter !== 'all' && (c.contact_type || 'person') !== typeFilter) return false;
+      if (scope === 'mine' && c.is_mine === false) return false;
+      if (scope === 'shared' && !c.team_id) return false;
       if (activeTag && !(c.tags || []).some((t) => t.toLowerCase() === activeTag)) return false;
       if (!q) return true;
       return [c.name, c.email, c.phone, c.company, c.role, ...(c.tags || [])].some((v) => (v || '').toLowerCase().includes(q));
     });
-  }, [contacts, search, activeTag, newsletterOnly, typeFilter]);
+  }, [contacts, search, activeTag, newsletterOnly, typeFilter, scope]);
 
-  const newsletterCount = contacts.filter((c) => c.newsletter && c.email).length;
+  // The newsletter flag belongs to whoever owns the contact, so teammates' shared contacts never count.
+  const newsletterCount = contacts.filter((c) => c.is_mine !== false && c.newsletter && c.email).length;
   const allVisibleSelected = visible.length > 0 && visible.every((c) => selected.has(c.id));
 
   const toggleSelect = (id: string) =>
@@ -226,7 +247,12 @@ export default function ContactsPage() {
 
   const runBulk = async (action: string, extra: Record<string, unknown> = {}) => {
     if (selected.size === 0) return;
-    if (action === 'delete' && !confirm(`Delete ${selected.size} contact${selected.size === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    if (action === 'delete') {
+      const theirs = contacts.filter((c) => selected.has(c.id) && c.is_mine === false).length;
+      const note = theirs > 0 ? ` ${theirs} shared by teammates will only be taken off the team list; they stay with whoever shared them.` : '';
+      if (!confirm(`Delete ${selected.size - theirs} contact${selected.size - theirs === 1 ? '' : 's'}? This cannot be undone.${note}`)) return;
+    }
+    if (action === 'share_team' && !confirm(`Share ${selected.size} contact${selected.size === 1 ? '' : 's'} with your team? Everyone on the team will be able to see and edit their details.`)) return;
     setWorking(true);
     try {
       const res = await authFetch('/api/contacts/bulk', {
@@ -239,7 +265,8 @@ export default function ContactsPage() {
       if (action === 'delete') setSelected(new Set());
       if (action === 'add_tag' || action === 'remove_tag') setBulkTag('');
       await load();
-      flash('Done.');
+      if (action === 'share_team') flash(`Shared ${data.shared} with your team${data.skippedDuplicate ? `. ${data.skippedDuplicate} were already on the team list` : ''}.`);
+      else flash('Done.');
     } catch (err) {
       if (handleAuth(err)) return;
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -251,7 +278,7 @@ export default function ContactsPage() {
   const [addTo, setAddTo] = useState<ContactRow | null>(null);
 
   // How many contacts still carry role-style tags that the tidy-up would group into categories.
-  const untidyCount = useMemo(() => contacts.filter((c) => tidyTags(c.role, c.tags || []) !== (c.tags || [])).length, [contacts]);
+  const untidyCount = useMemo(() => contacts.filter((c) => c.is_mine !== false &&  tidyTags(c.role, c.tags || []) !== (c.tags || [])).length, [contacts]);
 
   const tidyUp = async () => {
     setWorking(true);
@@ -342,6 +369,15 @@ export default function ContactsPage() {
           >
             Import from my deals
           </button>
+          {hasTeam && (
+            <button
+              type="button"
+              onClick={() => setShowSync(true)}
+              className="px-4 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg transition"
+            >
+              Sync contacts
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowDupes(true)}
@@ -401,6 +437,13 @@ export default function ContactsPage() {
           placeholder="Search name, email, company, tag…"
           className={`${inputCls} max-w-sm`}
         />
+        {hasTeam && (
+          <select value={scope} onChange={(e) => setScope(e.target.value as 'all' | 'mine' | 'shared')} className={`${inputCls} w-auto`} aria-label="Whose contacts">
+            <option value="all">Mine &amp; team</option>
+            <option value="mine">Only mine</option>
+            <option value="shared">Shared with team</option>
+          </select>
+        )}
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as 'all' | 'person' | 'organization')}
@@ -474,6 +517,17 @@ export default function ContactsPage() {
           <button type="button" disabled={working} onClick={() => runBulk('unsubscribe')} className="text-slate-300 hover:text-slate-100 disabled:opacity-40">
             Remove from newsletter
           </button>
+          {hasTeam && (
+            <>
+              <span className="text-slate-600">|</span>
+              <button type="button" disabled={working} onClick={() => runBulk('share_team')} className="text-blue-400 hover:text-blue-300 disabled:opacity-40">
+                Share with team
+              </button>
+              <button type="button" disabled={working} onClick={() => runBulk('unshare_team')} className="text-slate-300 hover:text-slate-100 disabled:opacity-40">
+                Stop sharing
+              </button>
+            </>
+          )}
           <button type="button" disabled={working} onClick={() => runBulk('delete')} className="text-red-400 hover:text-red-300 disabled:opacity-40 ml-auto">
             Delete
           </button>
@@ -526,6 +580,11 @@ export default function ContactsPage() {
                     <Link href={`/dashboard/contacts/${c.id}`} className="text-slate-100 font-medium break-words hover:text-blue-300">
                       {c.name || c.email}
                     </Link>
+                    {c.team_id && (
+                      <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-emerald-600/50 text-emerald-300">
+                        {c.is_mine === false ? `Shared by ${c.shared_by_name || 'a teammate'}` : 'Shared'}
+                      </span>
+                    )}
                     {c.contact_type === 'organization' && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-slate-600 text-slate-400">Org</span>}
                     <p className="text-xs text-slate-500 break-words">{[c.role, c.company].filter(Boolean).join(' · ')}</p>
                   </td>
@@ -594,12 +653,25 @@ export default function ContactsPage() {
         <ContactEditModal
           contact={editing === 'new' ? null : editing}
           organizations={contacts.filter((c) => c.contact_type === 'organization')}
+          hasTeam={hasTeam}
+          isOwner={editing === 'new' || editing.is_mine !== false}
           onClose={() => setEditing(null)}
           onAuthError={handleAuth}
           onSaved={async () => {
             setEditing(null);
             await load();
           }}
+        />
+      )}
+
+      {showSync && (
+        <SyncContactsModal
+          tags={tagCounts.map(([, v]) => v.label)}
+          onClose={() => setShowSync(false)}
+          onDone={async () => {
+            await load();
+          }}
+          onAuthError={handleAuth}
         />
       )}
 

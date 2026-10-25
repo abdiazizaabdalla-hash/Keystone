@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
-import { requireContactsUser, contactsFail, loadOwnedContact } from '@/lib/contactGuard';
+import { requireContactsUser, contactsFail, loadAccessibleContact } from '@/lib/contactGuard';
 import { UUID_RE, isIsoDate } from '@/lib/contactsCrm';
 
 const MAX_OPEN = 50;
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const user = await requireContactsUser(request);
-    if (!(await loadOwnedContact(user.id, id))) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+    if (!(await loadAccessibleContact(user.id, id))) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     const { data, error } = await supabaseServer
       .from('contact_reminders')
       .select('id, contact_id, due_on, note, done_at, created_at')
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id } = await params;
     const user = await requireContactsUser(request, { write: true });
-    if (!(await loadOwnedContact(user.id, id))) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+    if (!(await loadAccessibleContact(user.id, id))) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     const body = await request.json().catch(() => ({}));
     if (!isIsoDate(body.dueOn)) return NextResponse.json({ error: 'Pick a date for the reminder' }, { status: 400 });
     const note = typeof body.note === 'string' ? body.note.trim().slice(0, 300) || null : null;

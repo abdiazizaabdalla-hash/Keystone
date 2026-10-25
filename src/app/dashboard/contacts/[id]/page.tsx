@@ -14,6 +14,9 @@ import AddContactToDealModal from '@/components/AddContactToDealModal';
 
 interface Profile {
   contact: ContactRow;
+  isOwner: boolean;
+  hasTeam: boolean;
+  sharedByName: string | null;
   organization: { id: string; name: string; email: string | null } | null;
   people: { id: string; name: string; email: string | null; phone: string | null; role: string | null }[];
   transactions: { id: string; property_address: string; file_number: string | null; status: string | null; closing_date: string | null; as: string }[];
@@ -264,6 +267,11 @@ export default function ContactProfilePage({ params }: { params: Promise<{ id: s
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-display font-semibold text-slate-100 break-words">{title}</h1>
                 <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border border-slate-600 text-slate-300">{isOrg ? 'Organization' : 'Person'}</span>
+                {contact.team_id && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border border-emerald-600/50 text-emerald-300">
+                    {profile.isOwner ? 'Shared with team' : `Shared by ${profile.sharedByName || 'a teammate'}`}
+                  </span>
+                )}
                 {contact.agent_id && <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border border-blue-500/50 text-blue-300">Agent profile</span>}
               </div>
               <p className="text-sm text-slate-400 mt-0.5">
@@ -329,7 +337,9 @@ export default function ContactProfilePage({ params }: { params: Promise<{ id: s
       <div className="grid lg:grid-cols-5 gap-5">
         <div className="lg:col-span-3 space-y-5">
           <section className={cardCls}>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">Notes &amp; activity</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-1">Notes &amp; activity</h2>
+            {contact.team_id && <p className="text-xs text-slate-500 mb-3">Private to you. Teammates keep their own notes, history and follow-ups on this shared contact.</p>}
+            {!contact.team_id && <div className="mb-2" />}
             <form onSubmit={addEntry} className="space-y-2 mb-4">
               <div className="flex flex-wrap gap-1.5">
                 {(Object.keys(KIND_LABEL) as ActivityKind[]).map((k) => (
@@ -535,6 +545,8 @@ export default function ContactProfilePage({ params }: { params: Promise<{ id: s
         <ContactEditModal
           contact={contact}
           organizations={organizations}
+          hasTeam={profile.hasTeam}
+          isOwner={profile.isOwner}
           onClose={() => setEditing(false)}
           onAuthError={handleAuth}
           onSaved={async () => {
@@ -548,6 +560,7 @@ export default function ContactProfilePage({ params }: { params: Promise<{ id: s
           contact={null}
           organizations={organizations}
           defaults={{ organizationId: id, company: contact.name }}
+          hasTeam={profile.hasTeam}
           onClose={() => setAddingPerson(false)}
           onAuthError={handleAuth}
           onSaved={async () => {

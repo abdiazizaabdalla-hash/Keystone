@@ -16,6 +16,8 @@ export default function ContactEditModal({
   onSaved,
   onAuthError,
   defaults,
+  hasTeam = false,
+  isOwner = true,
 }: {
   /** null to add a new contact */
   contact: ContactRow | null;
@@ -26,6 +28,10 @@ export default function ContactEditModal({
   onAuthError?: (err: unknown) => boolean;
   /** starting values for a new contact, for example the organization they are being added to */
   defaults?: { organizationId?: string; company?: string };
+  /** the TC is on a team, so the contact can be shared with it */
+  hasTeam?: boolean;
+  /** false when editing a contact a teammate shared: the newsletter flag and sharing stay with its owner */
+  isOwner?: boolean;
 }) {
   const [form, setForm] = useState({
     contactType: (contact?.contact_type === 'organization' ? 'organization' : 'person') as 'person' | 'organization',
@@ -38,6 +44,7 @@ export default function ContactEditModal({
     notes: contact?.notes || '',
     tags: (contact?.tags || []).join(', '),
     newsletter: contact?.newsletter || false,
+    shared: Boolean(contact?.team_id),
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -52,7 +59,12 @@ export default function ContactEditModal({
       const res = await authFetch(contact ? `/api/contacts/${contact.id}` : '/api/contacts', {
         method: contact ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, organizationId: isOrg ? null : form.organizationId || null, tags: form.tags.split(',') }),
+        body: JSON.stringify({
+          ...form,
+          organizationId: isOrg ? null : form.organizationId || null,
+          tags: form.tags.split(','),
+          shared: hasTeam && isOwner ? form.shared : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save contact');
@@ -121,6 +133,17 @@ export default function ContactEditModal({
           value={form.notes}
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
         />
+        {hasTeam && isOwner && (
+          <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
+            <input type="checkbox" checked={form.shared} onChange={(e) => setForm({ ...form, shared: e.target.checked })} className="mt-0.5 accent-blue-500" />
+            <span>
+              Share with my team
+              <span className="block text-xs text-slate-500">Everyone on your team can see and edit these details. Your own notes and follow-ups stay private.</span>
+            </span>
+          </label>
+        )}
+        {!isOwner && <p className="text-xs text-slate-500">Shared by a teammate. Your changes to these details are visible to the whole team.</p>}
+        {isOwner && (
         <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
           <input
             type="checkbox"
@@ -131,6 +154,7 @@ export default function ContactEditModal({
           />
           Agreed to receive my newsletter {!form.email.trim() && <span className="text-slate-500">(needs an email)</span>}
         </label>
+        )}
         {error && <p className="text-sm text-red-400">{error}</p>}
         <div className="flex items-center gap-3 pt-1">
           <button type="submit" disabled={saving} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">

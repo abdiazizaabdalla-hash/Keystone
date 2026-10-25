@@ -23,6 +23,13 @@ export interface ContactRow {
   organization_id?: string | null;
   /** The agent profile this contact is the address-book record for. */
   agent_id?: string | null;
+  /** Set when the owner has shared this contact with their team (see add-contacts-team-sharing.sql). */
+  team_id?: string | null;
+  shared_at?: string | null;
+  /** Added by GET /api/contacts: true when the signed-in TC owns the contact. */
+  is_mine?: boolean;
+  /** Added by GET /api/contacts for contacts a teammate shared. */
+  shared_by_name?: string | null;
   created_at: string;
   updated_at: string;
 }

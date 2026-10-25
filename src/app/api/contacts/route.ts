@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { cleanContactInput } from '@/lib/contactsCrm';
-import { isOwnedOrganization } from '@/lib/contactGuard';
+import { isAccessibleOrganization, getUserTeamId } from '@/lib/contactGuard';
 
 const MAX_CONTACTS = 5000;
 
@@ -21,7 +21,7 @@ function fail(error: unknown, what: string) {
   return NextResponse.json({ error: `Failed to ${what} contacts` }, { status: 500 });
 }
 
-// GET: every contact in this TC's address book.
+// GET: every contact in this TC's address book, plus the ones teammates have shared with the team.
 export async function GET(request: NextRequest) {
   try {
     const user = await requireTc(request);
@@ -32,7 +32,28 @@ export async function GET(request: NextRequest) {
       .order('name', { ascending: true })
       .limit(MAX_CONTACTS);
     if (error) throw error;
-    return NextResponse.json(data || []);
+    const mine = (data || []).map((c) => ({ ...c, is_mine: true }));
+
+    let shared: Record<string, unknown>[] = [];
+    const teamId = await getUserTeamId(user.id);
+    if (teamId) {
+      const { data: theirs, error: teamError } = await supabaseServer
+        .from('contacts')
+        .select('*')
+        .eq('team_id', teamId)
+        .neq('tc_user_id', user.id)
+        .order('name', { ascending: true })
+        .limit(MAX_CONTACTS);
+      if (teamError) throw teamError;
+      const names = new Map<string, string>();
+      for (const ownerId of new Set((theirs || []).map((c) => c.tc_user_id as string))) {
+        const { data: owner } = await supabaseServer.auth.admin.getUserById(ownerId);
+        const meta = owner.user?.user_metadata?.full_name;
+        names.set(ownerId, typeof meta === 'string' && meta.trim() ? meta.trim() : owner.user?.email || 'a teammate');
+      }
+      shared = (theirs || []).map((c) => ({ ...c, is_mine: false, shared_by_name: names.get(c.tc_user_id as string) || 'a teammate' }));
+    }
+    return NextResponse.json([...mine, ...shared]);
   } catch (error) {
     return fail(error, 'load');
   }
@@ -48,8 +69,16 @@ export async function POST(request: NextRequest) {
     if (!cleaned.ok) return NextResponse.json({ error: cleaned.error }, { status: 400 });
 
     const orgId = cleaned.value.organization_id;
-    if (orgId && !(await isOwnedOrganization(user.id, orgId))) {
+    if (orgId && !(await isAccessibleOrganization(user.id, orgId))) {
       return NextResponse.json({ error: 'Pick an organization from your contacts' }, { status: 400 });
+    }
+
+    // Optionally share with the team right away (only when the TC is on one).
+    let shareFields: { team_id?: string; shared_at?: string } = {};
+    if (body.shared === true) {
+      const teamId = await getUserTeamId(user.id);
+      if (!teamId) return NextResponse.json({ error: 'You are not on a team' }, { status: 400 });
+      shareFields = { team_id: teamId, shared_at: new Date().toISOString() };
     }
 
     const { count } = await supabaseServer.from('contacts').select('id', { count: 'exact', head: true }).eq('tc_user_id', user.id);
@@ -59,11 +88,11 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await supabaseServer
       .from('contacts')
-      .insert({ ...cleaned.value, tc_user_id: user.id, source: 'manual' })
+      .insert({ ...cleaned.value, tc_user_id: user.id, source: 'manual', ...shareFields })
       .select('*')
       .single();
     if (error) {
-      if (error.code === '23505') return NextResponse.json({ error: 'You already have a contact with that email' }, { status: 409 });
+      if (error.code === '23505') return NextResponse.json({ error: shareFields.team_id ? 'A contact with that email is already in the team list' : 'You already have a contact with that email' }, { status: 409 });
       throw error;
     }
     return NextResponse.json(data, { status: 201 });

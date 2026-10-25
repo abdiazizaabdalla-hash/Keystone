@@ -27,6 +27,9 @@ export async function POST(request: NextRequest) {
     const keep = (found || []).find((c) => c.id === keepId) as ContactRow | undefined;
     const others = ((found || []) as ContactRow[]).filter((c) => c.id !== keepId);
     if (!keep || others.length !== mergeIds.length) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+    if (keep.team_id || others.some((o) => o.team_id)) {
+      return NextResponse.json({ error: 'Stop sharing these contacts with your team before merging them' }, { status: 400 });
+    }
 
     const pick = <K extends 'name' | 'email' | 'phone' | 'company' | 'role'>(key: K): string | null =>
       (keep[key] && String(keep[key]).trim() ? keep[key] : others.map((o) => o[key]).find((v) => v && String(v).trim())) || null;
