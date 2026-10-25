@@ -40,7 +40,18 @@ export default function ContactsPage() {
   const [showDupes, setShowDupes] = useState(false);
   const [showSync, setShowSync] = useState(false);
   const [hasTeam, setHasTeam] = useState(false);
-  const [scope, setScope] = useState<'all' | 'mine' | 'shared'>('all');
+  // Personal = everything I own; Team = what has been shared with my team (mine and teammates').
+  const [scope, setScopeState] = useState<'personal' | 'team'>('personal');
+  const setScope = (next: 'personal' | 'team') => {
+    setScopeState(next);
+    setSelected(new Set());
+    setActiveTag(null);
+    try {
+      window.localStorage.setItem('relay.contacts.scope', next);
+    } catch {
+      /* the toggle still works */
+    }
+  };
   const [working, setWorking] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -97,7 +108,14 @@ export default function ContactsPage() {
       try {
         const res = await authFetch('/api/contacts/sync');
         const data = await res.json();
-        if (res.ok) setHasTeam(Boolean(data.hasTeam));
+        if (res.ok) {
+          setHasTeam(Boolean(data.hasTeam));
+          try {
+            if (data.hasTeam && window.localStorage.getItem('relay.contacts.scope') === 'team') setScopeState('team');
+          } catch {
+            /* start on Personal */
+          }
+        }
       } catch {
         /* ignore */
       }
@@ -145,9 +163,14 @@ export default function ContactsPage() {
     return () => clearTimeout(t);
   }, [load]);
 
+  // Without a team there is only the personal view.
+  const effectiveScope = hasTeam ? scope : 'personal';
+  const teamMode = effectiveScope === 'team';
+  const scoped = useMemo(() => contacts.filter((c) => (teamMode ? !!c.team_id : c.is_mine !== false)), [contacts, teamMode]);
+
   const tagCounts = useMemo(() => {
     const map = new Map<string, { label: string; count: number }>();
-    for (const c of contacts) {
+    for (const c of scoped) {
       for (const t of c.tags || []) {
         const key = t.toLowerCase();
         const entry = map.get(key);
@@ -156,20 +179,18 @@ export default function ContactsPage() {
       }
     }
     return [...map.entries()].sort((a, b) => b[1].count - a[1].count);
-  }, [contacts]);
+  }, [scoped]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return contacts.filter((c) => {
+    return scoped.filter((c) => {
       if (newsletterOnly && (!c.newsletter || c.is_mine === false)) return false;
       if (typeFilter !== 'all' && (c.contact_type || 'person') !== typeFilter) return false;
-      if (scope === 'mine' && c.is_mine === false) return false;
-      if (scope === 'shared' && !c.team_id) return false;
       if (activeTag && !(c.tags || []).some((t) => t.toLowerCase() === activeTag)) return false;
       if (!q) return true;
       return [c.name, c.email, c.phone, c.company, c.role, ...(c.tags || [])].some((v) => (v || '').toLowerCase().includes(q));
     });
-  }, [contacts, search, activeTag, newsletterOnly, typeFilter, scope]);
+  }, [scoped, search, activeTag, newsletterOnly, typeFilter]);
 
   // The newsletter flag belongs to whoever owns the contact, so teammates' shared contacts never count.
   const newsletterCount = contacts.filter((c) => c.is_mine !== false && c.newsletter && c.email).length;
@@ -347,10 +368,12 @@ export default function ContactsPage() {
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Contacts</h1>
-          <p className="text-slate-400">The people and organizations in your business, with history and follow-ups.</p>
+          <p className="text-slate-400">
+            {teamMode ? 'Contacts your team shares. Everyone on the team can see and edit these.' : 'The people and organizations in your business, with history and follow-ups.'}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {untidyCount > 0 && (
+          {!teamMode && untidyCount > 0 && (
             <button
               type="button"
               onClick={tidyUp}
@@ -361,6 +384,7 @@ export default function ContactsPage() {
               Group tags ({untidyCount})
             </button>
           )}
+          {!teamMode && (
           <button
             type="button"
             onClick={importFromDeals}
@@ -369,6 +393,7 @@ export default function ContactsPage() {
           >
             Import from my deals
           </button>
+          )}
           {hasTeam && (
             <button
               type="button"
@@ -378,6 +403,7 @@ export default function ContactsPage() {
               Sync contacts
             </button>
           )}
+          {!teamMode && (
           <button
             type="button"
             onClick={() => setShowDupes(true)}
@@ -385,6 +411,9 @@ export default function ContactsPage() {
           >
             Find duplicates
           </button>
+          )}
+          {!teamMode && (
+          <>
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
@@ -395,6 +424,8 @@ export default function ContactsPage() {
             Import CSV
           </button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => importCsv(e.target.files?.[0])} />
+          </>
+          )}
           <button
             type="button"
             onClick={() => setEditing('new')}
@@ -404,6 +435,31 @@ export default function ContactsPage() {
           </button>
         </div>
       </div>
+
+      {hasTeam && (
+        <div className="mb-5 grid grid-cols-2 gap-1 p-1 bg-white/5 border border-white/10 rounded-2xl max-w-xl" role="tablist" aria-label="Which contacts">
+          {(
+            [
+              { id: 'personal', label: 'Personal', sub: 'Only you', count: contacts.filter((c) => c.is_mine !== false).length },
+              { id: 'team', label: 'Team', sub: 'Shared with your team', count: contacts.filter((c) => !!c.team_id).length },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={effectiveScope === t.id}
+              onClick={() => setScope(t.id)}
+              className={`rounded-xl px-4 py-3 text-left transition ${effectiveScope === t.id ? 'bg-blue-500 text-white shadow' : 'text-slate-300 hover:bg-white/10'}`}
+            >
+              <span className="block text-base font-semibold">
+                {t.label} <span className={`text-sm font-normal ${effectiveScope === t.id ? 'text-blue-100' : 'text-slate-500'}`}>({t.count})</span>
+              </span>
+              <span className={`block text-xs ${effectiveScope === t.id ? 'text-blue-100' : 'text-slate-500'}`}>{t.sub}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
       {notice && <p className="mb-4 text-sm text-green-400">{notice}</p>}
@@ -437,13 +493,6 @@ export default function ContactsPage() {
           placeholder="Search name, email, company, tag…"
           className={`${inputCls} max-w-sm`}
         />
-        {hasTeam && (
-          <select value={scope} onChange={(e) => setScope(e.target.value as 'all' | 'mine' | 'shared')} className={`${inputCls} w-auto`} aria-label="Whose contacts">
-            <option value="all">Mine &amp; team</option>
-            <option value="mine">Only mine</option>
-            <option value="shared">Shared with team</option>
-          </select>
-        )}
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as 'all' | 'person' | 'organization')}
@@ -454,10 +503,13 @@ export default function ContactsPage() {
           <option value="person">People</option>
           <option value="organization">Organizations</option>
         </select>
+        {!teamMode && (
         <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
           <input type="checkbox" checked={newsletterOnly} onChange={(e) => setNewsletterOnly(e.target.checked)} className="accent-blue-500" />
           Newsletter only ({newsletterCount})
         </label>
+        )}
+        {!teamMode && (
         <div className="ml-auto flex items-center gap-3 text-sm">
           <button type="button" onClick={() => exportCsv(false)} className="text-blue-400 hover:text-blue-300">
             Export CSV
@@ -466,6 +518,7 @@ export default function ContactsPage() {
             Export newsletter list
           </button>
         </div>
+        )}
       </div>
 
       {tagCounts.length > 0 && (
@@ -477,7 +530,7 @@ export default function ContactsPage() {
               activeTag === null ? 'border-blue-500 text-blue-300 bg-blue-500/10' : 'border-slate-600 text-slate-400 hover:text-slate-200'
             }`}
           >
-            All ({contacts.length})
+            All ({scoped.length})
           </button>
           {tagCounts.map(([key, { label, count }]) => (
             <button
@@ -534,7 +587,15 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {contacts.length === 0 ? (
+      {scoped.length === 0 && teamMode ? (
+        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 text-center">
+          <p className="text-slate-200 font-semibold mb-1">Nothing shared with your team yet</p>
+          <p className="text-slate-400 text-sm mb-5">Share the contacts your whole team works with, like preferred lenders and title companies. Use Sync to share many at once, or add a shared contact.</p>
+          <button type="button" onClick={() => setShowSync(true)} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg">
+            Sync contacts
+          </button>
+        </div>
+      ) : scoped.length === 0 ? (
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 text-center">
           <p className="text-slate-200 font-semibold mb-1">Your address book is empty</p>
           <p className="text-slate-400 text-sm mb-5">Pull in the agents and lenders already on your deals, or add someone by hand.</p>
@@ -654,6 +715,7 @@ export default function ContactsPage() {
           contact={editing === 'new' ? null : editing}
           organizations={contacts.filter((c) => c.contact_type === 'organization')}
           hasTeam={hasTeam}
+          defaults={editing === 'new' && teamMode ? { shared: true } : undefined}
           isOwner={editing === 'new' || editing.is_mine !== false}
           onClose={() => setEditing(null)}
           onAuthError={handleAuth}
@@ -666,7 +728,7 @@ export default function ContactsPage() {
 
       {showSync && (
         <SyncContactsModal
-          tags={tagCounts.map(([, v]) => v.label)}
+          tags={[...new Set(contacts.filter((c) => c.is_mine !== false).flatMap((c) => c.tags || []))].sort()}
           onClose={() => setShowSync(false)}
           onDone={async () => {
             await load();
