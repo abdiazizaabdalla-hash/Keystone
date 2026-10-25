@@ -99,22 +99,58 @@ function AgentLoginContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-6">
-          <img src="/relay-icon.png" alt="Relay TC" className="w-16 h-16 object-contain inline-block mb-4 bg-white rounded-xl p-2" />
-          <h1 className="text-2xl font-display font-semibold text-slate-100">{invited && mode === 'link' ? 'Set up your agent account' : 'Agent log in'}</h1>
-          <p className="text-slate-400 text-sm mt-1">
-            {mode === 'password'
-              ? 'Log in with the password you set when you first accepted an invite.'
-              : invited
-                ? "Welcome. Confirm your email and we'll send a link that signs you in and lets you choose a password. This page never expires, so come back any time to get a new link."
-                : "No password needed -- we'll email you a link that logs you straight in."}
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col">
+      {/* Same marketing nav as the coordinator sign-in page */}
+      <div className="px-6 py-5">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
+            </span>
+          </Link>
+          <div className="flex items-center gap-3 sm:gap-6 text-sm text-slate-400">
+            <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
+            <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
+            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
+            <Link
+              href="/auth"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+              </svg>
+              TC Login
+            </Link>
+          </div>
         </div>
+      </div>
 
-        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
-          {mode === 'password' ? (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          {/* Logo */}
+          <div className="text-center mb-8">
+            <span className="inline-block bg-white rounded-xl p-3 shadow-md mb-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/relay-logo.png" alt="Relay TC" className="h-10 w-auto object-contain" />
+            </span>
+            <p className="text-slate-400 text-sm">Agent Portal</p>
+          </div>
+
+          {/* Card */}
+          <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
+            <h2 className="text-2xl font-display font-semibold text-slate-100 mb-1">
+              {invited && mode === 'link' ? 'Set up your agent account' : 'Agent Sign In'}
+            </h2>
+            <p className="text-slate-400 text-sm mb-6">
+              {mode === 'password'
+                ? 'Sign in with the password you set when you first accepted an invite.'
+                : invited
+                  ? "Welcome. Confirm your email and we'll send a link that signs you in and lets you choose a password. This page never expires, so come back any time to get a new link."
+                  : "No password needed -- we'll email you a link that signs you straight in."}
+            </p>
+
+            {mode === 'password' ? (
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
               <div>
                 <label className="text-sm text-slate-400 block mb-2">Email</label>
@@ -142,7 +178,7 @@ function AgentLoginContent() {
                 disabled={submitting}
                 className="w-full px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
               >
-                {submitting ? 'Logging in…' : 'Log in'}
+                {submitting ? 'Signing in…' : 'Sign In'}
               </button>
               <button
                 type="button"
@@ -186,14 +222,17 @@ function AgentLoginContent() {
               </button>
             </form>
           )}
-        </div>
+          </div>
 
-        <p className="text-center text-xs text-slate-600 mt-6">
-          Not an agent?{' '}
-          <Link href="/auth" className="text-slate-400 hover:text-slate-300">
-            Sign in to your TC account
-          </Link>
-        </p>
+          <div className="mt-6 text-center">
+            <p className="text-slate-500 text-sm">
+              Not an agent?{' '}
+              <Link href="/auth" className="text-blue-400 hover:text-blue-300 font-medium">
+                Sign in to your TC account
+              </Link>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
