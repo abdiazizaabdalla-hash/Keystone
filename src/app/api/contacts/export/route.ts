@@ -29,8 +29,8 @@ export async function GET(request: NextRequest) {
     );
 
     const csv = toCsv(
-      ['Name', 'Email', 'Phone', 'Company', 'Role', 'Tags', 'Newsletter', 'Notes'],
-      rows.map((c) => [c.name, c.email, c.phone, c.company, c.role, (c.tags || []).join('; '), c.newsletter ? 'yes' : 'no', c.notes])
+      ['Name', 'Email', 'Phone', 'Company', 'Role', 'Type', 'Tags', 'Newsletter', 'Notes'],
+      rows.map((c) => [c.name, c.email, c.phone, c.company, c.role, c.contact_type === 'organization' ? 'organization' : 'person', (c.tags || []).join('; '), c.newsletter ? 'yes' : 'no', c.notes])
     );
     return new NextResponse(csv, {
       headers: {

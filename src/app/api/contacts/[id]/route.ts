@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { cleanContactInput } from '@/lib/contactsCrm';
+import { isOwnedOrganization } from '@/lib/contactGuard';
 
 function fail(error: unknown, what: string) {
   if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
@@ -26,6 +27,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const body = await request.json().catch(() => ({}));
     const cleaned = cleanContactInput(body);
     if (!cleaned.ok) return NextResponse.json({ error: cleaned.error }, { status: 400 });
+
+    const orgId = cleaned.value.organization_id;
+    if (orgId && (orgId === id || !(await isOwnedOrganization(user.id, orgId)))) {
+      return NextResponse.json({ error: 'Pick an organization from your contacts' }, { status: 400 });
+    }
 
     const { data, error } = await supabaseServer
       .from('contacts')

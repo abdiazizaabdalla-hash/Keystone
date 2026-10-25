@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { cleanContactInput } from '@/lib/contactsCrm';
+import { isOwnedOrganization } from '@/lib/contactGuard';
 
 const MAX_CONTACTS = 5000;
 
@@ -45,6 +46,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const cleaned = cleanContactInput(body);
     if (!cleaned.ok) return NextResponse.json({ error: cleaned.error }, { status: 400 });
+
+    const orgId = cleaned.value.organization_id;
+    if (orgId && !(await isOwnedOrganization(user.id, orgId))) {
+      return NextResponse.json({ error: 'Pick an organization from your contacts' }, { status: 400 });
+    }
 
     const { count } = await supabaseServer.from('contacts').select('id', { count: 'exact', head: true }).eq('tc_user_id', user.id);
     if ((count ?? 0) >= MAX_CONTACTS) {

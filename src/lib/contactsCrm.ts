@@ -17,8 +17,44 @@ export interface ContactRow {
   tags: string[];
   newsletter: boolean;
   source: string;
+  /** 'person' or 'organization' (see add-contacts-relationships.sql). */
+  contact_type?: ContactType;
+  /** The organization contact this person works for. */
+  organization_id?: string | null;
+  /** The agent profile this contact is the address-book record for. */
+  agent_id?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type ContactType = 'person' | 'organization';
+
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const ACTIVITY_KINDS = ['note', 'call', 'email', 'text', 'meeting', 'other'] as const;
+export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
+
+/** Escapes % _ and \ so an email can be used safely inside an ilike filter. */
+export function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+export interface ContactActivityRow {
+  id: string;
+  contact_id: string;
+  kind: ActivityKind;
+  body: string;
+  occurred_at: string;
+  created_at: string;
+}
+
+export interface ContactReminderRow {
+  id: string;
+  contact_id: string;
+  due_on: string;
+  note: string | null;
+  done_at: string | null;
+  created_at: string;
 }
 
 /** Trims, de-duplicates (case-insensitive), and bounds a list of tags. */
@@ -45,7 +81,7 @@ function text(value: unknown, max: number): string | null {
 }
 
 export type CleanContactResult =
-  | { ok: true; value: { name: string; email: string | null; phone: string | null; company: string | null; role: string | null; notes: string | null; tags: string[]; newsletter: boolean } }
+  | { ok: true; value: { name: string; email: string | null; phone: string | null; company: string | null; role: string | null; notes: string | null; tags: string[]; newsletter: boolean; contact_type?: ContactType; organization_id?: string | null } }
   | { ok: false; error: string };
 
 /** Validates the fields a contact form sends. */
@@ -54,9 +90,24 @@ export function cleanContactInput(body: Record<string, unknown>): CleanContactRe
   const email = text(body.email, 254)?.toLowerCase() ?? null;
   if (email && !EMAIL_RE.test(email)) return { ok: false, error: 'That email address does not look right' };
   if (!name && !email) return { ok: false, error: 'Add a name or an email address' };
+  // Only present when the form sends them, so saving still works for older clients.
+  const extra: { contact_type?: ContactType; organization_id?: string | null } = {};
+  if (body.contactType !== undefined) {
+    if (body.contactType !== 'person' && body.contactType !== 'organization') return { ok: false, error: 'Type must be person or organization' };
+    extra.contact_type = body.contactType;
+  }
+  if (body.organizationId !== undefined) {
+    const org = body.organizationId;
+    if (org === null || org === '') extra.organization_id = null;
+    else if (typeof org === 'string' && UUID_RE.test(org)) extra.organization_id = org;
+    else return { ok: false, error: 'That organization is not valid' };
+    // an organization does not work for another organization
+    if (extra.contact_type === 'organization') extra.organization_id = null;
+  }
   return {
     ok: true,
     value: {
+      ...extra,
       name,
       email,
       phone: text(body.phone, 40),
@@ -78,4 +129,11 @@ export function csvCell(value: unknown): string {
 
 export function toCsv(headers: string[], rows: unknown[][]): string {
   return [headers.map(csvCell).join(','), ...rows.map((r) => r.map(csvCell).join(','))].join('\r\n') + '\r\n';
+}
+
+/** True for a real calendar date written YYYY-MM-DD. */
+export function isIsoDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().startsWith(value);
 }

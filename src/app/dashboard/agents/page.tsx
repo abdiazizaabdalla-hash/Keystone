@@ -3,6 +3,7 @@
 import MoneyInput from '@/components/MoneyInput';
 import PhoneInput from '@/components/PhoneInput';
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatPhoneNumber } from '@/lib/formatPhone';
@@ -585,7 +586,13 @@ export default function AgentsPage() {
                             <dd className="mt-0.5 font-semibold text-blue-400">{agent.commission_percent ?? 0}%</dd>
                           </div>
                         </dl>
-                        <div className="mt-4 flex gap-2">
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <Link
+                            href={`/dashboard/agents/${agent.id}`}
+                            className="px-3.5 py-1.5 text-sm border border-blue-500/50 text-blue-300 hover:bg-blue-500/10 rounded-lg transition font-medium"
+                          >
+                            Profile &amp; history
+                          </Link>
                           <button
                             onClick={() => handleEdit(agent)}
                             className="px-3.5 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium"
