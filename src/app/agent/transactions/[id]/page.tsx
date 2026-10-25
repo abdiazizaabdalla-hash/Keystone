@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import KeyDatesPanel from '@/components/KeyDatesPanel';
-import OverviewSection from '@/components/OverviewSection';
 import {
   DOCUMENT_CATEGORIES,
   DEFAULT_CATEGORY_KEY,
@@ -108,32 +107,10 @@ function daysSince(dateIso: string): number {
 // section below) is visible and payable here, same as the TC's own
 // invoice page. Still nothing about commission math, other agents,
 // other transactions, or account/billing -- see lib/agentPortal.ts.
-type AgentTxTab = 'overview' | 'checklist' | 'documents' | 'messages' | 'people';
-const AGENT_TX_TABS: { id: AgentTxTab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'checklist', label: 'Checklist' },
-  { id: 'documents', label: 'Documents' },
-  { id: 'messages', label: 'Messages' },
-  { id: 'people', label: 'Contacts' },
-];
-
 export default function AgentTransactionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
 
-  const [tab, setTab] = useState<AgentTxTab>('overview');
-  const selectTab = (next: AgentTxTab) => {
-    setTab(next);
-    try {
-      window.history.replaceState(null, '', `#${next}`);
-    } catch {
-      /* non-fatal */
-    }
-  };
-  useEffect(() => {
-    const h = window.location.hash.replace('#', '');
-    if (AGENT_TX_TABS.some((t) => t.id === h)) setTab(h as AgentTxTab);
-  }, []);
   const [transaction, setTransaction] = useState<AgentTransactionDetail | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
@@ -509,8 +486,8 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
     : documents;
 
   return (
-    <div className="min-h-screen px-4 py-6 md:px-8 md:py-12">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 px-6 py-12">
+      <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between gap-3 mb-6">
           <Link href="/agent" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm font-medium">
             ← Your deals
@@ -521,7 +498,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
             status, dates -- just plain text instead of editable
             dropdowns/inputs. The Invoice section below is the one part
             of this card that isn't purely read-only. */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-8 mb-8">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
           <div className="mb-4">
             <h1 className="text-xl font-display font-semibold text-slate-100">
               {transaction.propertyAddress || transaction.fileNumber}
@@ -529,7 +506,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
             <p className="text-slate-500 text-sm mt-0.5">Coordinated by {transaction.tcLabel}</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8 pt-6 border-t border-white/10">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-slate-600">
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent</p>
               <div className="flex items-center gap-3">
@@ -552,44 +529,6 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               <p className="text-slate-100 font-medium">{transaction.status}</p>
             </div>
 
-          </div>
-
-        </div>
-
-        <div role="tablist" aria-label="Deal sections" className="flex gap-1 overflow-x-auto mb-8 p-1 bg-white/5 border border-white/10 rounded-2xl">
-          {AGENT_TX_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.id}
-              onClick={() => selectTab(t.id)}
-              className={`px-4 md:px-5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
-                tab === t.id ? 'bg-blue-500 text-white shadow' : 'text-slate-300 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              {t.label}
-              {t.id === 'checklist' && transaction.tasks.length > 0 ? (
-                <span className={`ml-2 text-xs ${tab === t.id ? 'text-blue-100' : 'text-slate-400'}`}>
-                  {completedCount}/{transaction.tasks.length}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-
-        <div className={tab === 'overview' ? 'space-y-3' : 'hidden'}>
-          <OverviewSection
-            title="Key dates"
-            defaultOpen
-            summary={[
-              transaction.acceptanceDate ? `Accepted ${formatDisplayDate(transaction.acceptanceDate, { month: 'short', day: 'numeric' })}` : null,
-              transaction.closingDate ? `Closing ${formatDisplayDate(transaction.closingDate, { month: 'short', day: 'numeric' })}` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Acceptance Date</p>
               <p className="text-slate-100">{transaction.acceptanceDate ? formatDisplayDate(transaction.acceptanceDate) : '—'}</p>
@@ -599,29 +538,17 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Target Closing Date</p>
               <p className="text-slate-100">{transaction.closingDate ? formatDisplayDate(transaction.closingDate) : '—'}</p>
             </div>
-            </div>
-          <KeyDatesPanel
-            transactionId={transaction.id}
-            propertyAddress={transaction.propertyAddress || transaction.fileNumber}
-            closingDate={transaction.closingDate}
-            canEdit={false}
-            readOnlyDates={transaction.keyDates ?? []}
-          />
-          </OverviewSection>
+          </div>
 
-          {invoice && (
-            <OverviewSection
-              title="Invoice"
-              defaultOpen
-              summary={`${invoice.invoice_number} · ${invoice.paid ? 'Paid' : 'Unpaid'}`}
-            >
           {/* Invoice: only shows once the TC has actually generated one
               (same "no invoice yet" silence as the TC's own page shows
               before that point -- an agent never sees fee math, just the
               finished invoice once it exists). Paid/unpaid as plain
               colored text, no pill, matching the rest of this page. */}
-            <div>
-                            <div className="flex flex-wrap items-center justify-between gap-4">
+          {invoice && (
+            <div className="pt-6 mt-6 border-t border-slate-600">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Invoice</p>
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <p className="text-slate-100 font-semibold">
                     {invoice.invoice_number} · ${invoice.amount_owed.toLocaleString()} ·{' '}
@@ -679,84 +606,111 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               )}
               {payLinkError && <p className="text-red-400 text-xs mt-2">{payLinkError}</p>}
             </div>
-                      </OverviewSection>
           )}
 
-          <OverviewSection
-            title="Checklist"
-            summary={transaction.tasks.length === 0 ? 'No steps yet' : `${completedCount} of ${transaction.tasks.length} done`}
-            action={{ label: 'Open checklist', onClick: () => selectTab('checklist') }}
-          >
-            {transaction.tasks.filter((t) => !t.completed).length === 0 ? (
-              <p className="text-sm text-slate-400">Every step is done.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {transaction.tasks.filter((t) => !t.completed).slice(0, 5).map((t) => (
-                  <li key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                    <span className="text-slate-200 truncate">{t.name}</span>
-                    <span className="text-slate-500 shrink-0">{t.due_date ? formatDisplayDate(t.due_date, { month: 'short', day: 'numeric' }) : ''}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
-
-          <OverviewSection
-            title="Documents"
-            summary={`${documents.length} file${documents.length === 1 ? '' : 's'}`}
-            action={{ label: 'Open documents', onClick: () => selectTab('documents') }}
-          >
-            {documents.length === 0 ? (
-              <p className="text-sm text-slate-400">No documents yet.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {documents.slice(0, 5).map((d) => (
-                  <li key={d.id} className="py-2.5 text-sm text-slate-200 truncate">📄 {d.file_name}</li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
-
-          <OverviewSection
-            title="Messages"
-            summary={messages.length === 0 ? 'No messages yet' : messages[messages.length - 1].body || 'Attachment'}
-            action={{ label: 'Open messages', onClick: () => selectTab('messages') }}
-          >
-            {messages.length === 0 ? (
-              <p className="text-sm text-slate-400">Nothing yet. Say hello to {transaction.tcLabel}.</p>
-            ) : (
-              <ul className="space-y-3">
-                {messages.slice(-3).map((m) => (
-                  <li key={m.id} className="text-sm">
-                    <p className="text-xs text-slate-500">{m.sender_role === 'agent' ? 'You' : transaction.tcLabel} · {new Date(m.created_at).toLocaleDateString()}</p>
-                    <p className="text-slate-200 line-clamp-2">{m.body || '📎 Attachment'}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
-
-          <OverviewSection
-            title="Contacts"
-            summary={`${transaction.agentName}${contacts.length ? ` + ${contacts.length} other${contacts.length === 1 ? '' : 's'}` : ''}`}
-            action={{ label: 'Open contacts', onClick: () => selectTab('people') }}
-          >
-            <ul className="divide-y divide-white/10">
-              <li className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                <span className="text-slate-200">{transaction.agentName}</span>
-                <span className="text-slate-500">Agent</span>
-              </li>
-              {contacts.filter((c) => c.name || c.email).map((c) => (
-                <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                  <span className="text-slate-200 truncate">{c.name || c.email}</span>
-                  <span className="text-slate-500 shrink-0">{c.role || ''}</span>
-                </li>
-              ))}
-            </ul>
-          </OverviewSection>
+          <KeyDatesPanel
+            transactionId={transaction.id}
+            propertyAddress={transaction.propertyAddress || transaction.fileNumber}
+            closingDate={transaction.closingDate}
+            canEdit={false}
+            readOnlyDates={transaction.keyDates ?? []}
+          />
         </div>
 
-        <div className={tab === 'checklist' ? '' : 'hidden'}>
+        {/* Same grid the TC page uses: Documents wide on the left,
+            Messages + Checklist + Contacts stacked in a narrow column on
+            the right. Both stack full-width on mobile, in source order. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
+          <div className="lg:order-2 lg:self-start flex flex-col gap-8">
+            <section className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col h-[28rem]">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-slate-100">Messages</h2>
+                <Link
+                  href={`/agent/transactions/${id}/messages`}
+                  className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
+                >
+                  Open Messages →
+                </Link>
+              </div>
+              <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
+                {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet -- say hello.</p>}
+                {messages.map((m) => (
+                  <div key={m.id} className={`flex ${m.sender_role === 'agent' ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                        m.sender_role === 'agent' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
+                      }`}
+                    >
+                      {m.body && <p>{m.body}</p>}
+                      {m.attachment && (
+                        <a
+                          href={m.attachment.url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`flex items-center gap-1.5 text-xs underline underline-offset-2 ${
+                            m.sender_role === 'agent' ? 'text-blue-100' : 'text-blue-300'
+                          } ${m.body ? 'mt-1.5' : ''}`}
+                        >
+                          📎 {m.attachment.fileName}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <input
+                ref={messageFileInputRef}
+                type="file"
+                accept="application/pdf,image/*,.doc,.docx"
+                className="hidden"
+                onChange={handleAttachFileSelected}
+              />
+              {attachError && <p className="text-xs text-red-400 mb-2">{attachError}</p>}
+              {pendingAttachment && (
+                <div className="flex items-center gap-2 mb-2 text-xs text-slate-300 bg-white/5 border border-white/10 rounded-2xl px-2.5 py-1.5">
+                  <span className="truncate flex-1">📎 {pendingAttachment.fileName}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPendingAttachment(null)}
+                    className="text-slate-500 hover:text-red-400 transition flex-shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => messageFileInputRef.current?.click()}
+                  disabled={isAttachingFile}
+                  title="Attach a file"
+                  className="px-3 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-200 rounded-lg transition disabled:opacity-50 flex-shrink-0"
+                >
+                  {isAttachingFile ? '…' : '📎'}
+                </button>
+                <input
+                  type="text"
+                  value={messageDraft}
+                  onChange={(e) => setMessageDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder={`Message ${transaction.tcLabel}…`}
+                  className="flex-1 bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={sendingMessage || (!messageDraft.trim() && !pendingAttachment)}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                >
+                  Send
+                </button>
+              </div>
+            </section>
+
             <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <div className="mb-5">
                 <h2 className="text-lg font-bold text-slate-100 mb-1">Checklist</h2>
@@ -826,10 +780,97 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               <p className="text-slate-500 text-xs mt-4">View-only -- your TC updates this checklist.</p>
             </section>
 
-        </div>
+            <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <h2 className="text-lg font-bold text-slate-100 mb-4">Contacts</h2>
+              <div className="space-y-4">
+                <div className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
+                  <span className="text-xs font-semibold text-blue-400">Agent</span>
+                  <p className="text-sm font-medium text-slate-200 mt-1">{transaction.agentName || 'Unknown'}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{transaction.agentEmail || 'No email on file'}</p>
+                  <p className="text-xs text-slate-400">{transaction.agentPhone || 'No phone on file'}</p>
+                </div>
 
-        <div className={tab === 'documents' ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start' : 'hidden'}>
-          <section className="bg-white/5 border border-white/10 rounded-2xl p-8">
+                {contacts.map((contact) => (
+                  <div key={contact.id} className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
+                    <span className="text-xs font-semibold text-blue-400">{contact.role || 'Contact'}</span>
+                    <p className="text-sm font-medium text-slate-200 mt-1">{contact.name || 'Unnamed'}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{contact.email || 'No email on file'}</p>
+                    <p className="text-xs text-slate-400">{contact.phone || 'No phone on file'}</p>
+                  </div>
+                ))}
+
+                {isAddingContact && (
+                  <div className="px-3 py-2 bg-slate-700/20 border border-dashed border-slate-600 rounded-lg space-y-1.5">
+                    <input
+                      type="text"
+                      value={newContactRole}
+                      onChange={(e) => setNewContactRole(e.target.value)}
+                      placeholder="Role (e.g. Lender)"
+                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={newContactName}
+                      onChange={(e) => setNewContactName(e.target.value)}
+                      placeholder="Name or company"
+                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    <input
+                      type="email"
+                      value={newContactEmail}
+                      onChange={(e) => setNewContactEmail(e.target.value)}
+                      placeholder="Email"
+                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    <PhoneInput
+                      value={newContactPhone}
+                      onValueChange={setNewContactPhone}
+                      placeholder="Phone"
+                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    {addContactError && <p className="text-[11px] text-red-400">{addContactError}</p>}
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleAddContact}
+                        disabled={savingContact}
+                        className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition disabled:opacity-50"
+                      >
+                        {savingContact ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingContact(false);
+                          setAddContactError('');
+                        }}
+                        disabled={savingContact}
+                        className="text-xs text-slate-500 hover:text-slate-300 transition disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!isAddingContact && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingContact(true)}
+                  className="mt-3 text-xs text-blue-400 hover:text-blue-300 font-medium transition"
+                >
+                  + Add contact
+                </button>
+              )}
+
+              <p className="text-slate-500 text-xs mt-4">
+                You can add a contact -- editing or removing one stays with your TC.
+              </p>
+            </section>
+          </div>
+
+          <section className="lg:order-1 bg-white/5 border border-white/10 rounded-2xl p-8">
             <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
             <p className="text-sm text-slate-400 mb-6">
               Organized by category, same as your TC sees it. Upload straight into a category, or view/download
@@ -965,210 +1006,6 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               )}
             </div>
           </section>
-          <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-bold text-slate-100">Messages</h2>
-              <button type="button" onClick={() => selectTab('messages')} className="text-sm text-blue-400 hover:text-blue-300 font-medium transition">
-                Open →
-              </button>
-            </div>
-            {messages.length === 0 ? (
-              <p className="text-sm text-slate-500">No messages yet.</p>
-            ) : (
-              <ul className="space-y-3">
-                {messages.slice(-4).map((m) => (
-                  <li key={m.id} className="text-sm">
-                    <p className="text-xs text-slate-500">{m.sender_role === 'agent' ? 'You' : transaction.tcLabel} · {new Date(m.created_at).toLocaleDateString()}</p>
-                    {m.body && <p className="text-slate-200 line-clamp-2">{m.body}</p>}
-                    {m.attachment && <p className="mt-1 text-xs text-blue-300 truncate">📎 {m.attachment.fileName}</p>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
-
-        <div className={tab === 'messages' ? '' : 'hidden'}>
-            <section className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col h-[34rem]">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-slate-100">Messages</h2>
-                <Link
-                  href={`/agent/transactions/${id}/messages`}
-                  className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
-                >
-                  Open Messages →
-                </Link>
-              </div>
-              <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
-                {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet -- say hello.</p>}
-                {messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.sender_role === 'agent' ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                        m.sender_role === 'agent' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
-                      }`}
-                    >
-                      {m.body && <p>{m.body}</p>}
-                      {m.attachment && (
-                        <a
-                          href={m.attachment.url || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`flex items-center gap-1.5 text-xs underline underline-offset-2 ${
-                            m.sender_role === 'agent' ? 'text-blue-100' : 'text-blue-300'
-                          } ${m.body ? 'mt-1.5' : ''}`}
-                        >
-                          📎 {m.attachment.fileName}
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <input
-                ref={messageFileInputRef}
-                type="file"
-                accept="application/pdf,image/*,.doc,.docx"
-                className="hidden"
-                onChange={handleAttachFileSelected}
-              />
-              {attachError && <p className="text-xs text-red-400 mb-2">{attachError}</p>}
-              {pendingAttachment && (
-                <div className="flex items-center gap-2 mb-2 text-xs text-slate-300 bg-white/5 border border-white/10 rounded-2xl px-2.5 py-1.5">
-                  <span className="truncate flex-1">📎 {pendingAttachment.fileName}</span>
-                  <button
-                    type="button"
-                    onClick={() => setPendingAttachment(null)}
-                    className="text-slate-500 hover:text-red-400 transition flex-shrink-0"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => messageFileInputRef.current?.click()}
-                  disabled={isAttachingFile}
-                  title="Attach a file"
-                  className="px-3 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-200 rounded-lg transition disabled:opacity-50 flex-shrink-0"
-                >
-                  {isAttachingFile ? '…' : '📎'}
-                </button>
-                <input
-                  type="text"
-                  value={messageDraft}
-                  onChange={(e) => setMessageDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  placeholder={`Message ${transaction.tcLabel}…`}
-                  className="flex-1 bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={sendingMessage || (!messageDraft.trim() && !pendingAttachment)}
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
-                >
-                  Send
-                </button>
-              </div>
-            </section>
-
-        </div>
-
-        <div className={tab === 'people' ? '' : 'hidden'}>
-            <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <h2 className="text-lg font-bold text-slate-100 mb-4">Contacts</h2>
-              <div className="space-y-4">
-                <div className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
-                  <span className="text-xs font-semibold text-blue-400">Agent</span>
-                  <p className="text-sm font-medium text-slate-200 mt-1">{transaction.agentName || 'Unknown'}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{transaction.agentEmail || 'No email on file'}</p>
-                  <p className="text-xs text-slate-400">{transaction.agentPhone || 'No phone on file'}</p>
-                </div>
-
-                {contacts.map((contact) => (
-                  <div key={contact.id} className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
-                    <span className="text-xs font-semibold text-blue-400">{contact.role || 'Contact'}</span>
-                    <p className="text-sm font-medium text-slate-200 mt-1">{contact.name || 'Unnamed'}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{contact.email || 'No email on file'}</p>
-                    <p className="text-xs text-slate-400">{contact.phone || 'No phone on file'}</p>
-                  </div>
-                ))}
-
-                {isAddingContact && (
-                  <div className="px-3 py-2 bg-slate-700/20 border border-dashed border-slate-600 rounded-lg space-y-1.5">
-                    <input
-                      type="text"
-                      value={newContactRole}
-                      onChange={(e) => setNewContactRole(e.target.value)}
-                      placeholder="Role (e.g. Lender)"
-                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs font-semibold text-blue-300 placeholder:text-slate-500 placeholder:font-normal focus:border-blue-500 focus:outline-none"
-                    />
-                    <input
-                      type="text"
-                      value={newContactName}
-                      onChange={(e) => setNewContactName(e.target.value)}
-                      placeholder="Name or company"
-                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-                    />
-                    <input
-                      type="email"
-                      value={newContactEmail}
-                      onChange={(e) => setNewContactEmail(e.target.value)}
-                      placeholder="Email"
-                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-                    />
-                    <PhoneInput
-                      value={newContactPhone}
-                      onValueChange={setNewContactPhone}
-                      placeholder="Phone"
-                      className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-                    />
-                    {addContactError && <p className="text-[11px] text-red-400">{addContactError}</p>}
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={handleAddContact}
-                        disabled={savingContact}
-                        className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition disabled:opacity-50"
-                      >
-                        {savingContact ? 'Saving...' : 'Save'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsAddingContact(false);
-                          setAddContactError('');
-                        }}
-                        disabled={savingContact}
-                        className="text-xs text-slate-500 hover:text-slate-300 transition disabled:opacity-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {!isAddingContact && (
-                <button
-                  type="button"
-                  onClick={() => setIsAddingContact(true)}
-                  className="mt-3 text-xs text-blue-400 hover:text-blue-300 font-medium transition"
-                >
-                  + Add contact
-                </button>
-              )}
-
-              <p className="text-slate-500 text-xs mt-4">
-                You can add a contact -- editing or removing one stays with your TC.
-              </p>
-            </section>
         </div>
       </div>
     </div>
