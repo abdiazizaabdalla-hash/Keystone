@@ -1,7 +1,7 @@
 -- DEMO TEAM: sets up abdiaziz.a.abdalla@gmail.com as the manager of a busy Team account with two team members
 -- (aabdiaziz47@gmail.com = "Maya Chen", aaa7420023@gmail.com = "Jordan Reyes"), filled with believable data:
 -- 24 open deals, 15 closed deals with paid and unpaid invoices, 7 listings (preparing, active, under offer) with offers
--- and showings, about 45 contacts, agents for every TC, and team chat. Fictional people, example.com emails, Austin TX area.
+-- and showings, ~50 contacts, agents for every TC, and team chat. Fictional people, example.com emails, Austin TX area.
 -- Everything is dated relative to TODAY, so run it right before a demo and it looks current.
 --
 -- WARNING: permanently deletes the deals, listings, invoices, contacts and agents of these THREE accounts first
@@ -17,6 +17,7 @@ declare
   t record; d record; tx uuid; l uuid; ag uuid;
   k int := 0; n int; c int; a int;
   amt numeric;
+  has_agent_team boolean; has_team_name boolean; has_contact_team boolean; has_waiting boolean;
   steps text[] := array['Contract & File Setup','Earnest Money & Option','Inspection & Repairs','Title, Appraisal & Financing','Clear to Close','Closing & Post-Closing'];
   stages text[] := array['Contract Pending','Contract & File Setup','Earnest Money & Option','Inspection & Repairs','Title, Appraisal & Financing','Clear to Close','Closed'];
   firsts text[] := array['Priya','Daniel','Maria','Chris','Aisha','Tom','Lauren','Victor','Grace','Omar','Elena','Ben'];
@@ -24,6 +25,14 @@ declare
   lenders text[] := array['Colin Brooks','Dana Whitaker','Rafael Ortega','Kim Nguyen'];
   titles  text[] := array['Hannah Reyes','Marcus Doyle','Elise Navarro','Priscilla Tran'];
 begin
+  -- some columns come from later migrations; this script works with or without them
+  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'agents' and column_name = 'team_id') into has_agent_team;
+  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'teams' and column_name = 'name') into has_team_name;
+  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'contacts' and column_name = 'team_id')
+     and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'contacts' and column_name = 'shared_at') into has_contact_team;
+  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'tasks' and column_name = 'waiting_on')
+     and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'tasks' and column_name = 'waiting_on_since') into has_waiting;
+
   select id into u0 from auth.users where lower(email) = owner_email;
   select id into u1 from auth.users where lower(email) = m1_email;
   select id into u2 from auth.users where lower(email) = m2_email;
@@ -37,7 +46,7 @@ begin
     insert into public.teams (owner_id) values (u0) returning id into tm;
     insert into public.team_members (team_id, user_id, role) values (tm, u0, 'owner');
   end if;
-  update public.teams set name = 'Lone Star Closing Team' where id = tm;
+  if has_team_name then update public.teams set name = 'Lone Star Closing Team' where id = tm; end if;
   delete from public.team_members where user_id in (u1, u2) and team_id <> tm;
   insert into public.team_members (team_id, user_id, role)
     select tm, x, 'member' from unnest(array[u1, u2]) x
@@ -62,8 +71,8 @@ begin
   delete from public.team_messages where team_id = tm;
 
   -- ---------- agents (each TC works with their own) ----------
-  insert into public.agents (tc_user_id, team_id, name, brokerage, commission_percent, email, phone)
-  select case v.tc when 0 then u0 when 1 then u1 else u2 end, tm, v.name, v.brk, 0,
+  insert into public.agents (tc_user_id, name, brokerage, commission_percent, email, phone)
+  select case v.tc when 0 then u0 when 1 then u1 else u2 end, v.name, v.brk, 0,
          lower(replace(v.name, ' ', '.')) || '@example.com', '(512) 555-' || lpad((1100 + row_number() over ())::text, 4, '0')
   from (values
     (0, 'Lena Park',     'Capital City Realty'),   (0, 'Marcus Bell',   'Lakeline Properties'),   (0, 'Ana Ortiz',     'Hill Country Homes'),
@@ -73,6 +82,7 @@ begin
     (2, 'Hana Sato',     'Mueller Realty Partners'), (2, 'Eric Lindgren', 'Bee Cave Properties'),  (2, 'Tasha Williams','East Austin Homes'),
     (2, 'Omar Haddad',   'Leander Home Group')
   ) as v(tc, name, brk);
+  if has_agent_team then execute 'update public.agents set team_id = $1 where tc_user_id in ($2, $3, $4)' using tm, u0, u1, u2; end if;
 
   -- ---------- deals ----------
   -- tc 0/1/2 = Abdiaziz / Maya / Jordan; a = days from today to acceptance; done = checklist steps finished; cl = days from
@@ -136,12 +146,14 @@ begin
 
     -- checklist: due dates follow the contract timeline
     for n in 1..6 loop
-      insert into public.tasks (transaction_id, name, completed, sort_order, due_date, waiting_on, waiting_on_since)
+      insert into public.tasks (transaction_id, name, completed, sort_order, due_date)
       values (tx, steps[n], n <= t.done, n - 1,
-        current_date + case n when 1 then a + 2 when 2 then a + 3 when 3 then a + 12 when 4 then least(a + 25, c - 5) when 5 then c - 3 else c end,
-        case when t.waiting is not null and n = t.done + 1 then t.waiting end,
-        case when t.waiting is not null and n = t.done + 1 then current_date - (2 + k % 5) end);
+        current_date + case n when 1 then a + 2 when 2 then a + 3 when 3 then a + 12 when 4 then least(a + 25, c - 5) when 5 then c - 3 else c end);
     end loop;
+    if has_waiting and t.waiting is not null then
+      execute 'update public.tasks set waiting_on = $1, waiting_on_since = $2 where transaction_id = $3 and sort_order = $4'
+        using t.waiting, current_date - (2 + k % 5), tx, t.done;
+    end if;
 
     -- critical dates; past ones are done, except financing/title on deals stuck waiting
     insert into public.transaction_key_dates (transaction_id, kind, label, due_date, completed, source)
@@ -237,10 +249,9 @@ begin
   end loop;
 
   -- ---------- contacts: Abdiaziz's book (the vendor ones are shared with the team) ----------
-  insert into public.contacts (tc_user_id, name, email, phone, company, role, tags, source, team_id, shared_at, created_at, updated_at)
+  insert into public.contacts (tc_user_id, name, email, phone, company, role, tags, source, created_at, updated_at)
   select u0, v.name, lower(replace(v.name, ' ', '.')) || '@example.com', '(512) 555-' || lpad((6000 + row_number() over ())::text, 4, '0'),
          v.company, v.role, array[v.tag], v.src,
-         case when v.shared then tm end, case when v.shared then now() - (v.days || ' days')::interval end,
          now() - (v.days || ' days')::interval, now() - (v.days || ' days')::interval
   from (values
     ('Hannah Reyes',     'Northshore Title',          'Title / escrow', 'Title',     'manual', true,  160),
@@ -277,6 +288,11 @@ begin
     ('Lauren Okafor',    null,                        'Buyer',          'Buyer',     'manual', false,   2),
     ('Victor Murphy',    null,                        'Buyer',          'Buyer',     'manual', false,   1)
   ) as v(name, company, role, tag, src, shared, days);
+  -- the vendor contacts marked true above are shared with the team
+  if has_contact_team then
+    execute 'update public.contacts set team_id = $1, shared_at = created_at where tc_user_id = $2 and name = any($3)'
+      using tm, u0, array['Hannah Reyes','Marcus Doyle','Elise Navarro','Priscilla Tran','Colin Brooks','Dana Whitaker','Rafael Ortega','Kim Nguyen','Tamara Singh','Wes Callahan','Gabe Lindqvist'];
+  end if;
 
   -- Maya's and Jordan's own contacts
   insert into public.contacts (tc_user_id, name, email, phone, company, role, tags, source, created_at, updated_at)
