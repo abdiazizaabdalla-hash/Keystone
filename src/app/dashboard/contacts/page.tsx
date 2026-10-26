@@ -496,7 +496,7 @@ export default function ContactsPage() {
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as 'all' | 'person' | 'organization')}
-          className={`${inputCls} w-auto`}
+          className={inputCls.replace("w-full", "w-auto")}
           aria-label="Show"
         >
           <option value="all">People &amp; organizations</option>

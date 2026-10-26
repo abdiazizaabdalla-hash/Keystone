@@ -105,13 +105,13 @@ export default function TeamContacts({ onLoaded }: { onLoaded?: (shared: Contact
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, company, tag…" className={`${inputCls} max-w-sm`} />
-        <select value={who} onChange={(e) => setWho(e.target.value as Who)} className={`${inputCls} w-auto`} aria-label="Shared by">
+        <select value={who} onChange={(e) => setWho(e.target.value as Who)} className={inputCls.replace("w-full", "w-auto")} aria-label="Shared by">
           <option value="all">Everyone&rsquo;s</option>
           <option value="mine">Shared by me</option>
           <option value="teammates">Shared by teammates</option>
         </select>
         {tags.length > 0 && (
-          <select value={tag || ''} onChange={(e) => setTag(e.target.value || null)} className={`${inputCls} w-auto`} aria-label="Tag">
+          <select value={tag || ''} onChange={(e) => setTag(e.target.value || null)} className={inputCls.replace("w-full", "w-auto")} aria-label="Tag">
             <option value="">All tags</option>
             {tags.map(([key, label]) => (
               <option key={key} value={key}>
