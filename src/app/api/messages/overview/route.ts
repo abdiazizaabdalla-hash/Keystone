@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { getVisibleTcUserIds } from '@/lib/team';
 
 // GET: one row per transaction that has agent-portal messaging switched
 // on (i.e. at least one accepted transaction_agents grant), across every
@@ -18,8 +17,10 @@ export async function GET(request: NextRequest) {
     // their own (or their team's) agent records.
     let agentsQuery = supabaseServer.from('agents').select('id, name, tc_user_id');
     if (!isAdmin) {
-      const visibleIds = await getVisibleTcUserIds(user.id);
-      agentsQuery = agentsQuery.in('tc_user_id', visibleIds);
+      // Own deals only, matching /api/messages: a thread is a direct conversation
+      // between the TC who owns the deal and their agent, so a Team owner's inbox
+      // doesn't list (or preview) a teammate's threads they could not open anyway.
+      agentsQuery = agentsQuery.eq('tc_user_id', user.id);
     }
     const { data: userAgents, error: agentsError } = await agentsQuery;
     if (agentsError) throw agentsError;
