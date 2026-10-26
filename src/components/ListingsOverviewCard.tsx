@@ -1,99 +1,199 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { LISTING_STATUS_LABEL, daysBetween, daysOnMarket, type ListingStatus } from '@/lib/listingsShared';
+import { useListingsImport } from '@/components/useListingsImport';
 
 interface Row {
   id: string;
   property_address: string;
+  seller_name?: string | null;
+  list_price?: number | null;
   status: ListingStatus;
   expiration_date: string | null;
   listed_on?: string | null;
+  tasks_total?: number;
+  tasks_done?: number;
+  next_due_date?: string | null;
   open_offers: number;
   overdue_count: number;
 }
 
-// A one-glance view of the listings side of the business. Renders nothing until loaded, and nothing at all when
-// there are no open listings, so it never adds an empty box to the dashboard.
+const COLLAPSED_ROWS = 8;
+const OPEN_STATUSES: ListingStatus[] = ['preparing', 'active', 'under_offer'];
+
+const STATUS_CHIP: Record<string, { cls: string; dot: string }> = {
+  preparing: { cls: 'bg-amber-900/40 text-amber-300 border-amber-800', dot: 'bg-amber-400' },
+  active: { cls: 'bg-green-900/40 text-green-300 border-green-800', dot: 'bg-green-400' },
+  under_offer: { cls: 'bg-blue-900/40 text-blue-300 border-blue-800', dot: 'bg-blue-400' },
+};
+
+const money = (n?: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '');
+
+// "Listings" on the dashboard, set up like Critical dates: open by default, one thin row per open listing with
+// its details, and the header line collapses it. Sits right under Active Transactions. Hidden until loaded
+// (and on any load failure); with no open listings it shows a short empty state so the CSV import is
+// always within reach.
 export default function ListingsOverviewCard() {
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [open, setOpen] = useState(true);
+  const [showAll, setShowAll] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      try {
-        const res = await authFetch('/api/listings');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data)) setRows(data);
-      } catch {
-        // Non-essential widget: stay hidden on any failure.
-      }
-    }, 0);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
+  const load = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/listings');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setRows(data);
+    } catch {
+      // Non-essential widget: stay hidden on any failure.
+    }
   }, []);
 
-  const open = (rows || []).filter((l) => l.status === 'preparing' || l.status === 'active' || l.status === 'under_offer');
-  if (open.length === 0) return null;
+  useEffect(() => {
+    const t = setTimeout(load, 0);
+    return () => clearTimeout(t);
+  }, [load]);
+
+  const importer = useListingsImport(load);
+
+  if (rows === null) return null;
 
   const today = new Date().toISOString().slice(0, 10);
-  const count = (s: ListingStatus) => open.filter((l) => l.status === s).length;
-  const live = open.filter((l) => l.status === 'active' || l.status === 'under_offer');
+  const list = rows
+    .filter((l) => OPEN_STATUSES.includes(l.status))
+    // Needs-attention first: most overdue steps, then the soonest next step.
+    .sort((a, b) => b.overdue_count - a.overdue_count || (a.next_due_date || '9999').localeCompare(b.next_due_date || '9999'));
+
+  const live = list.filter((l) => l.status === 'active' || l.status === 'under_offer');
   const doms = live.map((l) => daysOnMarket(l.listed_on, today)).filter((n): n is number => n !== null);
   const avgDom = doms.length ? Math.round(doms.reduce((a, b) => a + b, 0) / doms.length) : null;
-  const openOffers = open.reduce((n, l) => n + (l.open_offers || 0), 0);
-  const overdue = open.filter((l) => l.overdue_count > 0).length;
-  const expiring = open
-    .filter((l) => l.expiration_date && l.expiration_date >= today && daysBetween(today, l.expiration_date) <= 30)
-    .sort((a, b) => (a.expiration_date as string).localeCompare(b.expiration_date as string));
+  const openOffers = list.reduce((n, l) => n + (l.open_offers || 0), 0);
+  const withOverdue = list.filter((l) => l.overdue_count > 0).length;
+  const visible = showAll ? list : list.slice(0, COLLAPSED_ROWS);
 
-  const stat = (label: string, value: string | number, tone = 'text-slate-100') => (
-    <div className="min-w-[6.5rem]">
-      <p className={`text-2xl font-semibold ${tone}`}>{value}</p>
-      <p className="text-xs text-slate-400">{label}</p>
-    </div>
+  const importButton = (
+    <button
+      type="button"
+      onClick={importer.openPicker}
+      disabled={importer.working}
+      className="px-3 py-1.5 rounded-lg border border-white/15 text-slate-200 hover:bg-white/10 transition disabled:opacity-50"
+    >
+      {importer.working ? 'Importing…' : 'Import CSV'}
+    </button>
   );
 
+  if (list.length === 0) {
+    return (
+      <div className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+        {importer.input}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-100">Listings</p>
+            <p className="text-xs text-slate-500">No open listings yet. Start one, or bring in the ones you already have.</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            {importButton}
+            <Link href="/dashboard/listings" className="px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-semibold transition">
+              Go to Listings
+            </Link>
+          </div>
+        </div>
+        {importer.banner && <div className="mt-3">{importer.banner}</div>}
+      </div>
+    );
+  }
+
   return (
-    <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-5">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <h2 className="text-lg font-semibold text-slate-100">Listings</h2>
-        <Link href="/dashboard/listings" className="text-sm text-blue-400 hover:text-blue-300">
-          View all
-        </Link>
-      </div>
-      <div className="flex flex-wrap gap-x-8 gap-y-4">
-        {stat(LISTING_STATUS_LABEL.preparing, count('preparing'))}
-        {stat(LISTING_STATUS_LABEL.active, count('active'))}
-        {stat(LISTING_STATUS_LABEL.under_offer, count('under_offer'))}
-        {avgDom !== null && stat('Avg. days on market', avgDom)}
-        {stat('Open offers', openOffers, openOffers > 0 ? 'text-blue-300' : 'text-slate-100')}
-        {overdue > 0 && stat('With overdue steps', overdue, 'text-red-300')}
-      </div>
-      {expiring.length > 0 && (
-        <div className="mt-4 border-t border-slate-700 pt-3">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Listing agreements expiring within 30 days</p>
-          <ul className="text-sm space-y-1">
-            {expiring.slice(0, 5).map((l) => {
-              const d = daysBetween(today, l.expiration_date as string);
+    <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+      {importer.input}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-slate-800/60 transition"
+      >
+        <span className="flex items-center gap-3 min-w-0">
+          <svg className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+          </svg>
+          <span className="text-sm font-semibold text-slate-100">Listings</span>
+          <span className="hidden sm:inline text-xs text-slate-500">
+            Open listings{avgDom !== null ? ` · avg. ${avgDom} days on market` : ''}
+          </span>
+        </span>
+        <span className="flex items-center gap-2 shrink-0 text-xs">
+          {withOverdue > 0 && <span className="px-2 py-0.5 rounded-full border bg-red-900/40 text-red-300 border-red-800">{withOverdue} with overdue steps</span>}
+          {openOffers > 0 && (
+            <span className="px-2 py-0.5 rounded-full border bg-blue-900/40 text-blue-300 border-blue-800">
+              {openOffers} open offer{openOffers === 1 ? '' : 's'}
+            </span>
+          )}
+          <span className="text-slate-400">{list.length} total</span>
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t border-slate-700">
+          <ul className={`divide-y divide-slate-700/60 ${showAll ? 'max-h-[28rem] overflow-y-auto' : ''}`}>
+            {visible.map((l) => {
+              const chip = STATUS_CHIP[l.status] || STATUS_CHIP.preparing;
+              const exp = l.expiration_date && l.expiration_date >= today ? daysBetween(today, l.expiration_date) : null;
+              const expiring = exp !== null && exp <= 30;
+              const sub = [l.seller_name, money(l.list_price)].filter(Boolean).join(' · ');
               return (
                 <li key={l.id}>
-                  <Link href={`/dashboard/listings/${l.id}`} className="text-slate-200 hover:text-blue-300">
-                    {l.property_address}
+                  <Link href={`/dashboard/listings/${l.id}`} className="group flex items-center gap-3 px-4 py-1.5 hover:bg-slate-800/60 transition">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${chip.dot}`} aria-hidden="true" />
+                    <span className="min-w-0 truncate text-sm text-slate-100 group-hover:text-blue-300 transition">{l.property_address}</span>
+                    {sub && <span className="hidden md:block min-w-0 flex-1 truncate text-xs text-slate-500">{sub}</span>}
+                    {!sub && <span className="hidden md:block flex-1" />}
+                    {!!l.tasks_total && (
+                      <span className="hidden sm:inline text-xs text-slate-400 whitespace-nowrap tabular-nums">
+                        {l.tasks_done}/{l.tasks_total} steps
+                      </span>
+                    )}
+                    {l.overdue_count > 0 && (
+                      <span className="text-[11px] leading-5 px-2 rounded-full border whitespace-nowrap shrink-0 bg-red-900/40 text-red-300 border-red-800">
+                        {l.overdue_count} overdue
+                      </span>
+                    )}
+                    {l.open_offers > 0 && (
+                      <span className="text-[11px] leading-5 px-2 rounded-full border whitespace-nowrap shrink-0 bg-blue-900/40 text-blue-300 border-blue-800">
+                        {l.open_offers} offer{l.open_offers === 1 ? '' : 's'}
+                      </span>
+                    )}
+                    {expiring && (
+                      <span className="hidden lg:inline text-[11px] leading-5 px-2 rounded-full border whitespace-nowrap shrink-0 bg-amber-900/40 text-amber-300 border-amber-800">
+                        Expires {exp === 0 ? 'today' : `in ${exp}d`}
+                      </span>
+                    )}
+                    <span className={`text-[11px] leading-5 px-2 rounded-full border whitespace-nowrap shrink-0 ${chip.cls}`}>{LISTING_STATUS_LABEL[l.status]}</span>
                   </Link>
-                  <span className={d <= 7 ? 'text-amber-300' : 'text-slate-400'}> · {d === 0 ? 'today' : `${d} day${d === 1 ? '' : 's'}`}</span>
                 </li>
               );
             })}
-            {expiring.length > 5 && <li className="text-xs text-slate-500">+{expiring.length - 5} more</li>}
           </ul>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-t border-slate-700/60 text-xs">
+            {list.length > COLLAPSED_ROWS ? (
+              <button type="button" onClick={() => setShowAll((v) => !v)} className="text-blue-400 hover:text-blue-300">
+                {showAll ? 'Show fewer' : `Show all ${list.length}`}
+              </button>
+            ) : (
+              <span />
+            )}
+            <span className="flex items-center gap-3">
+              {importButton}
+              <Link href="/dashboard/listings" className="text-slate-400 hover:text-slate-200">
+                View all listings →
+              </Link>
+            </span>
+          </div>
         </div>
       )}
+      {importer.banner && <div className="px-4 pb-3 pt-1">{importer.banner}</div>}
     </div>
   );
 }

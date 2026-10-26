@@ -130,6 +130,7 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [attention, setAttention] = useState<AttentionSummary | null>(null);
+  const [attentionNote, setAttentionNote] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -167,6 +168,64 @@ export default function Dashboard() {
   // renders nothing until this resolves) from the main dashboard data,
   // so a slow attention-summary query never blocks the KPI row and
   // transactions table from showing up.
+  // Dismissing hides an item from this panel only; the task itself is never changed. The item disappears
+  // right away and the server is told in the background (a failed save puts it back).
+  const dismissAttention = async (id: string) => {
+    setAttentionNote('');
+    setAttention((prev) => {
+      if (!prev) return prev;
+      const keep = <T extends { taskId: string }>(items: T[]) => items.filter((i) => i.taskId !== id);
+      const next = {
+        ...prev,
+        overdue: keep(prev.overdue),
+        dueToday: keep(prev.dueToday),
+        dueSoon: keep(prev.dueSoon),
+        waitingOn: keep(prev.waitingOn),
+        closingsSoon: prev.closingsSoon.filter((c) => `closing-${c.transactionId}` !== id),
+        dismissedCount: (prev.dismissedCount ?? 0) + 1,
+      };
+      return { ...next, totalNeedsAttention: next.overdue.length + next.dueToday.length + next.waitingOn.length };
+    });
+    try {
+      const res = await authFetch('/api/dashboard/attention/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setAttentionNote(data.error || 'Could not dismiss that item.');
+        await fetchAttention();
+      }
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setAttentionNote('Could not dismiss that item.');
+      await fetchAttention();
+    }
+  };
+
+  const restoreAttention = async (id: string | 'all') => {
+    setAttentionNote('');
+    try {
+      const res = await authFetch('/api/dashboard/attention/dismiss', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(id === 'all' ? { all: true } : { key: id }),
+      });
+      if (!res.ok) setAttentionNote('Could not restore that.');
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setAttentionNote('Could not restore that.');
+    }
+    await fetchAttention();
+  };
+
   const fetchAttention = async () => {
     try {
       const res = await authFetch('/api/dashboard/attention');
@@ -372,7 +431,13 @@ export default function Dashboard() {
       {/* Needs Attention Today -- a cross-transaction triage view (fed by
           /api/dashboard/attention) so the first thing a TC sees is what
           actually needs action. Renders nothing until the fetch resolves. */}
-      {attention && <AttentionPanel attention={attention} />}
+      {attentionNote && <p className="mb-3 text-sm text-red-400">{attentionNote}</p>}
+      {/* Half and half with Critical dates on wide screens; stacked on smaller ones. Either side that has
+          nothing to show renders nothing, and the other then takes the whole row. */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 xl:[&>*:only-child]:col-span-2 gap-6 mb-8 items-start">
+        {attention && <AttentionPanel attention={attention} onDismiss={dismissAttention} onRestore={restoreAttention} />}
+        <CriticalDatesCard />
+      </div>
 
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
@@ -584,8 +649,8 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-        <CriticalDatesCard />
+      {/* Listings: same setup as Critical dates, right under Active Transactions */}
+      <div className="mb-8">
         <ListingsOverviewCard />
       </div>
 

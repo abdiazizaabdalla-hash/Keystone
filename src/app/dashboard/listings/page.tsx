@@ -9,6 +9,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { uploadIncoming, type UploadedFile } from '@/lib/incomingUploadClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { LISTING_STATUS_LABEL, daysOnMarket, type ListingStatus } from '@/lib/listingsShared';
+import { useListingsImport } from '@/components/useListingsImport';
 
 interface ListingRow {
   id: string;
@@ -129,6 +130,8 @@ export default function ListingsPage() {
     const t = setTimeout(load, 0);
     return () => clearTimeout(t);
   }, [load]);
+
+  const importer = useListingsImport(load);
 
   const visible = useMemo(
     () => (filter === 'all' ? listings : listings.filter((l) => l.status === 'preparing' || l.status === 'active' || l.status === 'under_offer')),
@@ -275,6 +278,14 @@ export default function ListingsPage() {
           </Link>
           <button
             type="button"
+            onClick={importer.openPicker}
+            disabled={importer.working}
+            className="px-4 py-2.5 border border-white/15 text-slate-200 hover:bg-white/10 text-sm font-semibold rounded-lg transition disabled:opacity-50"
+          >
+            {importer.working ? 'Importing…' : 'Import CSV'}
+          </button>
+          <button
+            type="button"
             onClick={() => {
               setFormError('');
               setShowNew(true);
@@ -286,6 +297,8 @@ export default function ListingsPage() {
         </div>
       </div>
 
+      {importer.input}
+      {importer.banner && <div className="mb-4">{importer.banner}</div>}
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 
       <div className="mb-4 flex items-center gap-2 text-sm">
@@ -304,7 +317,7 @@ export default function ListingsPage() {
       {visible.length === 0 ? (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <p className="text-slate-300 mb-1">{listings.length === 0 ? 'No listings yet.' : 'No open listings.'}</p>
-          <p className="text-sm text-slate-500">Start one when a listing agreement is signed. Relay adds the prep checklist and counts the days to your list date.</p>
+          <p className="text-sm text-slate-500">Start one when a listing agreement is signed. Relay adds the prep checklist and counts the days to your list date. Already have a list? Use Import CSV (columns like Address, Seller, List price, List date, MLS #).</p>
         </div>
       ) : (
         <div className="grid gap-3">

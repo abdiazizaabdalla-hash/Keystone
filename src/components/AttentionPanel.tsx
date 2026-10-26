@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 
 export interface AttentionDueItem {
@@ -44,6 +44,8 @@ export interface AttentionSummary {
   waitingOn: AttentionWaitingOnItem[];
   closingsSoon: AttentionClosingSoonItem[];
   totalNeedsAttention: number;
+  /** How many items this person has dismissed (hidden from the lists above). */
+  dismissedCount?: number;
 }
 
 // ---- Needs Attention Today ------------------------------------------------
@@ -133,9 +135,37 @@ function buildGroups<T extends AttentionDueItem>(
 const DEALS_COLLAPSED = 4;
 const ROWS_PER_DEAL = 4;
 
-export default function AttentionPanel({ attention }: { attention: AttentionSummary }) {
+export default function AttentionPanel({
+  attention,
+  onDismiss,
+  onRestore,
+}: {
+  attention: AttentionSummary;
+  /** Hide one item (its id is the task id, or closing-<deal id>). */
+  onDismiss?: (id: string) => void | Promise<void>;
+  /** Bring one item back, or everything dismissed. */
+  onRestore?: (id: string | 'all') => void | Promise<void>;
+}) {
   const [picked, setPicked] = useState<AttentionTab | null>(null);
   const [showAll, setShowAll] = useState(false);
+  // The last thing dismissed stays undoable for a few seconds.
+  const [lastDismissed, setLastDismissed] = useState<{ id: string; text: string } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dismiss = (id: string, text: string) => {
+    if (!onDismiss) return;
+    void onDismiss(id);
+    setLastDismissed({ id, text });
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setLastDismissed(null), 8000);
+  };
+  const undoDismiss = () => {
+    if (!lastDismissed || !onRestore) return;
+    void onRestore(lastDismissed.id);
+    setLastDismissed(null);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+  };
+  const dismissedCount = attention.dismissedCount ?? 0;
 
   const counts: Record<AttentionTab, number> = {
     overdue: attention.overdue.length,
@@ -227,7 +257,7 @@ export default function AttentionPanel({ attention }: { attention: AttentionSumm
   };
 
   return (
-    <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5">
+    <div className="@container bg-white/5 border border-white/10 rounded-2xl p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3 mb-4">
         <h2 className="text-lg font-semibold text-slate-100">Needs attention today</h2>
         {attention.totalNeedsAttention === 0 && (
@@ -237,7 +267,7 @@ export default function AttentionPanel({ attention }: { attention: AttentionSumm
         )}
       </div>
 
-      <div role="tablist" aria-label="Attention categories" className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div role="tablist" aria-label="Attention categories" className="grid grid-cols-2 @md:grid-cols-4 gap-3 mb-4">
         {tiles.map((t) => {
           const tone = ATTENTION_TONES[t.id];
           const active = tab === t.id;
@@ -251,7 +281,7 @@ export default function AttentionPanel({ attention }: { attention: AttentionSumm
                 setPicked(t.id);
                 setShowAll(false);
               }}
-              className={`text-left rounded-xl border px-4 py-3 transition ${
+              className={`text-left rounded-xl border px-3 @md:px-3.5 py-3 transition ${
                 active ? (counts[t.id] > 0 ? tone.active : 'border-white/20 bg-white/5') : 'border-white/10 bg-slate-900/30 hover:bg-white/5'
               }`}
             >
@@ -295,10 +325,10 @@ export default function AttentionPanel({ attention }: { attention: AttentionSumm
                 </Link>
                 <ul className="px-2 pb-2">
                   {g.rows.slice(0, ROWS_PER_DEAL).map((r) => (
-                    <li key={r.id}>
+                    <li key={r.id} className="group/row flex items-center gap-1 rounded-lg hover:bg-white/5 transition">
                       <Link
                         href={r.href}
-                        className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm text-slate-300 hover:bg-white/5 hover:text-slate-100 transition"
+                        className="flex flex-1 min-w-0 items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm text-slate-300 group-hover/row:text-slate-100 transition"
                       >
                         <span className="flex items-center gap-2 min-w-0">
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${tone.dot}`} aria-hidden="true" />
@@ -310,6 +340,19 @@ export default function AttentionPanel({ attention }: { attention: AttentionSumm
                           {r.chip}
                         </span>
                       </Link>
+                      {onDismiss && (
+                        <button
+                          type="button"
+                          onClick={() => dismiss(r.id, r.text)}
+                          title="Dismiss from this list (the task itself is not changed)"
+                          aria-label={`Dismiss ${r.text}`}
+                          className="shrink-0 mr-1 w-7 h-7 flex items-center justify-center rounded-md text-slate-500 hover:text-slate-100 hover:bg-white/10 focus-visible:text-slate-100 transition"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                          </svg>
+                        </button>
+                      )}
                     </li>
                   ))}
                   {g.rows.length > ROWS_PER_DEAL && (
@@ -337,7 +380,29 @@ export default function AttentionPanel({ attention }: { attention: AttentionSumm
           )}
         </div>
       )}
+
+      {(lastDismissed || dismissedCount > 0) && onRestore && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-slate-500">
+          {lastDismissed ? (
+            <span className="min-w-0 truncate" role="status">
+              Dismissed “{lastDismissed.text}”.{' '}
+              <button type="button" onClick={undoDismiss} className="text-blue-400 hover:text-blue-300 font-medium">
+                Undo
+              </button>
+            </span>
+          ) : (
+            <span />
+          )}
+          {dismissedCount > 0 && (
+            <span>
+              {dismissedCount} dismissed ·{' '}
+              <button type="button" onClick={() => void onRestore('all')} className="text-blue-400 hover:text-blue-300">
+                Restore all
+              </button>
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
-

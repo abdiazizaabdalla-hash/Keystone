@@ -38,7 +38,30 @@ export async function GET(request: NextRequest) {
       tcUserIds = await getVisibleTcUserIds(user.id);
     }
 
-    const summary = await computeAttentionSummary(tcUserIds);
+    const rawSummary = await computeAttentionSummary(tcUserIds);
+
+    // Items this person dismissed are hidden from their own panel (the tasks themselves are untouched).
+    // If the dismissals table doesn't exist yet this quietly shows everything.
+    const { data: dismissedRows, error: dismissedError } = await supabaseServer
+      .from('attention_dismissals')
+      .select('item_key')
+      .eq('tc_user_id', user.id)
+      .limit(2000);
+    const dismissed = new Set<string>(dismissedError ? [] : (dismissedRows || []).map((r) => String(r.item_key)));
+    const keep = <T extends { taskId: string }>(items: T[]) => items.filter((i) => !dismissed.has(i.taskId));
+    const dismissedCount = dismissed.size
+      ? [...rawSummary.overdue, ...rawSummary.dueToday, ...rawSummary.dueSoon, ...rawSummary.waitingOn].filter((i) => dismissed.has(i.taskId)).length +
+        rawSummary.closingsSoon.filter((c) => dismissed.has(`closing-${c.transactionId}`)).length
+      : 0;
+    const summary = {
+      ...rawSummary,
+      overdue: keep(rawSummary.overdue),
+      dueToday: keep(rawSummary.dueToday),
+      dueSoon: keep(rawSummary.dueSoon),
+      waitingOn: keep(rawSummary.waitingOn),
+      closingsSoon: rawSummary.closingsSoon.filter((c) => !dismissed.has(`closing-${c.transactionId}`)),
+    };
+    const totalNeedsAttention = summary.overdue.length + summary.dueToday.length + summary.waitingOn.length;
 
     // Only a team/brokerage owner has more than one id in tcUserIds --
     // resolve labels just for those, so a solo TC's request (by far the
@@ -71,7 +94,8 @@ export async function GET(request: NextRequest) {
       dueSoon: summary.dueSoon.map(withLabel),
       waitingOn: summary.waitingOn.map(withLabel),
       closingsSoon: summary.closingsSoon.map(withLabel),
-      totalNeedsAttention: summary.totalNeedsAttention,
+      totalNeedsAttention,
+      dismissedCount,
     });
   } catch (error) {
     if (error instanceof AuthError) {

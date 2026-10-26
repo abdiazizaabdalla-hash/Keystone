@@ -59,7 +59,7 @@ export default function CriticalDatesCard() {
   const visible = showAll ? items : items.slice(0, COLLAPSED_ROWS);
 
   return (
-    <div className="mb-6 bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+    <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
