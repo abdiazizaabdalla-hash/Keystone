@@ -7,6 +7,7 @@ import { PUBLIC_PLANS } from '@/lib/plans';
 import { decodeStoredRole } from '@/lib/authClient';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import ShotRow from '@/components/ShotRow';
+import HomeVideo from '@/components/HomeVideo';
 import PublicMobileMenu from '@/components/PublicMobileMenu';
 
 export default function Home() {
@@ -104,10 +105,10 @@ export default function Home() {
               Start free
             </Link>
             <a
-              href="#how-it-works"
+              href="#demo"
               className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition"
             >
-              See how it works
+              Watch the video
             </a>
           </div>
           <p className="text-xs text-slate-500 mt-4">Free for 30 days. No credit card required.</p>
@@ -167,6 +168,15 @@ export default function Home() {
           </div>
           <div className="absolute -z-10 -top-8 -right-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl" />
         </div>
+      </section>
+
+      {/* Product video: click to play, nothing loads until then */}
+      <section id="demo" className="max-w-4xl mx-auto px-6 pb-16 scroll-mt-4">
+        <div className="text-center mb-8">
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">See it in a minute</p>
+          <h2 className="font-display text-3xl font-semibold text-slate-100">Every closing has moving parts. Relay brings them together.</h2>
+        </div>
+        <HomeVideo />
       </section>
 
       <section id="how-it-works" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
