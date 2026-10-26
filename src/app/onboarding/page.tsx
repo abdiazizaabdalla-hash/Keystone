@@ -9,34 +9,61 @@ import DueDateControl from '@/components/DueDateControl';
 
 import { PLANS, PUBLIC_PLANS, type PlanId } from '@/lib/plans';
 
-// Onboarding walks a new account through every setting one step at a time
-// before dropping them at the dashboard, instead of leaving Settings to be
-// discovered later:
+// Onboarding walks a new account through the settings that matter before
+// dropping them at the dashboard:
 //   1. Choose plan
-//   2. Your Profile (full name)
-//   3. Agent Defaults (fee pre-fills)
-//   4. Invoicing (due-in days)
-//   5. Checklist Templates (info — Pro/Team can build their own later)
-//   6. Getting Paid by Agents (Stripe Connect vs. handle it yourself)
-//   7. Setup guide / finish
-// Each settings step (2, 3, 4) saves immediately via PATCH /api/auth/me
-// before advancing — the same endpoint and fields the Settings page itself
-// uses — so someone who closes the tab partway through keeps whatever
-// they already filled in instead of losing it.
-const TOTAL_STEPS = 7;
+//   2. About you (full name)
+//   3. Fees and invoicing (agent fee pre-fills + invoice due-in days)
+//   4. Deal checklist (baseline + automatic due dates)
+//   5. How agents pay you (Stripe Connect vs. collect it yourself)
+//   6. Launchpad: jump straight into the first thing to set up (AI contract
+//      intake, agents, contacts, imports, calendar link, listings,
+//      QuickBooks, and Collaborate on Team plans)
+// Each settings step saves immediately via PATCH /api/auth/me before
+// advancing -- the same endpoint and fields the Settings page uses -- so
+// someone who closes the tab partway through keeps what they filled in.
+const TOTAL_STEPS = 6;
+const STEP_LABELS = ['Plan', 'You', 'Fees', 'Checklist', 'Payments', 'Start'];
 
 const inputClass =
-  'w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
+  'w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 
-// Shared shell for every settings step (2-6): a step counter, title,
-// description, the step's own fields, an inline error, and Back/Continue
-// controls. Defined at module scope (not inside OnboardingContent) so its
-// identity is stable across renders — nesting a component definition
-// inside another component's render body makes React remount it on every
-// keystroke, which would knock focus out of these inputs as you type.
-function SettingsStepShell({
-  step,
-  totalSteps,
+// Progress bar across the top of every step. Module scope (not nested in
+// OnboardingContent) so its identity is stable across renders.
+function ProgressHeader({ current }: { current: number }) {
+  return (
+    <nav aria-label="Setup progress" className="max-w-3xl mx-auto mb-8">
+      <p className="sr-only">
+        Step {current} of {TOTAL_STEPS}
+      </p>
+      <ol className="flex items-start gap-2">
+        {STEP_LABELS.map((label, i) => {
+          const n = i + 1;
+          const done = n < current;
+          const active = n === current;
+          return (
+            <li key={label} className="flex-1" aria-current={active ? 'step' : undefined}>
+              <div className={`h-1.5 rounded-full ${active ? 'bg-blue-400' : done ? 'bg-blue-500/60' : 'bg-white/10'}`} />
+              <span
+                className={`mt-2 text-xs font-medium ${active ? 'block text-blue-300' : 'hidden sm:block'} ${
+                  done ? 'text-slate-300' : active ? '' : 'text-slate-500'
+                }`}
+              >
+                {label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+// Shared card for the settings steps (2-4): title, description, the step's
+// own fields, an inline error, and Back/Continue controls. Module scope for
+// the same reason as above -- defining it inside the page component would
+// remount it (and drop input focus) on every keystroke.
+function StepShell({
   title,
   description,
   badge,
@@ -44,31 +71,24 @@ function SettingsStepShell({
   onBack,
   onContinue,
   continueLabel = 'Continue',
-  continueDisabled = false,
   saving,
   error,
 }: {
-  step: number;
-  totalSteps: number;
   title: string;
   description: string;
   badge?: string;
   children: React.ReactNode;
-  onBack: () => void;
+  onBack?: () => void;
   onContinue: () => void;
   continueLabel?: string;
-  continueDisabled?: boolean;
   saving: boolean;
   error: string;
 }) {
   return (
     <div className="max-w-2xl mx-auto">
-      <p className="text-center text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">
-        Step {step} of {totalSteps}
-      </p>
-      <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8">
         <div className="flex items-start justify-between gap-4 mb-1">
-          <h2 className="text-xl font-display font-semibold text-slate-100">{title}</h2>
+          <h1 className="text-2xl font-display font-semibold text-slate-100">{title}</h1>
           {badge && (
             <span className="inline-block px-2.5 py-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 text-xs font-semibold rounded-full shrink-0">
               {badge}
@@ -79,23 +99,29 @@ function SettingsStepShell({
 
         {children}
 
-        {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-red-300">
+            {error}
+          </p>
+        )}
 
         <div className="flex gap-3 mt-8">
-          <button
-            type="button"
-            onClick={onBack}
-            className="px-5 py-2.5 border border-slate-600 text-slate-300 hover:border-slate-500 hover:text-slate-100 rounded-lg font-semibold transition"
-          >
-            ← Back
-          </button>
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-5 py-2.5 border border-slate-600 text-slate-300 hover:border-slate-500 hover:text-slate-100 rounded-xl font-semibold transition"
+            >
+              ← Back
+            </button>
+          )}
           <button
             type="button"
             onClick={onContinue}
-            disabled={continueDisabled || saving}
-            className="flex-1 px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
+            disabled={saving}
+            className="flex-1 px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition disabled:opacity-50"
           >
-            {saving ? 'Saving...' : continueLabel}
+            {saving ? 'Saving…' : continueLabel}
           </button>
         </div>
       </div>
@@ -115,7 +141,7 @@ function OnboardingContent() {
   const stripeReturnStatus = searchParams.get('stripe');
 
   const [currentStep, setCurrentStep] = useState(
-    stripeReturnStatus ? 6 : validPreselect === 'starter' ? 2 : 1
+    stripeReturnStatus ? 5 : validPreselect === 'starter' ? 2 : 1
   );
   const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(
     validPreselect === 'starter' ? validPreselect : null
@@ -188,7 +214,7 @@ function OnboardingContent() {
         setPaymentPreference(data.paymentPreference || null);
       }
     } catch {
-      // Non-fatal — step 7 just falls back to showing both options fresh.
+      // Non-fatal — the payment step just shows both options fresh.
     }
   };
 
@@ -299,10 +325,10 @@ function OnboardingContent() {
 
       // Landing back here from Stripe Connect's hosted onboarding (see
       // /api/stripe/connect/return) — jump straight back to the payment
-      // step so it shows whatever actually happened (connected, needs a
+      // step (5) so it shows whatever actually happened (connected, needs a
       // fresh link, or errored) instead of restarting the whole walkthrough.
       if (stripeReturnStatus) {
-        setCurrentStep(6);
+        setCurrentStep(5);
         fetchPaymentStatus();
         if (stripeReturnStatus === 'refresh') {
           setPaymentStepError("That link expired before you finished — click Connect Stripe to get a new one.");
@@ -342,6 +368,17 @@ function OnboardingContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The Stripe Connect form opens in another tab, so when this tab regains
+  // focus on the payment step, re-check whether they finished.
+  useEffect(() => {
+    if (currentStep !== 5) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchPaymentStatus();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [currentStep]);
+
   const handleSelectPlan = (planId: PlanId) => {
     setSelectedPlan(planId);
     if (planId === 'starter') {
@@ -377,15 +414,33 @@ function OnboardingContent() {
 
   const handleSaveProfile = () => savePatch({ fullName }, 3);
 
-  const handleSaveDueDateWorkflow = () => savePatch({ dueDateWorkflowEnabled, dueDateWorkflowSteps }, 6);
+  const handleSaveFeesAndInvoicing = () => {
+    const flat = parseFloat(defaultFlatFee);
+    const pct = parseFloat(defaultPercentFee);
+    const days = parseInt(invoiceDueDays, 10);
+    if (defaultFlatFee.trim() !== '' && (Number.isNaN(flat) || flat < 0)) {
+      setStepError('Flat fee must be 0 or more.');
+      return;
+    }
+    if (defaultPercentFee.trim() !== '' && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
+      setStepError('Percentage fee must be between 0 and 100.');
+      return;
+    }
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      setStepError('Enter a number of days between 1 and 365.');
+      return;
+    }
+    savePatch({ defaultFlatFee: flat || 0, defaultPercentFee: pct || 0, invoiceDueDays: days }, 4);
+  };
 
-  const handleSaveAgentDefaults = () =>
-    savePatch(
-      { defaultFlatFee: parseFloat(defaultFlatFee) || 0, defaultPercentFee: parseFloat(defaultPercentFee) || 0 },
-      4
-    );
+  const handleSaveDueDateWorkflow = () => savePatch({ dueDateWorkflowEnabled, dueDateWorkflowSteps }, 5);
 
-  const handleSaveInvoicing = () => savePatch({ invoiceDueDays: parseInt(invoiceDueDays, 10) || 30 }, 5);
+  // Moves between steps and clears any error left over from another step.
+  const goTo = (step: number) => {
+    setStepError('');
+    setPaymentStepError(null);
+    setCurrentStep(step);
+  };
 
   const handleConnectStripe = async () => {
     setIsStartingStripeConnect(true);
@@ -430,7 +485,7 @@ function OnboardingContent() {
         throw new Error(data.error || 'Failed to save payment preference');
       }
       setPaymentPreference('manual');
-      setCurrentStep(7);
+      setCurrentStep(6);
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         clearSession();
@@ -470,106 +525,162 @@ function OnboardingContent() {
     (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => setter(e.target.value);
   const blurOnWheel = (e: React.WheelEvent<HTMLInputElement>) => e.currentTarget.blur();
 
-  if (checkoutRedirecting) {
+  if (checkoutRedirecting || confirmingPlan) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
-        <div className="text-center">
+      <div className="min-h-screen app-bg flex items-center justify-center p-4">
+        <div className="text-center" role="status" aria-live="polite">
           <div className="w-12 h-12 rounded-full border-4 border-slate-600 border-t-blue-400 animate-spin mx-auto mb-4" />
-          <p className="text-slate-300">Taking you to secure checkout…</p>
+          <p className="text-slate-300">
+            {checkoutRedirecting ? 'Taking you to secure checkout…' : 'Finishing up your payment…'}
+          </p>
         </div>
       </div>
     );
   }
 
-  if (confirmingPlan) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-12 h-12 rounded-full border-4 border-slate-600 border-t-blue-400 animate-spin mx-auto mb-4" />
-          <p className="text-slate-300">Finishing up your payment…</p>
-        </div>
-      </div>
-    );
-  }
+  // A teammate who joined a Team (or a Pro/Team customer returning from
+  // Checkout) already has their plan, so Back from the first settings step
+  // must not reopen plan selection -- that would let them pick a plan again
+  // and get bounced into a second Stripe Checkout.
+  const canChangePlan = selectedPlan === null || selectedPlan === 'starter';
+  const planName = PLANS.find((p) => p.id === selectedPlan)?.name || 'Starter';
+  const showPlanStep = currentStep === 1;
+
+  const launchItems: { title: string; body: string; cta: string; href: string; show?: boolean }[] = [
+    {
+      title: 'Start a deal from a contract',
+      body: 'Upload the contract and Relay fills in the parties, dates and price, then builds your checklist.',
+      cta: 'New transaction',
+      href: '/dashboard/transactions/new',
+    },
+    {
+      title: 'Add your agents',
+      body:
+        selectedPlan === 'starter'
+          ? 'Each agent gets their own portal for deals, documents, messages and invoices. Starter includes up to 3.'
+          : 'Each agent gets their own portal for deals, documents, messages and invoices.',
+      cta: 'Add agents',
+      href: '/dashboard/agents',
+    },
+    {
+      title: 'Import your contacts',
+      body: 'Bring in a CSV. Relay flags duplicates and keeps follow-up reminders on every contact.',
+      cta: 'Open contacts',
+      href: '/dashboard/contacts',
+    },
+    {
+      title: 'Bring in deals you already have',
+      body: 'Import open files from a CSV so your calendar and checklists start full.',
+      cta: 'Import deals',
+      href: '/dashboard/transactions/import',
+    },
+    {
+      title: 'Put key dates on your calendar',
+      body: 'Subscribe to your Relay calendar link in Google, Outlook or Apple Calendar.',
+      cta: 'Get calendar link',
+      href: '/dashboard/calendar',
+    },
+    {
+      title: 'Track a listing',
+      body: 'Log offers and showings, then convert the winning offer to a deal in one click.',
+      cta: 'Open listings',
+      href: '/dashboard/listings',
+    },
+    {
+      title: 'Connect QuickBooks',
+      body: 'Import and export invoices so your books stay in sync.',
+      cta: 'Connect QuickBooks',
+      href: '/dashboard/invoices/quickbooks',
+    },
+    {
+      title: 'Invite your team',
+      body: 'Share agents, transactions and contacts with teammates, and message them in Collaborate.',
+      cta: 'Open Collaborate',
+      href: '/dashboard/collaborate',
+      show: selectedPlan === 'team' || selectedPlan === 'brokerage',
+    },
+  ].filter((i) => i.show !== false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-      {/* Header */}
-      <div className="border-b border-slate-700 bg-slate-800/50 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <span className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-            <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
-          </span>
+    <div className="min-h-screen app-bg text-slate-100">
+      <header className="border-b border-white/10 bg-slate-950/40 backdrop-blur">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
+              <img src="/relay-icon.png" alt="" className="w-full h-full object-contain" />
+            </span>
+            <span className="font-display font-semibold text-slate-100">Relay TC</span>
+          </div>
           <button
+            type="button"
             onClick={() => {
               clearSession();
               router.push('/auth');
             }}
-            className="text-sm text-slate-400 hover:text-slate-100"
+            className="text-sm text-slate-400 hover:text-slate-100 transition"
           >
-            Logout
+            Sign out
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-6 py-12">
-        {checkoutCancelled && (
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+        {checkoutCancelled && showPlanStep && (
           <div className="max-w-3xl mx-auto mb-8 p-4 bg-white/5 border border-white/10 rounded-2xl text-slate-300 text-sm text-center">
-            Checkout was cancelled — no charge was made. Pick a plan below whenever you&apos;re ready.
+            Checkout was cancelled — no charge was made. Pick a plan whenever you&apos;re ready.
           </div>
         )}
 
+        <ProgressHeader current={currentStep} />
+
         {currentStep === 1 && (
-          // Step 1: Choose Plan
           <div>
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-display font-semibold text-slate-100 mb-4">Choose your plan</h2>
-              <p className="text-xl text-slate-400">
-                Select the plan that fits your transaction coordinator business
+            <div className="text-center mb-10">
+              <h1 className="text-3xl sm:text-4xl font-display font-semibold text-slate-100 mb-3">Choose your plan</h1>
+              <p className="text-lg text-slate-400">
+                Starter is free for 30 days. Upgrade to Pro or Team any time from your Account page.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {PUBLIC_PLANS.map((plan) => (
                 <div
                   key={plan.id}
-                  className={`rounded-lg border transition ${
-                    plan.popular
-                      ? 'border-blue-500 bg-slate-700 ring-2 ring-blue-500/20'
-                      : 'border-slate-600 bg-slate-700/50 hover:border-slate-600'
+                  className={`flex flex-col rounded-2xl border ${
+                    plan.popular ? 'border-blue-500/70 bg-white/10 ring-1 ring-blue-500/30' : 'border-white/10 bg-white/5'
                   }`}
                 >
-                  {plan.popular && (
-                    <div className="bg-blue-500/10 border-b border-blue-500 px-6 py-2">
-                      <span className="text-sm font-semibold text-blue-400">Most Popular</span>
-                    </div>
-                  )}
-
-                  <div className="p-8">
-                    <h3 className="text-2xl font-display font-semibold text-slate-100 mb-2">{plan.name}</h3>
-                    <p className="text-slate-400 text-sm mb-6">{plan.description}</p>
-
-                    <div className="mb-6">
+                  <div className="h-9 px-6 flex items-center">
+                    {plan.popular ? (
+                      <span className="text-xs font-semibold uppercase tracking-wide text-blue-300">Most popular</span>
+                    ) : plan.trial ? (
+                      <span className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                        {plan.trial.days}-day free trial
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="px-6 pb-6 flex flex-col flex-1">
+                    <h2 className="text-2xl font-display font-semibold text-slate-100 mb-1">{plan.name}</h2>
+                    <p className="text-slate-400 text-sm mb-5">{plan.description}</p>
+                    <div className="mb-5">
                       <span className="text-4xl font-display font-semibold text-slate-100">{plan.price}</span>
-                      <span className="text-slate-400 ml-2">{plan.period}</span>
+                      <span className="text-slate-400 ml-1.5">{plan.period}</span>
                     </div>
-
                     <button
+                      type="button"
                       onClick={() => handleSelectPlan(plan.id)}
-                      className={`w-full py-3 rounded-lg font-semibold transition mb-8 disabled:opacity-50 ${
+                      className={`w-full py-3 rounded-xl font-semibold transition mb-6 ${
                         plan.popular
                           ? 'bg-blue-500 hover:bg-blue-400 text-white'
-                          : 'border border-slate-600 text-slate-300 hover:border-slate-500 hover:text-slate-100'
+                          : 'border border-slate-600 text-slate-200 hover:border-slate-500 hover:bg-white/5'
                       }`}
                     >
-                      {plan.id === 'starter' ? 'Select Plan' : `Continue to payment`}
+                      {plan.id === 'starter' ? 'Start free trial' : 'Continue to payment'}
                     </button>
-
-                    <ul className="space-y-4">
-                      {plan.features.map((feature, idx) => (
-                        <li key={idx} className="flex items-start gap-3">
-                          <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <ul className="space-y-3">
+                      {plan.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-2.5">
+                          <svg className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
                           <span className="text-slate-300 text-sm">{feature}</span>
@@ -584,44 +695,45 @@ function OnboardingContent() {
         )}
 
         {currentStep === 2 && (
-          <SettingsStepShell
-            step={2}
-            totalSteps={TOTAL_STEPS}
-            title="Your Profile"
-            description="Shown to teammates on your Collaborate roster instead of your bare email address."
+          <StepShell
+            title="Tell us who you are"
+            description="Your name appears to agents on invoices and emails, and to teammates on your Collaborate roster."
             saving={isSavingStep}
             error={stepError}
-            onBack={() => setCurrentStep(1)}
+            onBack={canChangePlan ? () => goTo(1) : undefined}
             onContinue={handleSaveProfile}
           >
-            <div>
-              <label className="text-sm text-slate-400 block mb-2">Full Name</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Jane Smith"
-                className={inputClass}
-              />
-            </div>
-          </SettingsStepShell>
+            <label htmlFor="ob-name" className="text-sm text-slate-400 block mb-2">
+              Full name
+            </label>
+            <input
+              id="ob-name"
+              type="text"
+              autoComplete="name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Jane Smith"
+              className={inputClass}
+            />
+          </StepShell>
         )}
 
         {currentStep === 3 && (
-          <SettingsStepShell
-            step={3}
-            totalSteps={TOTAL_STEPS}
-            title="Agent Defaults"
-            description="Pre-fills the fee fields whenever you add a new agent. You can still change these per agent."
+          <StepShell
+            title="Fees and invoicing"
+            description="These pre-fill every new agent and invoice. You can change them for any individual agent or invoice later."
             saving={isSavingStep}
             error={stepError}
-            onBack={() => setCurrentStep(2)}
-            onContinue={handleSaveAgentDefaults}
+            onBack={() => goTo(2)}
+            onContinue={handleSaveFeesAndInvoicing}
           >
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid sm:grid-cols-2 gap-5">
               <div>
-                <label className="text-sm text-slate-400 block mb-2">Default Flat Fee per Deal ($)</label>
+                <label htmlFor="ob-flat" className="text-sm text-slate-400 block mb-2">
+                  Flat fee per deal ($)
+                </label>
                 <MoneyInput
+                  id="ob-flat"
                   value={defaultFlatFee}
                   onValueChange={setDefaultFlatFee}
                   placeholder="400"
@@ -630,8 +742,11 @@ function OnboardingContent() {
                 />
               </div>
               <div>
-                <label className="text-sm text-slate-400 block mb-2">Default Percentage Fee (%)</label>
+                <label htmlFor="ob-pct" className="text-sm text-slate-400 block mb-2">
+                  Percentage fee (%)
+                </label>
                 <input
+                  id="ob-pct"
                   type="number"
                   value={defaultPercentFee}
                   onChange={handleNumberChange(setDefaultPercentFee)}
@@ -644,23 +759,14 @@ function OnboardingContent() {
                 />
               </div>
             </div>
-          </SettingsStepShell>
-        )}
+            <p className="text-xs text-slate-500 mt-2">Leave the percentage at 0 if you only charge a flat fee.</p>
 
-        {currentStep === 4 && (
-          <SettingsStepShell
-            step={4}
-            totalSteps={TOTAL_STEPS}
-            title="Invoicing"
-            description="How many days an agent has to pay after an invoice is generated. You can still change the due date on any individual invoice afterward."
-            saving={isSavingStep}
-            error={stepError}
-            onBack={() => setCurrentStep(3)}
-            onContinue={handleSaveInvoicing}
-          >
-            <div className="max-w-xs">
-              <label className="text-sm text-slate-400 block mb-2">Due in (days)</label>
+            <div className="border-t border-white/10 mt-6 pt-6">
+              <label htmlFor="ob-due" className="text-sm text-slate-400 block mb-2">
+                Invoices are due in (days)
+              </label>
               <input
+                id="ob-due"
                 type="number"
                 value={invoiceDueDays}
                 onChange={handleNumberChange(setInvoiceDueDays)}
@@ -669,29 +775,27 @@ function OnboardingContent() {
                 step="1"
                 min="1"
                 max="365"
-                className={inputClass}
+                className={`${inputClass} max-w-[10rem]`}
               />
             </div>
-          </SettingsStepShell>
+          </StepShell>
         )}
 
-        {currentStep === 5 && (
-          <SettingsStepShell
-            step={5}
-            totalSteps={TOTAL_STEPS}
-            title="Checklist Templates"
-            description="Every deal starts from the Baseline checklist below for free. On Pro and Team, build your own checklist templates — add, remove, and reorder steps like widgets, each with its own due-date rule — and pick one per deal when you create it."
+        {currentStep === 4 && (
+          <StepShell
+            title="Your deal checklist"
+            description="Every deal starts from a checklist. Choose whether Relay should set due dates for you."
             badge={canUseCustomTemplates ? 'Pro / Team' : undefined}
             saving={isSavingStep}
             error={stepError}
-            onBack={() => setCurrentStep(4)}
+            onBack={() => goTo(3)}
             onContinue={handleSaveDueDateWorkflow}
           >
             <div className="space-y-3">
-              <div className="bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-3">
-                <div className="flex items-center justify-between gap-4 mb-2">
-                  <p className="text-slate-100 font-medium text-sm">Baseline (default)</p>
-                  <p className="text-slate-500 text-xs shrink-0">6 steps · always available</p>
+              <div className="bg-slate-900/40 border border-white/10 rounded-xl px-4 py-3">
+                <div className="flex items-center justify-between gap-4 mb-1.5">
+                  <p className="text-slate-100 font-medium text-sm">Baseline checklist</p>
+                  <p className="text-slate-500 text-xs shrink-0">6 steps · included on every plan</p>
                 </div>
                 <p className="text-slate-400 text-xs leading-relaxed">
                   Contract &amp; File Setup → Earnest Money &amp; Option → Inspection &amp; Repairs → Title, Appraisal
@@ -699,23 +803,22 @@ function OnboardingContent() {
                 </p>
               </div>
 
-              <div className="bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-3">
-                <label className="flex items-center gap-2.5 text-sm text-slate-200 cursor-pointer mb-1">
+              <div className="bg-slate-900/40 border border-white/10 rounded-xl px-4 py-3">
+                <label className="flex items-center gap-2.5 text-sm text-slate-200 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={dueDateWorkflowEnabled}
                     onChange={(e) => setDueDateWorkflowEnabled(e.target.checked)}
                     className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
                   />
-                  Automatically calculate due dates for each step
+                  Set due dates automatically for each step
                 </label>
-                <p className="text-xs text-slate-500 mb-3">
-                  Off by default -- no due date is set for any step unless you turn this on. Either way, you can
-                  change any single step&apos;s due date on an individual deal later, and fine-tune this whole
-                  setup anytime from Settings.
+                <p className="text-xs text-slate-500 mt-1.5 mb-1">
+                  Off means no step gets a due date unless you add one. Due dates feed your calendar and reminder
+                  emails. You can change any step on a single deal, or this whole setup, later in Settings.
                 </p>
                 {dueDateWorkflowEnabled && (
-                  <div className="space-y-2">
+                  <div className="space-y-2 mt-3">
                     {dueDateWorkflowSteps.map((step, index) => (
                       <div key={step.name} className="flex flex-wrap items-center justify-between gap-2">
                         <span className="text-slate-300 text-xs">{step.name}</span>
@@ -734,203 +837,164 @@ function OnboardingContent() {
                 .map((template) => (
                   <div
                     key={template.id}
-                    className="flex items-center justify-between gap-4 bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-3"
+                    className="flex items-center justify-between gap-4 bg-slate-900/40 border border-white/10 rounded-xl px-4 py-3"
                   >
-                    <div>
-                      <p className="text-slate-100 font-medium text-sm">{template.name}</p>
-                      <p className="text-slate-500 text-xs">{template.steps.length} steps</p>
-                    </div>
+                    <p className="text-slate-100 font-medium text-sm">{template.name}</p>
+                    <p className="text-slate-500 text-xs">{template.steps.length} steps</p>
                   </div>
                 ))}
+
               {!canUseCustomTemplates ? (
-                <div className="bg-blue-900/10 border border-blue-800/40 rounded-lg p-4 text-sm text-blue-200/90">
-                  Pro and Team accounts can customize their own workflow — build custom checklist templates with
-                  your own steps, order, and due-date timing, and pick one per deal when you create it. You can
-                  upgrade anytime from the Account page.
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">
-                  You can build your own templates anytime from Settings — no need to do it now.
+                <p className="text-sm text-slate-400 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                  Pro and Team can build their own checklist templates with custom steps, order, required-step flags
+                  and due-date rules, then pick one for each deal. Upgrade any time from the Account page.
                 </p>
+              ) : (
+                <p className="text-sm text-slate-400">Build your own templates any time in Settings. No need to do it now.</p>
               )}
             </div>
-          </SettingsStepShell>
+          </StepShell>
         )}
 
-        {currentStep === 6 && (
-          // Getting Paid by Agents: Stripe Connect vs. handle it yourself.
-          <div className="max-w-3xl mx-auto">
-            <p className="text-center text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">
-              Step {currentStep} of {TOTAL_STEPS}
-            </p>
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-display font-semibold text-slate-100 mb-4">How do you get paid?</h2>
-              <p className="text-xl text-slate-400">
-                Choose how agents pay your transaction coordination fees. You can change this anytime in Settings.
-              </p>
+        {currentStep === 5 && (
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-display font-semibold text-slate-100 mb-2">How do agents pay you?</h1>
+              <p className="text-slate-400">You can change this any time in Settings.</p>
             </div>
 
             {paymentStepError && (
-              <div className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-lg text-sm text-red-200 text-center">
+              <div role="alert" className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-xl text-sm text-red-200 text-center">
                 {paymentStepError}
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-              <div className="rounded-lg border border-slate-600 bg-slate-700/50 p-8 flex flex-col">
-                <h3 className="text-xl font-display font-semibold text-slate-100 mb-2">Get paid automatically</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 flex flex-col">
+                <h2 className="text-xl font-display font-semibold text-slate-100 mb-2">Get paid through Relay</h2>
                 <p className="text-slate-400 text-sm mb-6 flex-1">
-                  Connect a Stripe account. Every invoice gets a real payment link — agents pay by card or bank
-                  transfer without creating an account, and the money lands directly in your own Stripe account.
+                  Connect a Stripe account and every invoice gets a payment link. Agents pay by card or bank transfer
+                  without creating an account, and the money goes straight to your own Stripe account. It opens in a
+                  new tab.
                 </p>
                 {stripeConnectStatus?.status === 'approved' ? (
-                  <div className="text-center">
+                  <div>
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-900/30 text-green-300 border border-green-700/50 mb-4">
                       Connected &amp; ready
                     </span>
                     <button
-                      onClick={() => setCurrentStep(7)}
-                      className="w-full py-3 rounded-lg font-semibold transition bg-blue-500 hover:bg-blue-400 text-white"
+                      type="button"
+                      onClick={() => goTo(6)}
+                      className="w-full py-3 rounded-xl font-semibold transition bg-blue-500 hover:bg-blue-400 text-white"
                     >
                       Continue
                     </button>
                   </div>
                 ) : (
-                  <button
-                    onClick={handleConnectStripe}
-                    disabled={isStartingStripeConnect}
-                    className="w-full py-3 rounded-lg font-semibold transition bg-blue-500 hover:bg-blue-400 text-white disabled:opacity-50"
-                  >
-                    {isStartingStripeConnect
-                      ? 'Opening...'
-                      : stripeConnectStatus?.connected
-                      ? 'Finish connecting Stripe'
-                      : 'Connect Stripe'}
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={handleConnectStripe}
+                      disabled={isStartingStripeConnect}
+                      className="w-full py-3 rounded-xl font-semibold transition bg-blue-500 hover:bg-blue-400 text-white disabled:opacity-50"
+                    >
+                      {isStartingStripeConnect
+                        ? 'Opening…'
+                        : stripeConnectStatus?.connected
+                        ? 'Finish connecting Stripe'
+                        : 'Connect Stripe'}
+                    </button>
+                    {stripeConnectStatus?.connected && (
+                      <button
+                        type="button"
+                        onClick={fetchPaymentStatus}
+                        className="w-full text-sm text-slate-400 hover:text-slate-200 transition"
+                      >
+                        I finished in Stripe — check again
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
 
-              <div className="rounded-lg border border-slate-600 bg-slate-700/50 p-8 flex flex-col">
-                <h3 className="text-xl font-display font-semibold text-slate-100 mb-2">Handle it yourself</h3>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 flex flex-col">
+                <h2 className="text-xl font-display font-semibold text-slate-100 mb-2">I&apos;ll collect payment myself</h2>
                 <p className="text-slate-400 text-sm mb-6 flex-1">
-                  Skip online payments — agents pay you directly through Zelle, Venmo, PayPal, a check, or however
-                  you already work. Relay still generates invoices and tracks whether they&apos;re paid; you just
-                  mark them paid yourself once you&apos;ve received the money.
+                  Agents pay you by Zelle, Venmo, PayPal, check, or however you already work. Relay still builds the
+                  invoice, emails it, tracks what&apos;s unpaid, and exports to QuickBooks. You mark it paid when the
+                  money arrives.
                 </p>
                 <button
+                  type="button"
                   onClick={handleChooseManual}
                   disabled={isSavingPaymentPreference}
-                  className="w-full py-3 rounded-lg font-semibold transition border border-slate-600 text-slate-300 hover:border-slate-500 hover:text-slate-100 disabled:opacity-50"
+                  className="w-full py-3 rounded-xl font-semibold transition border border-slate-600 text-slate-200 hover:border-slate-500 hover:bg-white/5 disabled:opacity-50"
                 >
-                  {isSavingPaymentPreference && paymentPreference !== 'stripe' ? 'Saving...' : "I'll handle it myself"}
+                  {isSavingPaymentPreference ? 'Saving…' : 'Collect it myself'}
                 </button>
               </div>
             </div>
 
             <div className="flex items-center justify-center gap-6">
-              <button onClick={() => setCurrentStep(5)} className="text-sm text-slate-500 hover:text-slate-300">
+              <button type="button" onClick={() => goTo(4)} className="text-sm text-slate-400 hover:text-slate-200 transition">
                 ← Back
               </button>
-              <button onClick={() => setCurrentStep(7)} className="text-sm text-slate-500 hover:text-slate-300">
-                Decide later — skip this step →
+              <button type="button" onClick={() => goTo(6)} className="text-sm text-slate-400 hover:text-slate-200 transition">
+                Decide later →
               </button>
             </div>
           </div>
         )}
 
-        {currentStep === 7 && (
-          // Step 8: Setup Guide (finish)
-          <div>
-            <div className="text-center mb-12">
-              <h2 className="text-4xl font-display font-semibold text-slate-100 mb-4">You&apos;re all set</h2>
-              <p className="text-xl text-slate-400">
-                You&apos;re on the {PLANS.find((p) => p.id === selectedPlan)?.name || 'Starter'} plan. Here&apos;s where to go next.
+        {currentStep === 6 && (
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl sm:text-4xl font-display font-semibold text-slate-100 mb-2">
+                You&apos;re set up{fullName.trim() ? `, ${fullName.trim().split(' ')[0]}` : ''}
+              </h1>
+              <p className="text-slate-400">
+                You&apos;re on the {planName} plan. Pick where to start — everything here is also in the menu.
               </p>
             </div>
 
-            <div className="max-w-3xl mx-auto space-y-8">
-              {/* Step 1: Add Agents */}
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-10 h-10 bg-blue-500/20 border border-blue-500 rounded-full flex items-center justify-center text-blue-400 font-bold">
-                    1
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Add Your Agents</h3>
-                    <p className="text-slate-400 mb-4">
-                      Start by adding the real estate agents you work with. Set their flat fees per transaction, and an optional percentage-based fee for agents who use one.
-                    </p>
-                    <button
-                      onClick={() => handleCompleteSetup('/dashboard/agents')}
-                      className="inline-block px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition"
-                    >
-                      Go to Agents →
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 2: Create Transactions */}
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-10 h-10 bg-blue-500/20 border border-blue-500 rounded-full flex items-center justify-center text-blue-400 font-bold">
-                    2
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Create Your First Transaction</h3>
-                    <p className="text-slate-400 mb-4">
-                      Add deals as you take them on. Track the property address, purchase price, and agent. Relay will automatically calculate fees and generate a checklist.
-                    </p>
-                    <button
-                      onClick={() => handleCompleteSetup('/dashboard/transactions/new')}
-                      className="inline-block px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition"
-                    >
-                      Create First Deal →
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 3: Manage Invoices */}
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-10 h-10 bg-blue-500/20 border border-blue-500 rounded-full flex items-center justify-center text-blue-400 font-bold">
-                    3
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-slate-100 mb-2">Generate &amp; Track Invoices</h3>
-                    <p className="text-slate-400 mb-4">
-                      When deals close, Relay generates invoices based on your flat fees and percentages. Track payments and mark them paid as they come in.
-                    </p>
-                    <button
-                      onClick={() => handleCompleteSetup('/dashboard/invoices')}
-                      className="inline-block px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition"
-                    >
-                      View Invoices →
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Buttons */}
-              <div className="flex gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {launchItems.map((item, i) => (
                 <button
-                  onClick={() => setCurrentStep(6)}
-                  className="px-6 py-3 border border-slate-600 text-slate-300 hover:border-slate-500 hover:text-slate-100 rounded-lg font-semibold transition"
+                  key={item.title}
+                  type="button"
+                  onClick={() => handleCompleteSetup(item.href)}
+                  className={`text-left rounded-2xl border p-5 transition group ${
+                    i === 0
+                      ? 'border-blue-500/60 bg-blue-500/10 hover:bg-blue-500/15'
+                      : 'border-white/10 bg-white/5 hover:bg-white/10'
+                  }`}
                 >
-                  ← Back
+                  <h2 className="text-base font-semibold text-slate-100 mb-1">{item.title}</h2>
+                  <p className="text-sm text-slate-400 mb-3">{item.body}</p>
+                  <span className="text-sm font-semibold text-blue-300 group-hover:text-blue-200">{item.cta} →</span>
                 </button>
-                <button
-                  onClick={() => handleCompleteSetup()}
-                  className="flex-1 px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
-                >
-                  Go to Dashboard →
-                </button>
-              </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3 mt-8">
+              <button
+                type="button"
+                onClick={() => goTo(5)}
+                className="px-5 py-2.5 border border-slate-600 text-slate-300 hover:border-slate-500 hover:text-slate-100 rounded-xl font-semibold transition"
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCompleteSetup()}
+                className="flex-1 px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition"
+              >
+                Go to dashboard
+              </button>
             </div>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
