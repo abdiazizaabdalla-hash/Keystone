@@ -189,7 +189,13 @@ export default function AttentionPanel({ attention }: { attention: AttentionSumm
     {
       id: 'overdue',
       label: 'Overdue',
-      hint: counts.overdue === 0 ? 'Nothing overdue' : `${buildGroups(attention.overdue, () => ({ text: '', chip: '' })).length} deals`,
+      hint:
+        counts.overdue === 0
+          ? 'Nothing overdue'
+          : (() => {
+              const n = buildGroups(attention.overdue, () => ({ text: '', chip: '' })).length;
+              return `${n} ${n === 1 ? 'deal' : 'deals'}`;
+            })(),
     },
     {
       id: 'today',

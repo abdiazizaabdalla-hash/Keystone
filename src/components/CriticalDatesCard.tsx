@@ -15,18 +15,17 @@ interface Item {
   propertyAddress: string;
 }
 
-function chip(days: number): { text: string; cls: string; dot: string } {
-  if (days < 0) return { text: `${-days}d overdue`, cls: 'bg-red-900/40 text-red-300 border-red-800', dot: 'bg-red-400' };
-  if (days === 0) return { text: 'Today', cls: 'bg-amber-900/40 text-amber-300 border-amber-800', dot: 'bg-amber-400' };
-  if (days === 1) return { text: 'Tomorrow', cls: 'bg-amber-900/40 text-amber-300 border-amber-800', dot: 'bg-amber-400' };
-  if (days <= 3) return { text: `${days} days`, cls: 'bg-amber-900/40 text-amber-300 border-amber-800', dot: 'bg-amber-400' };
-  return { text: `${days} days`, cls: 'bg-blue-900/40 text-blue-300 border-blue-800', dot: 'bg-blue-400' };
+// No countdown ("3 days", "Tomorrow"): each row shows its date, and the dot colour says how urgent it is.
+function tone(days: number): { dot: string; date: string; overdue: boolean } {
+  if (days < 0) return { dot: 'bg-red-400', date: 'text-red-300', overdue: true };
+  if (days <= 3) return { dot: 'bg-amber-400', date: 'text-amber-300', overdue: false };
+  return { dot: 'bg-blue-400', date: 'text-slate-400', overdue: false };
 }
 
 const COLLAPSED_ROWS = 8;
 
 // "Critical dates" across every open deal: contract deadlines (inspection, appraisal, financing, ...) that are
-// overdue or due in the next two weeks. Starts collapsed to one slim line with the counts that matter; open it
+// overdue or due in the next two weeks, shown by date (no countdown). Starts collapsed to one slim line with the counts that matter; open it
 // for one thin row per date. Renders nothing until loaded, and nothing at all if there are none, so it never
 // adds an empty box to the dashboard.
 export default function CriticalDatesCard() {
@@ -55,7 +54,6 @@ export default function CriticalDatesCard() {
   if (!items || items.length === 0) return null;
 
   const overdue = items.filter((i) => i.daysUntil < 0).length;
-  const soon = items.filter((i) => i.daysUntil >= 0 && i.daysUntil <= 3).length;
   const visible = showAll ? items : items.slice(0, COLLAPSED_ROWS);
 
   return (
@@ -75,7 +73,6 @@ export default function CriticalDatesCard() {
         </span>
         <span className="flex items-center gap-2 shrink-0 text-xs">
           {overdue > 0 && <span className="px-2 py-0.5 rounded-full border bg-red-900/40 text-red-300 border-red-800">{overdue} overdue</span>}
-          {soon > 0 && <span className="px-2 py-0.5 rounded-full border bg-amber-900/40 text-amber-300 border-amber-800">{soon} within 3 days</span>}
           <span className="text-slate-400">{items.length} total</span>
         </span>
       </button>
@@ -84,7 +81,7 @@ export default function CriticalDatesCard() {
         <div className="border-t border-slate-700">
           <ul className={`divide-y divide-slate-700/60 ${showAll ? 'max-h-[28rem] overflow-y-auto' : ''}`}>
             {visible.map((item) => {
-              const c = chip(item.daysUntil);
+              const c = tone(item.daysUntil);
               return (
                 <li key={item.id}>
                   <Link
@@ -97,8 +94,10 @@ export default function CriticalDatesCard() {
                       {item.fileNumber ? `${item.fileNumber} · ` : ''}
                       {item.propertyAddress}
                     </span>
-                    <span className="hidden sm:inline text-xs text-slate-400 whitespace-nowrap tabular-nums">{formatDisplayDate(item.dueDate)}</span>
-                    <span className={`text-[11px] leading-5 px-2 rounded-full border whitespace-nowrap shrink-0 ${c.cls}`}>{c.text}</span>
+                    {c.overdue && (
+                      <span className="text-[11px] leading-5 px-2 rounded-full border whitespace-nowrap shrink-0 bg-red-900/40 text-red-300 border-red-800">Overdue</span>
+                    )}
+                    <span className={`text-xs whitespace-nowrap tabular-nums shrink-0 ${c.date}`}>{formatDisplayDate(item.dueDate)}</span>
                   </Link>
                 </li>
               );
