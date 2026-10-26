@@ -9,6 +9,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import DragHandle from '@/components/DragHandle';
 import MoveMenu from '@/components/MoveMenu';
 import { isDocDrag, isFileDrag, readDocDrag, startDocDrag } from '@/lib/docDrag';
+import MessagePreview from '@/components/MessagePreview';
 import { stagesForTaskNames } from '@/lib/transactionStages';
 import { DOCUMENT_CATEGORIES, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE, categoryLabel, typesForCategory, isValidDocumentType } from '@/lib/documentTaxonomy';
 import { DueDateSpec, formatDisplayDate } from '@/lib/dueDates';
@@ -2653,14 +2654,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             {messages.length === 0 ? (
               <p className="text-sm text-slate-400">Nothing yet. Invite your agent on the Contacts tab to start a conversation.</p>
             ) : (
-              <ul className="space-y-3">
-                {messages.slice(-3).map((m) => (
-                  <li key={m.id} className="text-sm">
-                    <p className="text-xs text-slate-500">{m.sender_role === 'tc' ? 'You' : agentName} · {new Date(m.created_at).toLocaleDateString()}</p>
-                    <p className="text-slate-200 line-clamp-2">{m.body || '📎 Attachment'}</p>
-                  </li>
-                ))}
-              </ul>
+              <MessagePreview messages={messages} agentName={agentName} limit={3} />
             )}
           </OverviewSection>
 
@@ -3101,26 +3095,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               {messages.length === 0 ? (
                 <p className="text-sm text-slate-500">No messages yet.</p>
               ) : (
-                <ul className="space-y-3">
-                  {messages.slice(-4).map((m) => (
-                    <li key={m.id} className="text-sm">
-                      <p className="text-xs text-slate-500">{m.sender_role === 'tc' ? 'You' : agentName} · {new Date(m.created_at).toLocaleDateString()}</p>
-                      {m.body && <p className="text-slate-200 line-clamp-2">{m.body}</p>}
-                      {m.attachment && (
-                        <div
-                          draggable={Boolean(m.attachment_document_id)}
-                          onDragStart={(e) => {
-                            if (m.attachment_document_id) startDocDrag(e, m.attachment_document_id);
-                          }}
-                          title={m.attachment_document_id ? 'Drag onto a Documents category to file it there' : undefined}
-                          className={`mt-1 flex items-center gap-2 bg-slate-800/50 border border-white/10 rounded-xl px-3 py-2 ${m.attachment_document_id ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                        >
-                          <span className="text-xs text-blue-300 truncate">📎 {m.attachment.fileName}</span>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <MessagePreview messages={messages} agentName={agentName} limit={4} onAttachmentDragStart={startDocDrag} />
               )}
             </div>
         {/* Communication -- emails forwarded/CC'd to this transaction's
