@@ -584,7 +584,8 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="mb-8">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+        <CriticalDatesCard />
         <ListingsOverviewCard />
       </div>
 
@@ -622,11 +623,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-
-      {/* Critical dates sit at the very bottom: reference, not today's to-do list (that is Needs attention above). */}
-      <div className="mt-8">
-        <CriticalDatesCard />
-      </div>
     </div>
   );
 }
