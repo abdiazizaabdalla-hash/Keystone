@@ -294,7 +294,7 @@ export default function AgentsPage() {
 
   return (
     <div className="p-4 md:p-8">
-      <div className="flex items-center justify-between gap-4 mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Agents</h1>
           <p className="text-slate-400">

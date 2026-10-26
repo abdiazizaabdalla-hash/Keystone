@@ -22,6 +22,18 @@ const inputCls =
 
 type SortKey = 'name' | 'newest' | 'oldest';
 
+// A CSV import can be undone for 2 minutes. The server enforces the same limit.
+const UNDO_WINDOW_MS = 2 * 60 * 1000;
+const LAST_IMPORT_KEY = 'relay.contacts.lastImport';
+interface LastImport {
+  ids: string[];
+  at: number;
+}
+const countdownLabel = (ms: number) => {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+};
+
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'name', label: 'Name A–Z' },
   { value: 'newest', label: 'Recently added' },
@@ -55,6 +67,50 @@ export default function ContactsPage() {
   // null = closed, 'new' = adding, a contact = editing it
   const [editing, setEditing] = useState<ContactRow | 'new' | null>(null);
   const [typeFilter, setTypeFilter] = useState<'all' | 'person' | 'organization'>('all');
+  // The CSV import that can still be undone, and a clock that ticks while it can.
+  const [lastImport, setLastImport] = useState<LastImport | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [undoing, setUndoing] = useState(false);
+  const rememberImport = (v: LastImport | null) => {
+    setLastImport(v);
+    try {
+      if (v) window.localStorage.setItem(LAST_IMPORT_KEY, JSON.stringify(v));
+      else window.localStorage.removeItem(LAST_IMPORT_KEY);
+    } catch {
+      /* the undo button still works on this page */
+    }
+  };
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(LAST_IMPORT_KEY);
+        if (!raw) return;
+        const v = JSON.parse(raw) as LastImport;
+        if (v && Array.isArray(v.ids) && v.ids.length && Date.now() - v.at < UNDO_WINDOW_MS) setLastImport(v);
+        else window.localStorage.removeItem(LAST_IMPORT_KEY);
+      } catch {
+        /* nothing to restore */
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    if (!lastImport) return;
+    const id = setInterval(() => {
+      const t = Date.now();
+      setNow(t);
+      if (t - lastImport.at >= UNDO_WINDOW_MS) {
+        setLastImport(null);
+        try {
+          window.localStorage.removeItem(LAST_IMPORT_KEY);
+        } catch {
+          /* ignore */
+        }
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [lastImport]);
+
   // How the list is ordered. 'newest' puts the most recently added contacts first.
   const [sortBy, setSortByState] = useState<SortKey>('name');
   const setSortBy = (next: SortKey) => {
@@ -274,8 +330,8 @@ export default function ContactsPage() {
       const iEmail = find('email', 'e-mail');
       const iPhone = find('mobile', 'phone', 'cell');
       const iCompany = find('company', 'brokerage', 'organization');
-      const iRole = find('role', 'type', 'category', 'title');
-      const iTags = find('tags', 'groups', 'labels');
+      const iRole = find('role', 'job title', 'position', 'type', 'category', 'title');
+      const iTags = find('tags', 'tag', 'groups', 'group', 'labels', 'label');
       if (iEmail < 0 && iName < 0 && iFirst < 0) throw new Error('Could not find a Name or Email column.');
       const get = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
       const rows = parsed.slice(1).map((r) => ({
@@ -284,12 +340,15 @@ export default function ContactsPage() {
         phone: get(r, iPhone),
         company: get(r, iCompany),
         role: get(r, iRole),
-        tags: get(r, iTags),
+        // Tags may be separated by commas, semicolons or pipes.
+        tags: get(r, iTags).replace(/[;|]/g, ','),
       }));
       setWorking(true);
       let added = 0;
       let dup = 0;
       let bad = 0;
+      let tagged = 0;
+      const addedIds: string[] = [];
       for (let i = 0; i < rows.length; i += 500) {
         const res = await authFetch('/api/contacts/import-csv', {
           method: 'POST',
@@ -301,8 +360,18 @@ export default function ContactsPage() {
         added += data.added;
         dup += data.skippedDuplicate;
         bad += data.skippedInvalid;
+        tagged += data.autoTagged || 0;
+        if (Array.isArray(data.ids)) addedIds.push(...data.ids);
       }
-      flash(`Added ${added} contact${added === 1 ? '' : 's'}. ${dup} already in your list, ${bad} skipped (no usable name or email). Nobody was added to your newsletter.`);
+      if (addedIds.length > 0) {
+        rememberImport({ ids: addedIds, at: Date.now() });
+        setNow(Date.now());
+      }
+      flash(
+        `Added ${added} contact${added === 1 ? '' : 's'}` +
+          (tagged ? `, ${tagged} tagged automatically from their role or company` : '') +
+          `. ${dup} already in your list, ${bad} skipped (no usable name or email). Nobody was added to your newsletter.`
+      );
       await load();
     } catch (err) {
       if (handleAuth(err)) return;
@@ -310,6 +379,33 @@ export default function ContactsPage() {
     } finally {
       setWorking(false);
       if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const undoImport = async () => {
+    if (!lastImport || undoing) return;
+    setUndoing(true);
+    setError('');
+    try {
+      const res = await authFetch('/api/contacts/import-csv/undo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: lastImport.ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not undo the import');
+      rememberImport(null);
+      await load();
+      flash(
+        `Import undone: removed ${data.removed} contact${data.removed === 1 ? '' : 's'}.` +
+          (data.kept ? ` ${data.kept} were left because you changed or shared them.` : '') +
+          (data.expired ? ` ${data.expired} could not be removed because the 2 minutes were up.` : '')
+      );
+    } catch (err) {
+      if (handleAuth(err)) return;
+      setError(err instanceof Error ? err.message : 'Could not undo the import');
+    } finally {
+      setUndoing(false);
     }
   };
 
@@ -510,6 +606,23 @@ export default function ContactsPage() {
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
       {notice && <p className="mb-4 text-sm text-green-400">{notice}</p>}
+
+      {lastImport && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-blue-500/40 bg-blue-500/10 px-4 py-3 text-sm text-slate-200" role="status">
+          <span>
+            Imported {lastImport.ids.length} contact{lastImport.ids.length === 1 ? '' : 's'}. Changed your mind?
+          </span>
+          <button
+            type="button"
+            onClick={undoImport}
+            disabled={undoing}
+            className="px-3 py-1.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50"
+          >
+            {undoing ? 'Undoing…' : 'Undo import'}
+          </button>
+          <span className="text-xs text-slate-400">{countdownLabel(lastImport.at + UNDO_WINDOW_MS - now)} left</span>
+        </div>
+      )}
 
       {followUps.length > 0 && (
         <div className="mb-4 bg-white/5 border border-white/10 rounded-2xl p-4">

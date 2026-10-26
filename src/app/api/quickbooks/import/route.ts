@@ -345,12 +345,13 @@ export async function DELETE(request: NextRequest) {
     for (let i = 0; i < invoiceIds.length; i += 100) {
       const { data: rows } = await supabaseServer
         .from('invoices')
-        .select('id, agent_id, invoice_number, qb_invoice_id')
+        .select('id, agent_id, invoice_number, qb_invoice_id, paid')
         .in('id', invoiceIds.slice(i, i + 100));
       const deletable: string[] = [];
       for (const r of rows || []) {
         if (!myAgents.has(r.agent_id as string)) continue;
-        if (r.qb_invoice_id) {
+        // Already sent to QuickBooks, or already marked paid since the import: leave it alone.
+        if (r.qb_invoice_id || r.paid) {
           kept.push(String(r.invoice_number));
           continue;
         }

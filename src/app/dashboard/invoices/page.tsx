@@ -52,8 +52,8 @@ function QbNote({ invoice }: { invoice: Invoice }) {
   }
   if (invoice.qb_sync_status === 'error') {
     return (
-      <div className="text-xs text-amber-400 mt-1" title={invoice.qb_sync_error || ''}>
-        QuickBooks: action needed{invoice.qb_sync_error ? ` — ${invoice.qb_sync_error}` : ''}
+      <div className="text-xs text-amber-400 mt-1 whitespace-nowrap" title={invoice.qb_sync_error || 'QuickBooks needs attention'}>
+        QuickBooks: action needed
       </div>
     );
   }
@@ -246,7 +246,7 @@ export default function InvoicesPage() {
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
             <div className="text-sm text-slate-400 mb-2">Total Invoiced</div>
             <div className="text-3xl font-bold text-blue-400">${totalAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-            <div className="text-xs text-slate-500 mt-2">{invoices.length} invoices</div>
+            <div className="text-xs text-slate-500 mt-2">{invoices.length} invoice{invoices.length === 1 ? '' : 's'}</div>
           </div>
 
           {/* Outstanding */}

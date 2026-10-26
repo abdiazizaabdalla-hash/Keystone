@@ -7,6 +7,10 @@
   --foreground: #e8eefb;
 }
 
+/* Short browser windows (laptops at 100% zoom): used to tighten the left menu so every item stays visible. */
+@custom-variant short (@media (max-height: 800px));
+@custom-variant tiny (@media (max-height: 720px));
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

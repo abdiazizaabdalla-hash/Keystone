@@ -363,7 +363,7 @@ export default function QuickBooksPage() {
           (data.removedAgents ? `, ${data.removedAgents} agent${data.removedAgents === 1 ? '' : 's'}` : '') +
           (data.removedDeals ? ` and ${data.removedDeals} placeholder deal${data.removedDeals === 1 ? '' : 's'}` : '') +
           '.' +
-          (data.kept?.length ? ` ${data.kept.length} already sent to QuickBooks were left in place.` : '')
+          (data.kept?.length ? ` ${data.kept.length} already sent to QuickBooks or marked paid were left in place.` : '')
       );
       setLastImport(null);
       setResult(null);

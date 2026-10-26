@@ -128,7 +128,7 @@ function NavLink({
       title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
       className={`relative flex items-center rounded-xl transition font-medium ${
-        collapsed ? 'justify-center px-0 py-3' : 'gap-3.5 px-4 py-3'
+        collapsed ? 'justify-center px-0 py-2.5 short:py-2 tiny:py-1' : 'gap-3 px-4 py-2.5 short:py-2 tiny:py-1'
       } ${colors}`}
     >
       {icon}
@@ -409,7 +409,7 @@ export default function DashboardLayout({
         {/* Logo */}
         <div
           className={`border-b border-white/10 flex items-center ${
-            collapsed ? 'justify-center px-3 py-4' : 'justify-between px-5 py-5'
+            collapsed ? 'justify-center px-3 py-3' : 'justify-between px-4 py-3.5 tiny:py-2.5'
           }`}
         >
           <Link href="/dashboard" className="flex items-center gap-3 min-w-0" title={collapsed ? 'Relay TC' : undefined}>
@@ -462,7 +462,7 @@ export default function DashboardLayout({
         )}
 
         {/* Navigation */}
-        <nav className={`flex-1 min-h-0 overflow-y-auto py-6 space-y-1.5 ${collapsed ? 'px-2' : 'px-4'}`}>
+        <nav className={`flex-1 min-h-0 overflow-y-auto py-3 tiny:py-1.5 space-y-0.5 ${collapsed ? 'px-2' : 'px-3'}`}>
           {PRIMARY_NAV.map((item) => (
             <NavLink
               key={item.href}
@@ -473,8 +473,6 @@ export default function DashboardLayout({
               icon={NAV_ICONS[item.icon]}
             />
           ))}
-
-          <div className="my-3 border-t border-white/10" />
 
           {moreItems.map((item) => (
               <NavLink
@@ -491,14 +489,14 @@ export default function DashboardLayout({
         </nav>
 
         {/* User Section */}
-        <div className={`border-t border-white/10 space-y-3 ${collapsed ? 'p-2' : 'p-4'}`}>
+        <div className={`border-t border-white/10 space-y-1.5 ${collapsed ? 'p-2' : 'p-3'}`}>
           {userName && !collapsed && (
-            <div className="px-4">
+            <div className="px-2 tiny:hidden">
               <p className="text-sm font-semibold text-slate-100 truncate">{userName}</p>
             </div>
           )}
           {plan && !collapsed && (
-            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-700/60 border border-slate-600 rounded-lg">
+            <div className="flex items-center justify-between px-3 py-1.5 bg-slate-700/60 border border-slate-600 rounded-lg">
               <span className="text-xs text-slate-400">
                 <span className="text-slate-200 font-semibold capitalize">{plan}</span> plan
               </span>
@@ -519,7 +517,7 @@ export default function DashboardLayout({
           <button
             onClick={handleLogout}
             title={collapsed ? 'Logout' : undefined}
-            className={`w-full flex items-center justify-center text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition text-sm py-2 ${
+            className={`w-full flex items-center justify-center text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition text-sm py-1.5 ${
               collapsed ? 'px-0' : 'px-4'
             }`}
           >

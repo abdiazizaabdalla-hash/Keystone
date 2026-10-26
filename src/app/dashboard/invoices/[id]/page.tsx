@@ -374,7 +374,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
         {/* Main Card */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
-          <div className="flex items-start justify-between mb-8">
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
             <div>
               <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">{invoice.invoice_number}</h1>
               <p className="text-slate-400">Agent Invoice</p>
