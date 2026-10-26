@@ -15,7 +15,7 @@ export default function HomeVideo() {
           ref={videoRef}
           className="absolute inset-0 h-full w-full"
           src="/video/relay-tc-demo.mp4"
-          poster="/video/relay-tc-demo-poster.jpg"
+          poster="/video/relay-tc-demo-poster-v2.jpg"
           controls
           autoPlay
           playsInline
@@ -31,20 +31,19 @@ export default function HomeVideo() {
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/video/relay-tc-demo-poster.jpg"
+            src="/video/relay-tc-demo-poster-v2.jpg"
             alt=""
             loading="lazy"
             className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
           />
-          <span className="absolute inset-0 bg-slate-950/30 transition group-hover:bg-slate-950/10" />
-          <span className="absolute inset-0 flex items-center justify-center">
+                    <span className="absolute inset-0 flex items-end justify-center pb-[9%]">
             <span className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-500 text-white shadow-xl shadow-blue-500/30 ring-8 ring-white/10 transition group-hover:scale-105 group-hover:bg-blue-400">
               <svg className="ml-1 h-8 w-8" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
                 <path d="M6.3 3.7a1 1 0 011.5-.86l9 6.3a1 1 0 010 1.72l-9 6.3A1 1 0 016.3 16.3V3.7z" />
               </svg>
             </span>
           </span>
-          <span className="absolute bottom-4 left-4 rounded-full bg-slate-950/70 px-3 py-1 text-xs font-medium text-slate-200 backdrop-blur">
+          <span className="absolute bottom-4 left-4 rounded-full bg-slate-900/80 px-3 py-1 text-xs font-medium text-slate-100 backdrop-blur">
             1 min · with sound
           </span>
         </button>
