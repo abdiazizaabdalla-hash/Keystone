@@ -428,17 +428,6 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      {/* Needs Attention Today -- a cross-transaction triage view (fed by
-          /api/dashboard/attention) so the first thing a TC sees is what
-          actually needs action. Renders nothing until the fetch resolves. */}
-      {attentionNote && <p className="mb-3 text-sm text-red-400">{attentionNote}</p>}
-      {/* Half and half with Critical dates on wide screens; stacked on smaller ones. Either side that has
-          nothing to show renders nothing, and the other then takes the whole row. */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 xl:[&>*:only-child]:col-span-2 gap-6 mb-8 items-start">
-        {attention && <AttentionPanel attention={attention} onDismiss={dismissAttention} onRestore={restoreAttention} />}
-        <CriticalDatesCard />
-      </div>
-
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
@@ -492,6 +481,16 @@ export default function Dashboard() {
         </div>
         </div>
       </details>
+
+      {/* Needs Attention Today -- a cross-transaction triage view (fed by
+          /api/dashboard/attention) so the first thing a TC sees is what
+          actually needs action. Renders nothing until the fetch resolves.
+          Critical dates sits right under it as a thin full-width bar. */}
+      {attentionNote && <p className="mb-3 text-sm text-red-400">{attentionNote}</p>}
+      <div className="mb-8 space-y-4">
+        {attention && <AttentionPanel attention={attention} onDismiss={dismissAttention} onRestore={restoreAttention} />}
+        <CriticalDatesCard />
+      </div>
 
       {/* Active Transactions */}
       <div className="mb-10">

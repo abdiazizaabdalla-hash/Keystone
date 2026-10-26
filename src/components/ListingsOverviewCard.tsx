@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { LISTING_STATUS_LABEL, daysBetween, daysOnMarket, type ListingStatus } from '@/lib/listingsShared';
-import { useListingsImport } from '@/components/useListingsImport';
 
 interface Row {
   id: string;
@@ -34,8 +33,7 @@ const money = (n?: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}
 
 // "Listings" on the dashboard, set up like Critical dates: open by default, one thin row per open listing with
 // its details, and the header line collapses it. Sits right under Active Transactions. Hidden until loaded
-// (and on any load failure); with no open listings it shows a short empty state so the CSV import is
-// always within reach.
+// (and on any load failure); with no open listings it shows a short empty state pointing to the Listings tab.
 export default function ListingsOverviewCard() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [open, setOpen] = useState(true);
@@ -57,8 +55,6 @@ export default function ListingsOverviewCard() {
     return () => clearTimeout(t);
   }, [load]);
 
-  const importer = useListingsImport(load);
-
   if (rows === null) return null;
 
   const today = new Date().toISOString().slice(0, 10);
@@ -74,41 +70,26 @@ export default function ListingsOverviewCard() {
   const withOverdue = list.filter((l) => l.overdue_count > 0).length;
   const visible = showAll ? list : list.slice(0, COLLAPSED_ROWS);
 
-  const importButton = (
-    <button
-      type="button"
-      onClick={importer.openPicker}
-      disabled={importer.working}
-      className="px-3 py-1.5 rounded-lg border border-white/15 text-slate-200 hover:bg-white/10 transition disabled:opacity-50"
-    >
-      {importer.working ? 'Importing…' : 'Import CSV'}
-    </button>
-  );
-
   if (list.length === 0) {
     return (
       <div className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
-        {importer.input}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-slate-100">Listings</p>
-            <p className="text-xs text-slate-500">No open listings yet. Start one, or bring in the ones you already have.</p>
+            <p className="text-xs text-slate-500">No open listings yet. Start one from the Listings tab, where you can also import a CSV.</p>
           </div>
           <div className="flex items-center gap-2 text-xs">
-            {importButton}
             <Link href="/dashboard/listings" className="px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-semibold transition">
               Go to Listings
             </Link>
           </div>
         </div>
-        {importer.banner && <div className="mt-3">{importer.banner}</div>}
       </div>
     );
   }
 
   return (
     <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-      {importer.input}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -185,7 +166,6 @@ export default function ListingsOverviewCard() {
               <span />
             )}
             <span className="flex items-center gap-3">
-              {importButton}
               <Link href="/dashboard/listings" className="text-slate-400 hover:text-slate-200">
                 View all listings →
               </Link>
@@ -193,7 +173,6 @@ export default function ListingsOverviewCard() {
           </div>
         </div>
       )}
-      {importer.banner && <div className="px-4 pb-3 pt-1">{importer.banner}</div>}
     </div>
   );
 }
