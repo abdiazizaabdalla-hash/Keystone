@@ -20,6 +20,25 @@ import { dueLabel, todayLocal } from '@/lib/contactDates';
 const inputCls =
   'w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
 
+type SortKey = 'name' | 'newest' | 'oldest';
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'name', label: 'Name A–Z' },
+  { value: 'newest', label: 'Recently added' },
+  { value: 'oldest', label: 'Oldest first' },
+];
+
+const addedTime = (c: { created_at?: string | null }) => {
+  const t = c.created_at ? Date.parse(c.created_at) : NaN;
+  return Number.isNaN(t) ? 0 : t;
+};
+
+const formatAdded = (iso?: string | null) => {
+  const t = iso ? Date.parse(iso) : NaN;
+  if (Number.isNaN(t)) return '';
+  return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
 export default function ContactsPage() {
   const router = useRouter();
   const [contacts, setContacts] = useState<ContactRow[]>([]);
@@ -36,6 +55,27 @@ export default function ContactsPage() {
   // null = closed, 'new' = adding, a contact = editing it
   const [editing, setEditing] = useState<ContactRow | 'new' | null>(null);
   const [typeFilter, setTypeFilter] = useState<'all' | 'person' | 'organization'>('all');
+  // How the list is ordered. 'newest' puts the most recently added contacts first.
+  const [sortBy, setSortByState] = useState<SortKey>('name');
+  const setSortBy = (next: SortKey) => {
+    setSortByState(next);
+    try {
+      window.localStorage.setItem('relay.contacts.sort', next);
+    } catch {
+      /* the sort still works */
+    }
+  };
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const saved = window.localStorage.getItem('relay.contacts.sort');
+        if (saved === 'name' || saved === 'newest' || saved === 'oldest') setSortByState(saved);
+      } catch {
+        /* default order */
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
   const [followUps, setFollowUps] = useState<{ id: string; contact_id: string; due_on: string; note: string | null; contact_name: string }[]>([]);
   const [showDupes, setShowDupes] = useState(false);
   const [showSync, setShowSync] = useState(false);
@@ -183,14 +223,21 @@ export default function ContactsPage() {
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return scoped.filter((c) => {
+    const filtered = scoped.filter((c) => {
       if (newsletterOnly && (!c.newsletter || c.is_mine === false)) return false;
       if (typeFilter !== 'all' && (c.contact_type || 'person') !== typeFilter) return false;
       if (activeTag && !(c.tags || []).some((t) => t.toLowerCase() === activeTag)) return false;
       if (!q) return true;
       return [c.name, c.email, c.phone, c.company, c.role, ...(c.tags || [])].some((v) => (v || '').toLowerCase().includes(q));
     });
-  }, [scoped, search, activeTag, newsletterOnly, typeFilter]);
+    // The API already returns A–Z by name, so only the date orders need a re-sort. Ties fall back to name.
+    if (sortBy === 'name') return filtered;
+    const dir = sortBy === 'newest' ? -1 : 1;
+    return [...filtered].sort(
+      (a, b) =>
+        dir * (addedTime(a) - addedTime(b)) || (a.name || a.email || '').localeCompare(b.name || b.email || '')
+    );
+  }, [scoped, search, activeTag, newsletterOnly, typeFilter, sortBy]);
 
   // The newsletter flag belongs to whoever owns the contact, so teammates' shared contacts never count.
   const newsletterCount = contacts.filter((c) => c.is_mine !== false && c.newsletter && c.email).length;
@@ -503,6 +550,18 @@ export default function ContactsPage() {
           <option value="person">People</option>
           <option value="organization">Organizations</option>
         </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as SortKey)}
+          className={inputCls.replace("w-full", "w-auto")}
+          aria-label="Sort contacts"
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              Sort: {o.label}
+            </option>
+          ))}
+        </select>
         {!teamMode && (
         <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
           <input type="checkbox" checked={newsletterOnly} onChange={(e) => setNewsletterOnly(e.target.checked)} className="accent-blue-500" />
@@ -648,6 +707,9 @@ export default function ContactsPage() {
                     )}
                     {c.contact_type === 'organization' && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-slate-600 text-slate-400">Org</span>}
                     <p className="text-xs text-slate-500 break-words">{[c.role, c.company].filter(Boolean).join(' · ')}</p>
+                    {sortBy !== 'name' && formatAdded(c.created_at) && (
+                      <p className="text-xs text-slate-600">Added {formatAdded(c.created_at)}</p>
+                    )}
                   </td>
                   <td className="px-2 py-3 text-slate-300">
                     {c.email && (

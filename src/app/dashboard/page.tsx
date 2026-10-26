@@ -8,6 +8,7 @@ import { formatDisplayDate } from '@/lib/dueDates';
 import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 import CriticalDatesCard from '@/components/CriticalDatesCard';
 import ListingsOverviewCard from '@/components/ListingsOverviewCard';
+import AttentionPanel, { type AttentionSummary } from '@/components/AttentionPanel';
 
 interface Transaction {
   id: string;
@@ -45,49 +46,6 @@ interface Invoice {
   paid_amount?: number | null;
   refunded?: boolean;
   refunded_amount?: number | null;
-}
-
-interface AttentionDueItem {
-  // Set for listing items, which don't live under /transactions.
-  href?: string;
-  taskId: string;
-  taskName: string;
-  transactionId: string;
-  label: string;
-  // Set only for a team/brokerage owner viewing a rolled-up team-wide
-  // list -- null for a solo TC's own view, where every item is already
-  // theirs and a label would be redundant.
-  tcLabel: string | null;
-}
-
-interface AttentionOverdueItem extends AttentionDueItem {
-  daysOverdue: number;
-}
-
-interface AttentionDueSoonItem extends AttentionDueItem {
-  dueInDays: number;
-}
-
-interface AttentionWaitingOnItem extends AttentionDueItem {
-  waitingOn: string;
-  daysSince: number;
-}
-
-interface AttentionClosingSoonItem {
-  transactionId: string;
-  label: string;
-  closingDate: string;
-  daysUntil: number;
-  tcLabel: string | null;
-}
-
-interface AttentionSummary {
-  overdue: AttentionOverdueItem[];
-  dueToday: AttentionDueItem[];
-  dueSoon: AttentionDueSoonItem[];
-  waitingOn: AttentionWaitingOnItem[];
-  closingsSoon: AttentionClosingSoonItem[];
-  totalNeedsAttention: number;
 }
 
 const formatCurrency = (n: number) => `$${Math.round(n).toLocaleString()}`;
@@ -413,146 +371,8 @@ export default function Dashboard() {
 
       {/* Needs Attention Today -- a cross-transaction triage view (fed by
           /api/dashboard/attention) so the first thing a TC sees is what
-          actually needs action, instead of having to open every deal to
-          find out. Renders nothing until the fetch resolves rather than
-          showing a loading skeleton, since the KPI row/table below
-          already cover that moment. */}
-      {attention && (
-        <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-5">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <h2 className="text-lg font-semibold text-slate-100">Needs Attention Today</h2>
-            {attention.totalNeedsAttention === 0 && (
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-900/30 border border-green-700 text-green-300 whitespace-nowrap">
-                All caught up
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Overdue */}
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-red-400 mb-2">
-                Overdue{attention.overdue.length > 0 ? ` (${attention.overdue.length})` : ''}
-              </h3>
-              {attention.overdue.length === 0 ? (
-                <p className="text-xs text-slate-500">Nothing overdue</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {attention.overdue.slice(0, 5).map((item) => (
-                    <li key={item.taskId}>
-                      <Link
-                        href={item.href || `/dashboard/transactions/${item.transactionId}`}
-                        className="block text-xs text-slate-300 hover:text-slate-100 transition"
-                      >
-                        <span className="text-slate-400">{item.label}</span>
-                        {item.tcLabel && <span className="text-slate-500"> ({item.tcLabel})</span>} — {item.taskName}{' '}
-                        <span className="text-red-400 font-medium">
-                          {item.daysOverdue}d overdue
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                  {attention.overdue.length > 5 && (
-                    <li className="text-xs text-slate-500">+{attention.overdue.length - 5} more</li>
-                  )}
-                </ul>
-              )}
-            </div>
-
-            {/* Due Today */}
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-400 mb-2">
-                Due Today{attention.dueToday.length > 0 ? ` (${attention.dueToday.length})` : ''}
-              </h3>
-              {attention.dueToday.length === 0 ? (
-                <p className="text-xs text-slate-500">Nothing due today</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {attention.dueToday.slice(0, 5).map((item) => (
-                    <li key={item.taskId}>
-                      <Link
-                        href={item.href || `/dashboard/transactions/${item.transactionId}`}
-                        className="block text-xs text-slate-300 hover:text-slate-100 transition"
-                      >
-                        <span className="text-slate-400">{item.label}</span>
-                        {item.tcLabel && <span className="text-slate-500"> ({item.tcLabel})</span>} — {item.taskName}
-                      </Link>
-                    </li>
-                  ))}
-                  {attention.dueToday.length > 5 && (
-                    <li className="text-xs text-slate-500">+{attention.dueToday.length - 5} more</li>
-                  )}
-                </ul>
-              )}
-            </div>
-
-            {/* Waiting On */}
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-orange-400 mb-2">
-                Waiting On{attention.waitingOn.length > 0 ? ` (${attention.waitingOn.length})` : ''}
-              </h3>
-              {attention.waitingOn.length === 0 ? (
-                <p className="text-xs text-slate-500">Nothing stuck</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {attention.waitingOn.slice(0, 5).map((item) => (
-                    <li key={item.taskId}>
-                      <Link
-                        href={item.href || `/dashboard/transactions/${item.transactionId}`}
-                        className="block text-xs text-slate-300 hover:text-slate-100 transition"
-                      >
-                        <span className="text-slate-400">{item.label}</span>
-                        {item.tcLabel && <span className="text-slate-500"> ({item.tcLabel})</span>} — Waiting on {item.waitingOn}{' '}
-                        <span className="text-orange-400 font-medium">
-                          · {item.daysSince}d
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                  {attention.waitingOn.length > 5 && (
-                    <li className="text-xs text-slate-500">+{attention.waitingOn.length - 5} more</li>
-                  )}
-                </ul>
-              )}
-            </div>
-
-            {/* Coming Up -- due-soon tasks plus closings in the next
-                week, deliberately excluded from the headline count above
-                since neither is urgent *today*. */}
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-blue-400 mb-2">Coming Up</h3>
-              {attention.dueSoon.length === 0 && attention.closingsSoon.length === 0 ? (
-                <p className="text-xs text-slate-500">Nothing on the horizon</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {attention.closingsSoon.length > 0 && (
-                    <li className="text-xs text-slate-300">
-                      {attention.closingsSoon.length} closing{attention.closingsSoon.length !== 1 ? 's' : ''} this
-                      week
-                    </li>
-                  )}
-                  {attention.dueSoon.length > 0 && (
-                    <li className="text-xs text-slate-300">
-                      {attention.dueSoon.length} deadline{attention.dueSoon.length !== 1 ? 's' : ''} in the next 3
-                      days
-                    </li>
-                  )}
-                  {attention.dueSoon.slice(0, 4).map((item) => (
-                    <li key={item.taskId}>
-                      <Link
-                        href={item.href || `/dashboard/transactions/${item.transactionId}`}
-                        className="block text-xs text-slate-400 hover:text-slate-200 transition"
-                      >
-                        {item.label} — {item.taskName} <span className="text-blue-400">· {item.dueInDays}d</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+          actually needs action. Renders nothing until the fetch resolves. */}
+      {attention && <AttentionPanel attention={attention} />}
 
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
