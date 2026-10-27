@@ -823,6 +823,19 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           <p className="text-sm text-slate-400 mt-1">
             {[listing.seller_name && `Seller: ${listing.seller_name}`, data.agent && `Agent: ${data.agent.name}`].filter(Boolean).join(' · ')}
           </p>
+          {data.agent && (
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" data-testid="listing-agent-portal-status">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${portalStatus.ok ? 'bg-green-500' : 'bg-amber-400'}`} />
+              <span className={`font-medium ${portalStatus.ok ? 'text-green-300' : 'text-amber-300'}`}>
+                {portalStatus.ok ? 'Agent can see this listing in their portal' : 'Agent cannot see this listing in their portal yet'}
+              </span>
+              {!portalStatus.ok && (
+                <button type="button" onClick={() => selectTab('overview')} className="text-blue-400 hover:text-blue-300 underline underline-offset-2">
+                  Why?
+                </button>
+              )}
+            </p>
+          )}
           {money(listing.list_price) && <p className="text-2xl font-display text-blue-400 mt-1">{money(listing.list_price)}</p>}
           <p className="text-sm text-slate-400 mt-1">
             {(listing.status === 'active' || listing.status === 'under_offer') && daysOnMarket(listing.listed_on) !== null && (

@@ -337,6 +337,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [acceptedAgentUsers, setAcceptedAgentUsers] = useState<
     { userId: string; email: string; addedAt: string }[]
   >([]);
+  // False until the access list has loaded once, so the header never claims "no access" while it is still loading.
+  const [agentAccessLoaded, setAgentAccessLoaded] = useState(false);
   const [inviteEmailDraft, setInviteEmailDraft] = useState('');
   const [isInvitingAgent, setIsInvitingAgent] = useState(false);
   const [inviteMessage, setInviteMessage] = useState('');
@@ -396,6 +398,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       const data = await res.json();
       if (Array.isArray(data.invites)) setAgentInvites(data.invites);
       if (Array.isArray(data.agents)) setAcceptedAgentUsers(data.agents);
+      setAgentAccessLoaded(true);
     } catch {
       // ignore
     }
@@ -2397,6 +2400,39 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   <p className="text-lg font-semibold text-slate-100">{agentName}</p>
                 </div>
               )}
+              {/* Whether the agent can open this deal in their portal, always visible under the agent's name. */}
+              {(() => {
+                if (!agentAccessLoaded) return <p className="mt-2 text-xs text-slate-500">Checking portal access…</p>;
+                const agentEmail = agent?.email?.trim().toLowerCase() || '';
+                const hasAccess = !!agentEmail && acceptedAgentUsers.some((a) => a.email.toLowerCase() === agentEmail);
+                const invited = !hasAccess && !!agentEmail && agentInvites.some((i) => i.status !== 'accepted' && i.email.toLowerCase() === agentEmail);
+                const othersWithAccess = acceptedAgentUsers.filter((a) => a.email.toLowerCase() !== agentEmail).length;
+                const state = !agentEmail
+                  ? { dot: 'bg-slate-500', text: 'text-slate-400', label: 'No email on file, so no portal access', action: 'Add email' }
+                  : hasAccess
+                    ? { dot: 'bg-green-500', text: 'text-green-300', label: 'Has portal access', action: '' }
+                    : invited
+                      ? { dot: 'bg-amber-400', text: 'text-amber-300', label: 'Invited, not accepted yet', action: 'Manage' }
+                      : { dot: 'bg-red-400', text: 'text-red-300', label: 'No portal access yet', action: 'Invite' };
+                return (
+                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" data-testid="agent-portal-status">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${state.dot}`} />
+                    <span className={`font-medium ${state.text}`}>{state.label}</span>
+                    {hasAccess && othersWithAccess > 0 && (
+                      <span className="text-slate-500">+ {othersWithAccess} other{othersWithAccess === 1 ? '' : 's'}</span>
+                    )}
+                    {state.action && (
+                      <button
+                        type="button"
+                        onClick={() => (agentEmail ? selectTab('people') : router.push(`/dashboard/agents?agent=${transaction.agent_id}`))}
+                        className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+                      >
+                        {state.action}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Purchase Price */}
