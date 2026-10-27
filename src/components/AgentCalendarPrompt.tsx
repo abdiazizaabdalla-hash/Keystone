@@ -7,8 +7,9 @@ import { authFetch } from '@/lib/authClient';
 const DISMISS_KEY = 'relay_agent_calendar_prompt_dismissed';
 
 // One-time nudge on the agent's home page: set up your calendar once and every
-// important date on your deals lands there automatically. Hidden once they have
-// connected Google Calendar, or when they dismiss it (remembered in this browser only).
+// important date on your deals lands there automatically. It points to the subscribe link, which works in Google,
+// Apple and Outlook without any Google approval, so it shows whether or not direct Google sync is available yet.
+// Hidden once they have connected Google Calendar, or when they dismiss it (remembered in this browser only).
 export default function AgentCalendarPrompt() {
   const [show, setShow] = useState(false);
 
@@ -24,11 +25,14 @@ export default function AgentCalendarPrompt() {
     (async () => {
       try {
         const res = await authFetch('/api/google-calendar/status');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data.connected && data.available) setShow(true);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.connected) return;
+        }
+        setShow(true);
       } catch {
-        // Cosmetic prompt only: stay hidden on any error.
+        // Could not check: still show it, the nudge is harmless.
+        setShow(true);
       }
     })();
   }, []);
@@ -49,7 +53,7 @@ export default function AgentCalendarPrompt() {
       <div className="min-w-0">
         <p className="text-slate-100 text-sm font-semibold">Put your deal dates on your calendar</p>
         <p className="text-slate-400 text-xs mt-0.5">
-          Set it up once (about 30 seconds). Inspection, appraisal and closing dates then show up on their own and update if your TC changes them.
+          Set it up once (about 30 seconds) and every deal, including new ones, shows up on its own. Inspection, appraisal and closing dates move if your TC changes them.
         </p>
       </div>
       <div className="flex items-center gap-3 shrink-0">

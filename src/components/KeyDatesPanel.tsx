@@ -258,14 +258,25 @@ export default function KeyDatesPanel({
     <div className="pt-6 mt-6 border-t border-slate-600">
       <div className="flex items-start justify-between gap-3 mb-2">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Critical Dates</p>
-        {openCount > 0 && (
-          <button
-            type="button"
-            onClick={downloadIcs}
+        {readOnlyDates !== undefined ? (
+          // Agent portal: a one-time subscribe link covers every deal (and new ones) and stays up to date.
+          // A downloaded file would be a snapshot of this one deal that never changes.
+          <a
+            href="/agent/settings#calendar"
             className="text-xs text-blue-400 hover:text-blue-300 transition whitespace-nowrap shrink-0"
           >
-            Add to calendar
-          </button>
+            Add all my deals to my calendar
+          </a>
+        ) : (
+          openCount > 0 && (
+            <button
+              type="button"
+              onClick={downloadIcs}
+              className="text-xs text-blue-400 hover:text-blue-300 transition whitespace-nowrap shrink-0"
+            >
+              Add to calendar
+            </button>
+          )
         )}
       </div>
       <p className="text-xs text-slate-500 mb-3">
