@@ -80,7 +80,21 @@ export default function MessagePreview({
                     } ${m.attachment_document_id && onAttachmentDragStart ? 'cursor-grab active:cursor-grabbing' : ''}`}
                   >
                     <span aria-hidden>📎</span>
-                    <span className="truncate">{m.attachment.fileName}</span>
+                    {m.attachment.url ? (
+                      // draggable={false}: a link is draggable on its own, which would drag the web address instead of the document.
+                      <a
+                        href={m.attachment.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        draggable={false}
+                        title={`Open ${m.attachment.fileName}`}
+                        className="truncate underline underline-offset-2 hover:opacity-80"
+                      >
+                        {m.attachment.fileName}
+                      </a>
+                    ) : (
+                      <span className="truncate">{m.attachment.fileName}</span>
+                    )}
                   </span>
                 )}
                 {!m.body && !m.attachment && <p className="italic opacity-70">Attachment</p>}
