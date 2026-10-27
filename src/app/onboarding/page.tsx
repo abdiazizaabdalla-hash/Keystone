@@ -17,7 +17,7 @@ import { PLANS, PUBLIC_PLANS, type PlanId } from '@/lib/plans';
 //   4. Deal checklist (baseline + automatic due dates)
 //   5. How agents pay you (Stripe Connect vs. collect it yourself)
 //   6. Launchpad: jump straight into the first thing to set up (AI contract
-//      intake, agents, contacts, imports, calendar link, listings,
+//      intake, agents, contacts, imports, calendar connection, listings,
 //      QuickBooks, and Collaborate on Team plans)
 // Each settings step saves immediately via PATCH /api/auth/me before
 // advancing -- the same endpoint and fields the Settings page uses -- so
@@ -575,10 +575,10 @@ function OnboardingContent() {
       href: '/dashboard/transactions/import',
     },
     {
-      title: 'Put key dates on your calendar',
-      body: 'Subscribe to your Relay calendar link in Google, Outlook or Apple Calendar.',
-      cta: 'Get calendar link',
-      href: '/dashboard/calendar',
+      title: 'Connect your calendar',
+      body: 'Connect Google Calendar and your deal dates and due dates update there within seconds. Outlook or Apple Calendar? Use your Relay calendar link.',
+      cta: 'Connect calendar',
+      href: '/dashboard/calendar#calendar-settings',
     },
     {
       title: 'Track a listing',

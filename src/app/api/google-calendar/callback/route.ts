@@ -18,10 +18,18 @@ export async function GET(request: NextRequest) {
   const verified = stateToken ? verifyOAuthState(stateToken) : null;
   const state = verified && verified.from !== 'quickbooks' ? verified : null;
   const finalPage =
-    state?.from === 'onboarding' ? '/onboarding' : state?.from === 'agent' ? '/agent/settings' : '/dashboard/settings';
+    state?.from === 'onboarding'
+      ? '/onboarding'
+      : state?.from === 'agent'
+        ? '/agent/settings'
+        : state?.from === 'calendar'
+          ? '/dashboard/calendar'
+          : '/dashboard/settings';
+  // Back on the Calendar tab, land on the settings section where the result message is shown.
+  const hash = state?.from === 'calendar' ? '#calendar-settings' : '';
 
   if (oauthError || !code || !state) {
-    return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=error`);
+    return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=error${hash}`);
   }
 
   try {
@@ -32,14 +40,14 @@ export async function GET(request: NextRequest) {
       // Google only returns a refresh_token on the first consent for a
       // client+user pair; prompt=consent forces that on every attempt, but a
       // grant made outside this flow could still land here without one.
-      return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=no_refresh_token`);
+      return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=no_refresh_token${hash}`);
     }
 
     // Google's consent screen lets people untick individual permissions. If the calendar one was left
     // off, the connection would look fine but could never create an event, so refuse it here.
     const granted = String(tokens.scope || '').split(/\s+/);
     if (!granted.includes('https://www.googleapis.com/auth/calendar.events')) {
-      return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=missing_permission`);
+      return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=missing_permission${hash}`);
     }
 
     const email = await getGoogleUserEmail(tokens.access_token);
@@ -63,9 +71,9 @@ export async function GET(request: NextRequest) {
     // Put the dates that already exist on their calendar (runs after this redirect is sent).
     queueBackfillUserCalendar(state.userId);
 
-    return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=connected`);
+    return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=connected${hash}`);
   } catch (error) {
     console.error('Error completing Google Calendar connection:', error);
-    return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=error`);
+    return NextResponse.redirect(`${origin}${finalPage}?googleCalendar=error${hash}`);
   }
 }

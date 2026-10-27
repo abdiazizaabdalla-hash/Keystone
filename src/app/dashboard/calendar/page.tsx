@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import CalendarConnectCard from '@/components/CalendarConnectCard';
 
 // The Calendar tab: one month at a time, every date from your own deals and listings, colored by kind.
 // The "What goes on my calendar" switches are the same preferences the Google/Outlook/Apple calendar link
@@ -267,7 +268,8 @@ export default function CalendarPage() {
 
         <section id="calendar-settings" className="mt-10 scroll-mt-6" aria-label="Calendar settings">
           <h2 className="text-lg font-display font-semibold text-slate-100 mb-3">Calendar settings</h2>
-          <div className="grid gap-4 md:grid-cols-2 items-start">
+          <div className="space-y-4">
+          <CalendarConnectCard audience="tc" from="calendar" showPrefs={false} />
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-xs font-semibold tracking-wider text-slate-500 uppercase mb-3">What goes on my calendar</h2>
             <div className="space-y-2">
@@ -289,13 +291,6 @@ export default function CalendarPage() {
               ))}
             </div>
             <p className="text-xs text-slate-500 mt-3">These choices also decide what goes to your Google, Outlook or Apple calendar.</p>
-          </div>
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-            <h2 className="text-xs font-semibold tracking-wider text-slate-500 uppercase mb-2">Put it on your own calendar</h2>
-            <p className="text-sm text-slate-400 mb-3">Add your private Relay calendar link to Google Calendar, Outlook or Apple Calendar, so dates show up where you already look.</p>
-            <Link href="/dashboard/settings" className="inline-block px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">
-              Calendar settings
-            </Link>
           </div>
           </div>
         </section>

@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Google Calendar sync is not open to everyone yet. Use the calendar link instead.' }, { status: 403 });
     }
     const body = await request.json().catch(() => ({}));
-    const from: OAuthReturnTo = body?.from === 'onboarding' ? 'onboarding' : body?.from === 'agent' ? 'agent' : 'settings';
+    const from: OAuthReturnTo =
+      body?.from === 'onboarding' ? 'onboarding' : body?.from === 'agent' ? 'agent' : body?.from === 'calendar' ? 'calendar' : 'settings';
 
     const origin = new URL(request.url).origin;
     const redirectUri = `${origin}/api/google-calendar/callback`;

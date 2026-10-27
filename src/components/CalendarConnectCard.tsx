@@ -41,7 +41,17 @@ const PREF_ROWS: { key: keyof Prefs; label: string; hint: string; tcOnly?: boole
   { key: 'listing_dates', label: 'Listing dates', hint: 'Go-live day, open houses, price reviews and listing expiration' },
 ];
 
-export default function CalendarConnectCard({ audience }: { audience: Audience }) {
+export default function CalendarConnectCard({
+  audience,
+  from = 'settings',
+  showPrefs = true,
+}: {
+  audience: Audience;
+  /** Where Google sends a coordinator back to after connecting. */
+  from?: 'settings' | 'calendar';
+  /** Hide the "What goes on my calendar" switches when the page already shows them. */
+  showPrefs?: boolean;
+}) {
   const router = useRouter();
   const loginPath = audience === 'agent' ? '/agent/login' : '/auth';
 
@@ -116,7 +126,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
       const res = await authFetch('/api/google-calendar/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: audience === 'agent' ? 'agent' : 'settings' }),
+        body: JSON.stringify({ from: audience === 'agent' ? 'agent' : from }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to start Google Calendar connection');
@@ -351,7 +361,7 @@ export default function CalendarConnectCard({ audience }: { audience: Audience }
         </div>
       </div>
 
-      {prefs && (
+      {showPrefs && prefs && (
         <div className="mt-5 rounded-lg border border-slate-600 p-5">
           <h3 className="font-semibold text-slate-100 text-sm mb-1">What goes on my calendar</h3>
           <p className="text-xs text-slate-500 mb-4">

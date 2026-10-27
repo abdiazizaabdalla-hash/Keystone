@@ -21,7 +21,7 @@ function getStateSecret(): string {
   return secret;
 }
 
-export type OAuthReturnTo = 'settings' | 'onboarding' | 'agent' | 'quickbooks';
+export type OAuthReturnTo = 'settings' | 'onboarding' | 'agent' | 'quickbooks' | 'calendar';
 
 interface OAuthStatePayload {
   userId: string;
@@ -53,7 +53,7 @@ export function verifyOAuthState(token: string): { userId: string; from: OAuthRe
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as Partial<OAuthStatePayload>;
     if (typeof payload.userId !== 'string' || typeof payload.exp !== 'number') return null;
     if (Date.now() > payload.exp) return null;
-    return { userId: payload.userId, from: payload.from === 'onboarding' || payload.from === 'agent' || payload.from === 'quickbooks' ? payload.from : 'settings' };
+    return { userId: payload.userId, from: payload.from === 'onboarding' || payload.from === 'agent' || payload.from === 'quickbooks' || payload.from === 'calendar' ? payload.from : 'settings' };
   } catch {
     return null;
   }
