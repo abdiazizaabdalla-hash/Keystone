@@ -77,9 +77,9 @@ function buildIcs(address: string, dates: KeyDate[]): string {
   return lines.join('\r\n');
 }
 
-// Hidden until Google approves the Calendar integration. Flip to true (and set
-// GOOGLE_CALENDAR_PUBLIC on the server) once approved.
-const SHOW_GOOGLE_CALENDAR_SYNC = false;
+// Google approved the Calendar scope on Oct 25. The row still only appears when the server says Google Calendar is
+// available for this person (GOOGLE_CALENDAR_PUBLIC=true, or the beta allowlist), so this flag can stay true.
+const SHOW_GOOGLE_CALENDAR_SYNC = true;
 
 export default function KeyDatesPanel({
   transactionId,
