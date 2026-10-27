@@ -1,6 +1,7 @@
 import { supabaseServer } from '@/lib/supabase';
 import { hasAgentRole, mergeAppMetadata } from '@/lib/privileged';
-import { sendAgentInviteEmail, sendAgentListingInviteEmail } from '@/lib/agentPortalEmails';
+import { sendAgentInviteEmail, sendAgentListingInviteEmail, sendAgentAccessSummaryEmail } from '@/lib/agentPortalEmails';
+import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { logListingActivity } from '@/lib/listings';
 import { queueCalendarSync } from '@/lib/calendarSync';
 
@@ -56,6 +57,8 @@ export async function sendListingPortalInvite(params: {
   appUrl: string;
   /** Skip when this agent was already invited to this listing (used for automatic invites; the Send button always sends). */
   onlyIfNew?: boolean;
+  /** Give the access without sending the per-listing email (the caller sends one summary email instead). */
+  silent?: boolean;
 }): Promise<ListingInviteOutcome> {
   try {
     const { listing, user, appUrl } = params;
@@ -75,12 +78,14 @@ export async function sendListingPortalInvite(params: {
     if (!link.ok) return link.reason === 'other_account' ? 'other_account' : 'failed';
 
     const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
-    await sendAgentListingInviteEmail({
-      toEmail: email,
-      tcLabel,
-      propertyAddress: (listing.property_address as string | null) || null,
-      loginUrl: agentSetupUrl(appUrl, email),
-    });
+    if (!params.silent) {
+      await sendAgentListingInviteEmail({
+        toEmail: email,
+        tcLabel,
+        propertyAddress: (listing.property_address as string | null) || null,
+        loginUrl: agentSetupUrl(appUrl, email),
+      });
+    }
     await logListingActivity(listing.id, user, `Invited ${agent.name || email} (${email}) to the agent portal`);
     return 'sent';
   } catch (error) {
@@ -108,6 +113,8 @@ export async function inviteAgentToTransaction(params: {
   email?: string;
   /** The deal came from the agent's own listing: the email says so. */
   fromListing?: boolean;
+  /** Give the access without sending the per-deal email (the caller sends one summary email instead). */
+  silent?: boolean;
 }): Promise<TxInviteOutcome> {
   try {
     const { transaction, user, appUrl } = params;
@@ -145,7 +152,9 @@ export async function inviteAgentToTransaction(params: {
     }
 
     const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
-    await sendAgentInviteEmail({ toEmail: email, tcLabel, propertyAddress: (transaction.property_address as string | null) || null, loginUrl: agentSetupUrl(appUrl, email), fromListing: params.fromListing === true });
+    if (!params.silent) {
+      await sendAgentInviteEmail({ toEmail: email, tcLabel, propertyAddress: (transaction.property_address as string | null) || null, loginUrl: agentSetupUrl(appUrl, email), fromListing: params.fromListing === true });
+    }
     return 'sent';
   } catch (error) {
     console.error('inviteAgentToTransaction failed (ignored):', error);
@@ -154,3 +163,64 @@ export async function inviteAgentToTransaction(params: {
 }
 
 const normalize = (e: string | null | undefined) => (e || '').trim().toLowerCase();
+
+export type GrantAccessResult = { ok: boolean; reason?: 'no_agent' | 'no_email'; deals: number; listings: number; emailed: boolean };
+
+/**
+ * Gives one agent portal access to everything of theirs that is still open: their open deals and their shared,
+ * not-yet-closed listings. Anything they already have is skipped, so running it twice does nothing. One summary
+ * email goes out (not one per deal). Never throws.
+ */
+export async function grantAgentPortalAccess(params: {
+  agentId: string;
+  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null };
+  appUrl: string;
+}): Promise<GrantAccessResult> {
+  const empty = { deals: 0, listings: 0, emailed: false };
+  try {
+    const { agentId, user, appUrl } = params;
+    const { data: agent } = await supabaseServer.from('agents').select('id, name, email').eq('id', agentId).maybeSingle();
+    if (!agent) return { ok: false, reason: 'no_agent', ...empty };
+    const email = normalize(agent.email as string | null);
+    if (!email.includes('@')) return { ok: false, reason: 'no_email', ...empty };
+
+    const closed = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1];
+    const { data: txs } = await supabaseServer
+      .from('transactions')
+      .select('id, agent_id, property_address')
+      .eq('agent_id', agentId)
+      .neq('status', closed)
+      .limit(100);
+    let deals = 0;
+    for (const tx of txs || []) {
+      if ((await inviteAgentToTransaction({ transaction: tx, user, appUrl, silent: true })) === 'sent') deals += 1;
+    }
+
+    const { data: lists } = await supabaseServer
+      .from('listings')
+      .select('id, agent_id, share_with_agent, property_address')
+      .eq('agent_id', agentId)
+      .eq('share_with_agent', true)
+      .in('status', ['preparing', 'active', 'under_offer'])
+      .limit(100);
+    let listings = 0;
+    for (const l of lists || []) {
+      if ((await sendListingPortalInvite({ listing: l, user, appUrl, onlyIfNew: true, silent: true })) === 'sent') listings += 1;
+    }
+
+    let emailed = false;
+    if (deals + listings > 0) {
+      try {
+        const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
+        await sendAgentAccessSummaryEmail({ toEmail: email, tcLabel, deals, listings, loginUrl: agentSetupUrl(appUrl, email) });
+        emailed = true;
+      } catch (err) {
+        console.error('Could not send the agent access summary email (access was still granted):', err);
+      }
+    }
+    return { ok: true, deals, listings, emailed };
+  } catch (error) {
+    console.error('grantAgentPortalAccess failed (ignored):', error);
+    return { ok: false, ...empty };
+  }
+}

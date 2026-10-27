@@ -243,6 +243,9 @@ export default function ImportTransactionsPage() {
               purchasePrice: p.price,
               acceptanceDate: p.acc || null,
               closingDate: p.clo || null,
+              // An import can be undone and often brings in many deals for one agent: no one email per deal.
+              // The agent is given access from the Agents page ("Give access to open deals") when the TC is ready.
+              inviteAgent: false,
             }),
           });
           const tx = await txRes2.json();

@@ -152,3 +152,33 @@ export async function sendAgentCalendarInviteEmail(params: { toEmail: string; tc
   const resend = getResendClient();
   return resend.emails.send({ from: INVOICE_FROM_EMAIL, to: toEmail, subject: `Add your deal dates to your calendar${propertyAddress ? ` (${propertyAddress})` : ''}`, html });
 }
+
+// One email when an agent is given access to several existing deals/listings at once (instead of one email per item).
+export async function sendAgentAccessSummaryEmail(params: {
+  toEmail: string;
+  tcLabel: string;
+  deals: number;
+  listings: number;
+  loginUrl: string;
+}) {
+  const { toEmail, tcLabel, deals, listings, loginUrl } = params;
+  const parts = [
+    deals > 0 ? `${deals} deal${deals === 1 ? '' : 's'}` : '',
+    listings > 0 ? `${listings} listing${listings === 1 ? '' : 's'}` : '',
+  ].filter(Boolean);
+  const what = parts.join(' and ');
+  const html = wrapper(
+    "You've been added to your deals",
+    `<p><strong>${escapeHtml(tcLabel)}</strong> gave you access to ${escapeHtml(what)} on Relay TC, a transaction coordination workspace.</p>
+     <p><a href="${loginUrl}" style="color: #b45309;">Set up your Relay TC account</a></p>
+     <p style="font-size: 13px; color: #555;">This link doesn't expire. It takes you to a page that emails you a fresh sign-in link when you ask for one.</p>
+     <p>Once in, you'll see each one's checklist, documents and dates, and you can message ${escapeHtml(tcLabel)} right from the page.</p>`
+  );
+  const resend = getResendClient();
+  return resend.emails.send({
+    from: INVOICE_FROM_EMAIL,
+    to: toEmail,
+    subject: `${tcLabel} gave you access to ${what} on Relay TC`,
+    html,
+  });
+}

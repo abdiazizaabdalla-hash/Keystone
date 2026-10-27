@@ -230,7 +230,16 @@ export default function AgentsPage() {
         throw new Error(data.error || 'Failed to save agent');
       }
 
-      setMessage(editingId ? 'Agent updated!' : 'Agent added!');
+      const saved = editingId ? await response.json().catch(() => null) : null;
+      const gave = saved?.portalAccess as { deals?: number; listings?: number } | null | undefined;
+      const gaveCount = (gave?.deals ?? 0) + (gave?.listings ?? 0);
+      setMessage(
+        editingId
+          ? gaveCount > 0
+            ? `Agent updated! They now have portal access to ${gaveCount} open deal${gaveCount === 1 ? '' : 's'} and listing${gaveCount === 1 ? '' : 's'}, and were emailed once.`
+            : 'Agent updated!'
+          : 'Agent added!'
+      );
       await fetchAgents();
       resetForm();
     } catch (error) {
@@ -241,6 +250,27 @@ export default function AgentsPage() {
       setMessage(error instanceof Error ? error.message : 'Error saving agent');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGiveAccess = async (agent: Agent) => {
+    setMessage('');
+    try {
+      const response = await authFetch(`/api/agents/${agent.id}/portal-access`, { method: 'POST' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not give access');
+      const total = (data.deals ?? 0) + (data.listings ?? 0);
+      setMessage(
+        total === 0
+          ? `${agent.name} already has portal access to all of their open deals and listings.`
+          : `${agent.name} now has portal access to ${data.deals} open deal${data.deals === 1 ? '' : 's'}${data.listings ? ` and ${data.listings} listing${data.listings === 1 ? '' : 's'}` : ''}${data.emailed ? ', and was emailed once' : ''}.`
+      );
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setMessage(error instanceof Error ? error.message : 'Could not give access');
     }
   };
 
@@ -593,6 +623,15 @@ export default function AgentsPage() {
                           >
                             Profile &amp; history
                           </Link>
+                          {agent.email && (
+                            <button
+                              onClick={() => handleGiveAccess(agent)}
+                              title="Give this agent a portal login for every open deal and shared listing they are on"
+                              className="px-3.5 py-1.5 text-sm border border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition font-medium"
+                            >
+                              Give access to open deals
+                            </button>
+                          )}
                           <button
                             onClick={() => handleEdit(agent)}
                             className="px-3.5 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium"
