@@ -309,7 +309,8 @@ export default function Home() {
               "Upload documents and add contacts",
               "General messages with you, plus messages on each deal",
               "A heads-up when a listing becomes an active deal, with no extra step",
-              "Dates on their own calendar",
+              "Dates on their own calendar, connected once with Google Calendar",
+              "Access arrives automatically when you add them to a deal or listing",
               "View their invoices",
             ].map((line) => (
               <li key={line} className="flex items-start gap-2.5">
@@ -361,10 +362,11 @@ export default function Home() {
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Calendar</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Your deadlines, on the calendar you already use.</h2>
-          <p className="text-slate-400 mb-5">Add your private Relay calendar link to Google Calendar, Outlook or Apple Calendar in one click. Dates you add or move in Relay show up there on their own, and agents get the dates for their deals too.</p>
+          <p className="text-slate-400 mb-5">Connect Google Calendar once and every date you add or move in Relay updates there within seconds. Use Outlook or Apple Calendar? Subscribe to your private Relay link instead. Agents can connect their own calendar too, so every deal they are on shows up automatically.</p>
           <ul className="space-y-2.5 text-sm text-slate-300">
             {[
-              "One-click Add to Google Calendar, Outlook or Apple Calendar, no sign-in or permissions needed",
+              "Connect Google Calendar in about 30 seconds and changes appear within seconds",
+              "Outlook or Apple Calendar: add your private Relay link, no sign-in needed",
               "Critical dates, checklist due dates and listing dates, kept up to date as they change",
               "Choose what goes on your calendar: critical dates, closing day, checklist due dates, listing dates",
               "A private link only you have, which you can replace any time",
@@ -375,7 +377,7 @@ export default function Home() {
               </li>
             ))}
           </ul>
-          <p className="text-xs text-slate-500 mt-4">Calendar apps refresh subscribed links on their own schedule, so a change can take a little while to show.</p>
+          <p className="text-xs text-slate-500 mt-4">Subscribed links (Outlook, Apple, or Google by link) refresh on the calendar app's own schedule, so a change can take a few hours to show. Connecting Google Calendar directly avoids that wait.</p>
         </ShotRow>
       </section>
 
@@ -439,11 +441,11 @@ export default function Home() {
             { title: "AI contract intake", body: 'Upload the contract and Relay fills in the deal, including the key dates.' },
             { title: "Critical dates", body: 'Dates are read from the contract, shown on your dashboard, and sent to agents as reminders.' },
             { title: "Built-in e-signatures", body: 'Send a document for signature from the transaction or listing. No separate DocuSign account.' },
-            { title: "Calendar links", body: 'Add your dates to Google, Outlook or Apple Calendar in one click. They update on their own.' },
+            { title: "Calendar links", body: 'Connect Google Calendar and dates update within seconds. Outlook and Apple use your private Relay link.' },
             { title: "CSV deal import", body: 'Bring in your open deals from a spreadsheet, with a preview and no duplicates.' },
             { title: "Contacts", body: 'An address book that builds itself from your deals, with CSV import, export and a newsletter list.' },
             { title: "Document organization", body: 'Documents sorted into categories and linked to checklist steps.' },
-            { title: "Agent portal and messaging", body: 'Agents get a free login for their deals and listings, with general and per-deal messages.' },
+            { title: "Agent portal and messaging", body: 'Agents get a free login, set up automatically when you add them to a deal or listing, with general and per-deal messages.' },
             { title: "Email-to-transaction", body: 'Forward or CC an email to the deal and it lands on the transaction, attachments included.' },
             { title: "Daily digest", body: 'A morning email with overdue and due-today steps.' },
             { title: "Custom templates", body: 'Build checklists for different deal types, for deals and for listings. Pro and Team.' },

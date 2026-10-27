@@ -75,8 +75,8 @@ const FAQS: { category: string; q: string; a: string }[] = [
   },
   {
     category: 'Agent portal',
-    q: 'How do I invite an agent?',
-    a: 'From a transaction’s page, enter the agent’s email and send the invite. They get an email to set up their account — no password needed the first time — and choose one on their very first login. Their sign-in links work for 30 minutes and can be opened more than once, so a mail app that previews the link will not break it; you can always ask for a new one.',
+    q: 'How do I give an agent access?',
+    a: 'Just add the agent to a transaction or listing with their email. If they do not have a login yet, Relay sends them an email to set up their account, and if they already do, they get access straight away with no extra step. Each transaction and listing also shows whether the agent can see it in their portal, so you always know. New agents need no password the first time and choose one on their very first login. Their sign-in links work for 30 minutes and can be opened more than once, so a mail app that previews the link will not break it; you can always ask for a new one.',
   },
   {
     category: 'Agent portal',
@@ -112,7 +112,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Listings & calendar',
     q: 'Will my dates show up on my calendar?',
-    a: 'Yes. In Settings, choose Add to Google Calendar, Outlook or Apple Calendar to subscribe once to your private Relay link. Critical dates, checklist due dates and listing dates then appear and move on their own as you change them. Calendar apps refresh subscribed links on their own schedule, so Google can take a few hours to show a change. Direct Google Calendar sync is coming soon. You choose what goes on your calendar (critical dates, closing day, checklist due dates, listing dates) under Settings, and it applies to both.',
+    a: 'Yes. On Google Calendar, choose Connect Google Calendar once (on the Calendar tab or in Settings) and your critical dates, checklist due dates and listing dates are added and updated there within seconds as you change them. Agents can connect their own Google Calendar the same way, and every deal they are on, including new ones, shows up without any extra steps. On Outlook or Apple Calendar, subscribe once to your private Relay calendar link instead; those apps refresh subscribed links on their own schedule, so a change can take a few hours to show. You choose what goes on your calendar (critical dates, closing day, checklist due dates, listing dates) under Settings, and it applies to both.',
   },
   {
     category: 'Listings & calendar',

@@ -18,7 +18,7 @@ const FEATURES: { title: string; body: string }[] = [
   },
   {
     title: 'Dates on your calendar',
-    body: 'Add your deals’ key dates to Google Calendar, Outlook or Apple Calendar in one click. They update on their own when your TC moves a date.',
+    body: 'Connect Google Calendar once and every deal, including new ones, shows up on its own and updates within seconds when your TC moves a date. Outlook or Apple Calendar? Use your private Relay link.',
   },
   {
     title: 'See the checklist',
@@ -113,7 +113,7 @@ export default function ForAgentsPage() {
           </Link>
         </div>
         <p className="text-xs text-slate-500 mt-5">
-          Don&apos;t have a login yet? Your TC invites you by email the first time they add you to a deal.
+          Don&apos;t have a login yet? You get an email the first time your TC adds you to a deal or listing. Already have one? New deals just show up.
         </p>
       </section>
 
@@ -133,7 +133,7 @@ export default function ForAgentsPage() {
       <section id="features" className="max-w-6xl mx-auto px-6 pb-20 scroll-mt-20">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4 text-center">What you can do</h2>
         <p className="text-slate-400 mb-12 max-w-2xl mx-auto text-center">
-          Everything below is included the moment a TC invites you -- free, for as many TCs, deals and listings as you work.
+          Everything below is included the moment a TC adds you -- free, for as many TCs, deals and listings as you work.
         </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {FEATURES.map((f) => (
@@ -173,7 +173,7 @@ export default function ForAgentsPage() {
         <h2 className="font-display text-2xl font-semibold text-slate-100 mb-8 text-center">Getting started takes one email</h2>
         <div className="grid sm:grid-cols-3 gap-8 text-center">
           {[
-            { step: '1', title: 'Your TC invites you', body: 'They add you to a deal and Relay emails you a link -- no action needed until then.' },
+            { step: '1', title: 'Your TC adds you', body: 'They add you to a deal or listing and Relay emails you access automatically -- no action needed until then.' },
             { step: '2', title: 'Click the link, you’re in', body: 'No password required to start. Set one later if you’d rather not use email links every time.' },
             { step: '3', title: 'Log in anytime', body: 'The same email works for every TC who invites you -- all your deals, one login, relaytc.com/agent/login.' },
           ].map((s) => (
