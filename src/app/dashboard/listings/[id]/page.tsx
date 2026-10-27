@@ -15,7 +15,8 @@ import ContactPicker from '@/components/ContactPicker';
 import StepEmailModal from '@/components/StepEmailModal';
 import OfferIntakeModal from '@/components/OfferIntakeModal';
 import OfferHistory from '@/components/OfferHistory';
-import ListingThread from '@/components/ListingThread';
+import ListingThread, { type ListingThreadComment } from '@/components/ListingThread';
+import MessagePreview from '@/components/MessagePreview';
 import OverviewSection from '@/components/OverviewSection';
 import SellerUpdateModal from '@/components/SellerUpdateModal';
 import ListingReadinessCard from '@/components/ListingReadinessCard';
@@ -189,6 +190,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [newDate, setNewDate] = useState({ label: '', dueDate: '' });
   const [newContact, setNewContact] = useState({ role: '', name: '', email: '', phone: '' });
 
+  // The listing thread's messages, kept here so the same small preview shows beside the Documents and on the Overview.
+  const [threadComments, setThreadComments] = useState<ListingThreadComment[]>([]);
   // Documents
   const [docs, setDocs] = useState<ListingDoc[]>([]);
   const [signReqs, setSignReqs] = useState<ListingSigningRequest[]>([]);
@@ -423,6 +426,16 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       setRelisting(false);
     }
   };
+
+  // The thread's messages in the shape the small preview wants (same preview the deal page uses).
+  const previewMessages = threadComments.map((c) => ({
+    id: c.id,
+    sender_role: c.author_role,
+    body: c.body,
+    created_at: c.created_at,
+    attachment_document_id: c.attachment_document_id ?? null,
+    attachment: c.attachment ?? null,
+  }));
 
   const moveDoc = async (docId: string, documentType: string) => {
     const current = docs.find((d) => d.id === docId);
@@ -1081,11 +1094,23 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               </ul>
             )}
           </OverviewSection>
+
+          <OverviewSection
+            title="Messages"
+            summary={previewMessages.length === 0 ? 'No messages yet' : previewMessages[previewMessages.length - 1].body || 'Attachment'}
+            action={{ label: 'Open messages', onClick: () => selectTab('messages') }}
+          >
+            {previewMessages.length === 0 ? (
+              <p className="text-sm text-slate-400">Nothing yet. Choose a listing agent and turn on sharing in Details to start a conversation.</p>
+            ) : (
+              <MessagePreview messages={previewMessages} agentName={data.agent?.name || ''} limit={3} />
+            )}
+          </OverviewSection>
         </div>
 
         <div className={tab === 'messages' ? '' : 'hidden'}>
           {data.agent && listing.share_with_agent !== false ? (
-            <ListingThread endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} />
+            <ListingThread endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
           ) : (
             <div className={cardCls}>
               <h2 className="text-lg font-bold text-slate-100 mb-1">Messages</h2>
@@ -1666,6 +1691,19 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             {docError && <p className="text-sm text-red-400 mt-2">{docError}</p>}
           </div>
           <div className="space-y-6 min-w-0">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold text-slate-100">Messages</h2>
+                <button type="button" onClick={() => selectTab('messages')} className="text-sm text-blue-400 hover:text-blue-300 font-medium transition">
+                  Open →
+                </button>
+              </div>
+              {previewMessages.length === 0 ? (
+                <p className="text-sm text-slate-500">{data.agent && listing.share_with_agent !== false ? 'No messages yet.' : 'Choose a listing agent and turn on sharing in Details to message them here.'}</p>
+              ) : (
+                <MessagePreview messages={previewMessages} agentName={data.agent?.name || ''} limit={4} onAttachmentDragStart={startDocDrag} />
+              )}
+            </div>
           {/* Communication -- offer emails forwarded to this listing's own address wait for review in the Offers card;
               the address itself lives down here, like the deal page. Hidden until the inbound domain is configured. */}
           {inboundAddress && (

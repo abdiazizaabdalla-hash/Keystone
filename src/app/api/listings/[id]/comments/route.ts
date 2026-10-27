@@ -33,7 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     const body = await request.json().catch(() => ({}));
     const label = (user.user_metadata?.full_name as string | undefined)?.trim() || user.email || 'Coordinator';
-    const result = await addComment({ listingId: id, userId: user.id, role: 'tc', label, body: body.body });
+    const result = await addComment({ listingId: id, userId: user.id, role: 'tc', label, body: body.body, attachmentDocumentId: body.attachmentDocumentId });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
     // The agent gets a plain "you have a message" email, only when the listing is shared with them.
     if (listing.share_with_agent === true && listing.agent_id) queueAgentNotice({ listingId: id, what: 'message', appUrl: request.nextUrl.origin });
