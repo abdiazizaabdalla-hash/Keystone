@@ -89,6 +89,20 @@ export interface Plan {
   };
 }
 
+// Pro's feature list, shared so the Team card can show everything in Pro first.
+const PRO_FEATURES = [
+  'Unlimited transactions',
+  'Unlimited agent profiles',
+  'AI contract intake -- upload the contract, Relay fills in the deal',
+  'Listings, offers and showings, converted to a deal in one click',
+  'Document uploads per checklist step',
+  'Calendar link for Google, Outlook and Apple, plus CSV deal import',
+  'QuickBooks invoice import and export',
+  'Custom checklist templates with required-step flags',
+  'Admin dashboard access',
+  'Priority support',
+];
+
 export const PLANS: Plan[] = [
   {
     id: 'starter',
@@ -125,18 +139,7 @@ export const PLANS: Plan[] = [
     price: '$39',
     period: '/month',
     description: 'For solo TCs running their transactions in Relay.',
-    features: [
-      'Unlimited transactions',
-      'Unlimited agent profiles',
-      'AI contract intake -- upload the contract, Relay fills in the deal',
-      'Listings, offers and showings, converted to a deal in one click',
-      'Document uploads per checklist step',
-      'Calendar link for Google, Outlook and Apple, plus CSV deal import',
-      'QuickBooks invoice import and export',
-      'Custom checklist templates with required-step flags',
-      'Admin dashboard access',
-      'Priority support',
-    ],
+    features: PRO_FEATURES,
     popular: true,
     limits: {
       maxActiveTransactions: null,
@@ -152,12 +155,11 @@ export const PLANS: Plan[] = [
     period: '/month for 3 seats',
     description: 'For teams sharing transactions, agents, and workflows.',
     features: [
-      '3 seats included, $30/month for each extra seat',
-      'Everything in Pro',
+      // Everything Pro has, listed out so the Team card reads the same as the others, then what Team adds.
+      ...PRO_FEATURES,
       'Shared agent roster across the team',
       'Team-wide transaction visibility',
-      'Custom checklist templates with required-step flags',
-      'Priority support',
+      '3 seats included, $30/month for each extra seat',
     ],
     limits: {
       maxActiveTransactions: null,

@@ -138,7 +138,7 @@ export default function PricingPage() {
               >
                 {CTA_LABELS[plan.id] || `Start ${plan.name}`}
               </Link>
-              <ul className="space-y-3 mt-auto">
+              <ul className="space-y-3">
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
                     <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
