@@ -150,13 +150,13 @@ export const PLANS: Plan[] = [
     name: 'Team',
     price: '$89',
     period: '/month for 3 seats',
-    description: 'For teams sharing transactions, agents, and workflows. 3 seats included, extra seats $30/month each.',
+    description: 'For teams sharing transactions, agents, and workflows.',
     features: [
+      '3 seats included, $30/month for each extra seat',
       'Everything in Pro',
       'Shared agent roster across the team',
       'Team-wide transaction visibility',
       'Custom checklist templates with required-step flags',
-      '3 seats included, $30/month for each extra seat',
       'Priority support',
     ],
     limits: {
