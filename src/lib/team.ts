@@ -5,9 +5,9 @@ import { getStripeCustomerByUserId } from './stripeCustomers';
 import { getPlan, type PlanId } from './plans';
 
 // Team billing is now real per-seat quantity billing (see lib/stripe.ts —
-// STRIPE_PRICE_TEAM is a $19/mo per-unit price). 3 is the *minimum* a
-// Team subscription is ever started at ($57/mo, matching the old flat
-// price), not a hard cap: addPaidSeat/removePaidSeat below adjust the
+// STRIPE_PRICE_TEAM is a graduated-tier price: $89/mo flat covers the
+// first 3 seats, each seat after that is $30/mo). 3 is the *minimum* a
+// Team subscription is ever started at ($89/mo), not a hard cap: addPaidSeat/removePaidSeat below adjust the
 // Stripe subscription's quantity as members are added/removed, and
 // getPaidSeatCount reads the live quantity rather than assuming 3.
 export const TEAM_SEAT_LIMIT = 3;
@@ -43,7 +43,7 @@ export async function getPaidSeatCount(ownerId: string): Promise<number> {
  * Adds one paid seat to the owner's Team subscription. Stripe invoices
  * the prorated remainder of the current billing period immediately
  * (proration_behavior: 'always_invoice') rather than waiting for the
- * next renewal — the new seat then bills at $19/mo alongside the rest
+ * next renewal — the new seat then bills at the extra-seat price ($30/mo) alongside the rest
  * starting next cycle. Throws if the owner has no active subscription to
  * adjust (shouldn't happen for a real Team owner, but callers should
  * treat it as a real error, not silently proceed).

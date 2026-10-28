@@ -238,7 +238,7 @@ export async function POST(request: NextRequest) {
 
     // The owner's subscription already covers `paidSeats` seats (3 by
     // default). Adding a teammate beyond that buys one more seat right
-    // now — Stripe charges the prorated $19 immediately and rolls the
+    // now — Stripe charges the prorated extra-seat price ($30/mo) immediately and rolls the
     // extra seat into the next monthly invoice going forward.
     let addedPaidSeat = false;
     if (memberCount + pendingCount >= paidSeats) {

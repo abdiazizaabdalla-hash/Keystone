@@ -9,14 +9,12 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 // (or via the setup script) and referenced here by env var so they can
 // differ between test and live mode without a code change.
 //
-// Team is billed as a flat $57/mo price (the 3-seat minimum bundled into
-// one price) rather than a $19 x quantity-3 price — there's no real seat
-// management yet (see lib/plans.ts), so per-seat quantity would be more
-// complexity than the product currently supports. Revisit when the real
-// multi-seat model ships.
+// Team is one graduated-tier price: $89/mo flat for the first 3 seats
+// (Checkout starts at quantity 3), then $30/mo for each seat after that.
+// Seat changes just move the subscription's quantity (see lib/team.ts).
 //
 // Starter joined the paid plans once its 30-day/first-paid-deal free
-// trial shipped (see lib/trial.ts) — STRIPE_PRICE_STARTER is its $10/mo
+// trial shipped (see lib/trial.ts) — STRIPE_PRICE_STARTER is its $19/mo
 // price. A trialing user never hits this: checkout for 'starter' is only
 // ever started once their trial has actually expired (see the "Add
 // payment" flow on /dashboard/account and the dashboard trial banner).

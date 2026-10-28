@@ -40,7 +40,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Pricing & billing',
     q: 'What happens when my trial ends?',
-    a: 'Starter includes a free trial that lasts 30 days. Once the trial ends, Starter continues at $10/month — you’ll need to add a payment method to keep creating and editing transactions, agents, documents, and invoices. Nothing is deleted if you don’t upgrade right away; you just can’t make new changes until you do.',
+    a: 'Starter includes a free trial that lasts 30 days. Once the trial ends, Starter continues at $19/month — you’ll need to add a payment method to keep creating and editing transactions, agents, documents, and invoices. Nothing is deleted if you don’t upgrade right away; you just can’t make new changes until you do.',
   },
   {
     category: 'Pricing & billing',
@@ -55,7 +55,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Pricing & billing',
     q: 'How does Team billing work?',
-    a: 'Team is billed per seat at $19/month, with a three-seat minimum ($57/month to start). Adding a teammate beyond your paid seats charges the difference immediately; removing one credits your next invoice. Seats are for the people coordinating transactions — agents you invite through the agent portal never need a paid seat.',
+    a: 'Team is $89/month and includes three seats. Each extra seat is $30/month, charged prorated right away when you add a teammate beyond your paid seats; removing one credits your next invoice. Seats are for the people coordinating transactions — agents you invite through the agent portal never need a paid seat.',
   },
   {
     category: 'Pricing & billing',

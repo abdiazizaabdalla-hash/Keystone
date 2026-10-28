@@ -4,7 +4,7 @@ import { getUserPlan } from './privileged';
 
 // Starter used to be free forever. It's now a 30-day
 // trial, after which the account needs to add
-// payment ($10/month, via the same Stripe Checkout flow as Pro/Team — see
+// payment ($19/month, via the same Stripe Checkout flow as Pro/Team — see
 // lib/stripe.ts) to keep creating or editing anything.
 //
 // This cutoff is what makes that change non-retroactive: only accounts
@@ -103,7 +103,7 @@ export async function assertTrialActive(user: MinimalUser): Promise<void> {
   const status = await getTrialStatus(user.id, user.created_at);
   if (status.applies && status.expired) {
     throw new TrialExpiredError(
-      'Your free Starter trial has ended. Add payment ($10/month) to keep creating and editing on Relay.',
+      'Your free Starter trial has ended. Add payment ($19/month) to keep creating and editing on Relay.',
       status.trialEndsAt,
       status.endedBy
     );

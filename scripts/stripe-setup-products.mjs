@@ -1,7 +1,9 @@
 // One-off setup script: creates the Stripe Products/Prices Relay TC needs
-// (Pro $29/mo, Team $57/mo flat — see src/lib/stripe.ts for why Team isn't
-// per-seat yet) and prints the price IDs to paste into .env.local as
-// STRIPE_PRICE_PRO / STRIPE_PRICE_TEAM. Safe to re-run — it skips creating
+// (Starter $19/mo, Pro $39/mo, Team $89/mo for the first 3 seats then $30/mo
+// per extra seat — see src/lib/stripe.ts) and prints the price IDs to paste
+// into .env.local as STRIPE_PRICE_STARTER / STRIPE_PRICE_PRO / STRIPE_PRICE_TEAM.
+// For live mode, create the same three prices in the Stripe dashboard
+// (this script refuses live keys on purpose). Safe to re-run — it skips creating
 // a product/price if one with the same lookup_key already exists.
 //
 // Usage: STRIPE_SECRET_KEY=sk_test_... node scripts/stripe-setup-products.mjs
@@ -19,7 +21,7 @@ if (!secretKey.startsWith('sk_test_')) {
 
 const stripe = new Stripe(secretKey);
 
-async function ensurePrice({ lookupKey, productName, unitAmount, nickname }) {
+async function ensurePrice({ lookupKey, productName, nickname, price }) {
   const existing = await stripe.prices.list({ lookup_keys: [lookupKey], limit: 1 });
   if (existing.data.length > 0) {
     console.log(`${lookupKey}: already exists -> ${existing.data[0].id}`);
@@ -27,32 +29,49 @@ async function ensurePrice({ lookupKey, productName, unitAmount, nickname }) {
   }
 
   const product = await stripe.products.create({ name: productName });
-  const price = await stripe.prices.create({
+  const created = await stripe.prices.create({
     product: product.id,
-    unit_amount: unitAmount,
     currency: 'usd',
     recurring: { interval: 'month' },
     lookup_key: lookupKey,
     nickname,
+    ...price,
   });
-  console.log(`${lookupKey}: created -> ${price.id}`);
-  return price.id;
+  console.log(`${lookupKey}: created -> ${created.id}`);
+  return created.id;
 }
 
-const proPriceId = await ensurePrice({
-  lookupKey: 'keystone_pro_monthly',
-  productName: 'Relay TC — Pro',
-  unitAmount: 2900,
-  nickname: 'Pro $29/mo',
+const starterPriceId = await ensurePrice({
+  lookupKey: 'relay_starter_monthly_v2',
+  productName: 'Relay TC — Starter',
+  nickname: 'Starter $19/mo',
+  price: { unit_amount: 1900 },
 });
 
+const proPriceId = await ensurePrice({
+  lookupKey: 'relay_pro_monthly_v2',
+  productName: 'Relay TC — Pro',
+  nickname: 'Pro $39/mo',
+  price: { unit_amount: 3900 },
+});
+
+// Graduated tiers: the first 3 seats cost a flat $89, every seat after that $30.
+// Checkout starts at quantity 3 and seat changes only move the quantity.
 const teamPriceId = await ensurePrice({
-  lookupKey: 'keystone_team_monthly',
+  lookupKey: 'relay_team_monthly_v2',
   productName: 'Relay TC — Team',
-  unitAmount: 5700,
-  nickname: 'Team $57/mo (3-seat bundle)',
+  nickname: 'Team $89/mo for 3 seats, then $30/seat',
+  price: {
+    billing_scheme: 'tiered',
+    tiers_mode: 'graduated',
+    tiers: [
+      { up_to: 3, flat_amount: 8900, unit_amount: 0 },
+      { up_to: 'inf', unit_amount: 3000 },
+    ],
+  },
 });
 
 console.log('\nAdd these to .env.local:\n');
+console.log(`STRIPE_PRICE_STARTER=${starterPriceId}`);
 console.log(`STRIPE_PRICE_PRO=${proPriceId}`);
 console.log(`STRIPE_PRICE_TEAM=${teamPriceId}`);

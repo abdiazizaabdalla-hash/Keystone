@@ -13,7 +13,7 @@
 //
 // Starter is no longer free indefinitely: new signups (see
 // src/lib/trial.ts for the exact cutoff) get a 30-day
-// trial, then have to add payment to keep using it at $10/month, through
+// trial, then have to add payment to keep using it at $19/month, through
 // the same Stripe Checkout flow as Pro/Team (see src/lib/stripe.ts). The
 // `limits` below (unlimited transactions, up to 3 agents, no custom
 // checklists) apply the whole time — trialing or paid, Starter's feature set doesn't
@@ -81,9 +81,11 @@ export interface Plan {
    * single flat seat.
    */
   seatInfo?: {
-    pricePerSeat: number; // dollars/seat/month, for computing totals
-    pricePerSeatLabel: string; // e.g. "$19/mo" -- for copy only
+    pricePerSeat: number; // dollars/month for each seat beyond the minimum, for computing totals
+    pricePerSeatLabel: string; // e.g. "$30/mo" -- for copy only
     minimumSeats: number;
+    /** Flat monthly price that covers the first `minimumSeats` seats, when those are bundled (Team: $89 for 3). Seats past the minimum bill at pricePerSeat. */
+    bundlePrice?: number;
   };
 }
 
@@ -91,16 +93,16 @@ export const PLANS: Plan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    price: '$10',
+    price: '$19',
     period: '/month',
     trial: {
       days: 30,
-      description: 'Free for 30 days. Then $10/month.',
+      description: 'Free for 30 days. Then $19/month.',
     },
-    description: 'Free to try, then $10/month. Unlimited transactions.',
+    description: 'Free to try, then $19/month. Unlimited transactions.',
     features: [
       'Free for 30 days',
-      'Then $10/month',
+      'Then $19/month',
       'Unlimited transactions',
       'Up to 3 agent profiles',
       'AI contract intake -- upload the contract, Relay fills in the deal',
@@ -120,7 +122,7 @@ export const PLANS: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    price: '$29',
+    price: '$39',
     period: '/month',
     description: 'For solo TCs running their transactions in Relay.',
     features: [
@@ -146,15 +148,15 @@ export const PLANS: Plan[] = [
   {
     id: 'team',
     name: 'Team',
-    price: '$19',
-    period: '/seat/mo',
-    description: 'For teams sharing transactions, agents, and workflows. 3-seat minimum ($57/month).',
+    price: '$89',
+    period: '/month for 3 seats',
+    description: 'For teams sharing transactions, agents, and workflows. 3 seats included, extra seats $30/month each.',
     features: [
       'Everything in Pro',
       'Shared agent roster across the team',
       'Team-wide transaction visibility',
       'Custom checklist templates with required-step flags',
-      'Seat-based billing, 3-seat minimum',
+      '3 seats included, $30/month for each extra seat',
       'Priority support',
     ],
     limits: {
@@ -164,9 +166,10 @@ export const PLANS: Plan[] = [
       customChecklists: true,
     },
     seatInfo: {
-      pricePerSeat: 19,
-      pricePerSeatLabel: '$19/mo',
+      pricePerSeat: 30,
+      pricePerSeatLabel: '$30/mo',
       minimumSeats: 3,
+      bundlePrice: 89,
     },
   },
   {

@@ -152,7 +152,7 @@ export default function PricingPage() {
           ))}
         </div>
         <p className="text-center text-sm text-slate-500 mt-8">
-          Team is billed at $19 per TC seat per month, with a three-seat minimum ($57/month to start). Agents invited to collaborate on transactions do not require paid TC seats — the agent portal is free on every plan.
+          Team is $89 per month and includes three TC seats. Each additional seat is $30 per month. Agents invited to collaborate on transactions do not require paid TC seats — the agent portal is free on every plan.
         </p>
       </section>
 

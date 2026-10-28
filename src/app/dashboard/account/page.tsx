@@ -227,7 +227,7 @@ function AccountContent() {
                   : `${summary.trial.daysLeft} day${summary.trial.daysLeft === 1 ? '' : 's'} left in your free trial`}
               </p>
               <p className="text-sm text-blue-200/80 mb-4">
-                Free for 30 days. Then it&apos;s $10/month.
+                Free for 30 days. Then it&apos;s $19/month.
               </p>
             </>
           )}
@@ -239,8 +239,8 @@ function AccountContent() {
             {redirecting === 'starter'
               ? 'Redirecting…'
               : summary.trial.expired
-              ? 'Add payment — $10/month'
-              : 'Continue on Starter — $10/month'}
+              ? 'Add payment — $19/month'
+              : 'Continue on Starter — $19/month'}
           </button>
         </div>
       )}
@@ -283,7 +283,7 @@ function AccountContent() {
                     {redirecting === p.id
                       ? 'Redirecting…'
                       : p.seatInfo
-                      ? `Upgrade to ${p.name} ($${p.seatInfo.minimumSeats * p.seatInfo.pricePerSeat}/month for ${p.seatInfo.minimumSeats} seats)`
+                      ? `Upgrade to ${p.name} ($${p.seatInfo.bundlePrice ?? p.seatInfo.minimumSeats * p.seatInfo.pricePerSeat}/month for ${p.seatInfo.minimumSeats} seats)`
                       : `Upgrade to ${p.name} (${p.price}${p.period})`}
                   </button>
                 ))}

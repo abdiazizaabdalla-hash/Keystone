@@ -284,7 +284,7 @@ export default function DashboardLayout({
     router.push('/auth');
   };
 
-  // Starts Checkout for the $10/mo Starter price -- used by the trial
+  // Starts Checkout for the $19/mo Starter price -- used by the trial
   // banner's "Add payment" button once the trial's actually expired. Same
   // flow the Account page uses for Pro/Team, just with plan: 'starter'.
   const startStarterCheckout = async () => {
@@ -538,7 +538,7 @@ export default function DashboardLayout({
               disabled={startingCheckout}
               className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap"
             >
-              {startingCheckout ? 'Redirecting…' : 'Add payment — $10/month'}
+              {startingCheckout ? 'Redirecting…' : 'Add payment — $19/month'}
             </button>
           </div>
         )}
@@ -548,7 +548,7 @@ export default function DashboardLayout({
               {trial.daysLeft === 0
                 ? 'Your free Starter trial ends today.'
                 : `Your free Starter trial ends in ${trial.daysLeft} day${trial.daysLeft === 1 ? '' : 's'}.`}{' '}
-              Then it&apos;s $10/month to keep going.
+              Then it&apos;s $19/month to keep going.
             </p>
             <Link href="/dashboard/account" className="text-xs text-blue-300 hover:text-blue-200 font-medium whitespace-nowrap">
               Manage billing

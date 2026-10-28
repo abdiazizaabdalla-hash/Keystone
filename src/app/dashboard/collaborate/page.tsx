@@ -446,7 +446,7 @@ export default function CollaboratePage() {
               <p className="text-sm text-slate-400 mb-4">
                 {seatsUsed < data.seatLimit
                   ? "They'll get the same plan access right away — no separate payment needed, it's covered by your subscription."
-                  : `You're at your current seat count (${seatsUsed}/${data.seatLimit}). Inviting one more adds a prorated seat to your subscription (~${data.seatPriceLabel || '$19/mo'}) right away.`}
+                  : `You're at your current seat count (${seatsUsed}/${data.seatLimit}). Inviting one more adds a prorated seat to your subscription (~${data.seatPriceLabel || '$30/mo'}) right away.`}
               </p>
               <form onSubmit={handleInvite} className="flex gap-3">
                 <input
