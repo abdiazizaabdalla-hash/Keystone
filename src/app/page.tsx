@@ -301,13 +301,14 @@ export default function Home() {
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Agent portal</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Give your agents their own view of the deal.</h2>
-          <p className="text-slate-400 mb-5">Agents get a free portal where they can check progress on their deals and listings, upload documents, message you, and see their invoice. They only see what you&apos;ve shared with them.</p>
+          <p className="text-slate-400 mb-5">Agents get a free portal where they can follow and check off steps on their deals and listings, upload documents, message you, and see their invoice. They can also share a live progress page with their own buyers and sellers, so clients stop feeling out of the loop. They only see what you&apos;ve shared with them.</p>
           <ul className="space-y-2.5 text-sm text-slate-300">
             {[
               "See their deals and listings in one dashboard",
-              "View checklist progress, key dates, offers and showings",
+              "Follow the checklist, check off their steps, and see key dates, offers and showings",
               "Upload documents and add contacts",
               "General messages with you, plus messages on each deal",
+              "New: share a live client progress page with the documents and steps they choose",
               "A heads-up when a listing becomes an active deal, with no extra step",
               "Dates on their own calendar, connected once with Google Calendar",
               "Access arrives automatically when you add them to a deal or listing",
@@ -446,6 +447,7 @@ export default function Home() {
             { title: "Contacts", body: 'An address book that builds itself from your deals, with CSV import, export and a newsletter list.' },
             { title: "Document organization", body: 'Documents sorted into categories and linked to checklist steps.' },
             { title: "Agent portal and messaging", body: 'Agents get a free login, set up automatically when you add them to a deal or listing, with general and per-deal messages.' },
+            { title: "Client portal (new)", body: 'Agents invite their buyers and sellers to a live progress page: the steps and documents they choose, a dates timeline, and a shared board plus private threads.' },
             { title: "Email-to-transaction", body: 'Forward or CC an email to the deal and it lands on the transaction, attachments included.' },
             { title: "Daily digest", body: 'A morning email with overdue and due-today steps.' },
             { title: "Custom templates", body: 'Build checklists for different deal types, for deals and for listings. Pro and Team.' },

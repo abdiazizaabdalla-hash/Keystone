@@ -3,7 +3,12 @@
 import Link from 'next/link';
 import PublicMobileMenu from '@/components/PublicMobileMenu';
 
-const FEATURES: { title: string; body: string }[] = [
+const FEATURES: { title: string; body: string; isNew?: boolean }[] = [
+  {
+    title: 'Keep your clients in the loop',
+    isNew: true,
+    body: 'Invite your buyer or seller and they get their own live progress page: where the deal stands, the checklist steps and documents you choose, and the dates ahead. Message them on a shared board or privately.',
+  },
   {
     title: 'Your listings, before the contract',
     body: 'See the listings your TC shares with you: key dates, the checklist, offers, showings and feedback, price history, documents and contacts. Add your own contacts too. Your TC’s private notes stay private.',
@@ -21,16 +26,16 @@ const FEATURES: { title: string; body: string }[] = [
     body: 'Connect Google Calendar once and every deal, including new ones, shows up on its own and updates within seconds when your TC moves a date. Outlook or Apple Calendar? Use your private Relay link.',
   },
   {
-    title: 'See the checklist',
-    body: 'Watch the deal move from contract to closing in real time -- every step, every due date, exactly as your TC sees it. View-only, so you always know where things stand without having to ask.',
+    title: 'Work the checklist',
+    body: 'Watch the deal move from contract to closing in real time, and check off your own steps, move a due date or note who a step is waiting on. Your TC is notified and keeps control of the steps themselves.',
   },
   {
     title: 'Documents, organized',
-    body: 'Upload contracts, disclosures, and inspection reports straight into the right category, or grab anything your TC has already added. No digging through email threads for the latest version.',
+    body: 'Drag contracts, disclosures, and inspection reports straight into the right category, or grab anything your TC has already added. You decide which documents your clients can open. No digging through email threads for the latest version.',
   },
   {
     title: 'Message your TC directly',
-    body: 'A general thread with your TC for everyday questions, plus a separate thread on each deal and listing, with file attachments. No more texts or email chains to dig through.',
+    body: 'A general thread with your TC for everyday questions, plus a separate thread on each deal and listing, with file attachments. Clients get their own threads with you, kept separate from your TC chat.',
   },
   {
     title: 'Get paid without the back-and-forth',
@@ -95,8 +100,8 @@ export default function ForAgentsPage() {
         </h1>
         <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">
           A free login to every deal you&apos;re working -- the checklist, the documents, a direct
-          line to your TC, and your invoice, all in one place. No credit card, no subscription,
-          nothing to set up on your own.
+          line to your TC, your invoice, and now a live progress page you can share with your
+          clients. No credit card, no subscription, nothing to set up on your own.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
           <Link
@@ -129,6 +134,56 @@ export default function ForAgentsPage() {
         <p className="text-xs text-slate-500 mt-3 text-center">Everything for one deal, on one page. Illustration of the workflow.</p>
       </section>
 
+      {/* Client portal */}
+      <section id="client-portal" className="max-w-5xl mx-auto px-6 pb-20 scroll-mt-20">
+        <div className="rounded-2xl border border-blue-500/40 bg-gradient-to-br from-blue-500/10 to-slate-800/60 p-8 sm:p-12">
+          <p className="inline-block text-[11px] font-bold tracking-wider uppercase bg-blue-500 text-white rounded-full px-3 py-1 mb-5">New</p>
+          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Clients feel out of the loop. Not anymore.</h2>
+          <p className="text-slate-300 max-w-3xl mb-10">
+            Between an accepted contract and closing day, buyers and sellers wait weeks for news and end up texting
+            you for updates. The Client Portal gives each of your clients a live progress page, so they always know
+            where things stand, and you stop answering &ldquo;any updates?&rdquo;
+          </p>
+          <div className="grid sm:grid-cols-3 gap-6">
+            {[
+              {
+                title: 'Invite in a minute',
+                body: 'Add a client by name and email, or pick them from the deal’s contacts. They get an email with their page, and you can resend, copy the link or turn it off any time.',
+              },
+              {
+                title: 'You choose what they see',
+                body: 'Tick the checklist steps and documents each client can open. Nothing is shared until you choose it, and you can share new documents automatically.',
+              },
+              {
+                title: 'The right conversation, in the right place',
+                body: 'A shared board for everyone on the deal, plus private threads with you and with your TC. Your TC chat stays separate and private.',
+              },
+            ].map((c) => (
+              <div key={c.title} className="p-5 bg-slate-900/50 border border-slate-700 rounded-xl">
+                <h3 className="font-semibold text-slate-100 mb-2">{c.title}</h3>
+                <p className="text-sm text-slate-400">{c.body}</p>
+              </div>
+            ))}
+          </div>
+          <ul className="mt-8 grid sm:grid-cols-2 gap-x-8 gap-y-2.5 text-sm text-slate-300">
+            {[
+              'A clear status and progress bar, from contract to closing',
+              'Important dates as a timeline: done, today, in 3 days, overdue',
+              'Your agent and your TC, each with a clearly named role',
+              'You get a heads-up when a client opens their page',
+            ].map((line) => (
+              <li key={line} className="flex items-start gap-2.5">
+                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                {line}
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-slate-400 mt-6">Included with your free agent login, for every deal your TC adds you to.</p>
+        </div>
+      </section>
+
       {/* Features */}
       <section id="features" className="max-w-6xl mx-auto px-6 pb-20 scroll-mt-20">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4 text-center">What you can do</h2>
@@ -137,8 +192,13 @@ export default function ForAgentsPage() {
         </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {FEATURES.map((f) => (
-            <div key={f.title} className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl">
-              <h3 className="font-semibold text-slate-100 mb-2">{f.title}</h3>
+            <div key={f.title} className={`p-6 bg-slate-800/60 border rounded-xl ${f.isNew ? 'border-blue-500/50' : 'border-slate-700'}`}>
+              <h3 className="font-semibold text-slate-100 mb-2">
+                {f.title}
+                {f.isNew && (
+                  <span className="ml-2 align-middle text-[10px] font-bold tracking-wider uppercase bg-blue-500 text-white rounded-full px-2 py-0.5">New</span>
+                )}
+              </h3>
               <p className="text-sm text-slate-400">{f.body}</p>
             </div>
           ))}
@@ -153,7 +213,7 @@ export default function ForAgentsPage() {
         </p>
         <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-3 text-sm text-slate-300 max-w-2xl mx-auto">
           {[
-            "Checking off checklist steps -- you can see progress, not mark it done",
+            "Adding, removing or renaming checklist steps -- you can check them off, your TC manages the list",
             'Sending signature requests -- you can mark something signed outside Relay',
             "Editing or removing a contact someone else added",
             "Any other client, deal, invoice, or billing detail of your TC's",

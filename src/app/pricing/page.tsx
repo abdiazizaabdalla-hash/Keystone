@@ -34,6 +34,7 @@ const COMPARISON_ROWS: {
   { feature: 'Required-step flags on templates', starter: false, pro: true, team: true },
   { feature: 'Agent profiles (for invoicing)', starter: 'Up to 3', pro: 'Unlimited', team: 'Unlimited' },
   { feature: 'Automatic agent portal access', starter: true, pro: true, team: true },
+  { feature: 'Client portal (agents share live progress with clients)', starter: true, pro: true, team: true },
   { feature: 'Document storage & organization', starter: true, pro: true, team: true },
   { feature: 'E-signature requests', starter: true, pro: true, team: true },
   { feature: 'Invoicing & payment tracking', starter: true, pro: true, team: true },

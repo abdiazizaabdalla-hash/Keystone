@@ -86,7 +86,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Agent portal',
     q: 'What can agents see and change?',
-    a: 'On a deal, an invited agent can view the checklist, dates, and status (read-only), upload documents and mark them signed or unsigned, add a new contact, and message you with file attachments. On a listing you share with them, they can view the key dates, checklist, offers, showings, price history, documents and contacts, and add their own contacts. Your private notes are never shared. They cannot check off checklist items, delete a document, or send or void a signature request.',
+    a: 'On a deal, an invited agent can see the checklist, dates, and status, check off steps, move a step’s due date and note who it is waiting on, upload documents and mark them signed or unsigned, add a new contact, and message you with file attachments. They can also share a live progress page with their own clients (see the Client portal questions below). On a listing you share with them, they can view the key dates, checklist, offers, showings, price history, documents and contacts, and add their own contacts. Your private notes are never shared. They cannot add, remove or rename checklist steps, delete a document, or send or void a signature request.',
   },
   {
     category: 'Agent portal',
@@ -97,6 +97,27 @@ const FAQS: { category: string; q: string; a: string }[] = [
     category: 'Agent portal',
     q: 'Can agents sign documents through Relay?',
     a: 'Agents can mark a document as signed or unsigned, the same toggle you have. Actually sending a document out for signature — or canceling a pending request — stays with the TC.',
+  },
+  // Client portal
+  {
+    category: 'Client portal',
+    q: 'What is the client portal?',
+    a: 'A live progress page for an agent’s buyer or seller. Clients often feel out of the loop between an accepted contract and closing day; the page shows where the deal stands, the checklist steps and documents the agent chooses to share, and the important dates ahead, so they stop texting for updates.',
+  },
+  {
+    category: 'Client portal',
+    q: 'Who invites clients, and what do they see?',
+    a: 'The agent does, from their agent portal: add a client by name and email (or pick one of the deal’s contacts) and they get an email with their page. The agent ticks which checklist steps and documents that client can see, and can share new documents automatically. Nothing is shared until the agent chooses it. Your internal notes, invoices and other deals are never part of it.',
+  },
+  {
+    category: 'Client portal',
+    q: 'Can clients message us?',
+    a: 'Yes. Each client has a shared board that the client, the agent and the TC can all read, plus a private thread with the agent and a private thread with the TC. The agent never sees the TC’s private thread and the TC never sees the agent’s, and your TC-to-agent messages are separate from all of it. Everyone is notified by email and in the in-app bell.',
+  },
+  {
+    category: 'Client portal',
+    q: 'Does the client portal cost extra?',
+    a: 'No. It is included on every plan and with every free agent login. A TC can also see and turn off any client link on a deal from the External Access card.',
   },
   // Listings & calendar
   {
