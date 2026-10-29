@@ -122,163 +122,196 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
     const closed = info.stageIndex >= info.stages.length - 1;
     const today = new Date().toISOString().slice(0, 10);
     const nextDate = info.dates.find((d) => !d.completed && d.date >= today);
+    const doneCount = info.steps.filter((x) => x.completed).length;
+    const q = docSearch.trim().toLowerCase();
+    const visibleDocs = info.documents.filter((d) => !q || d.fileName.toLowerCase().includes(q));
+    const knownCategories = new Set(DOCUMENT_CATEGORIES.map((c) => c.key));
+    const docGroups = [
+      ...DOCUMENT_CATEGORIES.map((c) => ({ key: c.key, label: c.label })),
+      { key: '__other', label: 'Uncategorized' },
+    ];
+
+    // Same arrangement as the agent portal: a deal card on top, then
+    // Documents wide on the left with Messages and the Checklist stacked in
+    // a narrow column on the right (stacked, right column first, on a phone).
     return (
-      <div className="min-h-screen px-6 py-12">
-        <div className="max-w-xl mx-auto space-y-6">
-          <div className="text-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 px-6 py-12">
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
             <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Transaction progress</p>
-            <h1 className="text-2xl font-display font-semibold text-slate-100">{info.propertyAddress}</h1>
-            {info.clientName && <p className="text-slate-400 mt-1">Prepared for {info.clientName}</p>}
-          </div>
+            <h1 className="text-xl font-display font-semibold text-slate-100">{info.propertyAddress}</h1>
+            <p className="text-slate-500 text-sm mt-0.5">
+              {info.clientName ? `Prepared for ${info.clientName}` : 'Your transaction'}
+              {info.people.tcName ? ` · Coordinated by ${info.people.tcName}` : ''}
+            </p>
 
-          {info.note && (
-            <div className="bg-blue-500/10 border border-blue-400/30 rounded-2xl p-5">
-              <p className="text-slate-200 whitespace-pre-wrap text-sm leading-relaxed">{info.note}</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 mt-6 border-t border-slate-600">
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Your agent</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0">
+                    {(info.people.agentName || '?')[0]}
+                  </div>
+                  <p className="text-lg font-semibold text-slate-100">{info.people.agentName || 'Your agent'}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Status</p>
+                <p className="text-lg font-semibold text-blue-400">{closed ? 'Closed' : info.currentStage}</p>
+                {nextDate && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Next up: <span className="text-slate-200 font-medium">{nextDate.label}</span> on {nextDate.dateDisplay}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Progress</p>
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-xs text-slate-400">{percent}% of the way to closing</span>
+                </div>
+                <div
+                  className="w-full h-2 bg-slate-600 rounded-full overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={percent}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Transaction progress"
+                >
+                  <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${percent}%` }} />
+                </div>
+              </div>
             </div>
-          )}
 
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-            <div className="flex items-baseline justify-between mb-3">
-              <span className="text-slate-400 text-sm">Where things stand</span>
-              <span className="text-slate-100 font-semibold">{closed ? 'Closed' : info.currentStage}</span>
-            </div>
-            <div
-              className="h-2.5 rounded-full bg-slate-700 overflow-hidden"
-              role="progressbar"
-              aria-valuenow={percent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="Transaction progress"
-            >
-              <div className="h-full rounded-full bg-blue-400 transition-all" style={{ width: `${percent}%` }} />
-            </div>
-            <p className="text-slate-500 text-xs mt-2">{percent}% of the way to closing</p>
-            {nextDate && (
-              <p className="text-slate-300 text-sm mt-4">
-                Next up: <span className="font-semibold text-slate-100">{nextDate.label}</span> on {nextDate.dateDisplay}
-              </p>
+            {info.note && (
+              <div className="mt-6 bg-blue-500/10 border border-blue-400/30 rounded-xl p-4">
+                <p className="text-slate-200 whitespace-pre-wrap text-sm leading-relaxed">{info.note}</p>
+              </div>
+            )}
+
+            {info.dates.length > 0 && (
+              <div className="pt-6 mt-6 border-t border-slate-600">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Critical Dates</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
+                  {info.dates.map((d, i) => (
+                    <div key={i} className="flex items-center justify-between gap-4 text-sm">
+                      <span className={d.completed ? 'text-slate-500 line-through' : 'text-slate-300'}>{d.label}</span>
+                      <span className={`font-semibold whitespace-nowrap ${d.completed ? 'text-slate-500' : 'text-slate-100'}`}>{d.dateDisplay}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
-          {info.steps.length > 0 && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <div className="flex items-baseline justify-between mb-3">
-                <h2 className="text-slate-100 font-semibold">Checklist</h2>
-                <span className="text-xs text-slate-400">
-                  {info.steps.filter((x) => x.completed).length} of {info.steps.length} done
-                </span>
-              </div>
-              <div className="space-y-2">
-                {info.steps.map((step, i) => (
-                  <div key={i} className="flex items-center gap-3 px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
-                    <input
-                      type="checkbox"
-                      checked={step.completed}
-                      readOnly
-                      tabIndex={-1}
-                      aria-label={`${step.name}: ${step.completed ? 'done' : 'still to do'}`}
-                      className="w-4 h-4 rounded border-2 border-slate-600 accent-blue-500 pointer-events-none flex-shrink-0"
-                    />
-                    <span className={`flex-1 text-sm font-medium ${step.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-                      {step.name}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
+            <div className="lg:order-2 lg:self-start flex flex-col gap-8 min-w-0">
+              <ClientPortalMessages token={token} agentName={info.people.agentName} tcName={info.people.tcName} />
+
+              {info.steps.length > 0 && (
+                <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                  <h2 className="text-lg font-bold text-slate-100 mb-1">Checklist</h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs text-slate-400">
+                      <span className="font-semibold text-slate-300">{doneCount}</span> of{' '}
+                      <span className="font-semibold text-slate-300">{info.steps.length}</span> completed
                     </span>
-                    {!step.completed &&
-                      (step.dueDate ? (
-                        <span className={`text-xs font-medium flex-shrink-0 ${step.dueDate < today ? 'text-red-400' : 'text-slate-500'}`}>
-                          {step.dueDate < today ? 'Overdue ' : 'Due '}
-                          {formatDisplayDate(step.dueDate, { month: '2-digit', day: '2-digit' })}
-                        </span>
-                      ) : null)}
+                    <span className="text-xs font-semibold text-blue-400">
+                      {Math.round((doneCount / info.steps.length) * 100)}%
+                    </span>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <ClientPortalMessages token={token} agentName={info.people.agentName} tcName={info.people.tcName} />
-
-          {info.documents.length > 0 && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <h2 className="text-slate-100 font-semibold mb-3">Documents</h2>
-              <input
-                type="search"
-                value={docSearch}
-                onChange={(e) => setDocSearch(e.target.value)}
-                placeholder="Search documents…"
-                aria-label="Search documents"
-                className="w-full mb-3 bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-              />
-              <div className="space-y-3">
-                {(() => {
-                  const q = docSearch.trim().toLowerCase();
-                  const visible = info.documents.filter((d) => !q || d.fileName.toLowerCase().includes(q));
-                  if (visible.length === 0) return <p className="text-sm text-slate-500 italic">No documents match &quot;{docSearch}&quot;.</p>;
-                  const known = new Set(DOCUMENT_CATEGORIES.map((c) => c.key));
-                  const groups = [
-                    ...DOCUMENT_CATEGORIES.map((c) => ({ key: c.key, label: c.label })),
-                    { key: '__other', label: 'Uncategorized' },
-                  ];
-                  return groups.map((cat) => {
-                    const docs = visible.filter((d) => (known.has(d.category) ? d.category : '__other') === cat.key);
-                    if (docs.length === 0) return null;
-                    const collapsed = Boolean(collapsedCategories[cat.key]) && !q;
-                    return (
-                      <div key={cat.key} className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => setCollapsedCategories((prev) => ({ ...prev, [cat.key]: !prev[cat.key] }))}
-                          aria-expanded={!collapsed}
-                          className="w-full flex items-center justify-between px-4 py-2.5 text-left"
-                        >
-                          <span className="text-sm font-semibold text-slate-100">
-                            {cat.label} <span className="text-xs font-normal text-slate-500">({docs.length})</span>
+                  <div className="space-y-2">
+                    {info.steps.map((step, i) => (
+                      <div key={i} className="flex items-center gap-3 px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
+                        <input
+                          type="checkbox"
+                          checked={step.completed}
+                          readOnly
+                          tabIndex={-1}
+                          aria-label={`${step.name}: ${step.completed ? 'done' : 'still to do'}`}
+                          className="w-4 h-4 rounded border-2 border-slate-600 accent-blue-500 pointer-events-none flex-shrink-0"
+                        />
+                        <span className={`flex-1 text-sm font-medium ${step.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                          {step.name}
+                        </span>
+                        {!step.completed && step.dueDate && (
+                          <span className={`text-xs font-medium flex-shrink-0 ${step.dueDate < today ? 'text-red-400' : 'text-slate-500'}`}>
+                            {step.dueDate < today ? 'Overdue ' : 'Due '}
+                            {formatDisplayDate(step.dueDate, { month: '2-digit', day: '2-digit' })}
                           </span>
-                          <span className="text-slate-400 text-xs">{collapsed ? 'Show' : 'Hide'}</span>
-                        </button>
-                        {!collapsed && (
-                          <div className="px-4 pb-3 space-y-2">
-                            {docs.map((doc) => (
-                              <a
-                                key={doc.id}
-                                href={`/api/external/${token}/documents/${doc.id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-between gap-3 rounded-lg bg-slate-800/50 border border-slate-600 px-4 py-2.5 text-sm hover:border-blue-400 transition"
-                              >
-                                <span className="min-w-0">
-                                  <span className="block text-blue-300 truncate">📄 {doc.fileName}</span>
-                                  {doc.documentType && <span className="block text-xs text-slate-500">{doc.documentType}</span>}
-                                </span>
-                                {doc.fileSize ? (
-                                  <span className="text-xs text-slate-500 flex-shrink-0">{(doc.fileSize / 1024).toFixed(0)} KB</span>
-                                ) : null}
-                              </a>
-                            ))}
-                          </div>
                         )}
                       </div>
-                    );
-                  });
-                })()}
-              </div>
-            </div>
-          )}
-
-          {info.dates.length > 0 && (
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <h2 className="text-slate-100 font-semibold mb-3">Key dates</h2>
-              <div className="space-y-3">
-                {info.dates.map((d, i) => (
-                  <div key={i} className="flex items-center justify-between gap-4 text-sm">
-                    <span className={d.completed ? 'text-slate-500 line-through' : 'text-slate-300'}>{d.label}</span>
-                    <span className="text-slate-100 font-semibold whitespace-nowrap">{d.dateDisplay}</span>
+                    ))}
                   </div>
-                ))}
-              </div>
+                  <p className="text-slate-500 text-xs mt-4">View-only. Your team updates this as each step is completed.</p>
+                </section>
+              )}
             </div>
-          )}
 
-          <p className="text-center text-slate-600 text-xs">Updated automatically as your coordinator completes each step.</p>
+            <section className="lg:order-1 bg-white/5 border border-white/10 rounded-2xl p-8 min-w-0">
+              <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
+              {info.documents.length === 0 ? (
+                <p className="text-sm text-slate-500 italic">Your agent has not shared any documents yet. They will appear here when they do.</p>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-400 mb-4">Documents your agent has shared with you.</p>
+                  <input
+                    type="search"
+                    value={docSearch}
+                    onChange={(e) => setDocSearch(e.target.value)}
+                    placeholder="Search documents…"
+                    aria-label="Search documents"
+                    className="w-full mb-4 bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  />
+                  <div className="space-y-3">
+                    {visibleDocs.length === 0 && <p className="text-sm text-slate-500 italic">No documents match &quot;{docSearch}&quot;.</p>}
+                    {docGroups.map((cat) => {
+                      const docs = visibleDocs.filter((d) => (knownCategories.has(d.category) ? d.category : '__other') === cat.key);
+                      if (docs.length === 0) return null;
+                      const collapsed = Boolean(collapsedCategories[cat.key]) && !q;
+                      return (
+                        <div key={cat.key} className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setCollapsedCategories((prev) => ({ ...prev, [cat.key]: !prev[cat.key] }))}
+                            aria-expanded={!collapsed}
+                            className="w-full flex items-center justify-between px-4 py-3 text-left"
+                          >
+                            <span className="text-sm font-semibold text-slate-100">
+                              {cat.label} <span className="text-xs font-normal text-slate-500">({docs.length})</span>
+                            </span>
+                            <span className="text-slate-400 text-xs">{collapsed ? 'Show' : 'Hide'}</span>
+                          </button>
+                          {!collapsed && (
+                            <div className="px-4 pb-4 space-y-2">
+                              {docs.map((doc) => (
+                                <a
+                                  key={doc.id}
+                                  href={`/api/external/${token}/documents/${doc.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center justify-between gap-3 rounded-lg bg-slate-800/50 border border-slate-600 px-4 py-2.5 text-sm hover:border-blue-400 transition"
+                                >
+                                  <span className="min-w-0">
+                                    <span className="block text-blue-300 truncate">📄 {doc.fileName}</span>
+                                    {doc.documentType && <span className="block text-xs text-slate-500">{doc.documentType}</span>}
+                                  </span>
+                                  {doc.fileSize ? (
+                                    <span className="text-xs text-slate-500 flex-shrink-0">{(doc.fileSize / 1024).toFixed(0)} KB</span>
+                                  ) : null}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
+
+          <p className="text-center text-slate-600 text-xs mt-10">Updated automatically as your team completes each step.</p>
         </div>
       </div>
     );

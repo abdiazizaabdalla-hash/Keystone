@@ -22,6 +22,16 @@ function handleError(error: unknown, what: string) {
   if (error instanceof AuthError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }
+  // A missing column means a database script has not been run yet. Say so
+  // instead of a bare "failed", since that is the fix.
+  const info = error as { code?: string; message?: string } | null;
+  if (info && (info.code === '42703' || info.code === 'PGRST204' || /client_visible|client_email|client_name/.test(info.message || ''))) {
+    console.error(`Error ${what} (missing column):`, error);
+    return NextResponse.json(
+      { error: 'The database needs one more update before this works. Run the client portal SQL scripts in Supabase (add-client-visible-documents.sql), then try again.' },
+      { status: 500 }
+    );
+  }
   console.error(`Error ${what}:`, error);
   return NextResponse.json({ error: `Failed to ${what}` }, { status: 500 });
 }
