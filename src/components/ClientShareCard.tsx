@@ -33,11 +33,14 @@ export default function ClientShareCard({
   steps,
   documents,
   onDocumentsShared,
+  contacts,
 }: {
   transactionId: string;
   steps: StepOption[];
   documents: { id: string; name: string; clientVisible: boolean }[];
   onDocumentsShared: (ids: string[]) => void;
+  /** This deal's contacts; the agent can pick a client from here instead of typing them. */
+  contacts: { id: string; name: string | null; email: string | null; role: string | null }[];
 }) {
   const router = useRouter();
   const [links, setLinks] = useState<ClientLink[]>([]);
@@ -82,6 +85,13 @@ export default function ClientShareCard({
   }, [base, router]);
 
   const defaultPicked = () => (visibleIds.length > 0 ? visibleIds : steps.map((s) => s.id));
+
+  // Contacts with an email who don't already have an active link. Buyers and sellers first.
+  const takenEmails = new Set(links.filter((l) => !l.revoked_at && new Date(l.expires_at) >= new Date()).map((l) => (l.client_email || '').toLowerCase()));
+  const roleRank = (role: string | null) => (/buyer|seller|client/i.test(role || '') ? 0 : 1);
+  const contactChoices = contacts
+    .filter((c) => c.email && !takenEmails.has(c.email.toLowerCase()))
+    .sort((a, b) => roleRank(a.role) - roleRank(b.role));
 
   const sharedDocIds = documents.filter((d) => d.clientVisible).map((d) => d.id);
 
@@ -360,6 +370,29 @@ export default function ClientShareCard({
 
       {showForm && (
         <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-4 mt-4 space-y-3">
+          {contactChoices.length > 0 && (
+            <select
+              value=""
+              onChange={(e) => {
+                const picked = contactChoices.find((c) => c.id === e.target.value);
+                if (picked) {
+                  setName(picked.name || '');
+                  setEmail(picked.email || '');
+                }
+              }}
+              aria-label="Choose a client from this deal's contacts"
+              className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">Choose from this deal&apos;s contacts…</option>
+              {contactChoices.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name || c.email}
+                  {c.role ? ` · ${c.role}` : ''}
+                  {c.name && c.email ? ` · ${c.email}` : ''}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             type="text"
             value={name}

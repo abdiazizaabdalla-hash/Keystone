@@ -44,6 +44,8 @@ export interface DealNotification {
   body?: string | null;
   /** When set, a recent unread row of this type on this deal is updated instead of adding another. */
   coalesce?: { title: (count: number) => string };
+  /** Who should hear about it. Default: the TC and every agent on the deal. Private client threads use 'tc' or 'agents'. */
+  audience?: 'all' | 'tc' | 'agents';
 }
 
 function clip(text: string | null | undefined, max: number): string | null {
@@ -103,7 +105,13 @@ export async function notifyDeal(event: DealNotification): Promise<void> {
   try {
     const { tcUserId, agentUserIds, address } = await getDealParticipants(event.transactionId);
     const agentSet = new Set(agentUserIds);
-    const recipients = [...new Set([...(tcUserId ? [tcUserId] : []), ...agentUserIds])].filter(
+    const audience = event.audience ?? 'all';
+    const recipients = [
+      ...new Set([
+        ...(tcUserId && audience !== 'agents' ? [tcUserId] : []),
+        ...(audience !== 'tc' ? agentUserIds : []),
+      ]),
+    ].filter(
       (id) => id !== event.actorUserId
     );
     if (recipients.length === 0) return;

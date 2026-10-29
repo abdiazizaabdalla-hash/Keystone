@@ -1,6 +1,9 @@
 'use client';
 
 import { use, useEffect, useState } from 'react';
+import ClientPortalMessages from '@/components/ClientPortalMessages';
+import { DOCUMENT_CATEGORIES } from '@/lib/documentTaxonomy';
+import { formatDisplayDate } from '@/lib/dueDates';
 
 interface DatesInfo {
   scope: 'dates';
@@ -28,9 +31,10 @@ interface ProgressInfo {
   stages: string[];
   stageIndex: number;
   currentStage: string;
-  steps: { name: string; completed: boolean }[];
+  steps: { name: string; completed: boolean; dueDate: string | null }[];
   dates: { label: string; date: string; dateDisplay: string; completed: boolean }[];
-  documents: { id: string; fileName: string; fileSize: number | null }[];
+  documents: { id: string; fileName: string; fileSize: number | null; category: string; documentType: string | null }[];
+  people: { agentName: string | null; tcName: string | null };
 }
 
 type ExternalInfo = DatesInfo | DocumentInfo | ProgressInfo;
@@ -45,6 +49,8 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
   const [info, setInfo] = useState<ExternalInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [docSearch, setDocSearch] = useState('');
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch(`/api/external/${token}`)
@@ -156,48 +162,105 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
 
           {info.steps.length > 0 && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-              <h2 className="text-slate-100 font-semibold mb-3">What&apos;s been done</h2>
-              <ul className="space-y-2.5">
+              <div className="flex items-baseline justify-between mb-3">
+                <h2 className="text-slate-100 font-semibold">Checklist</h2>
+                <span className="text-xs text-slate-400">
+                  {info.steps.filter((x) => x.completed).length} of {info.steps.length} done
+                </span>
+              </div>
+              <div className="space-y-2">
                 {info.steps.map((step, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm">
-                    <span
-                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${
-                        step.completed ? 'bg-emerald-500/20 text-emerald-300' : 'border border-slate-500 text-transparent'
-                      }`}
-                      aria-hidden="true"
-                    >
-                      ✓
-                    </span>
-                    <span className={step.completed ? 'text-slate-200' : 'text-slate-400'}>
+                  <div key={i} className="flex items-center gap-3 px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
+                    <input
+                      type="checkbox"
+                      checked={step.completed}
+                      readOnly
+                      tabIndex={-1}
+                      aria-label={`${step.name}: ${step.completed ? 'done' : 'still to do'}`}
+                      className="w-4 h-4 rounded border-2 border-slate-600 accent-blue-500 pointer-events-none flex-shrink-0"
+                    />
+                    <span className={`flex-1 text-sm font-medium ${step.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
                       {step.name}
-                      <span className="sr-only">{step.completed ? ' (done)' : ' (still to do)'}</span>
                     </span>
-                  </li>
+                    {!step.completed &&
+                      (step.dueDate ? (
+                        <span className={`text-xs font-medium flex-shrink-0 ${step.dueDate < today ? 'text-red-400' : 'text-slate-500'}`}>
+                          {step.dueDate < today ? 'Overdue ' : 'Due '}
+                          {formatDisplayDate(step.dueDate, { month: '2-digit', day: '2-digit' })}
+                        </span>
+                      ) : null)}
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
+
+          <ClientPortalMessages token={token} agentName={info.people.agentName} tcName={info.people.tcName} />
 
           {info.documents.length > 0 && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h2 className="text-slate-100 font-semibold mb-3">Documents</h2>
-              <ul className="space-y-2">
-                {info.documents.map((doc) => (
-                  <li key={doc.id}>
-                    <a
-                      href={`/api/external/${token}/documents/${doc.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between gap-3 rounded-lg bg-slate-800/50 border border-slate-600 px-4 py-2.5 text-sm hover:border-blue-400 transition"
-                    >
-                      <span className="text-blue-300 truncate">{doc.fileName}</span>
-                      {doc.fileSize ? (
-                        <span className="text-xs text-slate-500 flex-shrink-0">{(doc.fileSize / 1024).toFixed(0)} KB</span>
-                      ) : null}
-                    </a>
-                  </li>
-                ))}
-              </ul>
+              <input
+                type="search"
+                value={docSearch}
+                onChange={(e) => setDocSearch(e.target.value)}
+                placeholder="Search documents…"
+                aria-label="Search documents"
+                className="w-full mb-3 bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              />
+              <div className="space-y-3">
+                {(() => {
+                  const q = docSearch.trim().toLowerCase();
+                  const visible = info.documents.filter((d) => !q || d.fileName.toLowerCase().includes(q));
+                  if (visible.length === 0) return <p className="text-sm text-slate-500 italic">No documents match &quot;{docSearch}&quot;.</p>;
+                  const known = new Set(DOCUMENT_CATEGORIES.map((c) => c.key));
+                  const groups = [
+                    ...DOCUMENT_CATEGORIES.map((c) => ({ key: c.key, label: c.label })),
+                    { key: '__other', label: 'Uncategorized' },
+                  ];
+                  return groups.map((cat) => {
+                    const docs = visible.filter((d) => (known.has(d.category) ? d.category : '__other') === cat.key);
+                    if (docs.length === 0) return null;
+                    const collapsed = Boolean(collapsedCategories[cat.key]) && !q;
+                    return (
+                      <div key={cat.key} className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setCollapsedCategories((prev) => ({ ...prev, [cat.key]: !prev[cat.key] }))}
+                          aria-expanded={!collapsed}
+                          className="w-full flex items-center justify-between px-4 py-2.5 text-left"
+                        >
+                          <span className="text-sm font-semibold text-slate-100">
+                            {cat.label} <span className="text-xs font-normal text-slate-500">({docs.length})</span>
+                          </span>
+                          <span className="text-slate-400 text-xs">{collapsed ? 'Show' : 'Hide'}</span>
+                        </button>
+                        {!collapsed && (
+                          <div className="px-4 pb-3 space-y-2">
+                            {docs.map((doc) => (
+                              <a
+                                key={doc.id}
+                                href={`/api/external/${token}/documents/${doc.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-between gap-3 rounded-lg bg-slate-800/50 border border-slate-600 px-4 py-2.5 text-sm hover:border-blue-400 transition"
+                              >
+                                <span className="min-w-0">
+                                  <span className="block text-blue-300 truncate">📄 {doc.fileName}</span>
+                                  {doc.documentType && <span className="block text-xs text-slate-500">{doc.documentType}</span>}
+                                </span>
+                                {doc.fileSize ? (
+                                  <span className="text-xs text-slate-500 flex-shrink-0">{(doc.fileSize / 1024).toFixed(0)} KB</span>
+                                ) : null}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
             </div>
           )}
 

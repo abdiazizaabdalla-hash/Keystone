@@ -5,6 +5,7 @@ import { formatPhoneInput } from '@/lib/formatPhone';
 import { use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import ClientMessagesPanel from '@/components/ClientMessagesPanel';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import DragHandle from '@/components/DragHandle';
 import MoveMenu from '@/components/MoveMenu';
@@ -274,6 +275,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   // Client progress links: who it's for, a short note, and which
   // checklist steps the client gets to see (default: all of them).
   const [newClientName, setNewClientName] = useState('');
+  const [newClientEmail, setNewClientEmail] = useState('');
   const [newClientNote, setNewClientNote] = useState('');
   const [clientStepIds, setClientStepIds] = useState<string[]>([]);
   const [editingStepsLinkId, setEditingStepsLinkId] = useState<string | null>(null);
@@ -708,6 +710,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           documentId: newLinkScope === 'document' ? newLinkDocumentId : undefined,
           recipientLabel: newLinkRecipientLabel.trim() || undefined,
           clientName: newLinkScope === 'progress' ? newClientName.trim() || undefined : undefined,
+          clientEmail: newLinkScope === 'progress' ? newClientEmail.trim() || undefined : undefined,
           clientNote: newLinkScope === 'progress' ? newClientNote.trim() || undefined : undefined,
           visibleTaskIds: newLinkScope === 'progress' ? clientStepIds : undefined,
         }),
@@ -722,6 +725,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setNewLinkDocumentId('');
       setNewLinkRecipientLabel('');
       setNewClientName('');
+      setNewClientEmail('');
       setNewClientNote('');
     } catch (error) {
       if (error instanceof AuthRequiredError) {
@@ -3492,6 +3496,9 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </>
           )}
         </div>
+        <div className="mt-6">
+          <ClientMessagesPanel transactionId={resolvedParams.id} viewerRole="tc" />
+        </div>
         </div>
 
         <div className={tab === 'people' ? 'space-y-8' : 'hidden'}>
@@ -3845,12 +3852,44 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   <p className="text-xs text-slate-400">
                     A live progress page for your buyer or seller. No login. It updates as you complete steps, and you can revoke it any time.
                   </p>
+                  {contacts.some((c) => c.email) && (
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const picked = contacts.find((c) => c.id === e.target.value);
+                        if (picked) {
+                          setNewClientName(picked.name || '');
+                          setNewClientEmail(picked.email || '');
+                        }
+                      }}
+                      aria-label="Choose a client from this deal's contacts"
+                      className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">Choose from this deal&apos;s contacts…</option>
+                      {contacts
+                        .filter((c) => c.email)
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name || c.email}
+                            {c.role ? ` · ${c.role}` : ''}
+                            {c.name && c.email ? ` · ${c.email}` : ''}
+                          </option>
+                        ))}
+                    </select>
+                  )}
                   <input
                     type="text"
                     value={newClientName}
                     onChange={(e) => setNewClientName(e.target.value)}
                     placeholder="Client name (shown on the page), optional"
                     maxLength={100}
+                    className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  />
+                  <input
+                    type="email"
+                    value={newClientEmail}
+                    onChange={(e) => setNewClientEmail(e.target.value.replace(/\s/g, ''))}
+                    placeholder="Client email (we'll email them the link), optional"
                     className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                   />
                   <textarea

@@ -8,6 +8,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import KeyDatesPanel from '@/components/KeyDatesPanel';
 import ClientShareCard from '@/components/ClientShareCard';
+import ClientMessagesPanel from '@/components/ClientMessagesPanel';
 import {
   DOCUMENT_CATEGORIES,
   DEFAULT_CATEGORY_KEY,
@@ -737,6 +738,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
           <ClientShareCard
             transactionId={id}
             steps={transaction.tasks.map((t) => ({ id: t.id, name: t.name }))}
+            contacts={contacts.map((c) => ({ id: c.id, name: c.name, email: c.email, role: c.role }))}
             documents={documents.map((d) => ({ id: d.id, name: d.file_name, clientVisible: Boolean(d.client_visible) }))}
             onDocumentsShared={(ids) => setDocuments((prev) => prev.map((d) => ({ ...d, client_visible: ids.includes(d.id) })))}
           />
@@ -835,6 +837,8 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                 </button>
               </div>
             </section>
+
+            <ClientMessagesPanel transactionId={id} viewerRole="agent" />
 
             <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <div className="mb-5">

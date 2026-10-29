@@ -216,3 +216,36 @@ export async function sendClientProgressEmail(params: {
     ...(agentEmail ? { replyTo: agentEmail } : {}),
   });
 }
+
+// A new message on a client's board or in a private thread. Goes to the
+// client with a link back to their progress page, where the message
+// section lives. Reply-To is the sender when we know their address.
+export async function sendClientMessageEmail(params: {
+  toEmail: string;
+  clientName: string | null;
+  senderLabel: string;
+  senderEmail: string | null;
+  propertyAddress: string | null;
+  preview: string;
+  linkUrl: string;
+  isPrivate: boolean;
+}) {
+  const { toEmail, clientName, senderLabel, senderEmail, propertyAddress, preview, linkUrl, isPrivate } = params;
+  const where = propertyAddress ? ` about ${propertyAddress}` : '';
+  const trimmed = preview.length > 200 ? `${preview.slice(0, 200)}…` : preview;
+  const html = wrapper(
+    clientName ? `Hi ${clientName}, you have a new message` : 'You have a new message',
+    `<p><strong>${escapeHtml(senderLabel)}</strong> ${isPrivate ? 'sent you a private message' : 'posted on your transaction board'}${escapeHtml(where)}:</p>
+     <p style="padding: 12px 16px; background: #f5f0e6; border-radius: 6px; white-space: pre-wrap;">${escapeHtml(trimmed)}</p>
+     <p><a href="${linkUrl}" style="color: #b45309;">Open your progress page to reply</a></p>
+     <p style="font-size: 13px; color: #555;">No account or password needed.</p>`
+  );
+  const resend = getResendClient();
+  return resend.emails.send({
+    from: INVOICE_FROM_EMAIL,
+    to: toEmail,
+    subject: `${senderLabel} sent you a message${where}`,
+    html,
+    ...(senderEmail ? { replyTo: senderEmail } : {}),
+  });
+}

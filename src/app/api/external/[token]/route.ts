@@ -82,7 +82,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data: allTasks } = await supabaseServer
       .from('tasks')
-      .select('name, completed, client_visible, sort_order')
+      .select('name, completed, client_visible, sort_order, due_date')
       .eq('transaction_id', link.transaction_id)
       .order('sort_order', { ascending: true });
     const ordered = allTasks || [];
@@ -110,9 +110,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     dates.sort((a, b) => a.date.localeCompare(b.date));
 
+    // Who the client can message: their agent and the coordinator.
+    const people: { agentName: string | null; tcName: string | null } = { agentName: null, tcName: null };
+    const { data: tx } = await supabaseServer.from('transactions').select('agent_id').eq('id', link.transaction_id).maybeSingle();
+    if (tx?.agent_id) {
+      const { data: agentRecord } = await supabaseServer.from('agents').select('name, tc_user_id').eq('id', tx.agent_id).maybeSingle();
+      people.agentName = (agentRecord?.name as string | null) ?? null;
+      if (agentRecord?.tc_user_id) {
+        const { data: tcUser } = await supabaseServer.auth.admin.getUserById(agentRecord.tc_user_id as string);
+        const meta = tcUser.user?.user_metadata as Record<string, unknown> | undefined;
+        people.tcName = (typeof meta?.full_name === 'string' && meta.full_name.trim()) || null;
+      }
+    }
+
     const { data: sharedDocs } = await supabaseServer
       .from('documents')
-      .select('id, file_name, file_size, created_at')
+      .select('id, file_name, file_size, category, document_type, created_at')
       .eq('transaction_id', link.transaction_id)
       .eq('client_visible', true)
       .order('created_at', { ascending: false });
@@ -123,7 +136,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         id: d.id as string,
         fileName: d.file_name as string,
         fileSize: (d.file_size as number | null) ?? null,
+        category: (d.category as string | null) ?? 'other',
+        documentType: (d.document_type as string | null) ?? null,
       })),
+      people,
       propertyAddress: transaction.property_address,
       clientName: link.client_name || null,
       note: link.client_note || null,
@@ -132,7 +148,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       currentStage,
       steps: ordered
         .filter((t) => t.client_visible)
-        .map((t) => ({ name: t.name as string, completed: Boolean(t.completed) })),
+        .map((t) => ({
+          name: t.name as string,
+          completed: Boolean(t.completed),
+          dueDate: (t.due_date as string | null) ?? null,
+        })),
       dates,
     });
   }

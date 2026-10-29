@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
+import { sendClientProgressEmail } from '@/lib/agentPortalEmails';
 import { generateExternalAccessToken, EXTERNAL_LINK_EXPIRY_DAYS, PROGRESS_LINK_EXPIRY_DAYS } from '@/lib/externalAccess';
 
 // Confirms the caller may manage external-access links on this
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const body = await request.json();
-    const { scope, documentId, recipientLabel, clientName, clientNote, visibleTaskIds } = body;
+    const { scope, documentId, recipientLabel, clientName, clientNote, visibleTaskIds, clientEmail } = body;
 
     if (scope !== 'document' && scope !== 'dates' && scope !== 'progress') {
       return NextResponse.json({ error: "scope must be 'document', 'dates' or 'progress'" }, { status: 400 });
@@ -141,6 +142,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const expiryDays = scope === 'progress' ? PROGRESS_LINK_EXPIRY_DAYS : EXTERNAL_LINK_EXPIRY_DAYS;
     const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString();
     const cleanClientName = scope === 'progress' && typeof clientName === 'string' ? clientName.trim().slice(0, 100) : '';
+    const cleanClientEmail =
+      scope === 'progress' && typeof clientEmail === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail.trim()) && clientEmail.trim().length <= 254
+        ? clientEmail.trim().toLowerCase()
+        : '';
     const cleanClientNote = scope === 'progress' && typeof clientNote === 'string' ? clientNote.trim().slice(0, 1000) : '';
     const label = typeof recipientLabel === 'string' ? recipientLabel.trim().slice(0, 200) : null;
 
@@ -154,6 +159,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         document_id: resolvedDocumentId,
         recipient_label: label || null,
         client_name: cleanClientName || null,
+        client_email: cleanClientEmail || null,
         client_note: cleanClientNote || null,
         expires_at: expiresAt,
       })
@@ -161,7 +167,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .single();
 
     if (error) throw error;
-    return NextResponse.json(link);
+
+    // A progress link with an email is also emailed to the client, same as when an agent shares one.
+    let emailSent = false;
+    if (scope === 'progress' && cleanClientEmail) {
+      try {
+        const { data: tx } = await supabaseServer.from('transactions').select('property_address').eq('id', transactionId).single();
+        const fullName = (user.user_metadata as Record<string, unknown> | undefined)?.full_name;
+        await sendClientProgressEmail({
+          toEmail: cleanClientEmail,
+          clientName: cleanClientName || null,
+          agentLabel: (typeof fullName === 'string' && fullName.trim()) || user.email || 'Your coordinator',
+          agentEmail: user.email || null,
+          propertyAddress: (tx?.property_address as string | null) ?? null,
+          note: cleanClientNote || null,
+          linkUrl: `${request.nextUrl.origin}/external/${token}`,
+        });
+        emailSent = true;
+      } catch (emailError) {
+        console.error('Error emailing client progress link:', emailError);
+      }
+    }
+    return NextResponse.json({ ...link, emailSent });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
