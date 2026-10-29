@@ -217,11 +217,12 @@ export async function POST(request: NextRequest) {
     // Most documents in a real-estate file need a signature; only treat it
     // as "no signature needed" when the caller explicitly said so.
     const requiresSignature = requiresSignatureRaw !== 'false';
-    // An agent's Documents upload goes straight onto their client's page when
-    // they turned on "share new documents" for this deal. Message attachments
-    // never do (the agent portal only sets fromDocuments for Documents uploads).
+    // A Documents upload (by the agent or the TC) goes straight onto the
+    // client's page when the agent turned on "share new documents" for this
+    // deal. Message attachments never do: only the Documents uploaders set
+    // fromDocuments.
     let shareWithClient = false;
-    if (callerIsAgent && formData.get('fromDocuments') === 'true' && typeof transactionId === 'string') {
+    if (formData.get('fromDocuments') === 'true' && typeof transactionId === 'string') {
       const { data: shareRow } = await supabaseServer
         .from('transactions')
         .select('client_share_new_documents')

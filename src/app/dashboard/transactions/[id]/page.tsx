@@ -123,6 +123,7 @@ interface DocumentItem {
   file_size: number | null;
   is_signed: boolean;
   requires_signature: boolean;
+  client_visible?: boolean;
   created_at: string;
   url: string | null;
 }
@@ -1470,6 +1471,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       formData.append('category', category);
       formData.append('documentType', documentType);
       formData.append('requiresSignature', requiresSignature ? 'true' : 'false');
+      formData.append('fromDocuments', 'true');
       if (taskId) formData.append('taskId', taskId);
 
       const response = await authFetch('/api/documents', {
@@ -1933,6 +1935,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           <span className="text-xs text-slate-500 flex-shrink-0">
             {doc.file_size ? `${(doc.file_size / 1024).toFixed(0)} KB` : ''}
           </span>
+          {doc.client_visible && (
+            <span
+              className="text-xs px-2 py-0.5 bg-blue-500/15 border border-blue-400/40 rounded-full text-blue-300 flex-shrink-0"
+              title="The agent shared this document with their client"
+            >
+              Shared with client
+            </span>
+          )}
           {!requiresSignature && (
             <span className="text-xs px-2 py-0.5 bg-slate-700/60 border border-slate-600 rounded-full text-slate-400 flex-shrink-0">
               No signature needed

@@ -142,9 +142,9 @@ export default function ClientShareCard({
       <label className="flex items-start gap-2 text-sm text-blue-200 cursor-pointer">
         <input type="checkbox" checked={pickedAutoShare} onChange={(e) => setPickedAutoShare(e.target.checked)} className="mt-1" />
         <span>
-          Share new documents I upload from now on
+          Share new documents added to this deal from now on
           <span className="block text-[11px] text-slate-500">
-            Your TC&apos;s uploads and message attachments stay private unless you tick them.
+            Covers uploads by you and your TC to Documents. Files attached in messages stay private unless you tick them.
           </span>
         </span>
       </label>
