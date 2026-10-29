@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getValidToken, clearSession, authFetch } from '@/lib/authClient';
 import FirstRunGuide, { saveFirstRunGuideDone, resetFirstRunGuideLocal, type GuideKind } from '@/components/FirstRunGuide';
+import PageHint from '@/components/PageHint';
 import { isTeamPlan } from '@/lib/plans';
 
 // Collapsed sidebar is icon-only -- narrow enough to stay useful on small
@@ -175,6 +176,20 @@ export default function DashboardLayout({
   const [guideKind, setGuideKind] = useState<GuideKind | null>(null);
   const [guideRestartKey, setGuideRestartKey] = useState(0);
   const [tutorialMenuOpen, setTutorialMenuOpen] = useState(false);
+  // First-visit page pointers (Contacts, Invoices): which the account has already seen.
+  const [seenHints, setSeenHints] = useState<string[]>([]);
+  const [hintsEligible, setHintsEligible] = useState(false);
+  const seenHintsRef = useRef<Set<string>>(new Set());
+  const markHintSeen = useCallback((id: string) => {
+    if (seenHintsRef.current.has(id)) return;
+    seenHintsRef.current.add(id);
+    setSeenHints((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    authFetch('/api/auth/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seenHint: id }),
+    }).catch(() => {});
+  }, []);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -302,6 +317,10 @@ export default function DashboardLayout({
           };
           setGuides(g);
           setGuideKind(nextGuide(g));
+          const seen: string[] = Array.isArray(data.seenHints) ? data.seenHints : [];
+          seenHintsRef.current = new Set(seen);
+          setSeenHints(seen);
+          setHintsEligible(Boolean(data.hintsEligible));
         }
       } catch {
         // Non-critical — the plan badge just won't show.
@@ -610,7 +629,8 @@ export default function DashboardLayout({
         )}
         {children}
       </div>
-      {guideKind && <FirstRunGuide key={`${guideKind}-${guideRestartKey}`} kind={guideKind} restartKey={guideRestartKey} onFinished={handleGuideFinished} />}
+      {guideKind && <FirstRunGuide key={`${guideKind}-${guideRestartKey}`} kind={guideKind} restartKey={guideRestartKey} onFinished={handleGuideFinished} onHintSeen={markHintSeen} />}
+      {hintsEligible && <PageHint seen={seenHints} suspended={guideKind !== null || tutorialMenuOpen} onSeen={markHintSeen} />}
       {tutorialMenuOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Tutorials" onClick={() => setTutorialMenuOpen(false)}>
           <div className="w-full max-w-sm bg-slate-800 border border-slate-600 rounded-2xl p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>

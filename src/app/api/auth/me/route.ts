@@ -133,7 +133,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ...shaped, trial, needsOnboarding: needsOnboardingFlow, firstRunGuides: guides });
+    // First-visit page hints (Contacts, Invoices): shown once per account, and only to fairly new accounts
+    // so long-time users aren't pointed at things they already know.
+    const seenHints = Array.isArray(user.user_metadata?.seen_hints)
+      ? (user.user_metadata.seen_hints as unknown[]).filter((h): h is string => typeof h === 'string')
+      : [];
+    const hintsEligible = Date.now() - new Date(user.created_at).getTime() < 30 * 24 * 60 * 60 * 1000;
+
+    return NextResponse.json({ ...shaped, trial, needsOnboarding: needsOnboardingFlow, firstRunGuides: guides, seenHints, hintsEligible });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -183,6 +190,7 @@ export async function PATCH(request: NextRequest) {
       onboardingCompleted,
       firstRunGuideDone,
       firstRunListingGuideDone,
+      seenHint,
       password,
     } = body;
 
@@ -277,6 +285,14 @@ export async function PATCH(request: NextRequest) {
 
     if (firstRunListingGuideDone !== undefined) {
       changes.first_run_listing_guide_done = Boolean(firstRunListingGuideDone);
+    }
+
+    // Remember that a first-visit page hint was shown (see components/PageHint.tsx).
+    if (typeof seenHint === 'string' && /^[a-z-]{1,40}$/.test(seenHint)) {
+      const { data: current } = await supabaseServer.auth.admin.getUserById(user.id);
+      const existing = current?.user?.user_metadata?.seen_hints;
+      const list = Array.isArray(existing) ? existing.filter((h: unknown): h is string => typeof h === 'string') : [];
+      if (!list.includes(seenHint)) changes.seen_hints = [...list, seenHint];
     }
 
     const updatedMetadata = await mergeUserMetadata(user.id, changes);

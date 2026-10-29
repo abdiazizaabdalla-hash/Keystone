@@ -84,6 +84,8 @@ const AGENTS_PAGE = /^\/dashboard\/agents\/?$/;
 const NEW_TX_PAGE = /^\/dashboard\/transactions\/new\/?$/;
 const TX_DETAIL = /^\/dashboard\/transactions\/(?!new\/?$|import)[^/]+\/?$/;
 const LISTINGS_PAGE = /^\/dashboard\/listings\/?$/;
+const CONTACTS_PAGE = /^\/dashboard\/contacts\/?$/;
+const INVOICES_PAGE = /^\/dashboard\/invoices\/?$/;
 const LISTING_DETAIL = /^\/dashboard\/listings\/(?!template)[^/]+\/?$/;
 
 interface Ctx {
@@ -106,6 +108,13 @@ interface HubItem {
   clickOnEnter?: string;
   /** Lives on the deal/listing page itself, so go back there first if needed. */
   needsHome?: boolean;
+  /** When the person lands on this page, the highlight and text switch to the page's own pointer. */
+  page?: RegExp;
+  pageTarget?: string;
+  pageTitle?: string;
+  pageBody?: string;
+  /** Also counts as having seen this first-visit page hint (PageHint). */
+  hintId?: string;
   title: string;
   body: string;
 }
@@ -285,6 +294,11 @@ const TRANSACTION_STEPS: Step[] = [
         label: 'Invoices',
         hint: 'Bill the agent when the deal closes',
         target: 'nav-invoices',
+        page: INVOICES_PAGE,
+        pageTarget: 'invoices-quickbooks',
+        pageTitle: 'Use QuickBooks?',
+        pageBody: 'Connect QuickBooks in Settings and every invoice you create here is created there too, with payments recorded. This button imports and exports files if you prefer.',
+        hintId: 'invoices',
         title: 'Get paid',
         body: 'When a deal closes, invoice the agent from Invoices and track what is paid. Click it to look around; this list stays with you.',
       },
@@ -301,6 +315,11 @@ const TRANSACTION_STEPS: Step[] = [
         label: 'Contacts',
         hint: 'Everyone you work with',
         target: 'nav-contacts',
+        page: CONTACTS_PAGE,
+        pageTarget: 'contacts-import',
+        pageTitle: 'Bring in your contacts',
+        pageBody: 'Have a list somewhere else? Click Import CSV to bring it in. Relay flags duplicates, and you can undo an import for two minutes.',
+        hintId: 'contacts',
         title: 'Your contacts',
         body: 'Everyone you work with in one list. People you add to a deal land here too, and you can import a CSV. Click it to look around.',
       },
@@ -434,6 +453,11 @@ const LISTING_STEPS: Step[] = [
         label: 'Contacts',
         hint: 'Everyone you work with',
         target: 'nav-contacts',
+        page: CONTACTS_PAGE,
+        pageTarget: 'contacts-import',
+        pageTitle: 'Bring in your contacts',
+        pageBody: 'Have a list somewhere else? Click Import CSV to bring it in. Relay flags duplicates, and you can undo an import for two minutes.',
+        hintId: 'contacts',
         title: 'Your contacts',
         body: 'Everyone you work with in one list. Sellers and people you add to a listing land here too, and you can import a CSV. Click it to look around.',
       },
@@ -451,7 +475,7 @@ const LISTING_STEPS: Step[] = [
 ];
 
 /** The first element with this data-tour name that is actually on screen (the sidebar and mobile menu can both exist). */
-function findTarget(name: string): HTMLElement | null {
+export function findTarget(name: string): HTMLElement | null {
   const nodes = document.querySelectorAll<HTMLElement>(`[data-tour="${name}"]`);
   for (const el of Array.from(nodes)) {
     const r = el.getBoundingClientRect();
@@ -460,7 +484,7 @@ function findTarget(name: string): HTMLElement | null {
   return null;
 }
 
-interface Box {
+export interface Box {
   top: number;
   left: number;
   width: number;
@@ -471,7 +495,7 @@ const TIP_WIDTH = 330;
 const TIP_HEIGHT_GUESS = 240;
 
 /** Where to put a tip card so it never covers the highlighted element: below, above, right, left, else docked in a corner. */
-function placeTip(box: Box, vw: number, vh: number, w: number, h: number): React.CSSProperties {
+export function placeTip(box: Box, vw: number, vh: number, w: number, h: number): React.CSSProperties {
   const gap = 16;
   const pad = 8;
   const clampLeft = (x: number) => Math.min(Math.max(pad, x), vw - w - pad);
@@ -489,6 +513,7 @@ export default function FirstRunGuide({
   kind,
   restartKey,
   onFinished,
+  onHintSeen,
 }: {
   /** Which tour this is: the transaction tour and the listing tour are separate. */
   kind: GuideKind;
@@ -496,6 +521,8 @@ export default function FirstRunGuide({
   restartKey: number;
   /** `saved` is true when the tour was finished or skipped for good (stored on the account). */
   onFinished: (kind: GuideKind, saved: boolean) => void;
+  /** Called when a topic that doubles as a first-visit page hint has been shown. */
+  onHintSeen?: (id: string) => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -649,9 +676,11 @@ export default function FirstRunGuide({
 
       // In the free-exploration step the highlight follows the topic the person opened.
       const item = step.hub && hubItemId ? step.hub.find((h) => h.id === hubItemId) ?? null : null;
-      const key = `${step.id}:${item?.id ?? ''}`;
-      const targetName = step.hub ? item?.target : step.target;
+      const onItemPage = !!item?.page && item.page.test(pathname);
+      const key = `${step.id}:${item?.id ?? ''}${onItemPage ? ':page' : ''}`;
+      const targetName = step.hub ? (onItemPage ? item?.pageTarget : item?.target) : step.target;
       const clickName = step.hub ? item?.clickOnEnter : step.clickOnEnter;
+      if (onItemPage && item?.hintId) onHintSeen?.(item.hintId);
       if (item?.needsHome && !onHome) {
         setBox(null);
         return;
@@ -705,7 +734,7 @@ export default function FirstRunGuide({
     tick();
     const id = window.setInterval(tick, 250);
     return () => window.clearInterval(id);
-  }, [step, ready, pathname, agents, idx, goToNext, router, mode, hubItemId, kind]);
+  }, [step, ready, pathname, agents, idx, goToNext, router, mode, hubItemId, kind, onHintSeen]);
 
   // Keep the agent count fresh on the step that waits for the agent to be saved.
   useEffect(() => {
@@ -814,6 +843,7 @@ export default function FirstRunGuide({
     const items = step.hub;
     const item = hubItemId ? items.find((h) => h.id === hubItemId) ?? null : null;
     const seen = items.filter((h) => visited.includes(`${step.id}:${h.id}`)).length;
+    const onPageItem = !!item?.page && item.page.test(pathname);
     const noun = mode === 'listing' ? 'listing' : 'transaction';
 
     if (hubMin) {
@@ -849,14 +879,14 @@ export default function FirstRunGuide({
           className="fixed z-[61] bottom-4 right-4 left-4 sm:left-auto sm:w-80 max-h-[80vh] overflow-y-auto bg-slate-800 border border-blue-400/60 rounded-2xl shadow-2xl p-4"
         >
           <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="text-base font-semibold text-slate-100">{item ? item.title : step.title}</h3>
+            <h3 className="text-base font-semibold text-slate-100">{item ? (onPageItem ? item.pageTitle : item.title) : step.title}</h3>
             <button type="button" onClick={() => setHubMin(true)} aria-label="Minimize tutorial" className="text-slate-400 hover:text-slate-200 text-lg leading-none px-1">
               –
             </button>
           </div>
           {item ? (
             <>
-              <p className="text-sm text-slate-300 mb-3">{item.body}</p>
+              <p className="text-sm text-slate-300 mb-3">{onPageItem ? item.pageBody : item.body}</p>
               {item.needsHome && !(mode === 'listing' ? LISTING_DETAIL : TX_DETAIL).test(pathname) && (
                 <p className="text-xs text-slate-400 mb-3">Taking you back to your {noun}…</p>
               )}

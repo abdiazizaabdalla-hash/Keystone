@@ -561,6 +561,7 @@ export default function ContactsPage() {
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={working}
+            data-tour="contacts-import"
             className="px-4 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg transition disabled:opacity-50"
             title="Columns it looks for: Name (or First/Last), Email, Phone, Company, Role, Tags"
           >

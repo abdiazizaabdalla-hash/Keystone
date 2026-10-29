@@ -231,6 +231,7 @@ export default function InvoicesPage() {
             </div>
             <Link
               href="/dashboard/invoices/quickbooks"
+              data-tour="invoices-quickbooks"
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2 border border-white/10 hover:bg-white/5 text-slate-300 hover:text-slate-100 text-sm rounded-xl transition"
