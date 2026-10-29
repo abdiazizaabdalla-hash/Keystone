@@ -2418,6 +2418,145 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     });
   };
 
+  // The Documents card is rendered in the Overview tab and in the Documents tab, but only one at a time,
+  // so its single hidden file picker is never duplicated.
+  const documentsCard = (
+    <>
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8">
+          <input
+            ref={categoryFileInputRef}
+            type="file"
+            accept="application/pdf,image/*,.doc,.docx"
+            onChange={handleDirectFileSelected}
+            className="hidden"
+          />
+          <div className="flex items-start justify-between gap-4 mb-2">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
+              <p className="text-sm text-slate-400">
+                Organized by category — a document can optionally be tagged with a checklist stage, but
+                doesn&apos;t have to be.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowUploadForm((prev) => !prev)}
+              className="flex-shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg text-sm transition"
+            >
+              {showUploadForm ? 'Cancel' : '+ Upload Document'}
+            </button>
+          </div>
+
+          {showUploadForm && (
+            <form
+              onSubmit={handleUploadSubmit}
+              className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-800/50 border border-slate-600 rounded-lg p-5 my-6"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Category</label>
+                <select
+                  value={uploadCategory}
+                  onChange={(e) => handleUploadCategoryChange(e.target.value)}
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                >
+                  {DOCUMENT_CATEGORIES.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Document Type</label>
+                <select
+                  value={uploadDocType}
+                  onChange={(e) => setUploadDocType(e.target.value)}
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                >
+                  {typesForCategory(uploadCategory).map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                  Checklist Stage <span className="normal-case text-slate-500">(optional)</span>
+                </label>
+                <select
+                  value={uploadStageTaskId}
+                  onChange={(e) => setUploadStageTaskId(e.target.value)}
+                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">None</option>
+                  {tasks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">File</label>
+                <input
+                  type="file"
+                  required
+                  accept="application/pdf,image/*,.doc,.docx"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  className="w-full text-sm text-slate-300 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-600 file:text-slate-200 hover:file:bg-slate-600 file:cursor-pointer"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-2 text-sm text-slate-300 select-none cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={uploadRequiresSignature}
+                    onChange={(e) => setUploadRequiresSignature(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                  />
+                  This document needs a signature
+                  <span className="text-xs text-slate-500">
+                    (uncheck for photos, printouts, or anything that won&apos;t be signed)
+                  </span>
+                </label>
+              </div>
+
+              <div className="md:col-span-2">
+                <button
+                  type="submit"
+                  disabled={uploadingSlot === 'upload' || !uploadFile}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg text-sm transition disabled:opacity-50"
+                >
+                  {uploadingSlot === 'upload' ? 'Uploading...' : 'Upload'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className="mb-6">
+            <input
+              type="text"
+              value={docSearch}
+              onChange={(e) => setDocSearch(e.target.value)}
+              placeholder="Search documents by name, type, category, or checklist stage..."
+              className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="space-y-3">
+            {renderDocumentCategories()}
+            {docSearch && filteredDocuments.length === 0 && (
+              <p className="text-sm text-slate-500 italic">No documents match "{docSearch}".</p>
+            )}
+          </div>
+        </div>
+    </>
+  );
+
   const incompleteTasks = tasks
     .filter((t) => !t.completed)
     .sort((x, y) => (x.due_date || '9999').localeCompare(y.due_date || '9999'));
@@ -2588,8 +2727,12 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           ))}
         </div>
 
-        <div className={tab === 'overview' ? 'space-y-3' : 'hidden'}>
-          <OverviewSection title="Key dates" summary={keyDatesSummary} defaultOpen>
+        {/* Overview mirrors the agent's page: deal dates and invoice on top, then
+            Documents wide on the left with Messages, the checklist and
+            Contacts stacked in a narrow column on the right. The other tabs
+            keep the full tools. */}
+        <div className={tab === 'overview' ? 'space-y-8' : 'hidden'}>
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Acceptance / Closing Dates -- editable here, not just at
                 creation. Changing either recomputes the checklist's due
@@ -2632,7 +2775,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             manageCalendar
           />
           </div>
-          </OverviewSection>
+          </div>
 
           <OverviewSection defaultOpen title="Invoice" summary={invoice ? `${invoice.invoice_number} · $${invoice.amount_owed.toLocaleString()} · ${invoice.paid ? 'Paid' : 'Unpaid'}` : 'Not created yet'}>
           {/* Invoice: no longer gated on the deal being manually walked to
@@ -2748,73 +2891,119 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             )}
           </div>
           </OverviewSection>
-          <OverviewSection
-            title="Checklist"
-            summary={tasks.length === 0 ? 'No steps yet' : `${completedCount} of ${tasks.length} done${nextTask ? ` · Next: ${nextTask.name}${nextTask.due_date ? ` (${formatDisplayDate(nextTask.due_date, { month: 'short', day: 'numeric' })})` : ''}` : ' · All done'}`}
-            action={{ label: 'Open checklist', onClick: () => selectTab('checklist') }}
-          >
-            {incompleteTasks.length === 0 ? (
-              <p className="text-sm text-slate-400">Every step is done.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {incompleteTasks.slice(0, 5).map((t) => (
-                  <li key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                    <span className="text-slate-200 truncate">{t.name}</span>
-                    <span className="text-slate-500 shrink-0">{t.due_date ? formatDisplayDate(t.due_date, { month: 'short', day: 'numeric' }) : ''}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
 
-          <OverviewSection
-            title="Documents"
-            summary={`${documents.length} file${documents.length === 1 ? '' : 's'}`}
-            action={{ label: 'Open documents', onClick: () => selectTab('documents') }}
-          >
-            {documents.length === 0 ? (
-              <p className="text-sm text-slate-400">No documents yet.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {[...documents].sort((x, y) => y.created_at.localeCompare(x.created_at)).slice(0, 5).map((d) => (
-                  <li key={d.id} className="py-2.5 text-sm text-slate-200 truncate">📄 {d.file_name}</li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
+            <div className="lg:order-2 lg:self-start flex flex-col gap-8 min-w-0">
+              <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-bold text-slate-100">Messages</h2>
+                  <button type="button" onClick={() => selectTab('messages')} className="text-sm text-blue-400 hover:text-blue-300 font-medium transition">
+                    Open Messages →
+                  </button>
+                </div>
+                {messages.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    {acceptedAgentUsers.length === 0
+                      ? 'Invite your agent on the Contacts tab to start a conversation.'
+                      : 'No messages yet.'}
+                  </p>
+                ) : (
+                  <MessagePreview messages={messages} agentName={agentName} limit={4} onAttachmentDragStart={startDocDrag} />
+                )}
+              </section>
 
-          <OverviewSection
-            title="Messages"
-            summary={messages.length === 0 ? 'No messages yet' : messages[messages.length - 1].body || 'Attachment'}
-            action={{ label: 'Open messages', onClick: () => selectTab('messages') }}
-          >
-            {messages.length === 0 ? (
-              <p className="text-sm text-slate-400">Nothing yet. Invite your agent on the Contacts tab to start a conversation.</p>
-            ) : (
-              <MessagePreview messages={messages} agentName={agentName} limit={3} />
-            )}
-          </OverviewSection>
+              {tab === 'overview' && <ClientMessagesPanel transactionId={resolvedParams.id} viewerRole="tc" />}
 
-          <OverviewSection
-            title="Contacts"
-            summary={`${agent ? agentName : 'No agent'}${contacts.length ? ` + ${contacts.length} other${contacts.length === 1 ? '' : 's'}` : ''}`}
-            action={{ label: 'Open contacts', onClick: () => selectTab('people') }}
-          >
-            <ul className="divide-y divide-white/10">
-              {agent && (
-                <li className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                  <span className="text-slate-200">{agentName}</span>
-                  <span className="text-slate-500">Agent</span>
-                </li>
-              )}
-              {contacts.filter((c) => c.name || c.email).map((c) => (
-                <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                  <span className="text-slate-200 truncate">{c.name || c.email}</span>
-                  <span className="text-slate-500 shrink-0">{c.role || ''}</span>
-                </li>
-              ))}
-            </ul>
-          </OverviewSection>
+              <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <div className="flex items-start justify-between gap-3 mb-1">
+                  <h2 className="text-lg font-bold text-slate-100">Checklist</h2>
+                  <button type="button" onClick={() => selectTab('checklist')} className="text-sm text-blue-400 hover:text-blue-300 font-medium transition">
+                    Open checklist →
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mb-4">{transaction.checklist_template_name || 'Baseline (default)'}</p>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-medium text-slate-400">Progress</span>
+                  <span className="text-xs font-semibold text-blue-400">
+                    {tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0}%
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-slate-600 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-300"
+                    style={{ width: `${tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0}%` }}
+                  />
+                </div>
+                <p className="text-xs text-slate-400 mt-2 mb-4">
+                  <span className="font-semibold text-slate-300">{completedCount}</span> of{' '}
+                  <span className="font-semibold text-slate-300">{tasks.length}</span> completed
+                </p>
+                <div className="space-y-2">
+                  {tasks.map((task) => {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    return (
+                      <div key={task.id} className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={task.completed}
+                            onChange={() => handleToggleTask(task.id)}
+                            aria-label={`Mark "${task.name}" ${task.completed ? 'not done' : 'done'}`}
+                            className="w-4 h-4 rounded border-2 border-slate-600 accent-blue-500 cursor-pointer flex-shrink-0"
+                          />
+                          <span className={`flex-1 text-sm font-medium ${task.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                            {task.name}
+                          </span>
+                          {!task.completed && task.due_date && (
+                            <span className={`text-xs font-medium flex-shrink-0 ${task.due_date < todayStr ? 'text-red-400' : 'text-slate-500'}`}>
+                              {task.due_date < todayStr ? 'Overdue ' : 'Due '}
+                              {formatDisplayDate(task.due_date, { month: '2-digit', day: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                        {!task.completed && task.waiting_on && (
+                          <div className="mt-1.5 pl-7">
+                            <span className="text-xs font-medium text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-full px-2 py-0.5">
+                              {'\u23F3'} Waiting on {task.waiting_on}
+                              {task.waiting_on_since ? ` \u00b7 ${daysSince(task.waiting_on_since)}d` : ''}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-slate-100">Contacts</h2>
+                  <button type="button" onClick={() => selectTab('people')} className="text-sm text-blue-400 hover:text-blue-300 font-medium transition">
+                    Open contacts →
+                  </button>
+                </div>
+                <ul className="divide-y divide-white/10">
+                  {agent && (
+                    <li className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                      <span className="text-slate-200">{agentName}</span>
+                      <span className="text-slate-500">Agent</span>
+                    </li>
+                  )}
+                  {contacts.filter((c) => c.name || c.email).map((c) => (
+                    <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                      <span className="text-slate-200 truncate">{c.name || c.email}</span>
+                      <span className="text-slate-500 shrink-0">{c.role || ''}</span>
+                    </li>
+                  ))}
+                  {!agent && contacts.filter((c) => c.name || c.email).length === 0 && (
+                    <li className="py-2.5 text-sm text-slate-500">No contacts yet.</li>
+                  )}
+                </ul>
+              </section>
+            </div>
+
+            <div className="lg:order-1 min-w-0">{tab === 'overview' ? documentsCard : null}</div>
+          </div>
 
         <OverviewSection title="Delete this deal" tone="danger">
           <p className="text-sm text-slate-400 mb-5">
@@ -3088,139 +3277,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         </div>
 
         <div className={tab === 'documents' ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start' : 'hidden'}>
-        {/* Documents Section (primary view, left column on desktop) */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8">
-          <input
-            ref={categoryFileInputRef}
-            type="file"
-            accept="application/pdf,image/*,.doc,.docx"
-            onChange={handleDirectFileSelected}
-            className="hidden"
-          />
-          <div className="flex items-start justify-between gap-4 mb-2">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
-              <p className="text-sm text-slate-400">
-                Organized by category — a document can optionally be tagged with a checklist stage, but
-                doesn&apos;t have to be.
-              </p>
-            </div>
-            <button
-              onClick={() => setShowUploadForm((prev) => !prev)}
-              className="flex-shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg text-sm transition"
-            >
-              {showUploadForm ? 'Cancel' : '+ Upload Document'}
-            </button>
-          </div>
-
-          {showUploadForm && (
-            <form
-              onSubmit={handleUploadSubmit}
-              className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-800/50 border border-slate-600 rounded-lg p-5 my-6"
-            >
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Category</label>
-                <select
-                  value={uploadCategory}
-                  onChange={(e) => handleUploadCategoryChange(e.target.value)}
-                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
-                >
-                  {DOCUMENT_CATEGORIES.map((c) => (
-                    <option key={c.key} value={c.key}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Document Type</label>
-                <select
-                  value={uploadDocType}
-                  onChange={(e) => setUploadDocType(e.target.value)}
-                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
-                >
-                  {typesForCategory(uploadCategory).map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                  Checklist Stage <span className="normal-case text-slate-500">(optional)</span>
-                </label>
-                <select
-                  value={uploadStageTaskId}
-                  onChange={(e) => setUploadStageTaskId(e.target.value)}
-                  className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">None</option>
-                  {tasks.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">File</label>
-                <input
-                  type="file"
-                  required
-                  accept="application/pdf,image/*,.doc,.docx"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  className="w-full text-sm text-slate-300 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-600 file:text-slate-200 hover:file:bg-slate-600 file:cursor-pointer"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="flex items-center gap-2 text-sm text-slate-300 select-none cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={uploadRequiresSignature}
-                    onChange={(e) => setUploadRequiresSignature(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
-                  />
-                  This document needs a signature
-                  <span className="text-xs text-slate-500">
-                    (uncheck for photos, printouts, or anything that won&apos;t be signed)
-                  </span>
-                </label>
-              </div>
-
-              <div className="md:col-span-2">
-                <button
-                  type="submit"
-                  disabled={uploadingSlot === 'upload' || !uploadFile}
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg text-sm transition disabled:opacity-50"
-                >
-                  {uploadingSlot === 'upload' ? 'Uploading...' : 'Upload'}
-                </button>
-              </div>
-            </form>
-          )}
-
-          <div className="mb-6">
-            <input
-              type="text"
-              value={docSearch}
-              onChange={(e) => setDocSearch(e.target.value)}
-              placeholder="Search documents by name, type, category, or checklist stage..."
-              className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-
-          <div className="space-y-3">
-            {renderDocumentCategories()}
-            {docSearch && filteredDocuments.length === 0 && (
-              <p className="text-sm text-slate-500 italic">No documents match "{docSearch}".</p>
-            )}
-          </div>
-        </div>
+        {/* Documents card: shared with the Overview tab (see documentsCard). */}
+        {tab === 'documents' ? documentsCard : null}
           <div className="space-y-6 min-w-0">
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
               <div className="flex items-center justify-between mb-3">
@@ -3497,7 +3555,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           )}
         </div>
         <div className="mt-6">
-          <ClientMessagesPanel transactionId={resolvedParams.id} viewerRole="tc" />
+          {tab === 'messages' && <ClientMessagesPanel transactionId={resolvedParams.id} viewerRole="tc" />}
         </div>
         </div>
 

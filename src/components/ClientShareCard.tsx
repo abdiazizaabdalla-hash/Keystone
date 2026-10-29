@@ -53,6 +53,8 @@ export default function ClientShareCard({
   const [note, setNote] = useState('');
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [pickedDocIds, setPickedDocIds] = useState<string[]>([]);
+  const [autoShare, setAutoShare] = useState(false); // saved setting
+  const [pickedAutoShare, setPickedAutoShare] = useState(false); // in the open form
   const [sending, setSending] = useState(false);
 
   const [editingSteps, setEditingSteps] = useState(false);
@@ -72,6 +74,7 @@ export default function ClientShareCard({
         const data = await res.json();
         setLinks(Array.isArray(data.links) ? data.links : []);
         setVisibleIds(Array.isArray(data.visibleTaskIds) ? data.visibleTaskIds : []);
+        setAutoShare(data.shareNewDocuments === true);
       })
       .catch((err) => {
         if (err instanceof AuthRequiredError) router.push('/agent/login');
@@ -98,6 +101,7 @@ export default function ClientShareCard({
   const openForm = () => {
     setPickedIds(defaultPicked());
     setPickedDocIds(sharedDocIds);
+    setPickedAutoShare(autoShare);
     setShowForm(true);
     setMessage('');
   };
@@ -133,32 +137,44 @@ export default function ClientShareCard({
     setPickedDocIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   // Documents are opt-in: nothing is shown to the client until it is ticked here.
-  const docPicker =
-    documents.length === 0 ? (
-      <p className="text-xs text-slate-500">No documents on this deal yet. Upload one and it can be shared here.</p>
-    ) : (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-slate-400">Documents your client can open (none by default)</p>
-          <div className="flex gap-3">
-            <button type="button" onClick={() => setPickedDocIds(documents.map((d) => d.id))} className="text-xs text-blue-400 hover:text-blue-300">
-              Select all
-            </button>
-            <button type="button" onClick={() => setPickedDocIds([])} className="text-xs text-slate-400 hover:text-slate-300">
-              None
-            </button>
+  const docPicker = (
+    <div className="space-y-2">
+      <label className="flex items-start gap-2 text-sm text-blue-200 cursor-pointer">
+        <input type="checkbox" checked={pickedAutoShare} onChange={(e) => setPickedAutoShare(e.target.checked)} className="mt-1" />
+        <span>
+          Share new documents I upload from now on
+          <span className="block text-[11px] text-slate-500">
+            Your TC&apos;s uploads and message attachments stay private unless you tick them.
+          </span>
+        </span>
+      </label>
+      {documents.length === 0 ? (
+        <p className="text-xs text-slate-500">No documents on this deal yet.</p>
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-slate-400">Documents your client can open now</p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setPickedDocIds(documents.map((d) => d.id))} className="text-xs text-blue-400 hover:text-blue-300">
+                Select all
+              </button>
+              <button type="button" onClick={() => setPickedDocIds([])} className="text-xs text-slate-400 hover:text-slate-300">
+                None
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
-          {documents.map((d) => (
-            <label key={d.id} className="flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
-              <input type="checkbox" checked={pickedDocIds.includes(d.id)} onChange={() => toggleDoc(d.id)} className="mt-1" />
-              <span className="break-all">{d.name}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-    );
+          <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
+            {documents.map((d) => (
+              <label key={d.id} className="flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
+                <input type="checkbox" checked={pickedDocIds.includes(d.id)} onChange={() => toggleDoc(d.id)} className="mt-1" />
+                <span className="break-all">{d.name}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 
   const handleError = (err: unknown, fallback: string) => {
     if (err instanceof AuthRequiredError) {
@@ -185,11 +201,13 @@ export default function ClientShareCard({
           note: note.trim() || undefined,
           visibleTaskIds: pickedIds,
           visibleDocumentIds: pickedDocIds,
+          shareNewDocuments: pickedAutoShare,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to share');
       onDocumentsShared(pickedDocIds);
+      setAutoShare(pickedAutoShare);
       setLinks((prev) => [data.link, ...prev]);
       setVisibleIds(pickedIds);
       setShowForm(false);
@@ -217,12 +235,13 @@ export default function ClientShareCard({
       const res = await authFetch(base, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visibleTaskIds: pickedIds, visibleDocumentIds: pickedDocIds }),
+        body: JSON.stringify({ visibleTaskIds: pickedIds, visibleDocumentIds: pickedDocIds, shareNewDocuments: pickedAutoShare }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to save steps');
       setVisibleIds(pickedIds);
       onDocumentsShared(pickedDocIds);
+      setAutoShare(pickedAutoShare);
       setEditingSteps(false);
       setMessage('Saved. Every client link now shows these steps and documents.');
     } catch (err) {
@@ -456,6 +475,7 @@ export default function ClientShareCard({
               onClick={() => {
                 setPickedIds(defaultPicked());
                 setPickedDocIds(sharedDocIds);
+                setPickedAutoShare(autoShare);
                 setEditingSteps(true);
               }}
               className={linkButton}

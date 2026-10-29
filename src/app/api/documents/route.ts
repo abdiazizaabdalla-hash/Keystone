@@ -217,6 +217,18 @@ export async function POST(request: NextRequest) {
     // Most documents in a real-estate file need a signature; only treat it
     // as "no signature needed" when the caller explicitly said so.
     const requiresSignature = requiresSignatureRaw !== 'false';
+    // An agent's Documents upload goes straight onto their client's page when
+    // they turned on "share new documents" for this deal. Message attachments
+    // never do (the agent portal only sets fromDocuments for Documents uploads).
+    let shareWithClient = false;
+    if (callerIsAgent && formData.get('fromDocuments') === 'true' && typeof transactionId === 'string') {
+      const { data: shareRow } = await supabaseServer
+        .from('transactions')
+        .select('client_share_new_documents')
+        .eq('id', transactionId)
+        .maybeSingle();
+      shareWithClient = shareRow?.client_share_new_documents === true;
+    }
 
     if (!isValidCategory(category)) {
       return NextResponse.json({ error: `Unknown document category: ${category}` }, { status: 400 });
@@ -260,6 +272,7 @@ export async function POST(request: NextRequest) {
         file_size: file.size,
         uploaded_by: user.id,
         requires_signature: requiresSignature,
+        ...(shareWithClient ? { client_visible: true } : {}),
       })
       .select()
       .single();

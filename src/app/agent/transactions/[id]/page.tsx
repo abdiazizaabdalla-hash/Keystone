@@ -404,6 +404,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
         formData.append('transactionId', id);
         formData.append('category', category);
         formData.append('documentType', documentType);
+        formData.append('fromDocuments', 'true');
         const res = await authFetch('/api/documents', { method: 'POST', body: formData });
         const result = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(result.error || `Failed to upload ${file.name}`);

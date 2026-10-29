@@ -53,9 +53,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     ]);
     if (error) throw error;
 
+    const { data: shareRow } = await supabaseServer
+      .from('transactions')
+      .select('client_share_new_documents')
+      .eq('id', transactionId)
+      .maybeSingle();
+
     return NextResponse.json({
       links: links || [],
       visibleTaskIds: (visible || []).map((t) => t.id as string),
+      shareNewDocuments: shareRow?.client_share_new_documents === true,
     });
   } catch (error) {
     return handleError(error, 'load client links');
@@ -111,6 +118,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (Array.isArray(body.visibleDocumentIds)) {
       await setVisibleDocuments(transactionId, body.visibleDocumentIds);
     }
+    if (typeof body.shareNewDocuments === 'boolean') {
+      await setShareNewDocuments(transactionId, body.shareNewDocuments);
+    }
 
     const token = generateExternalAccessToken();
     const expiresAt = new Date(Date.now() + PROGRESS_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -154,17 +164,31 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id: transactionId } = await params;
     await loadAgentContext(request, transactionId);
     const body = await request.json().catch(() => ({}));
-    if (!Array.isArray(body.visibleTaskIds) && !Array.isArray(body.visibleDocumentIds)) {
-      return NextResponse.json({ error: 'visibleTaskIds or visibleDocumentIds is required' }, { status: 400 });
+    if (!Array.isArray(body.visibleTaskIds) && !Array.isArray(body.visibleDocumentIds) && typeof body.shareNewDocuments !== 'boolean') {
+      return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+    }
+    if (typeof body.shareNewDocuments === 'boolean') {
+      await setShareNewDocuments(transactionId, body.shareNewDocuments);
     }
     const taskIds = Array.isArray(body.visibleTaskIds) ? await setVisibleSteps(transactionId, body.visibleTaskIds) : undefined;
     const documentIds = Array.isArray(body.visibleDocumentIds)
       ? await setVisibleDocuments(transactionId, body.visibleDocumentIds)
       : undefined;
-    return NextResponse.json({ success: true, visibleTaskIds: taskIds, visibleDocumentIds: documentIds });
+    return NextResponse.json({
+      success: true,
+      visibleTaskIds: taskIds,
+      visibleDocumentIds: documentIds,
+      shareNewDocuments: typeof body.shareNewDocuments === 'boolean' ? body.shareNewDocuments : undefined,
+    });
   } catch (error) {
     return handleError(error, 'update steps');
   }
+}
+
+// "Share new documents I upload automatically" -- read by POST /api/documents for agent uploads.
+async function setShareNewDocuments(transactionId: string, value: boolean) {
+  const { error } = await supabaseServer.from('transactions').update({ client_share_new_documents: value }).eq('id', transactionId);
+  if (error) throw error;
 }
 
 // Documents default to hidden; only ids that belong to this deal can be ticked.
