@@ -32,7 +32,7 @@ interface ProgressInfo {
   stageIndex: number;
   currentStage: string;
   steps: { name: string; completed: boolean; dueDate: string | null }[];
-  dates: { label: string; date: string; dateDisplay: string; completed: boolean }[];
+  dates: { label: string; kind: string; help: string | null; date: string; dateDisplay: string; completed: boolean }[];
   documents: { id: string; fileName: string; fileSize: number | null; category: string; documentType: string | null }[];
   people: { agentName: string | null; tcName: string | null };
 }
@@ -123,6 +123,41 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
     const today = new Date().toISOString().slice(0, 10);
     const nextDate = info.dates.find((d) => !d.completed && d.date >= today);
     const doneCount = info.steps.filter((x) => x.completed).length;
+    // Each date becomes a timeline entry: what it is, when (with weekday),
+    // and a plain status -- done, today, N days away, or N days overdue.
+    const startOfToday = new Date(`${today}T00:00:00`).getTime();
+    const firstOpen = info.dates.findIndex((d) => !(d.completed || (d.kind === 'closing' && closed)) && d.date >= today);
+    const timeline = info.dates.map((d, i) => {
+      const done = d.completed || (d.kind === 'closing' && closed);
+      const days = Math.round((new Date(`${d.date}T00:00:00`).getTime() - startOfToday) / 86400000);
+      const when = new Date(`${d.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      let status: string;
+      let tone: string;
+      let dot: string;
+      let mark: string;
+      if (done) {
+        status = 'Done';
+        tone = 'text-emerald-400';
+        dot = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50';
+        mark = '✓';
+      } else if (days < 0) {
+        status = `${-days} day${days === -1 ? '' : 's'} overdue`;
+        tone = 'text-red-400';
+        dot = 'bg-red-500/20 text-red-300 border border-red-500/50';
+        mark = '!';
+      } else if (days === 0) {
+        status = 'Today';
+        tone = 'text-amber-300';
+        dot = 'bg-amber-500/20 text-amber-300 border border-amber-500/50';
+        mark = '•';
+      } else {
+        status = days === 1 ? 'Tomorrow' : `In ${days} days`;
+        tone = i === firstOpen ? 'text-blue-300' : 'text-slate-400';
+        dot = i === firstOpen ? 'bg-blue-500/30 text-blue-200 border border-blue-400' : 'bg-slate-700 text-slate-400 border border-slate-600';
+        mark = '•';
+      }
+      return { label: d.label, help: d.help, when, status, tone, dot, mark, done, isNext: i === firstOpen };
+    });
     const q = docSearch.trim().toLowerCase();
     const visibleDocs = info.documents.filter((d) => !q || d.fileName.toLowerCase().includes(q));
     const knownCategories = new Set(DOCUMENT_CATEGORIES.map((c) => c.key));
@@ -145,18 +180,44 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
               {info.people.tcName ? ` · Coordinated by ${info.people.tcName}` : ''}
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 mt-6 border-t border-slate-600">
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Your agent</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0">
-                    {(info.people.agentName || '?')[0]}
+            {/* Who is who: the agent and the coordinator do different jobs. */}
+            <div className="pt-6 mt-6 border-t border-slate-600">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Your team</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  {
+                    role: 'Your agent',
+                    name: info.people.agentName || 'Your agent',
+                    blurb: 'Your main contact and advocate. Ask about offers, negotiations and what to expect next.',
+                    tone: 'from-blue-500 to-blue-600',
+                  },
+                  {
+                    role: 'Transaction coordinator',
+                    name: info.people.tcName || 'Your coordinator',
+                    blurb: 'Keeps the paperwork, deadlines and checklist on track. Ask where a document or step stands.',
+                    tone: 'from-emerald-500 to-emerald-600',
+                  },
+                ].map((person) => (
+                  <div key={person.role} className="flex items-start gap-3 bg-slate-700/30 border border-slate-600 rounded-xl p-4">
+                    <div
+                      className={`w-10 h-10 bg-gradient-to-br ${person.tone} rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0`}
+                      aria-hidden="true"
+                    >
+                      {person.name[0]}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{person.role}</p>
+                      <p className="text-base font-semibold text-slate-100 truncate">{person.name}</p>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">{person.blurb}</p>
+                    </div>
                   </div>
-                  <p className="text-lg font-semibold text-slate-100">{info.people.agentName || 'Your agent'}</p>
-                </div>
+                ))}
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 mt-6 border-t border-slate-600">
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Status</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Where things stand</p>
                 <p className="text-lg font-semibold text-blue-400">{closed ? 'Closed' : info.currentStage}</p>
                 {nextDate && (
                   <p className="text-xs text-slate-400 mt-1">
@@ -166,9 +227,6 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
               </div>
               <div>
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Progress</p>
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs text-slate-400">{percent}% of the way to closing</span>
-                </div>
                 <div
                   className="w-full h-2 bg-slate-600 rounded-full overflow-hidden"
                   role="progressbar"
@@ -179,6 +237,7 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
                 >
                   <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${percent}%` }} />
                 </div>
+                <p className="text-xs text-slate-400 mt-1.5">{percent}% of the way to closing</p>
               </div>
             </div>
 
@@ -190,15 +249,38 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
 
             {info.dates.length > 0 && (
               <div className="pt-6 mt-6 border-t border-slate-600">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Critical Dates</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
-                  {info.dates.map((d, i) => (
-                    <div key={i} className="flex items-center justify-between gap-4 text-sm">
-                      <span className={d.completed ? 'text-slate-500 line-through' : 'text-slate-300'}>{d.label}</span>
-                      <span className={`font-semibold whitespace-nowrap ${d.completed ? 'text-slate-500' : 'text-slate-100'}`}>{d.dateDisplay}</span>
-                    </div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Important dates</p>
+                <p className="text-xs text-slate-500 mb-4">The deadlines that keep your transaction on track, in order.</p>
+                <ol className="space-y-0">
+                  {timeline.map((d, i) => (
+                    <li key={i} className="relative flex gap-4 pb-5 last:pb-0">
+                      {i < timeline.length - 1 && <span className="absolute left-[11px] top-6 bottom-0 w-px bg-slate-600" aria-hidden="true" />}
+                      <span
+                        className={`relative mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${d.dot}`}
+                        aria-hidden="true"
+                      >
+                        {d.mark}
+                      </span>
+                      <div
+                        className={`flex-1 min-w-0 rounded-xl border px-4 py-3 ${
+                          d.isNext ? 'border-blue-400/60 bg-blue-500/10' : 'border-slate-600 bg-slate-700/20'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                          <p className={`text-sm font-semibold ${d.done ? 'text-slate-400' : 'text-slate-100'}`}>
+                            {d.label}
+                            {d.isNext && <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-blue-300">Next up</span>}
+                          </p>
+                          <div className="text-right">
+                            <p className={`text-sm font-semibold ${d.done ? 'text-slate-500' : 'text-slate-100'}`}>{d.when}</p>
+                            <p className={`text-xs font-medium ${d.tone}`}>{d.status}</p>
+                          </div>
+                        </div>
+                        {d.help && <p className="text-xs text-slate-400 mt-1 leading-relaxed">{d.help}</p>}
+                      </div>
+                    </li>
                   ))}
-                </div>
+                </ol>
               </div>
             )}
           </div>

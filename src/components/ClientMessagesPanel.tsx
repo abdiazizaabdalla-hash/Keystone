@@ -181,7 +181,7 @@ export default function ClientMessagesPanel({
                     {!mine && (
                       <p className="text-[11px] font-semibold text-slate-300 mb-0.5">
                         {m.sender_name || (m.sender_type === 'client' ? 'Client' : m.sender_type === 'agent' ? 'Agent' : 'Coordinator')}
-                        {m.sender_type === 'client' ? ' (client)' : ''}
+                        {m.sender_type === 'client' ? ' · Client' : m.sender_type === 'agent' ? ' · Agent' : ' · Coordinator'}
                       </p>
                     )}
                     {mine && tab === 'board' && m.sender_name && <p className="text-[11px] font-semibold text-blue-100/90 mb-0.5">You</p>}

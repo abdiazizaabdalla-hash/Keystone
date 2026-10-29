@@ -92,21 +92,35 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data: keyDates } = await supabaseServer
       .from('transaction_key_dates')
-      .select('label, due_date, completed')
+      .select('kind, label, due_date, completed')
       .eq('transaction_id', link.transaction_id)
       .order('due_date', { ascending: true });
 
-    const dates: { label: string; date: string; dateDisplay: string; completed: boolean }[] = [];
+    // Plain-English reasons for each kind of date, so a client who has never
+    // bought or sold before knows why it matters.
+    const KIND_HELP: Record<string, string> = {
+      accepted: 'The day both sides agreed to the contract. The deadlines below count from here.',
+      earnest_money: 'Your good-faith deposit is due to the title or escrow company by this date.',
+      inspection: 'The last day to finish inspections and ask for repairs or credits.',
+      appraisal: "The lender's appraisal should be done by this date to confirm the home's value.",
+      financing: 'Your loan approval needs to be in place by this date.',
+      title_commitment: 'The title company confirms ownership of the property is clear.',
+      closing: 'Signing day: ownership officially transfers.',
+    };
+    type PortalDate = { label: string; kind: string; help: string | null; date: string; dateDisplay: string; completed: boolean };
+    const dates: PortalDate[] = [];
+    const hasClosingKeyDate = (keyDates || []).some((d) => d.kind === 'closing' && d.due_date);
     if (transaction.acceptance_date) {
-      dates.push({ label: 'Contract accepted', date: transaction.acceptance_date as string, dateDisplay: formatDisplayDate(transaction.acceptance_date as string), completed: true });
+      dates.push({ label: 'Contract accepted', kind: 'accepted', help: KIND_HELP.accepted, date: transaction.acceptance_date as string, dateDisplay: formatDisplayDate(transaction.acceptance_date as string), completed: true });
     }
     (keyDates || []).forEach((d) => {
       if (d.due_date) {
-        dates.push({ label: d.label as string, date: d.due_date as string, dateDisplay: formatDisplayDate(d.due_date as string), completed: Boolean(d.completed) });
+        const kind = (d.kind as string) || 'custom';
+        dates.push({ label: d.label as string, kind, help: KIND_HELP[kind] ?? null, date: d.due_date as string, dateDisplay: formatDisplayDate(d.due_date as string), completed: Boolean(d.completed) });
       }
     });
-    if (transaction.closing_date) {
-      dates.push({ label: 'Closing', date: transaction.closing_date as string, dateDisplay: formatDisplayDate(transaction.closing_date as string), completed: false });
+    if (transaction.closing_date && !hasClosingKeyDate) {
+      dates.push({ label: 'Closing', kind: 'closing', help: KIND_HELP.closing, date: transaction.closing_date as string, dateDisplay: formatDisplayDate(transaction.closing_date as string), completed: false });
     }
     dates.sort((a, b) => a.date.localeCompare(b.date));
 

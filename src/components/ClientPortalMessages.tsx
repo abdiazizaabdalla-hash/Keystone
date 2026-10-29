@@ -41,8 +41,8 @@ export default function ClientPortalMessages({
 
   const tabs: { key: Channel; label: string; hint: string }[] = [
     { key: 'board', label: 'General board', hint: 'Everyone on this transaction can read this: you, your agent and the coordinator.' },
-    { key: 'agent', label: `Private: ${agentLabel}`, hint: `Only you and ${agentLabel} can see this thread.` },
-    { key: 'tc', label: `Private: ${tcLabel}`, hint: `Only you and ${tcLabel} can see this thread.` },
+    { key: 'agent', label: `Private: ${agentLabel} (Agent)`, hint: `Only you and ${agentLabel} can see this thread.` },
+    { key: 'tc', label: `Private: ${tcLabel} (Coordinator)`, hint: `Only you and ${tcLabel} can see this thread.` },
   ];
   const active = tabs.find((t) => t.key === channel)!;
 
@@ -146,7 +146,12 @@ export default function ClientPortalMessages({
                 m.mine ? 'bg-blue-500 text-white' : 'bg-slate-700/70 text-slate-100'
               }`}
             >
-              {!m.mine && <p className="text-[11px] font-semibold text-slate-300 mb-0.5">{m.senderName || 'Team'}</p>}
+              {!m.mine && (
+                <p className="text-[11px] font-semibold text-slate-300 mb-0.5">
+                  {m.senderName || 'Team'}
+                  {m.senderType === 'agent' ? ' · Agent' : m.senderType === 'tc' ? ' · Coordinator' : m.senderType === 'client' ? ' · Client' : ''}
+                </p>
+              )}
               {m.body}
               <p className={`text-[10px] mt-1 ${m.mine ? 'text-blue-100/80' : 'text-slate-400'}`}>
                 {new Date(m.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
