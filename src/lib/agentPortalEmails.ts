@@ -182,3 +182,37 @@ export async function sendAgentAccessSummaryEmail(params: {
     html,
   });
 }
+
+// Sent when an agent shares a live progress page with their buyer or
+// seller from the agent portal. The link is a progress-scope magic link
+// (see lib/externalAccess.ts) -- no account needed on the client's end.
+// Replies go to the agent, not to Relay TC.
+export async function sendClientProgressEmail(params: {
+  toEmail: string;
+  clientName: string | null;
+  agentLabel: string;
+  agentEmail: string | null;
+  propertyAddress: string | null;
+  note: string | null;
+  linkUrl: string;
+}) {
+  const { toEmail, clientName, agentLabel, agentEmail, propertyAddress, note, linkUrl } = params;
+  const where = propertyAddress ? ` at ${propertyAddress}` : '';
+  const html = wrapper(
+    clientName ? `Hi ${clientName}, here's your transaction progress` : "Here's your transaction progress",
+    `<p><strong>${escapeHtml(agentLabel)}</strong> shared a live progress page for your transaction${escapeHtml(where)}.
+     It shows where things stand, what has been completed, and the key dates coming up.</p>
+     ${note ? `<p style="padding: 12px 16px; background: #f5f0e6; border-radius: 6px; white-space: pre-wrap;">${escapeHtml(note)}</p>` : ''}
+     <p><a href="${linkUrl}" style="color: #b45309;">View your progress</a></p>
+     <p style="font-size: 13px; color: #555;">No account or password needed. Bookmark this page to check back any time; it updates automatically.
+     Questions? Just reply to this email and it will go to ${escapeHtml(agentLabel)}.</p>`
+  );
+  const resend = getResendClient();
+  return resend.emails.send({
+    from: INVOICE_FROM_EMAIL,
+    to: toEmail,
+    subject: `${agentLabel} shared your transaction progress${where}`,
+    html,
+    ...(agentEmail ? { replyTo: agentEmail } : {}),
+  });
+}

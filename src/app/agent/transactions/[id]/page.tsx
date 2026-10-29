@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import KeyDatesPanel from '@/components/KeyDatesPanel';
+import ClientShareCard from '@/components/ClientShareCard';
 import {
   DOCUMENT_CATEGORIES,
   DEFAULT_CATEGORY_KEY,
@@ -779,6 +780,11 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               </div>
               <p className="text-slate-500 text-xs mt-4">View-only -- your TC updates this checklist.</p>
             </section>
+
+            <ClientShareCard
+              transactionId={id}
+              steps={transaction.tasks.map((t) => ({ id: t.id, name: t.name }))}
+            />
 
             <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h2 className="text-lg font-bold text-slate-100 mb-4">Contacts</h2>

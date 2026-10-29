@@ -56,7 +56,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data: links, error } = await supabaseServer
       .from('external_access_links')
-      .select('id, scope, document_id, recipient_label, client_name, client_note, token, expires_at, revoked_at, last_accessed_at, access_count, created_at')
+      .select('id, scope, document_id, recipient_label, client_name, client_email, client_note, token, expires_at, revoked_at, last_accessed_at, access_count, created_at')
       .eq('transaction_id', transactionId)
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -157,7 +157,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         client_note: cleanClientNote || null,
         expires_at: expiresAt,
       })
-      .select('id, scope, document_id, recipient_label, client_name, client_note, token, expires_at, revoked_at, last_accessed_at, access_count, created_at')
+      .select('id, scope, document_id, recipient_label, client_name, client_email, client_note, token, expires_at, revoked_at, last_accessed_at, access_count, created_at')
       .single();
 
     if (error) throw error;
