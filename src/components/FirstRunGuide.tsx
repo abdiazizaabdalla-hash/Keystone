@@ -102,6 +102,8 @@ interface Step {
   target?: string;
   title: string;
   body: string;
+  /** Overrides the Next button's label. */
+  nextLabel?: string;
   /** Shown instead of a Next button when the person has to act. */
   action?: string;
   /** Step is passed over entirely when this is true. */
@@ -172,8 +174,9 @@ const TRANSACTION_STEPS: Step[] = [
     path: NEW_TX_PAGE,
     goto: '/dashboard/transactions/new',
     target: 'contract-upload',
-    title: 'Start from the contract',
-    body: 'Upload the purchase contract PDF and Relay reads the address, price, parties and key dates and fills the form for you. You review everything before saving.',
+    title: 'Uploading a contract is optional',
+    body: 'If you have a purchase contract handy, upload the PDF and Relay fills in the address, price, parties and key dates for you. No contract yet? Skip this and type the details in, or make a test transaction with a made-up address like 123 Test St. You can delete it later.',
+    nextLabel: 'Continue without a contract',
   },
   {
     id: 'tx-agent',
@@ -181,7 +184,7 @@ const TRANSACTION_STEPS: Step[] = [
     goto: '/dashboard/transactions/new',
     target: 'tx-agent',
     title: 'Pick the agent',
-    body: 'Choose which agent this deal is for. Relay picks the one named on the contract when it can.',
+    body: 'Choose which agent this deal is for. Then fill in an address and a price; those are the only things you need. Everything else can be added later.',
   },
   {
     id: 'tx-submit',
@@ -281,8 +284,9 @@ const LISTING_STEPS: Step[] = [
     path: LISTINGS_PAGE,
     goto: '/dashboard/listings',
     target: 'listing-upload',
-    title: 'Start from the agreement',
-    body: 'Upload the signed listing agreement and Relay fills in the address, price, dates and people. You review before anything is saved. Or just type the address.',
+    title: 'Uploading the agreement is optional',
+    body: 'Have the signed listing agreement? Upload it and Relay fills in the address, price, dates and people. If not, just type an address, or make a test listing with a made-up one like 123 Test St. You can delete it later.',
+    nextLabel: 'Continue without an agreement',
   },
   {
     id: 'ls-submit',
@@ -652,7 +656,7 @@ export default function FirstRunGuide({
               onClick={step.isLast ? finish : () => goToNext(idx, ctxFor())}
               className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition"
             >
-              {step.isLast ? 'Finish' : 'Next'}
+              {step.isLast ? 'Finish' : step.nextLabel || 'Next'}
             </button>
           ) : (
             <span />
