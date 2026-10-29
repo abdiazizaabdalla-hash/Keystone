@@ -26,12 +26,11 @@ import { authFetch } from '@/lib/authClient';
  * per-browser conveniences only.
  */
 
-type Mode = 'transaction' | 'listing';
+export type GuideKind = 'transaction' | 'listing';
+type Mode = GuideKind;
 
-const MODE_KEY = 'relay_first_run_mode';
-const STEP_KEY = 'relay_first_run_step';
-const VISITED_KEY = 'relay_first_run_visited';
-const HOME_KEY = 'relay_first_run_home';
+// The transaction tour and the listing tour are separate: each remembers its own step, topics and home page.
+const storeKey = (base: 'step' | 'visited' | 'home', kind: Mode) => `relay_first_run_${base}_${kind}`;
 
 function readStored(key: string): string | null {
   try {
@@ -51,19 +50,18 @@ function writeStored(key: string, value: string | null) {
 }
 
 /** Forget the chosen path and step so the welcome screen shows again (used by "Restart tutorial"). */
-export function resetFirstRunGuideLocal() {
-  writeStored(MODE_KEY, null);
-  writeStored(STEP_KEY, null);
-  writeStored(VISITED_KEY, null);
-  writeStored(HOME_KEY, null);
+export function resetFirstRunGuideLocal(kind: Mode) {
+  writeStored(storeKey('step', kind), null);
+  writeStored(storeKey('visited', kind), null);
+  writeStored(storeKey('home', kind), null);
 }
 
-export async function saveFirstRunGuideDone(done: boolean) {
+export async function saveFirstRunGuideDone(kind: Mode, done: boolean) {
   try {
     await authFetch('/api/auth/me', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstRunGuideDone: done }),
+      body: JSON.stringify(kind === 'listing' ? { firstRunListingGuideDone: done } : { firstRunGuideDone: done }),
     });
   } catch {
     // Non-critical -- worst case the tour shows once more next visit.
@@ -204,9 +202,9 @@ const TRANSACTION_STEPS: Step[] = [
     id: 'tx-agent',
     path: NEW_TX_PAGE,
     goto: '/dashboard/transactions/new',
-    target: 'tx-agent',
-    title: 'Pick the agent',
-    body: 'Choose which agent this deal is for. If you uploaded a contract, Relay may have picked them already.',
+    target: 'tx-agent,tx-invite',
+    title: 'Pick the agent and decide on their invite',
+    body: 'Choose which agent this deal is for. Right below, if the agent has an email, you decide whether they get a free portal invite now. Leave it ticked and they are added automatically, or untick it to invite them yourself from the deal later. Practicing? Untick it.',
   },
   {
     id: 'tx-fields',
@@ -236,11 +234,11 @@ const TRANSACTION_STEPS: Step[] = [
       {
         id: 'agent-portal',
         label: 'Your agent’s portal',
-        hint: 'Set up for you automatically',
-        target: 'tx-agent-card',
+        hint: 'See who can open this deal',
+        target: 'tx-portal-status',
         needsHome: true,
-        title: 'Your agent’s portal is set up for you',
-        body: 'When an agent has an email, Relay emails them a free portal login the moment you create a deal. There is no invite to send. They see this deal’s checklist, documents and messages, and nothing else. This line under their name shows where they stand. No email yet? Add one on their profile and they are added automatically.',
+        title: 'Look for “Has portal access”',
+        body: 'This line under the agent’s name shows their portal. When an agent has an email and the invite box was ticked, Relay set up a free login the moment you created the deal, and it reads “Has portal access”. They see this deal’s checklist, documents and messages, and nothing else. If you held off, or the agent has no email yet, click “Invite” here to send it yourself whenever you are ready.',
       },
       {
         id: 'checklist',
@@ -250,7 +248,7 @@ const TRANSACTION_STEPS: Step[] = [
         clickOnEnter: 'tx-tab-checklist',
         needsHome: true,
         title: 'The checklist',
-        body: 'Every step from contract to close lives here. Try it: check a step off, change a due date, or add your own step.',
+        body: 'Every step from contract to close lives here. Try it: check a step off, change a due date, or add your own step. Many steps have an Email button that opens a ready-made email template with the deal’s details filled in. The wording is editable, and your edits are saved for every deal.',
       },
       {
         id: 'documents',
@@ -298,6 +296,22 @@ const TRANSACTION_STEPS: Step[] = [
         title: 'Never miss a date',
         body: 'Every deal date and due date shows up here, and you can sync it to Google Calendar. Click it to look around.',
       },
+      {
+        id: 'contacts',
+        label: 'Contacts',
+        hint: 'Everyone you work with',
+        target: 'nav-contacts',
+        title: 'Your contacts',
+        body: 'Everyone you work with in one list. People you add to a deal land here too, and you can import a CSV. Click it to look around.',
+      },
+      {
+        id: 'listings',
+        label: 'Listings',
+        hint: 'Prep, showings and offers before the contract',
+        target: 'nav-listings',
+        title: 'Listings',
+        body: 'Listings cover everything before the contract: prep, go-live, showings and offers. An accepted offer becomes a deal. Click it to look around.',
+      },
     ],
     isLast: true,
   },
@@ -339,7 +353,7 @@ const LISTING_STEPS: Step[] = [
     goto: '/dashboard/listings',
     target: 'listing-address-field,listing-agent-field',
     title: 'Type in the details',
-    body: 'Enter the property address and choose the listing agent. Those are the only required details (a test address is fine). Seller, price and dates are optional and can be added later. If an agreement filled these in, just check them.',
+    body: 'Enter the property address and choose the listing agent. Those are the only required details (a test address is fine). If the agent has an email, a box appears asking whether to email them a portal invite now; untick it to invite them yourself later. Seller, price and dates are optional. If an agreement filled these in, just check them.',
   },
   {
     id: 'ls-submit',
@@ -362,11 +376,10 @@ const LISTING_STEPS: Step[] = [
         id: 'agent-portal',
         label: 'Your agent’s portal',
         hint: 'Set up for you automatically',
-        target: 'ls-portal',
-        clickOnEnter: 'ls-tab-overview',
+        target: 'ls-portal-status',
         needsHome: true,
-        title: 'Your agent’s portal is set up for you',
-        body: 'When the listing agent has an email, Relay invites them to their portal as soon as you create the listing, and the listing shows there once they sign in. This card tells you whether it is visible to them and lets you resend the invite. No email yet? Add one on their profile.',
+        title: 'Look for “Has portal access”',
+        body: 'This line under the agent’s name shows their portal. When the agent has an email and the invite box was ticked, Relay invited them as soon as you created the listing, and it reads “Has portal access”. The listing then shows under Listings in their portal. If you held off, or they have no email yet, open Overview for the full explanation and a button to send the invite yourself.',
       },
       {
         id: 'checklist',
@@ -376,7 +389,7 @@ const LISTING_STEPS: Step[] = [
         clickOnEnter: 'ls-tab-checklist',
         needsHome: true,
         title: 'The prep checklist',
-        body: 'Everything to do before go-live. Try it: check a step off or change a due date.',
+        body: 'Everything to do before go-live. Try it: check a step off or change a due date. Many steps have an Email button that opens a ready-made email template with the listing’s details filled in. The wording is editable, and your edits are saved for every listing.',
       },
       {
         id: 'offers',
@@ -416,6 +429,22 @@ const LISTING_STEPS: Step[] = [
         title: 'Never miss a date',
         body: 'Listing and deal dates show up here, and you can sync it to Google Calendar. Click it to look around.',
       },
+      {
+        id: 'contacts',
+        label: 'Contacts',
+        hint: 'Everyone you work with',
+        target: 'nav-contacts',
+        title: 'Your contacts',
+        body: 'Everyone you work with in one list. Sellers and people you add to a listing land here too, and you can import a CSV. Click it to look around.',
+      },
+      {
+        id: 'transactions',
+        label: 'Transactions',
+        hint: 'Once there is a contract',
+        target: 'nav-transactions',
+        title: 'Transactions',
+        body: 'When an offer is accepted, the listing converts to a deal here in one click, with its checklist and documents. Click it to look around.',
+      },
     ],
     isLast: true,
   },
@@ -439,19 +468,38 @@ interface Box {
 }
 
 const TIP_WIDTH = 330;
-const TIP_HEIGHT_GUESS = 210;
+const TIP_HEIGHT_GUESS = 240;
+
+/** Where to put a tip card so it never covers the highlighted element: below, above, right, left, else docked in a corner. */
+function placeTip(box: Box, vw: number, vh: number, w: number, h: number): React.CSSProperties {
+  const gap = 16;
+  const pad = 8;
+  const clampLeft = (x: number) => Math.min(Math.max(pad, x), vw - w - pad);
+  const clampTop = (y: number) => Math.min(Math.max(pad, y), vh - h - pad);
+  const hi = { top: box.top - 6, bottom: box.top + box.height + 6, left: box.left - 6, right: box.left + box.width + 6 };
+  if (hi.bottom + gap + h <= vh - pad) return { top: hi.bottom + gap, left: clampLeft(box.left), width: w };
+  if (hi.top - gap - h >= pad) return { top: hi.top - gap - h, left: clampLeft(box.left), width: w };
+  if (hi.right + gap + w <= vw - pad) return { top: clampTop(box.top), left: hi.right + gap, width: w };
+  if (hi.left - gap - w >= pad) return { top: clampTop(box.top), left: hi.left - gap - w, width: w };
+  // Nothing fits (a tall element on a small screen): dock in the corner with the most free room.
+  return box.left + box.width / 2 > vw / 2 ? { bottom: pad, left: pad, width: Math.min(w, 280) } : { bottom: pad, right: pad, width: Math.min(w, 280) };
+}
 
 export default function FirstRunGuide({
+  kind,
   restartKey,
   onFinished,
 }: {
-  /** Bumped by the layout's "Tutorial" button to reopen the welcome screen. */
+  /** Which tour this is: the transaction tour and the listing tour are separate. */
+  kind: GuideKind;
+  /** Bumped by the layout's "Tutorial" menu to reopen the welcome screen. */
   restartKey: number;
-  onFinished: () => void;
+  /** `saved` is true when the tour was finished or skipped for good (stored on the account). */
+  onFinished: (kind: GuideKind, saved: boolean) => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [mode, setMode] = useState<Mode | null>(null);
+  const mode: Mode = kind;
   const [stepId, setStepId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [agents, setAgents] = useState<number | null>(null);
@@ -466,9 +514,17 @@ export default function FirstRunGuide({
   const enteredRef = useRef<string | null>(null);
   const scrolledRef = useRef<string | null>(null);
   const mismatchSince = useRef<number | null>(null);
+  const tipRef = useRef<HTMLDivElement | null>(null);
+  const [tipH, setTipH] = useState(TIP_HEIGHT_GUESS);
   const autoTimer = useRef<number | null>(null);
 
   const steps = mode === 'listing' ? LISTING_STEPS : TRANSACTION_STEPS;
+
+  // The tip card's real height, so it can be placed clear of what it points at.
+  useEffect(() => {
+    const h = tipRef.current?.offsetHeight;
+    if (h && Math.abs(h - tipH) > 2) setTipH(h);
+  }, [tipH, stepId, hubItemId, hubMin, drifted, box]);
 
   // Read per-browser state after mount so the first client render matches the server's.
   useEffect(() => {
@@ -476,12 +532,9 @@ export default function FirstRunGuide({
     (async () => {
       await Promise.resolve();
       if (cancelled) return;
-      const stored = readStored(MODE_KEY);
-      const m: Mode | null = stored === 'transaction' || stored === 'listing' ? stored : null;
-      setMode(m);
-      setStepId(m ? readStored(STEP_KEY) : null);
+      setStepId(readStored(storeKey('step', kind)));
       try {
-        const v = JSON.parse(readStored(VISITED_KEY) || '[]');
+        const v = JSON.parse(readStored(storeKey('visited', kind)) || '[]');
         setVisited(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
       } catch {
         setVisited([]);
@@ -492,7 +545,7 @@ export default function FirstRunGuide({
     return () => {
       cancelled = true;
     };
-  }, [restartKey]);
+  }, [restartKey, kind]);
 
   const ctxFor = useCallback(
     (): Ctx => ({
@@ -518,22 +571,28 @@ export default function FirstRunGuide({
       setDrifted(false);
       setBox(null);
       setHubItemId(null);
-      writeStored(STEP_KEY, next.id);
+      writeStored(storeKey('step', kind), next.id);
       setStepId(next.id);
     },
-    [steps]
+    [steps, kind]
   );
 
+  /** Done for good: stored on the account so the tour never auto-starts again. */
   const finish = async () => {
-    resetFirstRunGuideLocal();
+    resetFirstRunGuideLocal(kind);
     if (autoTimer.current) window.clearTimeout(autoTimer.current);
-    await saveFirstRunGuideDone(true);
-    onFinished();
+    await saveFirstRunGuideDone(kind, true);
+    onFinished(kind, true);
   };
 
-  const choose = async (picked: Mode) => {
-    writeStored(MODE_KEY, picked);
-    const list = picked === 'listing' ? LISTING_STEPS : TRANSACTION_STEPS;
+  /** "Maybe later": hide it for now; it offers itself again on the next visit. */
+  const later = () => {
+    if (autoTimer.current) window.clearTimeout(autoTimer.current);
+    onFinished(kind, false);
+  };
+
+  const begin = async () => {
+    const list = steps;
     const count = await agentCount();
     setAgents(count);
     const ctx: Ctx = { pathname, has: () => false, agents: count, agentNameTyped: false };
@@ -542,14 +601,13 @@ export default function FirstRunGuide({
     const first = list[i];
     enteredRef.current = null;
     scrolledRef.current = null;
-    writeStored(STEP_KEY, first.id);
-    setMode(picked);
+    writeStored(storeKey('step', kind), first.id);
     setStepId(first.id);
     // Land the person on the page the first step is about.
     if (!first.path.test(pathname)) router.push(first.goto);
   };
 
-  const step = mode && stepId ? steps[stepIndex(stepId)] ?? null : null;
+  const step = stepId ? steps[stepIndex(stepId)] ?? null : null;
   const idx = step ? stepIndex(step.id) : -1;
 
   // One lightweight tick: tracks the highlighted element, detects when the
@@ -587,7 +645,7 @@ export default function FirstRunGuide({
       // Remember where the first deal/listing lives so the exploration list can bring the person back to it.
       const homeRe = mode === 'listing' ? LISTING_DETAIL : TX_DETAIL;
       const onHome = homeRe.test(pathname);
-      if (onHome) writeStored(HOME_KEY, pathname);
+      if (onHome) writeStored(storeKey('home', kind), pathname);
 
       // In the free-exploration step the highlight follows the topic the person opened.
       const item = step.hub && hubItemId ? step.hub.find((h) => h.id === hubItemId) ?? null : null;
@@ -647,7 +705,7 @@ export default function FirstRunGuide({
     tick();
     const id = window.setInterval(tick, 250);
     return () => window.clearInterval(id);
-  }, [step, ready, pathname, agents, idx, goToNext, router, mode, hubItemId]);
+  }, [step, ready, pathname, agents, idx, goToNext, router, mode, hubItemId, kind]);
 
   // Keep the agent count fresh on the step that waits for the agent to be saved.
   useEffect(() => {
@@ -677,50 +735,53 @@ export default function FirstRunGuide({
     setHubItemId(item.id);
     setVisited((prev) => {
       const next = prev.includes(`${step?.id}:${item.id}`) ? prev : [...prev, `${step?.id}:${item.id}`];
-      writeStored(VISITED_KEY, JSON.stringify(next));
+      writeStored(storeKey('visited', kind), JSON.stringify(next));
       return next;
     });
     // Topics that live on the deal/listing page: bring the person back to it first.
     const homeRe = mode === 'listing' ? LISTING_DETAIL : TX_DETAIL;
     if (item.needsHome && !homeRe.test(pathname)) {
-      const home = readStored(HOME_KEY);
+      const home = readStored(storeKey('home', kind));
       router.push(home && homeRe.test(home) ? home : mode === 'listing' ? '/dashboard/listings' : '/dashboard/transactions');
     }
   };
 
   if (!ready) return null;
 
-  // Welcome screen: shown until a path is chosen or the person skips.
-  if (!mode || !step) {
+  // Welcome screen: shown until the tour is started, put off, or skipped for good.
+  if (!step) {
+    const isListing = kind === 'listing';
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="first-run-title">
         <div className="w-full max-w-md bg-slate-800 border border-slate-600 rounded-2xl p-6 shadow-2xl">
           <h2 id="first-run-title" className="text-xl font-display font-semibold text-slate-100 mb-2">
-            Welcome to Relay TC
+            {isListing ? 'Take a quick tour of listings' : 'Welcome to Relay TC'}
           </h2>
           <p className="text-sm text-slate-300 mb-5">
-            The fastest way to learn Relay is to do one real file. We will walk you through it, step by step: add your agent, then start your first deal from the contract. About five minutes.
+            {isListing
+              ? 'Listings cover everything before the contract: prep, go-live, showings and offers. We will walk you through making one, step by step. A test listing is fine, and you can delete it afterwards.'
+              : 'The fastest way to learn Relay is to do one real file. We will walk you through it, step by step: add your agent, then start your first deal. A test transaction is fine. About five minutes.'}
           </p>
           <div className="space-y-2.5">
             <button
               type="button"
-              onClick={() => choose('transaction')}
+              onClick={begin}
               className="w-full px-4 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition"
             >
-              Create my first transaction
+              {isListing ? 'Start the listing tour' : 'Start the transaction tour'}
             </button>
             <button
               type="button"
-              onClick={() => choose('listing')}
+              onClick={later}
               className="w-full px-4 py-3 border border-slate-500 text-slate-100 hover:bg-white/10 font-semibold rounded-xl transition"
             >
-              Start with a listing instead
+              Maybe later
             </button>
             <button type="button" onClick={finish} className="w-full px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition">
-              Explore Relay on my own
+              {isListing ? 'I don’t need the listing tour' : 'I’ll explore on my own'}
             </button>
           </div>
-          <p className="text-xs text-slate-500 mt-4 text-center">You can bring this back any time from “Tutorial” in the menu.</p>
+          <p className="text-xs text-slate-500 mt-4 text-center">You can bring either tour back any time from “Tutorial” in the menu.</p>
         </div>
       </div>
     );
@@ -867,13 +928,12 @@ export default function FirstRunGuide({
 
   let tipStyle: React.CSSProperties;
   if (box && !narrow) {
-    const below = box.top + box.height + 16 + TIP_HEIGHT_GUESS < vh;
-    const top = below ? box.top + box.height + 14 : Math.max(12, box.top - TIP_HEIGHT_GUESS - 14);
-    const left = Math.min(Math.max(12, box.left), vw - tipWidth - 12);
-    tipStyle = { top, left, width: tipWidth };
+    tipStyle = placeTip(box, vw, vh, tipWidth, tipH);
   } else if (box && narrow) {
-    // Phones: a sheet on whichever half the highlighted element is not in.
-    tipStyle = box.top > vh / 2 ? { top: 12, left: 12, right: 12 } : { bottom: 12, left: 12, right: 12 };
+    // Phones: a sheet on whichever side has more free room, clear of the highlighted element.
+    const spaceAbove = box.top;
+    const spaceBelow = vh - (box.top + box.height);
+    tipStyle = spaceBelow >= spaceAbove ? { bottom: 12, left: 12, right: 12 } : { top: 12, left: 12, right: 12 };
   } else {
     tipStyle = narrow
       ? { bottom: 12, left: 12, right: 12 }
@@ -902,6 +962,7 @@ export default function FirstRunGuide({
       <div
         role="dialog"
         aria-label="Tutorial"
+        ref={tipRef}
         className="fixed z-[61] bg-slate-800 border border-blue-400/60 rounded-2xl shadow-2xl p-4"
         style={tipStyle}
       >

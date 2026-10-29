@@ -29,6 +29,7 @@ interface ListingRow {
 interface AgentOption {
   id: string;
   name: string;
+  email?: string | null;
 }
 interface FoundPerson {
   role: string;
@@ -60,6 +61,8 @@ export default function ListingsPage() {
   const router = useRouter();
   const [listings, setListings] = useState<ListingRow[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
+  // Whether the listing agent is emailed a portal invite on create (turn off to invite them yourself later).
+  const [inviteAgent, setInviteAgent] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'open' | 'all'>('open');
@@ -116,7 +119,7 @@ export default function ListingsPage() {
       if (xRes && xRes.ok) setAiAvailable(Boolean((await xRes.json()).available));
       if (!lRes.ok) throw new Error(l.error || 'Failed to load listings');
       setListings(l);
-      if (Array.isArray(a)) setAgents(a.map((x: AgentOption) => ({ id: x.id, name: x.name })));
+      if (Array.isArray(a)) setAgents(a.map((x: AgentOption) => ({ id: x.id, name: x.name, email: x.email ?? null })));
       setError('');
     } catch (err) {
       if (handleAuth(err)) return;
@@ -225,6 +228,7 @@ export default function ListingsPage() {
         body: JSON.stringify({
           ...form,
           allowDuplicate,
+          inviteAgent,
           agentId: form.agentId || null,
           contacts: found.filter((p) => p.include).map((p) => ({ role: p.role, name: p.name, email: p.email, phone: p.phone })),
         }),
@@ -402,6 +406,20 @@ export default function ListingsPage() {
                 ))}
               </select>
               <p className="text-xs text-slate-500 mt-1">The agent the listing belongs to. They are also the agent on the deal if you convert it.</p>
+              {(() => {
+                const picked = agents.find((a) => a.id === form.agentId);
+                if (!picked) return null;
+                return picked.email ? (
+                  <label data-tour="listing-invite" className="mt-2 flex items-start gap-2 text-xs text-slate-300 cursor-pointer">
+                    <input type="checkbox" checked={inviteAgent} onChange={(e) => setInviteAgent(e.target.checked)} className="mt-0.5 accent-blue-500" />
+                    <span>Email {picked.name} ({picked.email}) a portal invite so this listing shows in their portal. Uncheck to invite them yourself later.</span>
+                  </label>
+                ) : (
+                  <p data-tour="listing-invite" className="mt-2 text-xs text-slate-500">
+                    {picked.name} has no email on file, so no portal invite goes out. Add one on the Agents page and they are added automatically.
+                  </p>
+                );
+              })()}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>

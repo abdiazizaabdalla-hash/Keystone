@@ -2402,7 +2402,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               )}
               {/* Whether the agent can open this deal in their portal, always visible under the agent's name. */}
               {(() => {
-                if (!agentAccessLoaded) return <p className="mt-2 text-xs text-slate-500">Checking portal access…</p>;
+                if (!agentAccessLoaded) return <p data-tour="tx-portal-status" className="mt-2 text-xs text-slate-500">Checking portal access…</p>;
                 const agentEmail = agent?.email?.trim().toLowerCase() || '';
                 const hasAccess = !!agentEmail && acceptedAgentUsers.some((a) => a.email.toLowerCase() === agentEmail);
                 const invited = !hasAccess && !!agentEmail && agentInvites.some((i) => i.status !== 'accepted' && i.email.toLowerCase() === agentEmail);
@@ -2415,7 +2415,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                       ? { dot: 'bg-amber-400', text: 'text-amber-300', label: 'Invited, not accepted yet', action: 'Manage' }
                       : { dot: 'bg-red-400', text: 'text-red-300', label: 'No portal access yet', action: 'Invite' };
                 return (
-                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" data-testid="agent-portal-status">
+                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" data-testid="agent-portal-status" data-tour="tx-portal-status">
                     <span className={`w-2 h-2 rounded-full shrink-0 ${state.dot}`} />
                     <span className={`font-medium ${state.text}`}>{state.label}</span>
                     {hasAccess && othersWithAccess > 0 && (

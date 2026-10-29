@@ -813,74 +813,132 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  const pillCls =
+    listing.status === 'active'
+      ? 'bg-green-500/10 text-green-300 border-green-500/40'
+      : listing.status === 'under_offer'
+        ? 'bg-amber-500/10 text-amber-300 border-amber-500/40'
+        : 'bg-blue-500/15 text-blue-300 border-blue-500/50';
+  const marketLine = [
+    (listing.status === 'active' || listing.status === 'under_offer') && daysOnMarket(listing.listed_on) !== null
+      ? `${daysOnMarket(listing.listed_on)} day${daysOnMarket(listing.listed_on) === 1 ? '' : 's'} on market`
+      : null,
+    daysToGoLive !== null && listing.status === 'preparing'
+      ? daysToGoLive >= 0
+        ? `${daysToGoLive} day${daysToGoLive === 1 ? '' : 's'} to go live`
+        : `${-daysToGoLive} day${daysToGoLive === -1 ? '' : 's'} past the planned list date`
+      : null,
+  ].filter(Boolean);
+
+  // Same page setup as a deal (dashboard/transactions/[id]): back link, one header card with the
+  // address, the agent / price / status row, then the tabs below.
   return (
-    <div className="p-4 md:p-10 max-w-5xl mx-auto">
-      <Link href="/dashboard/listings" className="text-sm text-slate-400 hover:text-slate-200">
-        ← Back to listings
+    <div className="min-h-screen px-4 py-6 md:px-8 md:py-12">
+      <div className="max-w-5xl mx-auto">
+      <Link href="/dashboard/listings" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
+        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+        </svg>
+        Back to Listings
       </Link>
 
-      <div className="mt-3 mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <span
-            className={`inline-block px-2.5 py-1 mb-2 rounded-full text-xs font-semibold border ${
-              listing.status === 'active'
-                ? 'bg-green-500/10 text-green-300 border-green-500/40'
-                : listing.status === 'under_offer'
-                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/40'
-                  : 'bg-blue-500/15 text-blue-300 border-blue-500/50'
-            }`}
-          >
-            {LISTING_STATUS_LABEL[listing.status as keyof typeof LISTING_STATUS_LABEL] || listing.status}
-          </span>
-          <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 break-words">{listing.property_address}</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            {[listing.seller_name && `Seller: ${listing.seller_name}`, data.agent && `Agent: ${data.agent.name}`].filter(Boolean).join(' · ')}
-          </p>
-          {data.agent && (
-            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" data-testid="listing-agent-portal-status">
-              <span className={`w-2 h-2 rounded-full shrink-0 ${portalStatus.ok ? 'bg-green-500' : 'bg-amber-400'}`} />
-              <span className={`font-medium ${portalStatus.ok ? 'text-green-300' : 'text-amber-300'}`}>
-                {portalStatus.ok ? 'Agent can see this listing in their portal' : 'Agent cannot see this listing in their portal yet'}
-              </span>
-              {!portalStatus.ok && (
-                <button type="button" onClick={() => selectTab('overview')} className="text-blue-400 hover:text-blue-300 underline underline-offset-2">
-                  Why?
-                </button>
+      {/* Main Card */}
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8 mb-8">
+        <div className="mb-8">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold border ${pillCls}`}>
+              {LISTING_STATUS_LABEL[listing.status as keyof typeof LISTING_STATUS_LABEL] || listing.status}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {converted ? (
+                <Link href={`/dashboard/transactions/${listing.converted_transaction_id}`} className="text-sm px-3 py-1.5 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition">
+                  Open the deal
+                </Link>
+              ) : (
+                <>
+                  {(listing.status === 'expired' || listing.status === 'withdrawn') && (
+                    <button type="button" onClick={openRelist} className="text-sm px-3 py-1.5 border border-blue-500/60 text-blue-300 hover:bg-blue-500/10 rounded-lg transition">
+                      Relist
+                    </button>
+                  )}
+                  <button type="button" onClick={openSellerUpdate} className="text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition">
+                    Update seller
+                  </button>
+                  <button type="button" onClick={() => openConvert('none')} className="text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition">
+                    Convert to deal
+                  </button>
+                </>
               )}
-            </p>
-          )}
-          {money(listing.list_price) && <p className="text-2xl font-display text-blue-400 mt-1">{money(listing.list_price)}</p>}
-          <p className="text-sm text-slate-400 mt-1">
-            {(listing.status === 'active' || listing.status === 'under_offer') && daysOnMarket(listing.listed_on) !== null && (
-              <span>
-                {daysOnMarket(listing.listed_on)} day{daysOnMarket(listing.listed_on) === 1 ? '' : 's'} on market
-                {listing.mls_url || listing.mls_number ? ' · ' : ''}
-              </span>
-            )}
-            {daysToGoLive !== null && listing.status === 'preparing' && (daysToGoLive >= 0 ? `${daysToGoLive} day${daysToGoLive === 1 ? '' : 's'} to go live` : `${-daysToGoLive} day${daysToGoLive === -1 ? '' : 's'} past the planned list date`)}
-            {listing.mls_url ? (
+            </div>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2 break-words">{listing.property_address}</h1>
+          <p className="text-slate-400 break-words">
+            {[listing.seller_name && `Seller: ${listing.seller_name}`, ...marketLine, listing.mls_number && !listing.mls_url ? `MLS ${listing.mls_number}` : null]
+              .filter(Boolean)
+              .join(' · ')}
+            {listing.mls_url && (
               <>
-                {daysToGoLive !== null && listing.status === 'preparing' ? ' · ' : ''}
+                {listing.seller_name || marketLine.length > 0 ? ' · ' : ''}
                 <a href={listing.mls_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
                   View listing{listing.mls_number ? ` (MLS ${listing.mls_number})` : ''}
                 </a>
               </>
-            ) : listing.mls_number ? (
-              ` · MLS ${listing.mls_number}`
-            ) : null}
+            )}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {converted ? (
-            <Link href={`/dashboard/transactions/${listing.converted_transaction_id}`} className="px-4 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg">
-              Open the deal
-            </Link>
-          ) : (
-            <>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8 pt-6 border-t border-white/10">
+          {/* Agent */}
+          <div data-tour="ls-agent-card">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent</p>
+            {data.agent ? (
+              <Link
+                href={`/dashboard/agents?agent=${data.agent.id}`}
+                title="Open this agent's profile"
+                className="group flex items-center gap-3 rounded-lg -mx-2 px-2 py-1 hover:bg-slate-700/50 transition"
+              >
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
+                  {data.agent.name[0]}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-lg font-semibold text-slate-100 group-hover:text-blue-300 transition">{data.agent.name}</p>
+                  <p className="text-xs text-blue-400">View agent profile &rarr;</p>
+                </div>
+              </Link>
+            ) : (
+              <p className="text-sm text-slate-400">No agent chosen yet</p>
+            )}
+            {data.agent && (
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs" data-testid="listing-agent-portal-status" data-tour="ls-portal-status">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${portalStatus.ok ? 'bg-green-500' : 'bg-amber-400'}`} />
+                <span className={`font-medium ${portalStatus.ok ? 'text-green-300' : 'text-amber-300'}`}>
+                  {portalStatus.ok ? 'Has portal access' : 'No portal access yet'}
+                </span>
+                {!portalStatus.ok && (
+                  <button type="button" onClick={() => selectTab('overview')} className="text-blue-400 hover:text-blue-300 underline underline-offset-2">
+                    Why?
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* List Price */}
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">List Price</p>
+            <p className="text-2xl font-bold text-blue-400">{money(listing.list_price) || '—'}</p>
+          </div>
+
+          {/* Status */}
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Status</p>
+            {converted ? (
+              <p className="text-slate-200">Converted to a deal</p>
+            ) : (
               <select
                 value={listing.status}
                 onChange={(e) => act(() => call('PATCH', `/api/listings/${id}`, { status: e.target.value }))}
-                className="bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100"
+                className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none cursor-pointer"
                 aria-label="Listing status"
               >
                 {LISTING_STATUSES.filter((s) => s !== 'converted').map((s) => (
@@ -889,19 +947,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                   </option>
                 ))}
               </select>
-              {(listing.status === 'expired' || listing.status === 'withdrawn') && (
-                <button type="button" onClick={openRelist} className="px-4 py-2.5 border border-blue-500/60 text-blue-300 hover:bg-blue-500/10 text-sm font-semibold rounded-lg">
-                  Relist
-                </button>
-              )}
-              <button type="button" onClick={openSellerUpdate} className="px-4 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg">
-                Update seller
-              </button>
-              <button type="button" onClick={() => openConvert('none')} className="px-4 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg">
-                Convert to deal
-              </button>
-            </>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -2270,6 +2317,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

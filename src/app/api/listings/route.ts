@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
 
     // The agent gets a portal login right away so the listing shows up under Listings in their portal.
     // Skipped quietly when there is no agent, no email or sharing is off; the listing page shows the state.
-    const agentInvite = agentId ? await sendListingPortalInvite({ listing, user, appUrl: request.nextUrl.origin }) : 'no_agent';
+    const agentInvite = body.inviteAgent === false ? 'skipped' : agentId ? await sendListingPortalInvite({ listing, user, appUrl: request.nextUrl.origin }) : 'no_agent';
     return NextResponse.json({ ...listing, agentInvite }, { status: 201 });
   } catch (error) {
     return fail(error, 'create');

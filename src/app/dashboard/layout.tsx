@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getValidToken, clearSession, authFetch } from '@/lib/authClient';
-import FirstRunGuide, { saveFirstRunGuideDone, resetFirstRunGuideLocal } from '@/components/FirstRunGuide';
+import FirstRunGuide, { saveFirstRunGuideDone, resetFirstRunGuideLocal, type GuideKind } from '@/components/FirstRunGuide';
 import { isTeamPlan } from '@/lib/plans';
 
 // Collapsed sidebar is icon-only -- narrow enough to stay useful on small
@@ -171,17 +171,31 @@ export default function DashboardLayout({
   const [teamUnread, setTeamUnread] = useState(0);
   // New-account first-run guide (see components/FirstRunGuide.tsx). restartKey
   // is bumped by the "Tutorial" menu entry to bring the welcome screen back.
-  const [guideActive, setGuideActive] = useState(false);
+  const [guides, setGuides] = useState<Record<GuideKind, boolean>>({ transaction: false, listing: false });
+  const [guideKind, setGuideKind] = useState<GuideKind | null>(null);
   const [guideRestartKey, setGuideRestartKey] = useState(0);
+  const [tutorialMenuOpen, setTutorialMenuOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
-  const restartGuide = () => {
-    resetFirstRunGuideLocal();
+  // The transaction tour runs first; the listing tour follows it (or runs alone) until each is done.
+  const nextGuide = (g: Record<GuideKind, boolean>): GuideKind | null => (g.transaction ? 'transaction' : g.listing ? 'listing' : null);
+
+  const startGuide = (kind: GuideKind) => {
+    resetFirstRunGuideLocal(kind);
+    setTutorialMenuOpen(false);
     setMobileOpen(false);
+    setGuides((prev) => ({ ...prev, [kind]: true }));
+    setGuideKind(kind);
     setGuideRestartKey((k) => k + 1);
-    setGuideActive(true);
-    saveFirstRunGuideDone(false);
+    saveFirstRunGuideDone(kind, false);
+  };
+
+  const handleGuideFinished = (kind: GuideKind) => {
+    const next = { ...guides, [kind]: false };
+    setGuides(next);
+    setGuideKind(nextGuide(next));
+    setGuideRestartKey((k) => k + 1);
   };
 
   useEffect(() => {
@@ -282,7 +296,12 @@ export default function DashboardLayout({
           setTrial(data.trial || null);
           setUserName(data.fullName || data.email || '');
           setIsAdmin(Boolean(data.is_admin));
-          setGuideActive(Boolean(data.showFirstRunGuide));
+          const g = {
+            transaction: Boolean(data.firstRunGuides?.transaction),
+            listing: Boolean(data.firstRunGuides?.listing),
+          };
+          setGuides(g);
+          setGuideKind(nextGuide(g));
         }
       } catch {
         // Non-critical — the plan badge just won't show.
@@ -406,7 +425,10 @@ export default function DashboardLayout({
             ))}
             <button
               type="button"
-              onClick={restartGuide}
+              onClick={() => {
+                setMobileOpen(false);
+                setTutorialMenuOpen(true);
+              }}
               className="w-full text-left px-4 py-3 rounded-lg font-medium text-slate-300 hover:bg-white/5 border-t border-white/10 mt-1 transition"
             >
               Tutorial
@@ -537,8 +559,8 @@ export default function DashboardLayout({
             </Link>
           )}
           <button
-            onClick={restartGuide}
-            title="Restart the quick tutorial"
+            onClick={() => setTutorialMenuOpen(true)}
+            title="Open a quick tutorial"
             className={`w-full flex items-center justify-center text-slate-400 hover:bg-white/5 hover:text-slate-200 rounded-lg transition text-sm py-1.5 ${
               collapsed ? 'px-0' : 'px-4'
             }`}
@@ -588,7 +610,28 @@ export default function DashboardLayout({
         )}
         {children}
       </div>
-      {guideActive && <FirstRunGuide restartKey={guideRestartKey} onFinished={() => setGuideActive(false)} />}
+      {guideKind && <FirstRunGuide key={`${guideKind}-${guideRestartKey}`} kind={guideKind} restartKey={guideRestartKey} onFinished={handleGuideFinished} />}
+      {tutorialMenuOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Tutorials" onClick={() => setTutorialMenuOpen(false)}>
+          <div className="w-full max-w-sm bg-slate-800 border border-slate-600 rounded-2xl p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-display font-semibold text-slate-100 mb-1">Tutorials</h2>
+            <p className="text-sm text-slate-400 mb-4">Walk through the real screens again, as many times as you like.</p>
+            <div className="space-y-2.5">
+              <button type="button" onClick={() => startGuide('transaction')} className="w-full text-left px-4 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition">
+                Transactions tour
+                <span className="block text-xs font-normal text-blue-100">Add an agent, create a deal, explore it</span>
+              </button>
+              <button type="button" onClick={() => startGuide('listing')} className="w-full text-left px-4 py-3 border border-slate-500 text-slate-100 hover:bg-white/10 font-semibold rounded-xl transition">
+                Listings tour
+                <span className="block text-xs font-normal text-slate-400">Create a listing, offers, showings, documents</span>
+              </button>
+            </div>
+            <button type="button" onClick={() => setTutorialMenuOpen(false)} className="mt-4 text-sm text-slate-400 hover:text-slate-200 transition">
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

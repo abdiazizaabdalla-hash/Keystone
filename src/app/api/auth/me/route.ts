@@ -117,19 +117,23 @@ export async function GET(request: NextRequest) {
     // this is safe to check on every account, not just new ones.
     const needsOnboardingFlow = await needsOnboarding(user.id, user.user_metadata, isPlatformAdmin(user));
 
-    // New accounts get the in-dashboard first-run guide until they finish or
-    // skip it. Accounts that already have a deal or listing never see it, so
-    // existing users aren't interrupted.
-    let showFirstRunGuide = false;
-    if (!needsOnboardingFlow && !isPlatformAdmin(user) && user.user_metadata?.first_run_guide_done !== true) {
-      const [{ data: tx }, { data: ls }] = await Promise.all([
-        supabaseServer.from('transactions').select('id').eq('tc_user_id', user.id).limit(1),
-        supabaseServer.from('listings').select('id').eq('tc_user_id', user.id).limit(1),
-      ]);
-      showFirstRunGuide = !(tx && tx.length > 0) && !(ls && ls.length > 0);
+    // Two separate tours: one for the first transaction, one for the first listing. Each shows
+    // until it is finished or skipped, and never to someone who already has that kind of record.
+    const guides = { transaction: false, listing: false };
+    if (!needsOnboardingFlow && !isPlatformAdmin(user)) {
+      const doneTx = user.user_metadata?.first_run_guide_done === true;
+      const doneLs = user.user_metadata?.first_run_listing_guide_done === true;
+      if (!doneTx || !doneLs) {
+        const [{ data: tx }, { data: ls }] = await Promise.all([
+          supabaseServer.from('transactions').select('id').eq('tc_user_id', user.id).limit(1),
+          supabaseServer.from('listings').select('id').eq('tc_user_id', user.id).limit(1),
+        ]);
+        guides.transaction = !doneTx && !(tx && tx.length > 0);
+        guides.listing = !doneLs && !(ls && ls.length > 0);
+      }
     }
 
-    return NextResponse.json({ ...shaped, trial, needsOnboarding: needsOnboardingFlow, showFirstRunGuide });
+    return NextResponse.json({ ...shaped, trial, needsOnboarding: needsOnboardingFlow, firstRunGuides: guides });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -178,6 +182,7 @@ export async function PATCH(request: NextRequest) {
       dueDateWorkflowSteps,
       onboardingCompleted,
       firstRunGuideDone,
+      firstRunListingGuideDone,
       password,
     } = body;
 
@@ -268,6 +273,10 @@ export async function PATCH(request: NextRequest) {
     // (components/FirstRunGuide.tsx); false restarts it from the menu.
     if (firstRunGuideDone !== undefined) {
       changes.first_run_guide_done = Boolean(firstRunGuideDone);
+    }
+
+    if (firstRunListingGuideDone !== undefined) {
+      changes.first_run_listing_guide_done = Boolean(firstRunListingGuideDone);
     }
 
     const updatedMetadata = await mergeUserMetadata(user.id, changes);
