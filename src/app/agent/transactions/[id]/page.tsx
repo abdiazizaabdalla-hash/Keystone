@@ -8,6 +8,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import KeyDatesPanel from '@/components/KeyDatesPanel';
 import ClientShareCard from '@/components/ClientShareCard';
+import { isFileDrag } from '@/lib/docDrag';
 import ClientMessagesPanel from '@/components/ClientMessagesPanel';
 import {
   DOCUMENT_CATEGORIES,
@@ -383,25 +384,32 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
     categoryFileInputRef.current?.click();
   };
 
-  const handleFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const category = pendingUploadCategory.current;
-    pendingUploadCategory.current = null;
-    if (!file || !category) return;
+  // Same kinds of file the upload button accepts; a dropped file is checked against this too.
+  const isUploadableFile = (file: File) => {
+    const name = file.name.toLowerCase();
+    const type = (file.type || '').toLowerCase();
+    return type === 'application/pdf' || type.startsWith('image/') || name.endsWith('.doc') || name.endsWith('.docx');
+  };
 
+  // Uploads one or more files into a category, one after another, and opens the category so they show up.
+  const uploadFilesToCategory = async (files: File[], category: string) => {
+    if (files.length === 0) return;
+    const documentType = typesForCategory(category)[0] || DEFAULT_DOCUMENT_TYPE;
+    setUploadError('');
+    setUploadingCategory(category);
     try {
-      setUploadingCategory(category);
-      setUploadError('');
-      const documentType = typesForCategory(category)[0] || DEFAULT_DOCUMENT_TYPE;
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('transactionId', id);
-      formData.append('category', category);
-      formData.append('documentType', documentType);
-      const res = await authFetch('/api/documents', { method: 'POST', body: formData });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Failed to upload document');
-      setDocuments((prev) => [result, ...prev]);
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('transactionId', id);
+        formData.append('category', category);
+        formData.append('documentType', documentType);
+        const res = await authFetch('/api/documents', { method: 'POST', body: formData });
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(result.error || `Failed to upload ${file.name}`);
+        setDocuments((prev) => [result, ...prev]);
+      }
+      setCollapsedCategories((prev) => ({ ...prev, [category]: false }));
     } catch (err) {
       if (err instanceof AuthRequiredError) {
         router.push('/agent/login');
@@ -411,6 +419,29 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
     } finally {
       setUploadingCategory(null);
     }
+  };
+
+  // The upload button, and a file dropped on the Documents area outside any category (goes to General).
+  const handleFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const category = pendingUploadCategory.current || DEFAULT_CATEGORY_KEY;
+    pendingUploadCategory.current = null;
+    await uploadFilesToCategory(files, category);
+  };
+
+  // A file dragged from the computer onto one specific category box.
+  const handleDropFilesOnCategory = async (fileList: FileList, category: string) => {
+    const dropped = Array.from(fileList);
+    const usable = dropped.filter(isUploadableFile);
+    if (usable.length < dropped.length) {
+      setUploadError(
+        usable.length === 0
+          ? "That kind of file can't be uploaded. Use a PDF, image or Word document."
+          : "Some files were skipped. Only PDFs, images and Word documents can be uploaded."
+      );
+      if (usable.length === 0) return;
+    }
+    await uploadFilesToCategory(usable, category);
   };
 
   const toggleCategoryCollapsed = (categoryKey: string) => {
@@ -1046,7 +1077,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
           <section className="lg:order-1 bg-white/5 border border-white/10 rounded-2xl p-8">
             <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
             <p className="text-sm text-slate-400 mb-6">
-              Organized by category, same as your TC sees it. Upload straight into a category, or view/download
+              Organized by category, same as your TC sees it. Upload into a category or drag files onto it, or view/download
               anything already there -- editing or deleting a document stays with your TC.
             </p>
 
@@ -1054,6 +1085,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
               ref={categoryFileInputRef}
               type="file"
               accept="application/pdf,image/*,.doc,.docx"
+              multiple
               className="hidden"
               onChange={handleFileSelected}
             />
@@ -1077,7 +1109,26 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                 const isCollapsed = collapsedCategories[cat.key];
 
                 return (
-                  <div key={cat.key} className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden">
+                  <div
+                    key={cat.key}
+                    onDragOver={(e) => {
+                      if (!isFileDrag(e)) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'copy';
+                      // Highlight directly on the element: re-rendering on every drag event makes dragging lag.
+                      e.currentTarget.classList.add('doc-drop-over');
+                    }}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.classList.remove('doc-drop-over');
+                    }}
+                    onDrop={(e) => {
+                      e.currentTarget.classList.remove('doc-drop-over');
+                      if (!isFileDrag(e)) return;
+                      e.preventDefault();
+                      void handleDropFilesOnCategory(e.dataTransfer.files, cat.key);
+                    }}
+                    className="bg-slate-700/30 border border-slate-600 rounded-lg overflow-hidden"
+                  >
                     <div className="w-full flex items-center gap-2 px-4 py-3 hover:bg-slate-700/50 transition">
                       <button
                         onClick={() => toggleCategoryCollapsed(cat.key)}
