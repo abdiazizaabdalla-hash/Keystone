@@ -2471,6 +2471,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               key={t.id}
               type="button"
               role="tab"
+              data-tour={`tx-tab-${t.id}`}
               aria-selected={tab === t.id}
               onClick={() => selectTab(t.id)}
               className={`px-4 md:px-5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${

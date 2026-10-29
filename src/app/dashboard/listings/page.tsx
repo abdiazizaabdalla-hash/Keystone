@@ -286,6 +286,7 @@ export default function ListingsPage() {
           </button>
           <button
             type="button"
+            data-tour="new-listing-btn"
             onClick={() => {
               setFormError('');
               setShowNew(true);
@@ -365,7 +366,7 @@ export default function ListingsPage() {
           <form onSubmit={create} className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-800 border border-slate-600 rounded-xl p-6 space-y-3">
             <h2 className="text-lg font-bold text-slate-100">New listing</h2>
             {aiAvailable && (
-              <div className="rounded-lg border border-dashed border-slate-600 bg-slate-900/40 p-3">
+              <div data-tour="listing-upload" className="rounded-lg border border-dashed border-slate-600 bg-slate-900/40 p-3">
                 <p className="text-sm font-semibold text-slate-200">Start from the listing agreement</p>
                 <p className="text-xs text-slate-400 mt-0.5 mb-2">
                   Upload the signed PDF and Relay fills in the address, price, dates and everyone named on it. You review before anything is saved.
@@ -388,7 +389,7 @@ export default function ListingsPage() {
             )}
             <div>
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Property address *</label>
-              <input className={inputCls} placeholder="123 Main St, Austin, TX 78701" value={form.propertyAddress} onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })} required autoFocus />
+              <input data-tour="listing-address" className={inputCls} placeholder="123 Main St, Austin, TX 78701" value={form.propertyAddress} onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })} required autoFocus />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Listing agent *</label>
@@ -483,7 +484,7 @@ export default function ListingsPage() {
               </div>
             )}
             <div className="flex items-center gap-3 pt-1">
-              <button type="submit" disabled={saving} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
+              <button type="submit" data-tour="listing-submit" disabled={saving} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 {saving ? 'Creating…' : 'Create listing'}
               </button>
               <button type="button" onClick={() => { setShowNew(false); resetNew(); }} className="text-sm text-slate-400 hover:text-slate-200">

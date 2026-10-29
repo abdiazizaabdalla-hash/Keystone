@@ -126,6 +126,7 @@ function NavLink({
   return (
     <Link
       href={href}
+      data-tour={`nav-${label.toLowerCase()}`}
       title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
       className={`relative flex items-center rounded-xl transition font-medium ${

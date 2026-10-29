@@ -334,6 +334,7 @@ export default function AgentsPage() {
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
+            data-tour="add-agent-btn"
             className="shrink-0 px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition shadow-lg"
           >
             + Add Agent
@@ -390,6 +391,7 @@ export default function AgentsPage() {
                 <input
                   type="text"
                   name="name"
+                  data-tour="agent-name"
                   value={formData.name}
                   onChange={handleInputChange}
                   placeholder="John Smith"
@@ -470,6 +472,7 @@ export default function AgentsPage() {
             <div className="flex gap-3 pt-6 border-t border-slate-600">
               <button
                 type="submit"
+                data-tour="agent-submit"
                 disabled={isSubmitting}
                 className="flex-1 px-4 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50"
               >

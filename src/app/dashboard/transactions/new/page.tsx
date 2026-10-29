@@ -455,7 +455,7 @@ export default function NewTransactionPage() {
         {/* AI Contract Intake -- optional, only shown once ANTHROPIC_API_KEY
             is configured server-side (see checkAiAvailability above). */}
         {aiAvailable && (
-          <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-6">
+          <div data-tour="contract-upload" className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-6">
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
                 <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
@@ -601,6 +601,7 @@ export default function NewTransactionPage() {
             </label>
             <select
               name="agentId"
+              data-tour="tx-agent"
               value={formData.agentId}
               onChange={handleChange}
               required
@@ -777,6 +778,7 @@ export default function NewTransactionPage() {
           <div className="flex gap-4 pt-6 border-t border-slate-600">
             <button
               type="submit"
+              data-tour="tx-submit"
               disabled={submitting || agents.length === 0}
               className="flex-1 px-6 py-3 bg-blue-500 hover:bg-blue-400 disabled:from-slate-600 disabled:to-slate-600 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-blue-500/50 disabled:shadow-none"
             >
