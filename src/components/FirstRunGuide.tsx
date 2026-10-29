@@ -30,6 +30,8 @@ type Mode = 'transaction' | 'listing';
 
 const MODE_KEY = 'relay_first_run_mode';
 const STEP_KEY = 'relay_first_run_step';
+const VISITED_KEY = 'relay_first_run_visited';
+const HOME_KEY = 'relay_first_run_home';
 
 function readStored(key: string): string | null {
   try {
@@ -52,6 +54,8 @@ function writeStored(key: string, value: string | null) {
 export function resetFirstRunGuideLocal() {
   writeStored(MODE_KEY, null);
   writeStored(STEP_KEY, null);
+  writeStored(VISITED_KEY, null);
+  writeStored(HOME_KEY, null);
 }
 
 export async function saveFirstRunGuideDone(done: boolean) {
@@ -92,6 +96,22 @@ interface Ctx {
   agentNameTyped: boolean;
 }
 
+/** One thing to poke around in during the free-exploration step. */
+interface HubItem {
+  id: string;
+  label: string;
+  /** One line under the label in the list. */
+  hint: string;
+  /** data-tour name(s) to highlight. */
+  target: string;
+  /** Click this data-tour element first (a tab). */
+  clickOnEnter?: string;
+  /** Lives on the deal/listing page itself, so go back there first if needed. */
+  needsHome?: boolean;
+  title: string;
+  body: string;
+}
+
 interface Step {
   id: string;
   /** Pages this step belongs to; elsewhere the "Continue tutorial" card shows. */
@@ -116,6 +136,8 @@ interface Step {
   autoGoto?: string;
   /** Keep re-checking the agent count while on this step. */
   pollAgents?: boolean;
+  /** Free exploration: a list of things to try, in any order, at the person's own pace. */
+  hub?: HubItem[];
   isLast?: boolean;
 }
 
@@ -139,7 +161,7 @@ const AGENT_STEPS: Step[] = [
     goto: '/dashboard/agents',
     target: 'agent-name',
     title: 'Type their name',
-    body: 'A name is all you need. Add their email later and they get their own portal for documents and messages.',
+    body: 'A name is all you need. If you add their email, Relay automatically gives them a free portal login when you create a deal, and they get an email about it. Just testing? Leave the email blank so no one is emailed.',
     action: 'Type a name to continue.',
     skipIf: hasAgent,
     advanceWhen: (c) => c.agentNameTyped,
@@ -200,68 +222,83 @@ const TRANSACTION_STEPS: Step[] = [
     goto: '/dashboard/transactions/new',
     target: 'tx-submit',
     title: 'Create the transaction',
-    body: 'Happy with the details? Create it and Relay builds the checklist for you.',
+    body: 'Happy with the details? Create it and Relay builds the checklist for you. If the agent has an email, they are automatically invited to their portal, so practicing with a test agent that has no email keeps everything private.',
     action: 'Click “Create Transaction”.',
     advanceWhen: (c) => TX_DETAIL.test(c.pathname),
   },
   {
-    id: 'tx-overview',
-    path: TX_DETAIL,
-    goto: '/dashboard/transactions',
-    target: 'tx-tab-overview',
-    title: 'Your first transaction',
-    body: 'Overview holds the key dates, price and parties. Change a date here and the checklist due dates and your calendar follow.',
-    clickOnEnter: 'tx-tab-overview',
-  },
-  {
-    id: 'tx-checklist',
-    path: TX_DETAIL,
-    goto: '/dashboard/transactions',
-    target: 'tx-tab-checklist',
-    title: 'The checklist',
-    body: 'Every step from contract to close lives here. Check things off, set due dates, and add your own steps.',
-    clickOnEnter: 'tx-tab-checklist',
-  },
-  {
-    id: 'tx-documents',
-    path: TX_DETAIL,
-    goto: '/dashboard/transactions',
-    target: 'tx-tab-documents',
-    title: 'Documents and e-signatures',
-    body: 'Upload files here, send them out for e-signature, and keep everything for the deal in one place.',
-    clickOnEnter: 'tx-tab-documents',
-  },
-  {
-    id: 'tx-people',
-    path: TX_DETAIL,
-    goto: '/dashboard/transactions',
-    target: 'tx-tab-people',
-    title: 'Everyone on the deal',
-    body: 'Buyers, sellers, lender, title and escrow. Relay adds the people it found on the contract.',
-    clickOnEnter: 'tx-tab-people',
-  },
-  {
-    id: 'nav-invoices',
+    id: 'tx-hub',
     path: IN_DASHBOARD,
     goto: '/dashboard',
-    target: 'nav-invoices',
-    title: 'Get paid',
-    body: 'When a deal closes, invoice the agent from Invoices and track what is paid.',
-  },
-  {
-    id: 'nav-calendar',
-    path: IN_DASHBOARD,
-    goto: '/dashboard',
-    target: 'nav-calendar',
-    title: 'Never miss a date',
-    body: 'Every deal date and due date shows on your calendar. You can sync it to Google Calendar from there.',
-  },
-  {
-    id: 'finish',
-    path: IN_DASHBOARD,
-    goto: '/dashboard',
-    title: 'You are set',
-    body: 'That is the whole loop: agent, deal, checklist. The menu has everything else, and “Tutorial” brings this tour back any time.',
+    title: 'Explore your first transaction',
+    body: 'Open anything, try things out, and come back to this list whenever you like.',
+    hub: [
+      {
+        id: 'agent-portal',
+        label: 'Your agent’s portal',
+        hint: 'Set up for you automatically',
+        target: 'tx-agent-card',
+        needsHome: true,
+        title: 'Your agent’s portal is set up for you',
+        body: 'When an agent has an email, Relay emails them a free portal login the moment you create a deal. There is no invite to send. They see this deal’s checklist, documents and messages, and nothing else. This line under their name shows where they stand. No email yet? Add one on their profile and they are added automatically.',
+      },
+      {
+        id: 'checklist',
+        label: 'Checklist',
+        hint: 'Check a step off or change a due date',
+        target: 'tx-tab-checklist',
+        clickOnEnter: 'tx-tab-checklist',
+        needsHome: true,
+        title: 'The checklist',
+        body: 'Every step from contract to close lives here. Try it: check a step off, change a due date, or add your own step.',
+      },
+      {
+        id: 'documents',
+        label: 'Documents and e-signatures',
+        hint: 'Upload a file, send it to sign',
+        target: 'tx-tab-documents',
+        clickOnEnter: 'tx-tab-documents',
+        needsHome: true,
+        title: 'Documents and e-signatures',
+        body: 'Keep every file for the deal here. Try it: upload any PDF, then send it out for e-signature.',
+      },
+      {
+        id: 'people',
+        label: 'Contacts on the deal',
+        hint: 'Buyers, sellers, lender, title',
+        target: 'tx-tab-people',
+        clickOnEnter: 'tx-tab-people',
+        needsHome: true,
+        title: 'Everyone on the deal',
+        body: 'Buyers, sellers, lender, title and escrow. Try it: add a contact. This is also where you give other people access to the deal.',
+      },
+      {
+        id: 'overview',
+        label: 'Overview and key dates',
+        hint: 'Change a date, watch the checklist follow',
+        target: 'tx-tab-overview',
+        clickOnEnter: 'tx-tab-overview',
+        needsHome: true,
+        title: 'Overview and key dates',
+        body: 'Try it: change the closing date and watch the checklist due dates move with it. Your calendar follows too.',
+      },
+      {
+        id: 'invoices',
+        label: 'Invoices',
+        hint: 'Bill the agent when the deal closes',
+        target: 'nav-invoices',
+        title: 'Get paid',
+        body: 'When a deal closes, invoice the agent from Invoices and track what is paid. Click it to look around; this list stays with you.',
+      },
+      {
+        id: 'calendar',
+        label: 'Calendar',
+        hint: 'Every deal date in one place',
+        target: 'nav-calendar',
+        title: 'Never miss a date',
+        body: 'Every deal date and due date shows up here, and you can sync it to Google Calendar. Click it to look around.',
+      },
+    ],
     isLast: true,
   },
 ];
@@ -310,31 +347,76 @@ const LISTING_STEPS: Step[] = [
     goto: '/dashboard/listings',
     target: 'listing-submit',
     title: 'Create the listing',
-    body: 'Happy with the details? Create it and Relay adds the prep checklist for you.',
+    body: 'Happy with the details? Create it and Relay adds the prep checklist for you. If the agent has an email, they are automatically invited to their portal, so practicing with a test agent that has no email keeps everything private.',
     action: 'Click “Create listing”.',
     advanceWhen: (c) => LISTING_DETAIL.test(c.pathname),
   },
   {
-    id: 'ls-detail',
-    path: LISTING_DETAIL,
-    goto: '/dashboard/listings',
-    title: 'Your first listing',
-    body: 'The prep checklist, documents, showings and offers all live on this page. When an offer is accepted, convert it to a deal in one click.',
-  },
-  {
-    id: 'nav-calendar',
+    id: 'ls-hub',
     path: IN_DASHBOARD,
     goto: '/dashboard',
-    target: 'nav-calendar',
-    title: 'Never miss a date',
-    body: 'Listing and deal dates show on your calendar. You can sync it to Google Calendar from there.',
-  },
-  {
-    id: 'finish',
-    path: IN_DASHBOARD,
-    goto: '/dashboard',
-    title: 'You are set',
-    body: 'That is the whole loop. The menu has everything else, and “Tutorial” brings this tour back any time.',
+    title: 'Explore your first listing',
+    body: 'Open anything, try things out, and come back to this list whenever you like.',
+    hub: [
+      {
+        id: 'agent-portal',
+        label: 'Your agent’s portal',
+        hint: 'Set up for you automatically',
+        target: 'ls-portal',
+        clickOnEnter: 'ls-tab-overview',
+        needsHome: true,
+        title: 'Your agent’s portal is set up for you',
+        body: 'When the listing agent has an email, Relay invites them to their portal as soon as you create the listing, and the listing shows there once they sign in. This card tells you whether it is visible to them and lets you resend the invite. No email yet? Add one on their profile.',
+      },
+      {
+        id: 'checklist',
+        label: 'Prep checklist',
+        hint: 'Check a step off, watch the list date',
+        target: 'ls-tab-checklist',
+        clickOnEnter: 'ls-tab-checklist',
+        needsHome: true,
+        title: 'The prep checklist',
+        body: 'Everything to do before go-live. Try it: check a step off or change a due date.',
+      },
+      {
+        id: 'offers',
+        label: 'Offers and showings',
+        hint: 'Log an offer, convert to a deal',
+        target: 'ls-tab-offers',
+        clickOnEnter: 'ls-tab-offers',
+        needsHome: true,
+        title: 'Offers and showings',
+        body: 'Log showings and feedback and record offers. Try it: add a test offer. When one is accepted, convert it to a deal in one click.',
+      },
+      {
+        id: 'documents',
+        label: 'Documents',
+        hint: 'Upload a file, send it to sign',
+        target: 'ls-tab-documents',
+        clickOnEnter: 'ls-tab-documents',
+        needsHome: true,
+        title: 'Documents and e-signatures',
+        body: 'Keep the listing agreement and everything else here. Try it: upload any PDF, then send it out for e-signature.',
+      },
+      {
+        id: 'details',
+        label: 'Details and people',
+        hint: 'Seller, agent, other people',
+        target: 'ls-tab-details',
+        clickOnEnter: 'ls-tab-details',
+        needsHome: true,
+        title: 'Details and people',
+        body: 'The seller, the listing agent and anyone else on the agreement. Edit any of it here.',
+      },
+      {
+        id: 'calendar',
+        label: 'Calendar',
+        hint: 'Every date in one place',
+        target: 'nav-calendar',
+        title: 'Never miss a date',
+        body: 'Listing and deal dates show up here, and you can sync it to Google Calendar. Click it to look around.',
+      },
+    ],
     isLast: true,
   },
 ];
@@ -376,6 +458,10 @@ export default function FirstRunGuide({
   const [box, setBox] = useState<Box | null>(null);
   const [drifted, setDrifted] = useState(false);
   const [agentNameTyped, setAgentNameTyped] = useState(false);
+  // Free-exploration step: which topic is open, which have been opened, and whether the card is minimized.
+  const [hubItemId, setHubItemId] = useState<string | null>(null);
+  const [visited, setVisited] = useState<string[]>([]);
+  const [hubMin, setHubMin] = useState(false);
 
   const enteredRef = useRef<string | null>(null);
   const scrolledRef = useRef<string | null>(null);
@@ -394,6 +480,12 @@ export default function FirstRunGuide({
       const m: Mode | null = stored === 'transaction' || stored === 'listing' ? stored : null;
       setMode(m);
       setStepId(m ? readStored(STEP_KEY) : null);
+      try {
+        const v = JSON.parse(readStored(VISITED_KEY) || '[]');
+        setVisited(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+      } catch {
+        setVisited([]);
+      }
       setAgents(await agentCount());
       if (!cancelled) setReady(true);
     })();
@@ -425,6 +517,7 @@ export default function FirstRunGuide({
       mismatchSince.current = null;
       setDrifted(false);
       setBox(null);
+      setHubItemId(null);
       writeStored(STEP_KEY, next.id);
       setStepId(next.id);
     },
@@ -491,10 +584,25 @@ export default function FirstRunGuide({
       mismatchSince.current = null;
       setDrifted(false);
 
-      if (step.clickOnEnter && enteredRef.current !== step.id) {
-        const el = findTarget(step.clickOnEnter);
+      // Remember where the first deal/listing lives so the exploration list can bring the person back to it.
+      const homeRe = mode === 'listing' ? LISTING_DETAIL : TX_DETAIL;
+      const onHome = homeRe.test(pathname);
+      if (onHome) writeStored(HOME_KEY, pathname);
+
+      // In the free-exploration step the highlight follows the topic the person opened.
+      const item = step.hub && hubItemId ? step.hub.find((h) => h.id === hubItemId) ?? null : null;
+      const key = `${step.id}:${item?.id ?? ''}`;
+      const targetName = step.hub ? item?.target : step.target;
+      const clickName = step.hub ? item?.clickOnEnter : step.clickOnEnter;
+      if (item?.needsHome && !onHome) {
+        setBox(null);
+        return;
+      }
+
+      if (clickName && enteredRef.current !== key) {
+        const el = findTarget(clickName);
         if (el) {
-          enteredRef.current = step.id;
+          enteredRef.current = key;
           el.click();
         }
       }
@@ -508,15 +616,15 @@ export default function FirstRunGuide({
         }, 1400);
       }
 
-      if (step.target) {
+      if (targetName) {
         // A step can highlight several elements at once (comma-separated): one box around all of them.
-        const els = step.target
+        const els = targetName
           .split(',')
           .map((n) => findTarget(n.trim()))
           .filter((e): e is HTMLElement => e !== null);
         if (els.length > 0) {
-          if (scrolledRef.current !== step.id) {
-            scrolledRef.current = step.id;
+          if (scrolledRef.current !== key) {
+            scrolledRef.current = key;
             els[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
           }
           const rects = els.map((e) => e.getBoundingClientRect());
@@ -539,7 +647,7 @@ export default function FirstRunGuide({
     tick();
     const id = window.setInterval(tick, 250);
     return () => window.clearInterval(id);
-  }, [step, ready, pathname, agents, idx, goToNext, router]);
+  }, [step, ready, pathname, agents, idx, goToNext, router, mode, hubItemId]);
 
   // Keep the agent count fresh on the step that waits for the agent to be saved.
   useEffect(() => {
@@ -561,6 +669,24 @@ export default function FirstRunGuide({
       if (autoTimer.current) window.clearTimeout(autoTimer.current);
     };
   }, []);
+
+  const openHubItem = (item: HubItem) => {
+    enteredRef.current = null;
+    scrolledRef.current = null;
+    setBox(null);
+    setHubItemId(item.id);
+    setVisited((prev) => {
+      const next = prev.includes(`${step?.id}:${item.id}`) ? prev : [...prev, `${step?.id}:${item.id}`];
+      writeStored(VISITED_KEY, JSON.stringify(next));
+      return next;
+    });
+    // Topics that live on the deal/listing page: bring the person back to it first.
+    const homeRe = mode === 'listing' ? LISTING_DETAIL : TX_DETAIL;
+    if (item.needsHome && !homeRe.test(pathname)) {
+      const home = readStored(HOME_KEY);
+      router.push(home && homeRe.test(home) ? home : mode === 'listing' ? '/dashboard/listings' : '/dashboard/transactions');
+    }
+  };
 
   if (!ready) return null;
 
@@ -619,6 +745,118 @@ export default function FirstRunGuide({
           </button>
         </div>
       </aside>
+    );
+  }
+
+  // Free exploration: a list of things to try in any order, then a light highlight on whichever is open.
+  if (step.hub) {
+    const items = step.hub;
+    const item = hubItemId ? items.find((h) => h.id === hubItemId) ?? null : null;
+    const seen = items.filter((h) => visited.includes(`${step.id}:${h.id}`)).length;
+    const noun = mode === 'listing' ? 'listing' : 'transaction';
+
+    if (hubMin) {
+      return (
+        <button
+          type="button"
+          onClick={() => setHubMin(false)}
+          className="fixed bottom-4 right-4 z-[61] px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-full shadow-lg transition"
+        >
+          Tutorial · {seen}/{items.length} explored
+        </button>
+      );
+    }
+
+    return (
+      <>
+        {item && box && (
+          <div
+            aria-hidden
+            className="fixed z-[60] pointer-events-none rounded-xl ring-2 ring-blue-400 transition-all duration-200"
+            style={{
+              top: box.top - 6,
+              left: box.left - 6,
+              width: box.width + 12,
+              height: box.height + 12,
+              boxShadow: '0 0 0 9999px rgba(2, 6, 23, 0.35), 0 0 24px 4px rgba(96, 165, 250, 0.55)',
+            }}
+          />
+        )}
+        <aside
+          role="dialog"
+          aria-label="Tutorial"
+          className="fixed z-[61] bottom-4 right-4 left-4 sm:left-auto sm:w-80 max-h-[80vh] overflow-y-auto bg-slate-800 border border-blue-400/60 rounded-2xl shadow-2xl p-4"
+        >
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <h3 className="text-base font-semibold text-slate-100">{item ? item.title : step.title}</h3>
+            <button type="button" onClick={() => setHubMin(true)} aria-label="Minimize tutorial" className="text-slate-400 hover:text-slate-200 text-lg leading-none px-1">
+              –
+            </button>
+          </div>
+          {item ? (
+            <>
+              <p className="text-sm text-slate-300 mb-3">{item.body}</p>
+              {item.needsHome && !(mode === 'listing' ? LISTING_DETAIL : TX_DETAIL).test(pathname) && (
+                <p className="text-xs text-slate-400 mb-3">Taking you back to your {noun}…</p>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setHubItemId(null)}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition"
+                >
+                  ← All topics
+                </button>
+                <button type="button" onClick={finish} className="text-xs text-slate-500 hover:text-slate-300 transition">
+                  Finish tutorial
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-300 mb-3">
+                {step.body} Nothing here is permanent; a test {noun} can be deleted later.
+              </p>
+              <ul className="space-y-1.5 mb-3">
+                {items.map((h) => {
+                  const done = visited.includes(`${step.id}:${h.id}`);
+                  return (
+                    <li key={h.id}>
+                      <button
+                        type="button"
+                        onClick={() => openHubItem(h)}
+                        className="w-full flex items-start gap-2.5 text-left rounded-lg border border-slate-600 hover:border-blue-400/70 hover:bg-white/5 px-3 py-2 transition"
+                      >
+                        <span
+                          className={`mt-0.5 w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                            done ? 'bg-green-500/20 text-green-300 border border-green-500/50' : 'bg-slate-700 text-slate-400'
+                          }`}
+                        >
+                          {done ? '✓' : '•'}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-slate-100">{h.label}</span>
+                          <span className="block text-xs text-slate-400">{h.hint}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={finish}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition"
+                >
+                  {seen >= items.length ? 'Finish tutorial' : 'I’m done exploring'}
+                </button>
+                <span className="text-xs text-slate-500">{seen}/{items.length} explored</span>
+              </div>
+            </>
+          )}
+        </aside>
+      </>
     );
   }
 

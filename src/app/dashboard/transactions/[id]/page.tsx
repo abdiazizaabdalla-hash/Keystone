@@ -2376,7 +2376,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8 pt-6 border-t border-white/10">
             {/* Agent */}
-            <div>
+            <div data-tour="tx-agent-card">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent</p>
               {agent ? (
                 <Link

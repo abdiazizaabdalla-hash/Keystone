@@ -915,6 +915,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             key={t.id}
             type="button"
             role="tab"
+            data-tour={`ls-tab-${t.id}`}
             aria-selected={tab === t.id}
             onClick={() => selectTab(t.id)}
             className={`px-4 md:px-5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition ${
@@ -928,7 +929,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
       <div className="space-y-6">
         <div className={tab === 'overview' ? 'space-y-3' : 'hidden'}>
-          <div className={`rounded-2xl border p-5 ${portalStatus.ok ? 'bg-green-500/5 border-green-500/30' : 'bg-amber-500/5 border-amber-500/30'}`}>
+          <div data-tour="ls-portal" className={`rounded-2xl border p-5 ${portalStatus.ok ? 'bg-green-500/5 border-green-500/30' : 'bg-amber-500/5 border-amber-500/30'}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-semibold text-slate-100">{portalStatus.ok ? 'Visible to your agent' : 'Not visible to your agent yet'}</p>
