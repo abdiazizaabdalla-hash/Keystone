@@ -733,6 +733,13 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
             canEdit={false}
             readOnlyDates={transaction.keyDates ?? []}
           />
+
+          <ClientShareCard
+            transactionId={id}
+            steps={transaction.tasks.map((t) => ({ id: t.id, name: t.name }))}
+            documents={documents.map((d) => ({ id: d.id, name: d.file_name, clientVisible: Boolean(d.client_visible) }))}
+            onDocumentsShared={(ids) => setDocuments((prev) => prev.map((d) => ({ ...d, client_visible: ids.includes(d.id) })))}
+          />
         </div>
 
         {/* Same grid the TC page uses: Documents wide on the left,
@@ -941,11 +948,6 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                 Check off steps, move due dates and note who a step is waiting on. Your TC is notified of changes and manages the list of steps itself.
               </p>
             </section>
-
-            <ClientShareCard
-              transactionId={id}
-              steps={transaction.tasks.map((t) => ({ id: t.id, name: t.name }))}
-            />
 
             <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
               <h2 className="text-lg font-bold text-slate-100 mb-4">Contacts</h2>

@@ -98,6 +98,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (Array.isArray(body.visibleTaskIds)) {
       await setVisibleSteps(transactionId, body.visibleTaskIds);
     }
+    if (Array.isArray(body.visibleDocumentIds)) {
+      await setVisibleDocuments(transactionId, body.visibleDocumentIds);
+    }
 
     const token = generateExternalAccessToken();
     const expiresAt = new Date(Date.now() + PROGRESS_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -135,20 +138,42 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 }
 
-// PATCH { visibleTaskIds }: change which checklist steps clients see.
+// PATCH { visibleTaskIds?, visibleDocumentIds? }: change which checklist steps and documents clients see.
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: transactionId } = await params;
     await loadAgentContext(request, transactionId);
     const body = await request.json().catch(() => ({}));
-    if (!Array.isArray(body.visibleTaskIds)) {
-      return NextResponse.json({ error: 'visibleTaskIds must be an array' }, { status: 400 });
+    if (!Array.isArray(body.visibleTaskIds) && !Array.isArray(body.visibleDocumentIds)) {
+      return NextResponse.json({ error: 'visibleTaskIds or visibleDocumentIds is required' }, { status: 400 });
     }
-    const ids = await setVisibleSteps(transactionId, body.visibleTaskIds);
-    return NextResponse.json({ success: true, visibleTaskIds: ids });
+    const taskIds = Array.isArray(body.visibleTaskIds) ? await setVisibleSteps(transactionId, body.visibleTaskIds) : undefined;
+    const documentIds = Array.isArray(body.visibleDocumentIds)
+      ? await setVisibleDocuments(transactionId, body.visibleDocumentIds)
+      : undefined;
+    return NextResponse.json({ success: true, visibleTaskIds: taskIds, visibleDocumentIds: documentIds });
   } catch (error) {
     return handleError(error, 'update steps');
   }
+}
+
+// Documents default to hidden; only ids that belong to this deal can be ticked.
+async function setVisibleDocuments(transactionId: string, raw: unknown[]): Promise<string[]> {
+  const ids = raw.filter((v): v is string => typeof v === 'string').slice(0, 500);
+  const { error: clearError } = await supabaseServer
+    .from('documents')
+    .update({ client_visible: false })
+    .eq('transaction_id', transactionId);
+  if (clearError) throw clearError;
+  if (ids.length > 0) {
+    const { error } = await supabaseServer
+      .from('documents')
+      .update({ client_visible: true })
+      .eq('transaction_id', transactionId)
+      .in('id', ids);
+    if (error) throw error;
+  }
+  return ids;
 }
 
 async function setVisibleSteps(transactionId: string, raw: unknown[]): Promise<string[]> {

@@ -28,7 +28,17 @@ interface StepOption {
 // account or password for the client. Mirrors the TC's own "Agent portal
 // access" invite card, one level down. Backed by
 // /api/agent/transactions/[id]/clients.
-export default function ClientShareCard({ transactionId, steps }: { transactionId: string; steps: StepOption[] }) {
+export default function ClientShareCard({
+  transactionId,
+  steps,
+  documents,
+  onDocumentsShared,
+}: {
+  transactionId: string;
+  steps: StepOption[];
+  documents: { id: string; name: string; clientVisible: boolean }[];
+  onDocumentsShared: (ids: string[]) => void;
+}) {
   const router = useRouter();
   const [links, setLinks] = useState<ClientLink[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -39,6 +49,7 @@ export default function ClientShareCard({ transactionId, steps }: { transactionI
   const [email, setEmail] = useState('');
   const [note, setNote] = useState('');
   const [pickedIds, setPickedIds] = useState<string[]>([]);
+  const [pickedDocIds, setPickedDocIds] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
 
   const [editingSteps, setEditingSteps] = useState(false);
@@ -72,8 +83,11 @@ export default function ClientShareCard({ transactionId, steps }: { transactionI
 
   const defaultPicked = () => (visibleIds.length > 0 ? visibleIds : steps.map((s) => s.id));
 
+  const sharedDocIds = documents.filter((d) => d.clientVisible).map((d) => d.id);
+
   const openForm = () => {
     setPickedIds(defaultPicked());
+    setPickedDocIds(sharedDocIds);
     setShowForm(true);
     setMessage('');
   };
@@ -105,6 +119,37 @@ export default function ClientShareCard({ transactionId, steps }: { transactionI
     </div>
   );
 
+  const toggleDoc = (id: string) =>
+    setPickedDocIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  // Documents are opt-in: nothing is shown to the client until it is ticked here.
+  const docPicker =
+    documents.length === 0 ? (
+      <p className="text-xs text-slate-500">No documents on this deal yet. Upload one and it can be shared here.</p>
+    ) : (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-400">Documents your client can open (none by default)</p>
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setPickedDocIds(documents.map((d) => d.id))} className="text-xs text-blue-400 hover:text-blue-300">
+              Select all
+            </button>
+            <button type="button" onClick={() => setPickedDocIds([])} className="text-xs text-slate-400 hover:text-slate-300">
+              None
+            </button>
+          </div>
+        </div>
+        <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
+          {documents.map((d) => (
+            <label key={d.id} className="flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
+              <input type="checkbox" checked={pickedDocIds.includes(d.id)} onChange={() => toggleDoc(d.id)} className="mt-1" />
+              <span className="break-all">{d.name}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+    );
+
   const handleError = (err: unknown, fallback: string) => {
     if (err instanceof AuthRequiredError) {
       router.push('/agent/login');
@@ -129,10 +174,12 @@ export default function ClientShareCard({ transactionId, steps }: { transactionI
           clientEmail: email.trim() || undefined,
           note: note.trim() || undefined,
           visibleTaskIds: pickedIds,
+          visibleDocumentIds: pickedDocIds,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to share');
+      onDocumentsShared(pickedDocIds);
       setLinks((prev) => [data.link, ...prev]);
       setVisibleIds(pickedIds);
       setShowForm(false);
@@ -160,13 +207,14 @@ export default function ClientShareCard({ transactionId, steps }: { transactionI
       const res = await authFetch(base, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visibleTaskIds: pickedIds }),
+        body: JSON.stringify({ visibleTaskIds: pickedIds, visibleDocumentIds: pickedDocIds }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to save steps');
       setVisibleIds(pickedIds);
+      onDocumentsShared(pickedDocIds);
       setEditingSteps(false);
-      setMessage('Saved. Every client link now shows these steps.');
+      setMessage('Saved. Every client link now shows these steps and documents.');
     } catch (err) {
       handleError(err, 'Failed to save steps');
     } finally {
@@ -215,24 +263,103 @@ export default function ClientShareCard({ transactionId, steps }: { transactionI
     }
   };
 
+  const activeLinks = links.filter((l) => !l.revoked_at && new Date(l.expires_at) >= new Date());
+  const inactiveLinks = links.filter((l) => !activeLinks.includes(l));
+
+  // Same status-line look as the TC side's agent portal access: a coloured
+  // dot, a short label, and an underlined action.
+  const statusFor = (link: ClientLink) => {
+    if (link.revoked_at) return { dot: 'bg-slate-500', text: 'text-slate-400', label: 'Link turned off' };
+    if (new Date(link.expires_at) < new Date()) return { dot: 'bg-slate-500', text: 'text-slate-400', label: 'Link expired' };
+    if (link.access_count > 0) {
+      return {
+        dot: 'bg-green-500',
+        text: 'text-green-300',
+        label: `Has viewed progress${link.access_count > 1 ? ` (${link.access_count}×)` : ''}`,
+      };
+    }
+    return { dot: 'bg-amber-400', text: 'text-amber-300', label: link.client_email ? 'Sent, not opened yet' : 'Link created, not opened yet' };
+  };
+
+  const linkButton = 'text-blue-400 hover:text-blue-300 underline underline-offset-2 disabled:opacity-60';
+
   return (
-    <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="text-lg font-bold text-slate-100">Share with your client</h2>
+    <div className="pt-6 mt-6 border-t border-slate-600" data-testid="client-access">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Client Access</p>
         <button
           type="button"
           onClick={() => (showForm ? setShowForm(false) : openForm())}
-          className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
+          className="text-xs text-blue-400 hover:text-blue-300 transition whitespace-nowrap shrink-0"
         >
           {showForm ? 'Cancel' : '+ Add client'}
         </button>
       </div>
-      <p className="text-xs text-slate-500 mb-4">
+      <p className="text-xs text-slate-500 mb-3">
         Give your buyer or seller a live progress page. They get an email, no account needed, and it updates as your TC completes each step.
       </p>
 
+      {!loaded && <p className="text-xs text-slate-500">Checking client access…</p>}
+
+      {loaded && activeLinks.length === 0 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <span className="w-2 h-2 rounded-full shrink-0 bg-red-400" />
+          <span className="font-medium text-red-300">No client access yet</span>
+          {!showForm && (
+            <button type="button" onClick={openForm} className={linkButton}>
+              Invite now
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="space-y-2.5">
+        {activeLinks.map((link) => {
+          const state = statusFor(link);
+          return (
+            <div key={link.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${state.dot}`} />
+              <span className="text-slate-100 font-medium">{link.client_name || link.client_email}</span>
+              {link.client_name && link.client_email && <span className="text-slate-500">{link.client_email}</span>}
+              <span className={`font-medium ${state.text}`}>{state.label}</span>
+              {link.access_count > 0 && link.last_accessed_at && (
+                <span className="text-slate-500">last {new Date(link.last_accessed_at).toLocaleDateString()}</span>
+              )}
+              <button type="button" onClick={() => handleCopy(link)} className={linkButton}>
+                {copiedId === link.id ? 'Copied!' : 'Copy link'}
+              </button>
+              {link.client_email && (
+                <button type="button" onClick={() => handleResend(link)} disabled={busyId === link.id} className={linkButton}>
+                  {busyId === link.id ? 'Sending…' : 'Resend'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleRevoke(link)}
+                disabled={busyId === link.id}
+                className="text-red-400 hover:text-red-300 underline underline-offset-2 disabled:opacity-60"
+              >
+                Turn off
+              </button>
+            </div>
+          );
+        })}
+        {inactiveLinks.map((link) => {
+          const state = statusFor(link);
+          return (
+            <div key={link.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${state.dot}`} />
+              <span className="text-slate-400">{link.client_name || link.client_email}</span>
+              <span className={`font-medium ${state.text}`}>{state.label}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {message && <p className="text-xs text-slate-300 mt-3">{message}</p>}
+
       {showForm && (
-        <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-4 mb-4 space-y-3">
+        <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-4 mt-4 space-y-3">
           <input
             type="text"
             value={name}
@@ -257,6 +384,7 @@ export default function ClientShareCard({ transactionId, steps }: { transactionI
             className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
           />
           {stepPicker}
+          {docPicker}
           <button
             type="button"
             onClick={handleShare}
@@ -269,76 +397,12 @@ export default function ClientShareCard({ transactionId, steps }: { transactionI
         </div>
       )}
 
-      {message && <p className="text-xs text-slate-300 mb-3">{message}</p>}
-
-      {loaded && links.length === 0 && !showForm && (
-        <p className="text-sm text-slate-500 italic">Nobody has been given a link yet.</p>
-      )}
-
-      <div className="space-y-2">
-        {links.map((link) => {
-          const expired = new Date(link.expires_at) < new Date();
-          const revoked = Boolean(link.revoked_at);
-          const live = !expired && !revoked;
-          return (
-            <div key={link.id} className="bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm text-slate-100 font-medium truncate">{link.client_name || link.client_email}</p>
-                  {link.client_name && link.client_email && <p className="text-xs text-slate-400 truncate">{link.client_email}</p>}
-                </div>
-                <span
-                  className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                    live
-                      ? 'bg-green-500/20 border border-green-500/50 text-green-300'
-                      : 'bg-slate-600/40 border border-slate-500/50 text-slate-400'
-                  }`}
-                >
-                  {revoked ? 'Turned off' : expired ? 'Expired' : 'Active'}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                {link.access_count > 0
-                  ? `Opened ${link.access_count} time${link.access_count === 1 ? '' : 's'}${
-                      link.last_accessed_at ? `, last ${new Date(link.last_accessed_at).toLocaleDateString()}` : ''
-                    }`
-                  : 'Not opened yet'}
-              </p>
-              {live && (
-                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-                  <button type="button" onClick={() => handleCopy(link)} className="text-xs text-blue-400 hover:text-blue-300 font-medium transition">
-                    {copiedId === link.id ? 'Copied!' : 'Copy link'}
-                  </button>
-                  {link.client_email && (
-                    <button
-                      type="button"
-                      onClick={() => handleResend(link)}
-                      disabled={busyId === link.id}
-                      className="text-xs text-blue-400 hover:text-blue-300 font-medium transition disabled:opacity-50"
-                    >
-                      Resend email
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleRevoke(link)}
-                    disabled={busyId === link.id}
-                    className="text-xs text-red-400 hover:text-red-300 font-medium transition disabled:opacity-50"
-                  >
-                    Turn off
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {links.some((l) => !l.revoked_at && new Date(l.expires_at) >= new Date()) && (
-        <div className="mt-4 pt-4 border-t border-slate-700">
+      {activeLinks.length > 0 && (
+        <div className="mt-3 text-xs">
           {editingSteps ? (
-            <div className="space-y-3">
+            <div className="space-y-3 bg-slate-800/50 border border-slate-600 rounded-lg p-4">
               {stepPicker}
+              {docPicker}
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -358,15 +422,16 @@ export default function ClientShareCard({ transactionId, steps }: { transactionI
               type="button"
               onClick={() => {
                 setPickedIds(defaultPicked());
+                setPickedDocIds(sharedDocIds);
                 setEditingSteps(true);
               }}
-              className="text-xs text-slate-300 hover:text-white font-medium transition"
+              className={linkButton}
             >
-              Edit steps shown ({visibleIds.length} of {steps.length})
+              Edit what they see: {visibleIds.length} of {steps.length} steps, {sharedDocIds.length} document{sharedDocIds.length === 1 ? '' : 's'}
             </button>
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }
