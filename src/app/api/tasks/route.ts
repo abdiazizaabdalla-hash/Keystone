@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { queueDealNotification } from '@/lib/notifications';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { statusFromTasks } from '@/lib/transactionStages';
 import { getVisibleTcUserIds } from '@/lib/team';
@@ -169,8 +170,25 @@ export async function PATCH(request: NextRequest) {
         // checklist auto-advances a transaction to "Closed" -- the TC
         // always creates it themselves from the transaction page (see
         // dashboard/transactions/[id]/page.tsx's "Create Invoice" button).
+        queueDealNotification({
+          transactionId: task.transaction_id as string,
+          actorUserId: user.id,
+          type: 'stage_changed',
+          title: `Stage moved to ${newStatus}`,
+        });
       }
 
+    }
+
+    if (nowCompleted) {
+      queueDealNotification({
+        transactionId: task.transaction_id as string,
+        actorUserId: user.id,
+        type: 'task_completed',
+        title: 'Step completed',
+        body: task.name as string,
+        coalesce: { title: (n) => `${n} steps completed` },
+      });
     }
 
     // A toggled task changes whether it should still have a calendar event.

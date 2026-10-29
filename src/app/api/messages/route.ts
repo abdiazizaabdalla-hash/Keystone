@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
 import { sendNewMessageEmail } from '@/lib/agentPortalEmails';
+import { queueDealNotification } from '@/lib/notifications';
 
 // Confirms the caller may read/post in this transaction's thread. Kept
 // owner-only for the TC side (not widened to the whole Team the way
@@ -165,6 +166,15 @@ export async function POST(request: NextRequest) {
         console.error('Error sending new-message email:', emailError);
       }
     );
+
+    queueDealNotification({
+      transactionId,
+      actorUserId: user.id,
+      type: 'message',
+      title: 'New message',
+      body: text || 'Sent a file',
+      coalesce: { title: (n) => `${n} new messages` },
+    });
 
     // Enrich with the same signed-URL attachment shape GET returns, so
     // the sender's own optimistic UI update has a working link

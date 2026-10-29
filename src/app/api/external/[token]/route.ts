@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { formatDisplayDate } from '@/lib/dueDates';
+import { queueDealNotification } from '@/lib/notifications';
+import { stagesForTaskNames } from '@/lib/transactionStages';
 
 const BUCKET = 'transaction-documents';
 const PREVIEW_URL_TTL_SECONDS = 60 * 30; // 30 minutes, same as the signing-requests public route
@@ -31,7 +33,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const { data: link, error } = await supabaseServer
     .from('external_access_links')
-    .select('id, transaction_id, scope, document_id, revoked_at, expires_at, access_count')
+    .select('id, transaction_id, scope, document_id, revoked_at, expires_at, access_count, last_accessed_at, client_name, client_note')
     .eq('token', token)
     .single();
 
@@ -46,7 +48,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const { data: transaction } = await supabaseServer
     .from('transactions')
-    .select('file_number, property_address, acceptance_date, closing_date')
+    .select('file_number, property_address, acceptance_date, closing_date, status')
     .eq('id', link.transaction_id)
     .single();
 
@@ -63,6 +65,64 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .eq('id', link.id);
   } catch {
     // non-fatal
+  }
+
+  if (link.scope === 'progress') {
+    // Tell the TC when the client opens their link: the first time, and
+    // again after a day away (not on every refresh).
+    const lastSeen = link.last_accessed_at ? new Date(link.last_accessed_at).getTime() : 0;
+    if (!link.access_count || Date.now() - lastSeen > 24 * 60 * 60 * 1000) {
+      queueDealNotification({
+        transactionId: link.transaction_id as string,
+        actorUserId: null,
+        type: 'client_viewed',
+        title: link.client_name ? `${link.client_name} opened their progress link` : 'Your client opened their progress link',
+      });
+    }
+
+    const { data: allTasks } = await supabaseServer
+      .from('tasks')
+      .select('name, completed, client_visible, sort_order')
+      .eq('transaction_id', link.transaction_id)
+      .order('sort_order', { ascending: true });
+    const ordered = allTasks || [];
+    const stages = stagesForTaskNames(ordered.map((t) => t.name as string));
+    const currentStage = (transaction.status as string) || stages[0];
+    const stageIndex = Math.max(0, stages.indexOf(currentStage));
+
+    const { data: keyDates } = await supabaseServer
+      .from('transaction_key_dates')
+      .select('label, due_date, completed')
+      .eq('transaction_id', link.transaction_id)
+      .order('due_date', { ascending: true });
+
+    const dates: { label: string; date: string; dateDisplay: string; completed: boolean }[] = [];
+    if (transaction.acceptance_date) {
+      dates.push({ label: 'Contract accepted', date: transaction.acceptance_date as string, dateDisplay: formatDisplayDate(transaction.acceptance_date as string), completed: true });
+    }
+    (keyDates || []).forEach((d) => {
+      if (d.due_date) {
+        dates.push({ label: d.label as string, date: d.due_date as string, dateDisplay: formatDisplayDate(d.due_date as string), completed: Boolean(d.completed) });
+      }
+    });
+    if (transaction.closing_date) {
+      dates.push({ label: 'Closing', date: transaction.closing_date as string, dateDisplay: formatDisplayDate(transaction.closing_date as string), completed: false });
+    }
+    dates.sort((a, b) => a.date.localeCompare(b.date));
+
+    return NextResponse.json({
+      scope: 'progress',
+      propertyAddress: transaction.property_address,
+      clientName: link.client_name || null,
+      note: link.client_note || null,
+      stages,
+      stageIndex,
+      currentStage,
+      steps: ordered
+        .filter((t) => t.client_visible)
+        .map((t) => ({ name: t.name as string, completed: Boolean(t.completed) })),
+      dates,
+    });
   }
 
   if (link.scope === 'dates') {

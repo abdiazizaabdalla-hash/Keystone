@@ -62,6 +62,7 @@ interface Task {
   due_date_spec?: DueDateSpec | null;
   waiting_on?: string | null;
   waiting_on_since?: string | null;
+  client_visible?: boolean;
 }
 
 interface Agent {
@@ -146,10 +147,12 @@ interface SigningRequestItem {
 
 interface ExternalLink {
   id: string;
-  scope: 'document' | 'dates';
+  scope: 'document' | 'dates' | 'progress';
   document_id: string | null;
   document_file_name?: string | null;
   recipient_label: string | null;
+  client_name?: string | null;
+  client_note?: string | null;
   token: string;
   expires_at: string;
   revoked_at: string | null;
@@ -267,7 +270,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [externalLinks, setExternalLinks] = useState<ExternalLink[]>([]);
   const [externalLinksError, setExternalLinksError] = useState<string | null>(null);
   const [showCreateLinkForm, setShowCreateLinkForm] = useState(false);
-  const [newLinkScope, setNewLinkScope] = useState<'document' | 'dates'>('dates');
+  const [newLinkScope, setNewLinkScope] = useState<'document' | 'dates' | 'progress'>('dates');
+  // Client progress links: who it's for, a short note, and which
+  // checklist steps the client gets to see (default: all of them).
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientNote, setNewClientNote] = useState('');
+  const [clientStepIds, setClientStepIds] = useState<string[]>([]);
+  const [editingStepsLinkId, setEditingStepsLinkId] = useState<string | null>(null);
+  const [isSavingSteps, setIsSavingSteps] = useState(false);
   const [newLinkDocumentId, setNewLinkDocumentId] = useState('');
   const [newLinkRecipientLabel, setNewLinkRecipientLabel] = useState('');
   const [isCreatingLink, setIsCreatingLink] = useState(false);
@@ -617,6 +627,71 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     }
   };
 
+  // Pre-tick the steps already shared on this deal, or every step the first time.
+  const openProgressForm = () => {
+    setNewLinkScope('progress');
+    setClientStepIds(() => {
+      const shared = tasks.filter((t) => t.client_visible).map((t) => t.id);
+      return shared.length > 0 ? shared : tasks.map((t) => t.id);
+    });
+  };
+
+  const toggleClientStep = (id: string) =>
+    setClientStepIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const handleSaveClientSteps = async () => {
+    setExternalLinksError(null);
+    try {
+      setIsSavingSteps(true);
+      const res = await authFetch(`/api/transactions/${resolvedParams.id}/client-steps`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visibleTaskIds: clientStepIds }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to save steps');
+      setTasks((prev) => prev.map((t) => ({ ...t, client_visible: clientStepIds.includes(t.id) })));
+      setEditingStepsLinkId(null);
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setExternalLinksError(error instanceof Error ? error.message : 'Failed to save steps');
+    } finally {
+      setIsSavingSteps(false);
+    }
+  };
+
+  const renderStepPicker = () => (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-slate-400">Steps your client can see</p>
+        <div className="flex gap-3">
+          <button type="button" onClick={() => setClientStepIds(tasks.map((t) => t.id))} className="text-xs text-blue-400 hover:text-blue-300">
+            Select all
+          </button>
+          <button type="button" onClick={() => setClientStepIds([])} className="text-xs text-slate-400 hover:text-slate-300">
+            None
+          </button>
+        </div>
+      </div>
+      <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+        {tasks.map((t) => (
+          <label key={t.id} className="flex items-start gap-2 text-sm text-slate-200 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={clientStepIds.includes(t.id)}
+              onChange={() => toggleClientStep(t.id)}
+              className="mt-1"
+            />
+            <span>{t.name}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+
   const handleCreateExternalLink = async () => {
     setExternalLinksError(null);
     if (newLinkScope === 'document' && !newLinkDocumentId) {
@@ -632,14 +707,22 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           scope: newLinkScope,
           documentId: newLinkScope === 'document' ? newLinkDocumentId : undefined,
           recipientLabel: newLinkRecipientLabel.trim() || undefined,
+          clientName: newLinkScope === 'progress' ? newClientName.trim() || undefined : undefined,
+          clientNote: newLinkScope === 'progress' ? newClientNote.trim() || undefined : undefined,
+          visibleTaskIds: newLinkScope === 'progress' ? clientStepIds : undefined,
         }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to create link');
       setExternalLinks((prev) => [data, ...prev]);
+      if (newLinkScope === 'progress') {
+        setTasks((prev) => prev.map((t) => ({ ...t, client_visible: clientStepIds.includes(t.id) })));
+      }
       setShowCreateLinkForm(false);
       setNewLinkDocumentId('');
       setNewLinkRecipientLabel('');
+      setNewClientName('');
+      setNewClientNote('');
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
@@ -3746,7 +3829,41 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 >
                   One Document
                 </button>
+                <button
+                  type="button"
+                  onClick={openProgressForm}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                    newLinkScope === 'progress' ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  Client Progress
+                </button>
               </div>
+
+              {newLinkScope === 'progress' && (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-400">
+                    A live progress page for your buyer or seller. No login. It updates as you complete steps, and you can revoke it any time.
+                  </p>
+                  <input
+                    type="text"
+                    value={newClientName}
+                    onChange={(e) => setNewClientName(e.target.value)}
+                    placeholder="Client name (shown on the page), optional"
+                    maxLength={100}
+                    className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  />
+                  <textarea
+                    value={newClientNote}
+                    onChange={(e) => setNewClientNote(e.target.value)}
+                    placeholder="A short note for your client, optional"
+                    maxLength={1000}
+                    rows={3}
+                    className="w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  />
+                  {renderStepPicker()}
+                </div>
+              )}
 
               {newLinkScope === 'document' && (
                 <select
@@ -3797,7 +3914,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm text-slate-100 font-medium truncate">
-                          {link.scope === 'document' ? link.document_file_name || 'Document' : 'Key Dates'}
+                          {link.scope === 'document' ? link.document_file_name || 'Document' : link.scope === 'progress' ? `Client Progress${link.client_name ? ` · ${link.client_name}` : ''}` : 'Key Dates'}
                         </p>
                         {link.recipient_label && (
                           <p className="text-xs text-slate-400 truncate">{link.recipient_label}</p>
@@ -3833,6 +3950,35 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                           className="text-xs text-red-400 hover:text-red-300 font-medium transition disabled:opacity-50"
                         >
                           {revokingLinkId === link.id ? 'Revoking...' : 'Revoke'}
+                        </button>
+                        {link.scope === 'progress' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (editingStepsLinkId === link.id) {
+                                setEditingStepsLinkId(null);
+                              } else {
+                                setClientStepIds(tasks.filter((t) => t.client_visible).map((t) => t.id));
+                                setEditingStepsLinkId(link.id);
+                              }
+                            }}
+                            className="text-xs text-slate-300 hover:text-white font-medium transition"
+                          >
+                            {editingStepsLinkId === link.id ? 'Close' : 'Edit steps shown'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {isLive && link.scope === 'progress' && editingStepsLinkId === link.id && (
+                      <div className="mt-3 space-y-3 border-t border-slate-600 pt-3">
+                        {renderStepPicker()}
+                        <button
+                          type="button"
+                          onClick={handleSaveClientSteps}
+                          disabled={isSavingSteps}
+                          className="px-3 py-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50"
+                        >
+                          {isSavingSteps ? 'Saving...' : 'Save steps'}
                         </button>
                       </div>
                     )}

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession } from '@/lib/authClient';
+import NotificationBell from '@/components/NotificationBell';
 
 // Lightweight mirror of the TC sidebar (dashboard/layout.tsx) -- just
 // destinations an agent actually has (deals, messages, invoices, settings),
@@ -105,6 +106,8 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
             <img src="/relay-icon.png" alt="Relay TC" className="w-8 h-8 object-contain bg-white rounded-lg p-1" />
             <span className="text-white font-display font-semibold">Relay TC</span>
           </Link>
+          <div className="flex items-center">
+          <NotificationBell variant="topbar" />
           <button
             type="button"
             onClick={() => setMobileOpen((o) => !o)}
@@ -120,6 +123,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
               )}
             </svg>
           </button>
+          </div>
         </div>
         {mobileOpen && (
           <div className="absolute left-0 right-0 top-full bg-slate-800 border-b border-slate-700 shadow-xl px-3 pb-3 space-y-1">
@@ -282,6 +286,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
         </nav>
 
         <div className={`border-t border-slate-700 ${collapsed ? 'p-2' : 'p-4'}`}>
+          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={14} />
           <button
             onClick={handleLogout}
             title={collapsed ? 'Logout' : undefined}

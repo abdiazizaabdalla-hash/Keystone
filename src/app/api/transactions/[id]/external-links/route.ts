@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
-import { generateExternalAccessToken, EXTERNAL_LINK_EXPIRY_DAYS } from '@/lib/externalAccess';
+import { generateExternalAccessToken, EXTERNAL_LINK_EXPIRY_DAYS, PROGRESS_LINK_EXPIRY_DAYS } from '@/lib/externalAccess';
 
 // Confirms the caller may manage external-access links on this
 // transaction. Read (GET) is team-visible, same as signing_requests'
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { data: links, error } = await supabaseServer
       .from('external_access_links')
-      .select('id, scope, document_id, recipient_label, token, expires_at, revoked_at, last_accessed_at, access_count, created_at')
+      .select('id, scope, document_id, recipient_label, client_name, client_note, token, expires_at, revoked_at, last_accessed_at, access_count, created_at')
       .eq('transaction_id', transactionId)
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -103,10 +103,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const body = await request.json();
-    const { scope, documentId, recipientLabel } = body;
+    const { scope, documentId, recipientLabel, clientName, clientNote, visibleTaskIds } = body;
 
-    if (scope !== 'document' && scope !== 'dates') {
-      return NextResponse.json({ error: "scope must be 'document' or 'dates'" }, { status: 400 });
+    if (scope !== 'document' && scope !== 'dates' && scope !== 'progress') {
+      return NextResponse.json({ error: "scope must be 'document', 'dates' or 'progress'" }, { status: 400 });
     }
 
     let resolvedDocumentId: string | null = null;
@@ -126,8 +126,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       resolvedDocumentId = documentId;
     }
 
+    // A progress link also records which checklist steps the client may
+    // see. Steps are per deal (not per link), so this simply replaces the
+    // deal's visible set; only the TC's own steps on this deal can be set.
+    if (scope === 'progress' && Array.isArray(visibleTaskIds)) {
+      const ids = visibleTaskIds.filter((v): v is string => typeof v === 'string').slice(0, 200);
+      await supabaseServer.from('tasks').update({ client_visible: false }).eq('transaction_id', transactionId);
+      if (ids.length > 0) {
+        await supabaseServer.from('tasks').update({ client_visible: true }).eq('transaction_id', transactionId).in('id', ids);
+      }
+    }
+
     const token = generateExternalAccessToken();
-    const expiresAt = new Date(Date.now() + EXTERNAL_LINK_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const expiryDays = scope === 'progress' ? PROGRESS_LINK_EXPIRY_DAYS : EXTERNAL_LINK_EXPIRY_DAYS;
+    const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString();
+    const cleanClientName = scope === 'progress' && typeof clientName === 'string' ? clientName.trim().slice(0, 100) : '';
+    const cleanClientNote = scope === 'progress' && typeof clientNote === 'string' ? clientNote.trim().slice(0, 1000) : '';
     const label = typeof recipientLabel === 'string' ? recipientLabel.trim().slice(0, 200) : null;
 
     const { data: link, error } = await supabaseServer
@@ -139,9 +153,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         scope,
         document_id: resolvedDocumentId,
         recipient_label: label || null,
+        client_name: cleanClientName || null,
+        client_note: cleanClientNote || null,
         expires_at: expiresAt,
       })
-      .select('id, scope, document_id, recipient_label, token, expires_at, revoked_at, last_accessed_at, access_count, created_at')
+      .select('id, scope, document_id, recipient_label, client_name, client_note, token, expires_at, revoked_at, last_accessed_at, access_count, created_at')
       .single();
 
     if (error) throw error;

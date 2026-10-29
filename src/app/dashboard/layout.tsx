@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getValidToken, clearSession, authFetch } from '@/lib/authClient';
+import NotificationBell from '@/components/NotificationBell';
 import FirstRunGuide, { saveFirstRunGuideDone, resetFirstRunGuideLocal, type GuideKind } from '@/components/FirstRunGuide';
 import PageHint from '@/components/PageHint';
 import { isTeamPlan } from '@/lib/plans';
@@ -398,6 +399,8 @@ export default function DashboardLayout({
               </span>
             )}</span>
           </Link>
+          <div className="flex items-center">
+          <NotificationBell variant="topbar" />
           <button
             type="button"
             onClick={() => setMobileOpen((o) => !o)}
@@ -413,6 +416,7 @@ export default function DashboardLayout({
               )}
             </svg>
           </button>
+          </div>
         </div>
         {mobileOpen && (
           <div className="absolute left-0 right-0 top-full max-h-[calc(100vh-56px)] overflow-y-auto bg-slate-900 border-b border-white/10 shadow-xl px-3 pb-3 space-y-1">
@@ -577,6 +581,7 @@ export default function DashboardLayout({
               {plan.charAt(0)}
             </Link>
           )}
+          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={16} />
           <button
             onClick={() => setTutorialMenuOpen(true)}
             title="Open a quick tutorial"

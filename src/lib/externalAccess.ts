@@ -10,3 +10,8 @@ export function generateExternalAccessToken(): string {
 // long enough for a real closing timeline, short enough that a
 // forgotten link doesn't stay live indefinitely.
 export const EXTERNAL_LINK_EXPIRY_DAYS = 14;
+
+// A client progress link follows a deal from contract to close, so it
+// lives much longer than a one-off document or dates link. The TC can
+// still revoke it at any time.
+export const PROGRESS_LINK_EXPIRY_DAYS = 120;

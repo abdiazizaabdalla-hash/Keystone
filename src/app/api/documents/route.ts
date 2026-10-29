@@ -6,6 +6,7 @@ import { isValidCategory, isValidDocumentType, typesForCategory, DEFAULT_CATEGOR
 import { getVisibleTcUserIds } from '@/lib/team';
 import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
 import { logAudit } from '@/lib/audit';
+import { queueDealNotification } from '@/lib/notifications';
 
 const BUCKET = 'transaction-documents';
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
@@ -275,6 +276,14 @@ export async function POST(request: NextRequest) {
       .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
 
     await logAudit(request, user, 'document.upload', { entityType: 'document', entityId: docRow.id, metadata: { transactionId, fileName: file.name, size: file.size } });
+    queueDealNotification({
+      transactionId: transactionId as string,
+      actorUserId: user.id,
+      type: 'document_added',
+      title: 'Document added',
+      body: file.name,
+      coalesce: { title: (n) => `${n} documents added` },
+    });
     return NextResponse.json({ ...docRow, url: signed?.signedUrl || null }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

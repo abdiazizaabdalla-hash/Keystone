@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { canAccessTransactionDates, cleanLabel, isValidIsoDate } from '@/lib/keyDates';
+import { queueDealNotification } from '@/lib/notifications';
 import { queueCalendarSync, removeKeyDateCalendarEvents } from '@/lib/calendarSync';
 
 // PATCH: edit a critical date ({ dueDate?, label?, completed?, notifyAgent? }).
@@ -24,7 +25,7 @@ async function loadAndAuthorize(request: NextRequest, id: string) {
   if (!(await canAccessTransactionDates(row.transaction_id as string, user.id, isAdmin))) {
     return { error: NextResponse.json({ error: 'You do not have permission to edit this date' }, { status: 403 }) };
   }
-  return { row };
+  return { row, userId: user.id };
 }
 
 function handleError(error: unknown, what: string) {
@@ -65,6 +66,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .single();
     if (error) throw error;
     queueCalendarSync(auth.row!.transaction_id as string);
+    if ('dueDate' in body && auth.userId) {
+      queueDealNotification({
+        transactionId: auth.row!.transaction_id as string,
+        actorUserId: auth.userId,
+        type: 'date_changed',
+        title: 'Deadline changed',
+        body: (data?.label as string) || (auth.row!.label as string),
+        coalesce: { title: (n) => `${n} deadlines changed` },
+      });
+    }
     return NextResponse.json(data);
   } catch (error) {
     return handleError(error, 'update');

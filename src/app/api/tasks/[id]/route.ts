@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
+import { queueDealNotification } from '@/lib/notifications';
 import { computeDueDates, normalizeDueDateSpec } from '@/lib/dueDates';
 
 /**
@@ -29,7 +30,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const { data: task, error: getError } = await supabaseServer
       .from('tasks')
-      .select('id, transaction_id, waiting_on')
+      .select('id, transaction_id, waiting_on, name')
       .eq('id', taskId)
       .single();
 
@@ -97,6 +98,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .single();
 
     if (updateError) throw updateError;
+
+    if (hasDueDate) {
+      queueDealNotification({
+        transactionId: task.transaction_id as string,
+        actorUserId: user.id,
+        type: 'date_changed',
+        title: 'Deadline changed',
+        body: task.name as string,
+        coalesce: { title: (n) => `${n} deadlines changed` },
+      });
+    }
 
     return NextResponse.json(updatedTask);
   } catch (error) {
