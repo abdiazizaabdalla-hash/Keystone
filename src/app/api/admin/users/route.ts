@@ -54,6 +54,20 @@ export async function GET(request: NextRequest) {
 
     if (invoicesError) throw invoicesError;
 
+    // Stripe Connect (how a TC gets paid by agents): 'approved' = can take card payments, 'pending' = started
+    // onboarding but not finished. No account ids leave the server.
+    const connectByUser = new Map<string, string>();
+    {
+      const { data: payRows, error: payError } = await supabaseServer
+        .from('payment_accounts')
+        .select('tc_user_id, status')
+        .eq('provider', 'stripe_connect');
+      if (payError) console.error('Admin: could not read payment_accounts:', payError.message);
+      (payRows || []).forEach((row: { tc_user_id: string; status: string | null }) => {
+        if (row.tc_user_id) connectByUser.set(row.tc_user_id, row.status || 'pending');
+      });
+    }
+
     // AI document reads per account (contract, listing agreement, offer package), from ai_usage
     // (add-ai-usage.sql). If that table hasn't been created yet this is just empty, not an error.
     const aiByUser = new Map<string, { total: number; last30: number; tokens: number; last: string | null }>();
@@ -208,6 +222,11 @@ export async function GET(request: NextRequest) {
         active_transactions: stats?.activeTransactions || 0,
         closed_transactions: stats?.closedTransactions || 0,
         revenue_collected: stats?.revenueCollected || 0,
+        stripe_connect: connectByUser.get(u.id) || null,
+        payment_preference:
+          u.user_metadata?.payment_preference === 'stripe' || u.user_metadata?.payment_preference === 'manual'
+            ? (u.user_metadata.payment_preference as string)
+            : null,
         ai_reads: aiByUser.get(u.id)?.total || 0,
         ai_reads_30d: aiByUser.get(u.id)?.last30 || 0,
         ai_tokens: aiByUser.get(u.id)?.tokens || 0,

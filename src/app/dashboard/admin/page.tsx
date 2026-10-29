@@ -37,6 +37,8 @@ interface TCUser {
   active_transactions?: number;
   closed_transactions?: number;
   revenue_collected?: number;
+  stripe_connect?: string | null;
+  payment_preference?: string | null;
   ai_reads?: number;
   ai_reads_30d?: number;
   ai_tokens?: number;
@@ -293,6 +295,7 @@ export default function AdminPage() {
                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-300">Active</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-300">Closed</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-300">Revenue</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-300" title="Stripe Connect: whether this coordinator can take card payments from agents">Stripe</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-300" title="AI document reads: contracts, listing agreements and offer packages">AI reads</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-300">Actions</th>
               </tr>
@@ -390,6 +393,16 @@ export default function AdminPage() {
                   <td className="px-6 py-4 text-slate-300">
                     ${(user.revenue_collected || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </td>
+                  <td className="px-6 py-4 text-sm">
+                    {user.stripe_connect === 'approved' ? (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-900/30 text-green-300">Connected</span>
+                    ) : user.stripe_connect ? (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-900/30 text-amber-300" title="Started Stripe setup but has not finished it">Setup unfinished</span>
+                    ) : (
+                      <span className="text-slate-500">Not connected</span>
+                    )}
+                    {user.payment_preference === 'manual' && !user.stripe_connect && <span className="block text-xs text-slate-500">Chose manual payments</span>}
+                  </td>
                   <td
                     className="px-6 py-4 text-slate-300"
                     title={
@@ -430,7 +443,7 @@ export default function AdminPage() {
                 </tr>
                 {isOpen && (
                   <tr className="border-b border-slate-600 bg-slate-800/60">
-                    <td colSpan={13} className="px-6 py-4">
+                    <td colSpan={14} className="px-6 py-4">
                       <div className="ml-7 space-y-4">
                         <div>
                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
