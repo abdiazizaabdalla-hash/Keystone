@@ -61,7 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const bytes = Buffer.from(await blob.arrayBuffer());
     if (bytes.byteLength > MAX_FILE_SIZE) return NextResponse.json({ error: 'File exceeds the 25MB limit' }, { status: 400 });
 
-    const reading = await readContractPdf(bytes.toString('base64'));
+    const reading = await readContractPdf(bytes.toString('base64'), user.id);
     if (reading.kind === 'unreadable') return NextResponse.json({ error: 'Could not read that contract. You can fill the details in by hand.' }, { status: 502 });
     if (reading.kind === 'not_contract') {
       return NextResponse.json({ error: "That document doesn't look like a purchase contract, so nothing was filled in.", notAContract: true }, { status: 422 });

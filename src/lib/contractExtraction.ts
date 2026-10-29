@@ -1,4 +1,5 @@
 import { getAnthropicClient, CONTRACT_EXTRACTION_MODEL } from '@/lib/anthropic';
+import { logAiUsage } from '@/lib/aiUsage';
 
 // Reads a real estate purchase contract PDF with Claude and returns its key fields. Shared by the New Transaction
 // page (an uploaded file) and the listing "convert to a deal" step (a file already stored on the listing).
@@ -90,7 +91,7 @@ const EXTRACTION_TOOL = {
 
 export type ContractReading = { kind: 'fields'; fields: Record<string, unknown> } | { kind: 'not_contract' } | { kind: 'unreadable' };
 
-export async function readContractPdf(base64: string): Promise<ContractReading> {
+export async function readContractPdf(base64: string, userId?: string): Promise<ContractReading> {
   const anthropic = getAnthropicClient();
   const response = await anthropic.messages.create({
     model: CONTRACT_EXTRACTION_MODEL,
@@ -114,6 +115,8 @@ export async function readContractPdf(base64: string): Promise<ContractReading> 
       },
     ],
   });
+
+  if (userId) await logAiUsage(userId, 'contract', CONTRACT_EXTRACTION_MODEL, response.usage);
 
   const toolUse = response.content.find(
     (block): block is Extract<typeof block, { type: 'tool_use' }> => block.type === 'tool_use'

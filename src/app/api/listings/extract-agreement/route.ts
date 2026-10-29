@@ -4,6 +4,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isAgentUser } from '@/lib/agentPortal';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getAnthropicClient, CONTRACT_EXTRACTION_MODEL } from '@/lib/anthropic';
+import { logAiUsage } from '@/lib/aiUsage';
 import { IncomingError, parseUploadRequest } from '@/lib/incomingUploads';
 
 export const maxDuration = 60;
@@ -93,6 +94,8 @@ export async function POST(request: NextRequest) {
         },
       ],
     });
+
+    await logAiUsage(user.id, 'listing_agreement', CONTRACT_EXTRACTION_MODEL, response.usage);
 
     const toolUse = response.content.find((b): b is Extract<typeof b, { type: 'tool_use' }> => b.type === 'tool_use');
     if (!toolUse) return NextResponse.json({ error: 'Could not read the agreement. Please try again or enter the details yourself.' }, { status: 502 });

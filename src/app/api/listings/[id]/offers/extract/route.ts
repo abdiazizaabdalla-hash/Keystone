@@ -3,6 +3,7 @@ import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getAnthropicClient, CONTRACT_EXTRACTION_MODEL } from '@/lib/anthropic';
+import { logAiUsage } from '@/lib/aiUsage';
 import { requireListingAccess } from '@/lib/listings';
 import { MAX_OFFER_FILES, MAX_OFFER_FILE_SIZE } from '@/lib/listingOfferFiles';
 import { IncomingError, parseUploadRequest } from '@/lib/incomingUploads';
@@ -151,6 +152,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       tool_choice: { type: 'auto' },
       messages: [{ role: 'user', content: content as never }],
     });
+
+    await logAiUsage(user.id, 'offer', CONTRACT_EXTRACTION_MODEL, response.usage);
 
     const toolUse = response.content.find((b): b is Extract<typeof b, { type: 'tool_use' }> => b.type === 'tool_use');
     if (!toolUse) return NextResponse.json({ error: 'Could not read the offer. Please try again or enter the terms yourself.' }, { status: 502 });

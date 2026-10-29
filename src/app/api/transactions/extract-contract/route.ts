@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const base64 = Buffer.from(arrayBuffer).toString('base64');
 
-    const reading = await readContractPdf(base64);
+    const reading = await readContractPdf(base64, user.id);
 
     if (reading.kind === 'unreadable') {
       return NextResponse.json({ error: 'Could not read the contract. Please try again or enter the details manually.' }, { status: 502 });

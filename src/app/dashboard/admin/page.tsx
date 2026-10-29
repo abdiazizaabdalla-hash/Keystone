@@ -37,6 +37,10 @@ interface TCUser {
   active_transactions?: number;
   closed_transactions?: number;
   revenue_collected?: number;
+  ai_reads?: number;
+  ai_reads_30d?: number;
+  ai_tokens?: number;
+  ai_last_used?: string | null;
   agent_profiles?: AgentProfile[];
   portal_agents?: AgentAccount[];
 }
@@ -289,6 +293,7 @@ export default function AdminPage() {
                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-300">Active</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-300">Closed</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-300">Revenue</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-300" title="AI document reads: contracts, listing agreements and offer packages">AI reads</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-300">Actions</th>
               </tr>
             </thead>
@@ -385,6 +390,17 @@ export default function AdminPage() {
                   <td className="px-6 py-4 text-slate-300">
                     ${(user.revenue_collected || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </td>
+                  <td
+                    className="px-6 py-4 text-slate-300"
+                    title={
+                      user.ai_reads
+                        ? `${user.ai_reads_30d || 0} in the last 30 days · about ${(user.ai_tokens || 0).toLocaleString()} tokens in total · last used ${user.ai_last_used ? new Date(user.ai_last_used).toLocaleString() : 'unknown'}`
+                        : 'No AI reads recorded'
+                    }
+                  >
+                    {user.ai_reads || 0}
+                    {!!user.ai_reads && <span className="block text-xs text-slate-500">{user.ai_reads_30d || 0} in 30d</span>}
+                  </td>
                   <td className="px-6 py-4">
                     {user.is_admin ? (
                       <span className="text-slate-600 text-xs">—</span>
@@ -414,7 +430,7 @@ export default function AdminPage() {
                 </tr>
                 {isOpen && (
                   <tr className="border-b border-slate-600 bg-slate-800/60">
-                    <td colSpan={12} className="px-6 py-4">
+                    <td colSpan={13} className="px-6 py-4">
                       <div className="ml-7 space-y-4">
                         <div>
                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">

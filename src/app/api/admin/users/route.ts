@@ -54,6 +54,29 @@ export async function GET(request: NextRequest) {
 
     if (invoicesError) throw invoicesError;
 
+    // AI document reads per account (contract, listing agreement, offer package), from ai_usage
+    // (add-ai-usage.sql). If that table hasn't been created yet this is just empty, not an error.
+    const aiByUser = new Map<string, { total: number; last30: number; tokens: number; last: string | null }>();
+    {
+      const { data: aiRows, error: aiError } = await supabaseServer
+        .from('ai_usage')
+        .select('user_id, created_at, input_tokens, output_tokens')
+        .limit(50000);
+      if (aiError) {
+        console.error('Admin: could not read ai_usage (has add-ai-usage.sql been run?):', aiError.message);
+      } else {
+        const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        (aiRows || []).forEach((row: { user_id: string; created_at: string; input_tokens: number | null; output_tokens: number | null }) => {
+          const cur = aiByUser.get(row.user_id) || { total: 0, last30: 0, tokens: 0, last: null };
+          cur.total += 1;
+          if (new Date(row.created_at).getTime() >= cutoff) cur.last30 += 1;
+          cur.tokens += (row.input_tokens || 0) + (row.output_tokens || 0);
+          if (!cur.last || row.created_at > cur.last) cur.last = row.created_at;
+          aiByUser.set(row.user_id, cur);
+        });
+      }
+    }
+
     // Subscription status per user, in one query rather than N -- same
     // batch-then-group pattern as agents/transactions/invoices above.
     const { data: stripeCustomers, error: stripeError } = await supabaseServer
@@ -185,6 +208,10 @@ export async function GET(request: NextRequest) {
         active_transactions: stats?.activeTransactions || 0,
         closed_transactions: stats?.closedTransactions || 0,
         revenue_collected: stats?.revenueCollected || 0,
+        ai_reads: aiByUser.get(u.id)?.total || 0,
+        ai_reads_30d: aiByUser.get(u.id)?.last30 || 0,
+        ai_tokens: aiByUser.get(u.id)?.tokens || 0,
+        ai_last_used: aiByUser.get(u.id)?.last || null,
       };
     });
 
