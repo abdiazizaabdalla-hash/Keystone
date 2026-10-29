@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getValidToken, clearSession, authFetch } from '@/lib/authClient';
+import FirstRunGuide, { saveFirstRunGuideDone, resetFirstRunGuideLocal } from '@/components/FirstRunGuide';
 import { isTeamPlan } from '@/lib/plans';
 
 // Collapsed sidebar is icon-only -- narrow enough to stay useful on small
@@ -167,8 +168,20 @@ export default function DashboardLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
   // Unread team messages (Team/Brokerage plans) -- shown on the Collaborate link.
   const [teamUnread, setTeamUnread] = useState(0);
+  // New-account first-run guide (see components/FirstRunGuide.tsx). restartKey
+  // is bumped by the "Tutorial" menu entry to bring the welcome screen back.
+  const [guideActive, setGuideActive] = useState(false);
+  const [guideRestartKey, setGuideRestartKey] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
+
+  const restartGuide = () => {
+    resetFirstRunGuideLocal();
+    setMobileOpen(false);
+    setGuideRestartKey((k) => k + 1);
+    setGuideActive(true);
+    saveFirstRunGuideDone(false);
+  };
 
   useEffect(() => {
     if (!isTeamPlan(plan)) return;
@@ -268,6 +281,7 @@ export default function DashboardLayout({
           setTrial(data.trial || null);
           setUserName(data.fullName || data.email || '');
           setIsAdmin(Boolean(data.is_admin));
+          setGuideActive(Boolean(data.showFirstRunGuide));
         }
       } catch {
         // Non-critical — the plan badge just won't show.
@@ -389,6 +403,13 @@ export default function DashboardLayout({
                 {item.label}
               </Link>
             ))}
+            <button
+              type="button"
+              onClick={restartGuide}
+              className="w-full text-left px-4 py-3 rounded-lg font-medium text-slate-300 hover:bg-white/5 border-t border-white/10 mt-1 transition"
+            >
+              Tutorial
+            </button>
             <button
               type="button"
               onClick={handleLogout}
@@ -515,6 +536,15 @@ export default function DashboardLayout({
             </Link>
           )}
           <button
+            onClick={restartGuide}
+            title="Restart the quick tutorial"
+            className={`w-full flex items-center justify-center text-slate-400 hover:bg-white/5 hover:text-slate-200 rounded-lg transition text-sm py-1.5 ${
+              collapsed ? 'px-0' : 'px-4'
+            }`}
+          >
+            {collapsed ? '?' : 'Tutorial'}
+          </button>
+          <button
             onClick={handleLogout}
             title={collapsed ? 'Logout' : undefined}
             className={`w-full flex items-center justify-center text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition text-sm py-1.5 ${
@@ -557,6 +587,7 @@ export default function DashboardLayout({
         )}
         {children}
       </div>
+      {guideActive && <FirstRunGuide restartKey={guideRestartKey} onFinished={() => setGuideActive(false)} />}
     </div>
   );
 }

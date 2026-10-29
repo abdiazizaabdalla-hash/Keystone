@@ -117,7 +117,19 @@ export async function GET(request: NextRequest) {
     // this is safe to check on every account, not just new ones.
     const needsOnboardingFlow = await needsOnboarding(user.id, user.user_metadata, isPlatformAdmin(user));
 
-    return NextResponse.json({ ...shaped, trial, needsOnboarding: needsOnboardingFlow });
+    // New accounts get the in-dashboard first-run guide until they finish or
+    // skip it. Accounts that already have a deal or listing never see it, so
+    // existing users aren't interrupted.
+    let showFirstRunGuide = false;
+    if (!needsOnboardingFlow && !isPlatformAdmin(user) && user.user_metadata?.first_run_guide_done !== true) {
+      const [{ data: tx }, { data: ls }] = await Promise.all([
+        supabaseServer.from('transactions').select('id').eq('tc_user_id', user.id).limit(1),
+        supabaseServer.from('listings').select('id').eq('tc_user_id', user.id).limit(1),
+      ]);
+      showFirstRunGuide = !(tx && tx.length > 0) && !(ls && ls.length > 0);
+    }
+
+    return NextResponse.json({ ...shaped, trial, needsOnboarding: needsOnboardingFlow, showFirstRunGuide });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -165,6 +177,7 @@ export async function PATCH(request: NextRequest) {
       dueDateWorkflowEnabled,
       dueDateWorkflowSteps,
       onboardingCompleted,
+      firstRunGuideDone,
       password,
     } = body;
 
@@ -249,6 +262,12 @@ export async function PATCH(request: NextRequest) {
     // many agents it happens to have. See lib/onboarding.ts.
     if (onboardingCompleted !== undefined) {
       changes.onboarding_completed = Boolean(onboardingCompleted);
+    }
+
+    // Set when the person finishes or skips the in-dashboard first-run guide
+    // (components/FirstRunGuide.tsx); false restarts it from the menu.
+    if (firstRunGuideDone !== undefined) {
+      changes.first_run_guide_done = Boolean(firstRunGuideDone);
     }
 
     const updatedMetadata = await mergeUserMetadata(user.id, changes);
