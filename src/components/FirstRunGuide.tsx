@@ -238,7 +238,7 @@ const TRANSACTION_STEPS: Step[] = [
         target: 'tx-portal-status',
         needsHome: true,
         title: 'Look for “Has portal access”',
-        body: 'This line under the agent’s name shows their portal. When an agent has an email and the invite box was ticked, Relay set up a free login the moment you created the deal, and it reads “Has portal access”. They see this deal’s checklist, documents and messages, and nothing else. If you held off, or the agent has no email yet, click “Invite” here to send it yourself whenever you are ready.',
+        body: 'This line under the agent’s name shows their portal. When an agent has an email and the invite box was ticked, Relay set up a free login the moment you created the deal, and it reads “Has portal access”. They see this deal’s checklist, documents and messages, and nothing else. If you held off, or the agent has no email yet, click “Invite now” here to send it yourself whenever you are ready.',
       },
       {
         id: 'checklist',

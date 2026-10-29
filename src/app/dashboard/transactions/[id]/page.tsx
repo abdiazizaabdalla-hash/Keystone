@@ -511,8 +511,15 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
     }
   };
 
-  const handleInviteAgent = async () => {
-    const email = inviteEmailDraft.trim();
+  // Opens the Contacts tab and brings the "Agent portal access" box into view.
+  const showPortalBox = () => {
+    selectTab('people');
+    window.setTimeout(() => document.getElementById('agent-portal-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+  };
+
+  // `emailOverride` lets the header's Invite link send straight to the deal's agent without opening anything.
+  const handleInviteAgent = async (emailOverride?: string) => {
+    const email = (emailOverride ?? inviteEmailDraft).trim();
     if (!email || !transaction) return;
     try {
       setIsInvitingAgent(true);
@@ -524,7 +531,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Failed to send invite');
-      setInviteEmailDraft('');
+      if (!emailOverride) setInviteEmailDraft('');
       setInviteMessage(`Invite sent to ${email}.`);
       await fetchAgentAccess();
     } catch (error) {
@@ -2424,12 +2431,18 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                     {state.action && (
                       <button
                         type="button"
-                        onClick={() => (agentEmail ? selectTab('people') : router.push(`/dashboard/agents?agent=${transaction.agent_id}`))}
-                        className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+                        disabled={isInvitingAgent}
+                        onClick={() => {
+                          if (!agentEmail) router.push(`/dashboard/agents?agent=${transaction.agent_id}`);
+                          else if (state.action === 'Invite') void handleInviteAgent(agentEmail);
+                          else showPortalBox();
+                        }}
+                        className="text-blue-400 hover:text-blue-300 underline underline-offset-2 disabled:opacity-60"
                       >
-                        {state.action}
+                        {isInvitingAgent ? 'Sending…' : state.action === 'Invite' ? 'Invite now' : state.action}
                       </button>
                     )}
+                    {inviteMessage && <span className="basis-full text-slate-300">{inviteMessage}</span>}
                   </div>
                 );
               })()}
@@ -3606,7 +3619,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         </div>
 
 
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-8">
+          <div id="agent-portal-box" className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-8">
             <h2 className="text-lg font-bold text-slate-100 mb-5">Agent portal access</h2>
           {/* Agent portal access: invite the agent (or anyone else who
               needs it) onto this deal's read-only portal -- checklist
@@ -3685,7 +3698,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 className="flex-1 min-w-[12rem] bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
               />
               <button
-                onClick={handleInviteAgent}
+                onClick={() => handleInviteAgent()}
                 disabled={isInvitingAgent || !inviteEmailDraft.trim()}
                 className="px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-100 text-sm font-semibold rounded-lg transition disabled:opacity-50"
               >

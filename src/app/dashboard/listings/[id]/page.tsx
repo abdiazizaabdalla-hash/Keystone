@@ -915,8 +915,15 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                   {portalStatus.ok ? 'Has portal access' : 'No portal access yet'}
                 </span>
                 {!portalStatus.ok && (
-                  <button type="button" onClick={() => selectTab('overview')} className="text-blue-400 hover:text-blue-300 underline underline-offset-2">
-                    Why?
+                  <button
+                    type="button"
+                    onClick={() => {
+                      selectTab('overview');
+                      window.setTimeout(() => document.querySelector('[data-tour="ls-portal"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+                    }}
+                    className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+                  >
+                    See why and fix it
                   </button>
                 )}
               </div>
