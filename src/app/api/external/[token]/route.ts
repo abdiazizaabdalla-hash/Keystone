@@ -110,8 +110,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     dates.sort((a, b) => a.date.localeCompare(b.date));
 
+    const { data: sharedDocs } = await supabaseServer
+      .from('documents')
+      .select('id, file_name, file_size, created_at')
+      .eq('transaction_id', link.transaction_id)
+      .eq('client_visible', true)
+      .order('created_at', { ascending: false });
+
     return NextResponse.json({
       scope: 'progress',
+      documents: (sharedDocs || []).map((d) => ({
+        id: d.id as string,
+        fileName: d.file_name as string,
+        fileSize: (d.file_size as number | null) ?? null,
+      })),
       propertyAddress: transaction.property_address,
       clientName: link.client_name || null,
       note: link.client_note || null,

@@ -57,6 +57,7 @@ interface DocumentRow {
   file_size: number | null;
   requires_signature: boolean;
   is_signed: boolean;
+  client_visible?: boolean;
   url: string | null;
   created_at: string;
 }
@@ -138,6 +139,32 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
   const [isAttachingFile, setIsAttachingFile] = useState(false);
   const [attachError, setAttachError] = useState('');
   const messageFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [togglingClientDocId, setTogglingClientDocId] = useState<string | null>(null);
+
+  // Agent-only: decide whether this document appears on the client's progress page.
+  const handleToggleClientVisible = async (docId: string, clientVisible: boolean) => {
+    try {
+      setTogglingClientDocId(docId);
+      setUploadError('');
+      const res = await authFetch(`/api/agent/transactions/${id}/documents/${docId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientVisible }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to update document');
+      setDocuments((prev) => prev.map((d) => (d.id === docId ? { ...d, client_visible: clientVisible } : d)));
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/agent/login');
+        return;
+      }
+      setUploadError(err instanceof Error ? err.message : 'Failed to update document');
+    } finally {
+      setTogglingClientDocId(null);
+    }
+  };
 
   const [isAddingContact, setIsAddingContact] = useState(false);
   const [newContactRole, setNewContactRole] = useState('');
@@ -987,6 +1014,21 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                                   Signed
                                 </label>
                               )}
+                              <label
+                                className={`flex items-center gap-1.5 text-xs flex-shrink-0 select-none ${
+                                  togglingClientDocId === doc.id ? 'opacity-50' : 'cursor-pointer'
+                                } ${doc.client_visible ? 'text-blue-300 font-medium' : 'text-slate-400'}`}
+                                title="Show this document on your client's progress page"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(doc.client_visible)}
+                                  disabled={togglingClientDocId === doc.id}
+                                  onChange={(e) => handleToggleClientVisible(doc.id, e.target.checked)}
+                                  className="w-3.5 h-3.5 rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer disabled:cursor-not-allowed"
+                                />
+                                Client
+                              </label>
                               <button
                                 onClick={() => handleToggleRequiresSignature(doc.id, !doc.requires_signature)}
                                 disabled={togglingRequiresSignatureDocId === doc.id}

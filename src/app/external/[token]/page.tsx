@@ -30,6 +30,7 @@ interface ProgressInfo {
   currentStage: string;
   steps: { name: string; completed: boolean }[];
   dates: { label: string; date: string; dateDisplay: string; completed: boolean }[];
+  documents: { id: string; fileName: string; fileSize: number | null }[];
 }
 
 type ExternalInfo = DatesInfo | DocumentInfo | ProgressInfo;
@@ -171,6 +172,29 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
                       {step.name}
                       <span className="sr-only">{step.completed ? ' (done)' : ' (still to do)'}</span>
                     </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {info.documents.length > 0 && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <h2 className="text-slate-100 font-semibold mb-3">Documents</h2>
+              <ul className="space-y-2">
+                {info.documents.map((doc) => (
+                  <li key={doc.id}>
+                    <a
+                      href={`/api/external/${token}/documents/${doc.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between gap-3 rounded-lg bg-slate-800/50 border border-slate-600 px-4 py-2.5 text-sm hover:border-blue-400 transition"
+                    >
+                      <span className="text-blue-300 truncate">{doc.fileName}</span>
+                      {doc.fileSize ? (
+                        <span className="text-xs text-slate-500 flex-shrink-0">{(doc.fileSize / 1024).toFixed(0)} KB</span>
+                      ) : null}
+                    </a>
                   </li>
                 ))}
               </ul>
