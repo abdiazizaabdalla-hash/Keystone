@@ -98,7 +98,7 @@ interface Step {
   path: RegExp;
   /** Where "Continue tutorial" sends the person. */
   goto: string;
-  /** data-tour name to highlight; omitted = centered tip. */
+  /** data-tour name(s) to highlight, comma-separated for several; omitted = centered tip. */
   target?: string;
   title: string;
   body: string;
@@ -184,7 +184,15 @@ const TRANSACTION_STEPS: Step[] = [
     goto: '/dashboard/transactions/new',
     target: 'tx-agent',
     title: 'Pick the agent',
-    body: 'Choose which agent this deal is for. Then fill in an address and a price; those are the only things you need. Everything else can be added later.',
+    body: 'Choose which agent this deal is for. If you uploaded a contract, Relay may have picked them already.',
+  },
+  {
+    id: 'tx-fields',
+    path: NEW_TX_PAGE,
+    goto: '/dashboard/transactions/new',
+    target: 'tx-address,tx-price',
+    title: 'Type in the details',
+    body: 'Enter the property address and the purchase price. Those are the only required details (a test address is fine). Add the acceptance and closing dates below if you have them and Relay can set due dates on your checklist. If a contract filled these in, just check them.',
   },
   {
     id: 'tx-submit',
@@ -192,7 +200,7 @@ const TRANSACTION_STEPS: Step[] = [
     goto: '/dashboard/transactions/new',
     target: 'tx-submit',
     title: 'Create the transaction',
-    body: 'Check the details, then create it. Relay builds the checklist for you.',
+    body: 'Happy with the details? Create it and Relay builds the checklist for you.',
     action: 'Click “Create Transaction”.',
     advanceWhen: (c) => TX_DETAIL.test(c.pathname),
   },
@@ -289,12 +297,20 @@ const LISTING_STEPS: Step[] = [
     nextLabel: 'Continue without an agreement',
   },
   {
+    id: 'ls-fields',
+    path: LISTINGS_PAGE,
+    goto: '/dashboard/listings',
+    target: 'listing-address-field,listing-agent-field',
+    title: 'Type in the details',
+    body: 'Enter the property address and choose the listing agent. Those are the only required details (a test address is fine). Seller, price and dates are optional and can be added later. If an agreement filled these in, just check them.',
+  },
+  {
     id: 'ls-submit',
     path: LISTINGS_PAGE,
     goto: '/dashboard/listings',
     target: 'listing-submit',
     title: 'Create the listing',
-    body: 'Choose the listing agent, then create it. Relay adds the prep checklist.',
+    body: 'Happy with the details? Create it and Relay adds the prep checklist for you.',
     action: 'Click “Create listing”.',
     advanceWhen: (c) => LISTING_DETAIL.test(c.pathname),
   },
@@ -493,17 +509,25 @@ export default function FirstRunGuide({
       }
 
       if (step.target) {
-        const el = findTarget(step.target);
-        if (el) {
+        // A step can highlight several elements at once (comma-separated): one box around all of them.
+        const els = step.target
+          .split(',')
+          .map((n) => findTarget(n.trim()))
+          .filter((e): e is HTMLElement => e !== null);
+        if (els.length > 0) {
           if (scrolledRef.current !== step.id) {
             scrolledRef.current = step.id;
-            el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            els[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
           }
-          const r = el.getBoundingClientRect();
+          const rects = els.map((e) => e.getBoundingClientRect());
+          const top = Math.min(...rects.map((x) => x.top));
+          const left = Math.min(...rects.map((x) => x.left));
+          const bottom = Math.max(...rects.map((x) => x.bottom));
+          const right = Math.max(...rects.map((x) => x.right));
           setBox((prev) =>
-            prev && prev.top === r.top && prev.left === r.left && prev.width === r.width && prev.height === r.height
+            prev && prev.top === top && prev.left === left && prev.width === right - left && prev.height === bottom - top
               ? prev
-              : { top: r.top, left: r.left, width: r.width, height: r.height }
+              : { top, left, width: right - left, height: bottom - top }
           );
         } else {
           setBox(null);

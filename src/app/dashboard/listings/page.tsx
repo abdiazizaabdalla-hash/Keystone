@@ -387,11 +387,11 @@ export default function ListingsPage() {
                 {!reading && pdfFile && <p className="text-xs text-slate-500 mt-1">{pdfFile.name} will be saved on the listing under Documents.</p>}
               </div>
             )}
-            <div>
+            <div data-tour="listing-address-field">
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Property address *</label>
               <input data-tour="listing-address" className={inputCls} placeholder="123 Main St, Austin, TX 78701" value={form.propertyAddress} onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })} required autoFocus />
             </div>
-            <div>
+            <div data-tour="listing-agent-field">
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Listing agent *</label>
               <select className={inputCls} value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })}>
                 <option value="">Choose the agent who holds this listing</option>
