@@ -140,6 +140,96 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
   const [attachError, setAttachError] = useState('');
   const messageFileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Checklist editing. Agents on a deal can check steps off, move a step's
+  // due date, and note who a step is waiting on. They cannot add, remove or
+  // rename steps -- that stays with the coordinator, because the deal's
+  // stages are derived from the step list.
+  const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editWaitingOn, setEditWaitingOn] = useState('');
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [checklistError, setChecklistError] = useState('');
+
+  const handleToggleTask = async (taskId: string) => {
+    try {
+      setTogglingTaskId(taskId);
+      setChecklistError('');
+      const res = await authFetch('/api/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to update step');
+      setTransaction((prev) => {
+        if (!prev) return prev;
+        const fresh = new Map<string, { completed: boolean }>(
+          (Array.isArray(data.tasks) ? data.tasks : []).map((t: { id: string; completed: boolean }) => [t.id, t])
+        );
+        return {
+          ...prev,
+          status: data.status || prev.status,
+          tasks: prev.tasks.map((t) => (fresh.has(t.id) ? { ...t, completed: fresh.get(t.id)!.completed } : t)),
+        };
+      });
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/agent/login');
+        return;
+      }
+      setChecklistError(err instanceof Error ? err.message : 'Failed to update step');
+    } finally {
+      setTogglingTaskId(null);
+    }
+  };
+
+  const startEditTask = (task: AgentTransactionDetail['tasks'][number]) => {
+    setEditingTaskId(task.id);
+    setEditDueDate(task.due_date || '');
+    setEditWaitingOn(task.waiting_on || '');
+    setChecklistError('');
+  };
+
+  const handleSaveTask = async (task: AgentTransactionDetail['tasks'][number]) => {
+    try {
+      setSavingTaskId(task.id);
+      setChecklistError('');
+      const payload: Record<string, unknown> = { waitingOn: editWaitingOn.trim() || null };
+      if (editDueDate !== (task.due_date || '')) {
+        payload.dueDate = editDueDate ? { mode: 'fixed', fixedDate: editDueDate } : { mode: 'none' };
+      }
+      const res = await authFetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to save step');
+      setTransaction((prev) =>
+        prev
+          ? {
+              ...prev,
+              tasks: prev.tasks.map((t) =>
+                t.id === task.id
+                  ? { ...t, due_date: data.due_date ?? null, waiting_on: data.waiting_on ?? null, waiting_on_since: data.waiting_on_since ?? null }
+                  : t
+              ),
+            }
+          : prev
+      );
+      setEditingTaskId(null);
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push('/agent/login');
+        return;
+      }
+      setChecklistError(err instanceof Error ? err.message : 'Failed to save step');
+    } finally {
+      setSavingTaskId(null);
+    }
+  };
+
   const [togglingClientDocId, setTogglingClientDocId] = useState<string | null>(null);
 
   // Agent-only: decide whether this document appears on the client's progress page.
@@ -772,8 +862,10 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                       <input
                         type="checkbox"
                         checked={task.completed}
-                        disabled
-                        className="w-4 h-4 rounded border-2 border-slate-600 accent-blue-500 cursor-not-allowed flex-shrink-0"
+                        disabled={togglingTaskId === task.id}
+                        onChange={() => handleToggleTask(task.id)}
+                        aria-label={`Mark "${task.name}" ${task.completed ? 'not done' : 'done'}`}
+                        className="w-4 h-4 rounded border-2 border-slate-600 accent-blue-500 cursor-pointer disabled:cursor-wait flex-shrink-0"
                       />
                       <span
                         className={`flex-1 text-sm font-medium ${task.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}
@@ -793,7 +885,46 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                         ) : (
                           <span className="text-xs text-slate-600 flex-shrink-0">No due date</span>
                         ))}
+                      <button
+                        type="button"
+                        onClick={() => (editingTaskId === task.id ? setEditingTaskId(null) : startEditTask(task))}
+                        className="text-xs text-slate-500 hover:text-slate-200 flex-shrink-0 transition"
+                      >
+                        {editingTaskId === task.id ? 'Close' : 'Edit'}
+                      </button>
                     </div>
+                    {editingTaskId === task.id && (
+                      <div className="mt-2 pl-7 space-y-2">
+                        <label className="block text-xs text-slate-400">
+                          Due date
+                          <input
+                            type="date"
+                            value={editDueDate}
+                            onChange={(e) => setEditDueDate(e.target.value)}
+                            className="mt-1 block w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                          />
+                        </label>
+                        <label className="block text-xs text-slate-400">
+                          Waiting on
+                          <input
+                            type="text"
+                            value={editWaitingOn}
+                            onChange={(e) => setEditWaitingOn(e.target.value)}
+                            maxLength={100}
+                            placeholder="e.g. Lender, title, buyer"
+                            className="mt-1 block w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveTask(task)}
+                          disabled={savingTaskId === task.id}
+                          className="px-3 py-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50"
+                        >
+                          {savingTaskId === task.id ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                    )}
                     {!task.completed && task.waiting_on && (
                       <div className="mt-1.5 pl-7">
                         <span className="text-xs font-medium text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-full px-2 py-0.5">
@@ -805,7 +936,10 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                   </div>
                 ))}
               </div>
-              <p className="text-slate-500 text-xs mt-4">View-only -- your TC updates this checklist.</p>
+              {checklistError && <p className="text-xs text-red-400 mt-3">{checklistError}</p>}
+              <p className="text-slate-500 text-xs mt-4">
+                Check off steps, move due dates and note who a step is waiting on. Your TC is notified of changes and manages the list of steps itself.
+              </p>
             </section>
 
             <ClientShareCard

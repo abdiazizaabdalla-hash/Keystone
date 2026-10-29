@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { queueDealNotification } from '@/lib/notifications';
+import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
 import { computeDueDates, normalizeDueDateSpec } from '@/lib/dueDates';
 
 /**
@@ -18,7 +19,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const { id: taskId } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
-    await assertTrialActive(user);
+    const callerIsAgent = isAgentUser(user);
+    if (!callerIsAgent) await assertTrialActive(user);
     const body = await request.json();
 
     const hasDueDate = Boolean(body && typeof body === 'object' && 'dueDate' in body);
@@ -48,7 +50,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
 
-    if (!isAdmin) {
+    if (callerIsAgent) {
+      await assertAgentOnTransaction(transaction.id as string, user.id);
+    } else if (!isAdmin) {
       const { data: agent } = await supabaseServer
         .from('agents')
         .select('id')

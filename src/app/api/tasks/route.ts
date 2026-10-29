@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { queueDealNotification } from '@/lib/notifications';
+import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { statusFromTasks } from '@/lib/transactionStages';
 import { getVisibleTcUserIds } from '@/lib/team';
@@ -98,7 +99,9 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
-    await assertTrialActive(user);
+    // Agents on a deal can tick steps off too; they have no plan or trial of their own.
+    const callerIsAgent = isAgentUser(user);
+    if (!callerIsAgent) await assertTrialActive(user);
     const body = await request.json();
     const { taskId } = body;
 
@@ -111,7 +114,9 @@ export async function PATCH(request: NextRequest) {
 
     if (getError) throw getError;
 
-    if (!isAdmin) {
+    if (callerIsAgent) {
+      await assertAgentOnTransaction(task.transaction_id as string, user.id);
+    } else if (!isAdmin) {
       const { data: transaction } = await supabaseServer
         .from('transactions')
         .select('agent_id')
