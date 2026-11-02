@@ -43,7 +43,27 @@ export interface TrialStatus {
  * The trial is a flat 30 days from account creation, regardless of any
  * transaction or invoice activity.
  */
-export async function getTrialStatus(userId: string, userCreatedAt: string): Promise<TrialStatus> {
+export async function getTrialStatus(
+  userId: string,
+  userCreatedAt: string,
+  appMetadata?: Record<string, unknown> | null
+): Promise<TrialStatus> {
+  // Admin override (set from the admin page): an explicit trial end date for
+  // testing what happens when a trial ends (or to extend one). It wins over
+  // the 30-day clock and applies even to grandfathered accounts.
+  const override = appMetadata?.trial_ends_at;
+  if (typeof override === 'string' && override) {
+    const overrideEnd = new Date(override);
+    if (!Number.isNaN(overrideEnd.getTime())) {
+      return {
+        applies: true,
+        trialEndsAt: overrideEnd,
+        expired: Date.now() >= overrideEnd.getTime(),
+        endedBy: 'time',
+      };
+    }
+  }
+
   const createdAt = parseUtc(userCreatedAt);
 
   if (createdAt < TRIAL_ENFORCEMENT_START) {
@@ -100,7 +120,7 @@ export async function assertTrialActive(user: MinimalUser): Promise<void> {
     ['active', 'trialing'].includes(billing.subscription_status || '');
   if (hasActivePaidStarter) return;
 
-  const status = await getTrialStatus(user.id, user.created_at);
+  const status = await getTrialStatus(user.id, user.created_at, user.app_metadata);
   if (status.applies && status.expired) {
     throw new TrialExpiredError(
       'Your free Starter trial has ended. Add payment ($19/month) to keep creating and editing on Relay.',

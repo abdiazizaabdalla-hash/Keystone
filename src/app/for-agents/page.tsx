@@ -70,6 +70,7 @@ export default function ForAgentsPage() {
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
             <Link href="/for-agents" className="text-slate-100">For Agents</Link>
+            <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link

@@ -178,6 +178,50 @@ export default function AdminPage() {
     }
   };
 
+  // Sets the trial end date by hand (testing the post-trial paywall, or
+  // extending a trial). Blank = reset to the normal 30-day clock.
+  const handleTrialEdit = async (user: TCUser) => {
+    const current = user.trial?.trialEndsAt ? new Date(user.trial.trialEndsAt).toISOString().slice(0, 10) : '';
+    const typed = window.prompt(
+      `Trial end date for ${user.email} (YYYY-MM-DD).\n\nUse a past date to test what happens after the trial ends, or a future date to extend it. Leave blank to reset to the normal 30 days from signup.`,
+      current
+    );
+    if (typed === null) return;
+    const trimmed = typed.trim();
+    let trialEndsAt: string | null = null;
+    if (trimmed) {
+      const parsed = new Date(`${trimmed}T23:59:59`);
+      if (Number.isNaN(parsed.getTime())) {
+        setActionError('Enter the date as YYYY-MM-DD');
+        return;
+      }
+      trialEndsAt = parsed.toISOString();
+    }
+    setActionError(null);
+    setActionLoadingId(user.id);
+    try {
+      const response = await authFetch(`/api/admin/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_trial_end', trialEndsAt }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update trial');
+      }
+      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, trial: data.trial } : u)));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error updating trial:', error);
+      setActionError(error instanceof Error ? error.message : 'Failed to update trial');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const handleDelete = async (user: { id: string; email: string }) => {
     const typed = window.prompt(
       `PERMANENTLY delete ${user.email} and ALL of their data (deals, documents, agents, invoices, subscription)? This cannot be undone.\n\nType their email to confirm:`
@@ -379,6 +423,16 @@ export default function AdminPage() {
                       </span>
                     ) : (
                       <span className="text-slate-500">—</span>
+                    )}
+                    {(user.plan || 'starter') === 'starter' && (
+                      <button
+                        type="button"
+                        onClick={() => handleTrialEdit(user)}
+                        disabled={actionLoadingId === user.id}
+                        className="mt-1 block text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                      >
+                        Set trial end
+                      </button>
                     )}
                   </td>
                   <td className="px-6 py-4 text-slate-400 text-sm">

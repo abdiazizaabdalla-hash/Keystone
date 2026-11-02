@@ -8,6 +8,7 @@ const LINKS = [
   { href: '/pricing', label: 'Pricing' },
   { href: '/faq', label: 'FAQ' },
   { href: '/for-agents', label: 'For Agents' },
+  { href: '/for-teams', label: 'For Teams' },
   { href: '/auth', label: 'Sign In' },
   { href: '/agent/login', label: 'Agent Login' },
 ];

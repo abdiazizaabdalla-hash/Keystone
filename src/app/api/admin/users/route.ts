@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
     const trialEntries = await Promise.all(
       tcAuthUsers
         .filter((u) => ((getUserPlan(u) as string | undefined) || DEFAULT_PLAN) === 'starter')
-        .map(async (u) => [u.id, await getTrialStatus(u.id, u.created_at)] as const)
+        .map(async (u) => [u.id, await getTrialStatus(u.id, u.created_at, u.app_metadata as Record<string, unknown> | null)] as const)
     );
     const trialByUser = new Map(trialEntries);
 

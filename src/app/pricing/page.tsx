@@ -40,7 +40,8 @@ const COMPARISON_ROWS: {
   { feature: 'Invoicing & payment tracking', starter: true, pro: true, team: true },
   { feature: 'Daily deadline digest', starter: true, pro: true, team: true },
   { feature: 'Admin dashboard', starter: false, pro: true, team: true },
-  { feature: 'Team roster & shared oversight', starter: false, pro: false, team: true },
+  { feature: 'Team roster, team board and direct messages', starter: false, pro: false, team: true },
+  { feature: 'Shared contacts and owner status report', starter: false, pro: false, team: true },
   { feature: 'Seat minimum', starter: '—', pro: '—', team: '3 seats' },
 ];
 
@@ -77,6 +78,7 @@ export default function PricingPage() {
             <Link href="/pricing" className="text-slate-100">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
+            <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
@@ -153,7 +155,8 @@ export default function PricingPage() {
           ))}
         </div>
         <p className="text-center text-sm text-slate-500 mt-8">
-          Team is $89 per month and includes three TC seats. Each additional seat is $30 per month. Agents invited to collaborate on transactions do not require paid TC seats — the agent portal is free on every plan.
+          Team is $89 per month and includes three TC seats. Each additional seat is $30 per month. Agents invited to collaborate on transactions do not require paid TC seats — the agent portal is free on every plan.{' '}
+          <Link href="/for-teams" className="text-blue-400 hover:text-blue-300">See everything Team includes →</Link>
         </p>
       </section>
 
@@ -255,6 +258,7 @@ export default function PricingPage() {
             <Link href="/" className="hover:text-slate-200 transition">Home</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
+            <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>

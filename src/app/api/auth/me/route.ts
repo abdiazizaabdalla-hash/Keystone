@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
         !!billing.stripe_subscription_id &&
         ['active', 'trialing'].includes(billing.subscription_status || '');
       if (!hasActivePaidStarter) {
-        const status = await getTrialStatus(user.id, user.created_at);
+        const status = await getTrialStatus(user.id, user.created_at, user.app_metadata as Record<string, unknown> | null);
         trial = {
           applies: status.applies,
           trialEndsAt: status.trialEndsAt ? status.trialEndsAt.toISOString() : null,

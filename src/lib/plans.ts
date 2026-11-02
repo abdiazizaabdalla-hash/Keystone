@@ -157,8 +157,9 @@ export const PLANS: Plan[] = [
     features: [
       // Everything Pro has, listed out so the Team card reads the same as the others, then what Team adds.
       ...PRO_FEATURES,
-      'Shared agent roster across the team',
-      'Team-wide transaction visibility',
+      'Team board and direct messages',
+      'Shared contacts for lenders, title companies and inspectors',
+      'Owner status report across the team (no client details)',
       '3 seats included, $30/month for each extra seat',
     ],
     limits: {

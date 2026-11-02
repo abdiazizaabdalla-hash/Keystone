@@ -5,6 +5,8 @@ import { isPlatformAdmin } from '@/lib/privileged';
 import { logAudit } from '@/lib/audit';
 import { isValidPlan, isTeamPlan, DEFAULT_PLAN } from '@/lib/plans';
 import { setUserPlan } from '@/lib/stripeCustomers';
+import { getTrialStatus } from '@/lib/trial';
+import { mergeAppMetadata } from '@/lib/privileged';
 import { ensureTeamForOwner, dissolveTeamMembership } from '@/lib/team';
 import { deleteUserCompletely, DeleteAccountError } from '@/lib/deleteAccount';
 
@@ -61,6 +63,36 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         metadata: { from: oldPlan, to: newPlan },
       });
       return NextResponse.json({ id: targetUserId, plan: newPlan });
+    }
+
+    // Set (or clear) a user's trial end date by hand -- for testing what
+    // happens when a free trial ends, or to extend one. `trialEndsAt` is an
+    // ISO date/time; null resets to the normal 30-days-from-signup clock.
+    if (body?.action === 'set_trial_end') {
+      const { data: trialTarget, error: trialTargetError } = await supabaseServer.auth.admin.getUserById(targetUserId);
+      if (trialTargetError || !trialTarget.user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      let newValue: string | null = null;
+      if (body.trialEndsAt !== null && body.trialEndsAt !== undefined && body.trialEndsAt !== '') {
+        const parsed = new Date(body.trialEndsAt);
+        if (Number.isNaN(parsed.getTime())) {
+          return NextResponse.json({ error: 'Invalid date' }, { status: 400 });
+        }
+        newValue = parsed.toISOString();
+      }
+      const oldValue = (trialTarget.user.app_metadata as { trial_ends_at?: string } | null)?.trial_ends_at || null;
+      const meta = await mergeAppMetadata(targetUserId, { trial_ends_at: newValue });
+      const status = await getTrialStatus(targetUserId, trialTarget.user.created_at, meta);
+      await logAudit(request, caller, 'admin.set_trial_end', {
+        entityType: 'user',
+        entityId: targetUserId,
+        metadata: { from: oldValue, to: newValue },
+      });
+      return NextResponse.json({
+        id: targetUserId,
+        trial: { applies: status.applies, expired: status.expired, trialEndsAt: status.trialEndsAt ? status.trialEndsAt.toISOString() : null },
+      });
     }
 
     if (targetUserId === caller.id) {

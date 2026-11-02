@@ -13,6 +13,7 @@ const TRACKED_PATHS = new Set([
   '/pricing',
   '/faq',
   '/for-agents',
+  '/for-teams',
   '/terms',
   '/privacy',
   '/auth',

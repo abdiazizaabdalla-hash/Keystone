@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { checkRateLimit } from '@/lib/rateLimit';
 
-// Where demo requests land. Defaults to the owner's own inbox -- there's
+// Where demo requests land. Defaults to the Relay outreach inbox -- there's
 // no team alias set up yet (support@relaytc.com isn't a working inbox as
-// of 2026-10), so this goes straight to Abdi until that changes. Override
+// of 2026-10), so this goes to relaytransactions@gmail.com until that changes. Override
 // with DEMO_REQUEST_TO_EMAIL once a real shared inbox exists.
-const DEMO_REQUEST_TO_EMAIL = process.env.DEMO_REQUEST_TO_EMAIL || 'abdiaziz.a.abdalla@gmail.com';
+const DEMO_REQUEST_TO_EMAIL = process.env.DEMO_REQUEST_TO_EMAIL || 'relaytransactions@gmail.com';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
