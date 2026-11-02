@@ -6,6 +6,7 @@ import { mergeUserMetadata } from '@/lib/userMetadata';
 import { isCoordinationMode } from '@/lib/accountType';
 import { isAgentUser } from '@/lib/agentPortal';
 import { logAudit } from '@/lib/audit';
+import { agentSelfServeEnabled, AGENT_SELF_SERVE_OFF_MESSAGE } from '@/lib/agentSelfServe';
 
 // Finishes the short setup an agent who signed up for Relay goes through:
 // how they want to work, and who they are. It creates the one `agents` row
@@ -18,6 +19,9 @@ import { logAudit } from '@/lib/audit';
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    if (!agentSelfServeEnabled()) {
+      return NextResponse.json({ error: AGENT_SELF_SERVE_OFF_MESSAGE }, { status: 403 });
+    }
     // Free portal logins have no workspace to set up.
     if (isAgentUser(user)) {
       return NextResponse.json({ error: 'This account is a portal login, not a workspace account.' }, { status: 403 });

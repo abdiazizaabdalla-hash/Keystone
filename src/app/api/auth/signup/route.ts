@@ -6,6 +6,7 @@ import { mergeAppMetadata } from '@/lib/privileged';
 import { LEGAL_VERSION } from '@/lib/site';
 import { logAudit } from '@/lib/audit';
 import { notifyNewSignup } from '@/lib/signupNotification';
+import { agentSelfServeEnabled, AGENT_SELF_SERVE_OFF_MESSAGE } from '@/lib/agentSelfServe';
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -22,6 +23,10 @@ export async function POST(request: NextRequest) {
         { error: 'Email and password are required' },
         { status: 400 }
       );
+    }
+
+    if (accountType === 'agent' && !agentSelfServeEnabled()) {
+      return NextResponse.json({ error: AGENT_SELF_SERVE_OFF_MESSAGE }, { status: 403 });
     }
 
     if (acceptedTerms !== true) {

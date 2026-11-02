@@ -110,7 +110,7 @@ export default function PricingPage() {
           Simple pricing for agents, coordinators and teams.
         </h1>
         <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-          Start free for 30 days with the tools you need today. Upgrade for custom workflows or team collaboration as your business grows. Agents running their own deals start on Starter.
+          Start free for 30 days with the tools you need today. Upgrade for custom workflows or team collaboration as your business grows.
         </p>
       </section>
 

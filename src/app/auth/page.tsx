@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { isValidPlan, planLabel } from '@/lib/plans';
 import { track } from '@vercel/analytics';
+import { AGENT_SELF_SERVE_PUBLIC } from '@/lib/agentSelfServe';
 
 function AuthContent() {
   const router = useRouter();
@@ -14,7 +15,7 @@ function AuthContent() {
 
   const [isSignUp, setIsSignUp] = useState(searchParams.get('mode') === 'signup' || !!plan);
   const [fullName, setFullName] = useState('');
-  const [accountType, setAccountType] = useState<'agent' | 'tc'>(searchParams.get('as') === 'agent' ? 'agent' : 'tc');
+  const [accountType, setAccountType] = useState<'agent' | 'tc'>(AGENT_SELF_SERVE_PUBLIC && searchParams.get('as') === 'agent' ? 'agent' : 'tc');
   const [email, setEmail] = useState(searchParams.get('email') || '');
   const [password, setPassword] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -237,7 +238,7 @@ function AuthContent() {
                   </form>
                 ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  {isSignUp && (
+                  {isSignUp && AGENT_SELF_SERVE_PUBLIC && (
                     <div>
                       <span className="text-sm text-slate-400 block mb-2">I am a</span>
                       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Account type">

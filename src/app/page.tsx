@@ -187,7 +187,7 @@ export default function Home() {
         </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
-            { href: '/for-agents', kicker: 'Agents', title: 'Run your own deals', body: 'Upload a contract and Relay builds the deal, the checklist and the deadlines. Work with your TC or without one.' },
+            { href: '/for-agents', kicker: 'Agents', title: 'Stay in the loop', body: 'A free login for every deal your TC adds you to: the checklist, documents, messages, and a live page for your clients.' },
             { href: '/for-tcs', kicker: 'Transaction coordinators', title: 'Take on more files', body: 'Contract intake, checklists, deadlines, agent portals, listings and invoicing in one workspace.' },
             { href: '/for-teams', kicker: 'Teams', title: 'Coordinate together', body: 'A shared board and contacts for your coordinators, while every deal stays private to its owner.' },
             { href: '/for-brokerages', kicker: 'Brokerages', title: 'See every transaction', body: 'Oversight across agents and offices, standard checklists and coordinator assignment. In development.' },

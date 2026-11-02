@@ -123,10 +123,6 @@ export default function AgentPortalPage() {
         <p className="text-xs text-slate-500 mt-5">
           Don&apos;t have a login yet? You get an email the first time your TC adds you to a deal or listing. Already have one? New deals just show up.
         </p>
-        <p className="text-sm text-slate-400 mt-4">
-          Want to run your own transactions in Relay too?{' '}
-          <Link href="/for-agents" className="text-blue-400 hover:text-blue-300">See Relay for agents</Link>.
-        </p>
       </section>
 
       {/* Screenshot */}
