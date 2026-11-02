@@ -1,6 +1,6 @@
 # Relay Implementation Plan: Two Customers, One Free Collaboration Role
 
-Status: PLAN FOR REVIEW. Nothing in this document has been built. No production data, billing, Stripe, or pricing was touched in producing it.
+Status: PLAN FOR REVIEW, revision 2 (your answers on templates, invoices, sharing, pricing, trial and TC subscription are folded in; see section 12). Nothing in this document has been built. No production data, billing, Stripe, or pricing was touched in producing it.
 
 Companion documents: `docs/RELAY_PRODUCT_EXPANSION_BLUEPRINT.md` (audit and feasibility), `docs/EXPANSION_PLAN.md` (first-pass notes, now partly superseded by this plan).
 
@@ -31,7 +31,7 @@ What I recommend building first, in order:
 3. Shared deals in both directions (`transaction_participants`).
 4. Billing for the agent plan only after the access model is tested and you approve the entitlement rules.
 
-Ten decisions I need from you are listed in section 12. Four of them block Phase 1 or 2.
+Decisions you have made are recorded in section 12, along with the few that are still open.
 
 ---
 
@@ -107,7 +107,7 @@ In v1 the workspace **is the owner's user id**, which is what `transactions.tc_u
 
 An agent subscriber's transactions therefore use the same column and the same engine. `getVisibleTcUserIds(agentId)` already returns `[agentId]`, so their own list, tasks, documents and calendar work with the existing queries.
 
-### One workspace per login in v1 (decision D4)
+### One workspace per login in v1 (assumption, section 12)
 
 The schema does not forbid one person holding both a TC and an agent workspace. The first release supports one independent workspace per login plus unlimited collaboration roles. Dual workspaces need `stripe_customers` to hold two subscriptions per user (it is one row per `user_id` today), which is a billing change, so it waits.
 
@@ -148,7 +148,7 @@ New endpoint `POST /api/transactions/[id]/participants` (owner or manager only) 
 
 - If the TC already has a Relay login, the invite attaches to that login. They do not get a second account. This needs `createAgentLoginLink`'s `other_account` refusal replaced by "attach to the existing user".
 - The deal appears in the TC's workspace under **Shared with you**, not mixed into the deals they own, so TC reports, invoices and plan limits stay clean.
-- A TC without a subscription: this is the unresolved edge case (decision D1). My recommendation matches yours: a limited transaction-level role, `managing_tc_guest`, with checklist, dates, documents, messages and email on that one deal, and none of the TC workspace (no invoicing, CRM, templates, other deals, team). That guest role is where "upgrade to a TC plan" is offered.
+- **A TC must have a subscription to be on any deal** (decided). There is no free TC guest tier. An invited TC with no account signs up, gets the normal TC trial, and the deal appears in **Shared with you**. If their trial ends unpaid, they lose write access exactly as an expired Starter account does today (`assertTrialActive`), and the agent owner keeps the deal untouched.
 
 ### Q6. How does a TC invite a free agent to a TC-owned deal?
 
@@ -210,10 +210,31 @@ You asked for the TC side and the agent side to sit under one Relay umbrella wit
 1. **One sign-in page, one app, one design.** Nobody is asked to "pick a product" after they are in. The choice is made on the public site ("I'm a TC" / "I'm an agent") and from then on follows what they own.
 2. **Three words, used the same everywhere:** *Your workspace* (what you pay for and own), *Shared with you* (deals someone else owns), *Collaborator* (a free guest on someone's deal). No "account type" toggle after signup; a toggle looks like a role you can flip, and it is not.
 3. **Every deal shows who owns it and who manages it** ("Owned by Riley Morgan, coordinated by Summit Closing Team"), so a shared deal is never mistaken for your own.
-4. **Navigation by entitlement**, reusing today's layouts: TC workspace (unchanged), agent workspace (Home, My Transactions, Listings, Tasks, Calendar, Documents, Clients, TC Collaboration, Settings), collaborator view (the existing `/agent` portal, deliberately simple).
+4. **Navigation by entitlement**, reusing today's layouts. TC workspace: unchanged. **Paying agent workspace: the same system as the TC workspace** (Home, Transactions, Listings, Calendar, Messages, Invoices, Contacts and CRM, Search, Settings, Account, plus Templates), with agent wording and without the TC-only pieces that make no sense for an agent (the Agents roster, fee-per-agent settings). Free collaborator: the existing `/agent` portal, deliberately simple.
 5. **The upgrade message appears only when a collaborator tries to start their own deal**, using the wording in your brief. No banners while they are doing work on a shared deal.
 6. **Pricing page starts with an audience selector** (TC / Agent) and states plainly that invited agents collaborate free; building it waits for Phase 4.
 7. **Public pages stay `/for-tcs`, `/for-agents`, `/for-brokerages`** (the routes that exist). Your longer names can be redirects. Note `/for-agents` today describes self-serve signup and must be rewritten to match this model; the old free-collaborator page lives at `/for-agents/portal`.
+
+---
+
+## 5b. Two new capability areas from your answers
+
+### Agent invoices: custom, not fee-schedule-driven
+
+Today's invoice engine (`src/app/api/invoices/route.ts`, `src/lib/invoiceMath.ts`, `invoicePdf.ts`) computes the amount from the agent contact's `flat_fee` and `commission_percent`: a set price attached to a contact. For agents, you want free-form invoices with custom line items and custom prices, no fixed price per contact.
+
+- Reuse: invoice list and detail UI, PDF generation, send-by-email, payment through Stripe Connect (`api/stripe/connect`), QuickBooks export.
+- New: invoice line items (a table or a JSON column on `invoices`; additive), a "custom invoice" mode that skips the fee-schedule lookup, and a builder screen. The TC fee-driven path stays exactly as it is.
+- Open question: who the agent bills (section 12, O5).
+
+### Templates: state commission forms, blank or auto-filled
+
+There is no document-template feature today. What exists is checklist templates, step-email templates and listing templates. E-signature supports only three field types (`signature`, `initials`, `date`, in `src/lib/signingFields.ts`), so there are no text or checkbox fields yet.
+
+- **Phase T1 (blank forms):** a Templates tab (`src/app/dashboard/templates`), a `document_templates` table (workspace-owned, with state, name, file path), upload of the user's own PDF, and "use on this deal" which adds a copy to the deal's documents and can be sent for signature through the existing signing flow. Mostly reuse of `api/documents` and `signing-requests`.
+- **Phase T2 (auto-fill):** map each template's fields to deal data (property address, parties, price, dates). This needs new signing field types (text, checkbox), PDF form-filling or stamping support in `src/lib/signing.ts`, and a mapping editor. It is a larger build than T1 and depends on whether each state's PDFs are fillable or flat.
+- Relay does not bundle any forms. Users upload the ones they use. I have not researched the licensing terms of any state's or association's forms; that needs checking before anyone considers shipping forms with Relay.
+- You said this comes after the core collaboration work, and the schedule below reflects that.
 
 ---
 
@@ -290,11 +311,11 @@ alter table public.transaction_invites      enable row level security;
 
 Notes:
 
-- The "limited guest TC" is not a stored role. A participant with role `tc` is treated as a guest or a full TC by checking their **entitlement at request time**, so when a guest later buys a TC plan nothing has to be migrated.
+- A participant with role `tc` is only honored while that user holds a TC workspace entitlement (paid or in trial), checked at request time, so a lapse or renewal needs no data change.
 - Transaction events reuse `audit_log` (`src/lib/audit.ts`) instead of a new table in Phase 1.
 - Entitlements are `app_metadata` flags in Phases 1 to 3. A per-product subscriptions table is only designed in Phase 4, because it touches billing.
 - Rollback for every change above is `drop table`; nothing else references these tables until the feature flag is on.
-- Before any migration runs I need the production schema reconciled with the repo (decision D6). The `teams`, `team_members`, `team_invites` definitions are missing from the repo today. Deliverable: `docs/schema-snapshot.sql` plus a migration verification query file.
+- Before any migration runs I need the production schema reconciled with the repo (open item O2). The `teams`, `team_members`, `team_invites` definitions are missing from the repo today. Deliverable: `docs/schema-snapshot.sql` plus a migration verification query file.
 
 ---
 
@@ -311,7 +332,7 @@ Checked against the code and your table:
 | Free agent tries to create their own deal | **Allowed today by the API** | Close the gap (Phase 1) |
 | Existing Relay user accepts an invite | Blocked for non-agent logins (`other_account`) | Attach to the existing user (Phase 3) |
 
-**Agent-profile cap is the one place a free collaborator can look like a cost.** `maxAgents` (Starter = 3, `plans.ts`, enforced in `api/agents/route.ts` and `api/quickbooks/import/route.ts`) counts rows in `agents`, which are a TC's CRM contacts. Inviting an agent to a deal requires an `agents` row because `transactions.agent_id` is `NOT NULL`. So a Starter TC with three agent contacts cannot add a fourth even though the agent collaborates free. The cap is a contact limit, not a collaborator fee, and I would leave it unchanged and say so in the pricing copy (decision D7). Participants on deals a TC does not own are never rows in the TC's `agents` table, so they are not counted. Team seats are unaffected; `getPaidSeatCount` only counts team members.
+**Agent-profile cap is the one place a free collaborator can look like a cost.** `maxAgents` (Starter = 3, `plans.ts`, enforced in `api/agents/route.ts` and `api/quickbooks/import/route.ts`) counts rows in `agents`, which are a TC's CRM contacts. Inviting an agent to a deal requires an `agents` row because `transactions.agent_id` is `NOT NULL`. So a Starter TC with three agent contacts cannot add a fourth even though the agent collaborates free. The cap is a contact limit, not a collaborator fee, and I would leave it unchanged and say so in the pricing copy (assumption, section 12). Participants on deals a TC does not own are never rows in the TC's `agents` table, so they are not counted. Team seats are unaffected; `getPaidSeatCount` only counts team members.
 
 **Agent plan ($29, proposed):** `PlanId` is a closed union used in `plans.ts`, `stripe.ts`, the checkout route and the webhook. Adding `agent` is a Phase 4 change. Until then agent access is an admin-set flag, so the whole access model can be built and tested without creating a Stripe product.
 
@@ -321,7 +342,7 @@ Checked against the code and your table:
 
 There are no tests today, so the first deliverable is the harness and a safety net, not new behavior.
 
-**Tooling.** Vitest. Pure-logic tests need nothing else. Integration tests need a database that is not production (decision D5).
+**Tooling.** Vitest. Pure-logic tests need nothing else. Integration tests need a database that is not production (open item O1).
 
 **Test actors:** TC A, TC B (unrelated), Team member of TC A, agent subscriber, collaborator invited by TC A, unrelated collaborator, TC guest on an agent-owned deal.
 
@@ -342,22 +363,27 @@ There are no tests today, so the first deliverable is the harness and a safety n
 
 ## 10. Phased plan, dependencies and effort
 
-Effort is in engineering days, estimated, not committed.
+Effort is in engineering days, estimated, not committed. Because a paying agent now gets the same system as a TC, the agent workspace reuses the existing dashboard instead of a cut-down copy, which makes Phase 2 smaller than in revision 1.
 
 | Phase | Scope | Days | Depends on | Ships to users? |
 |---|---|---|---|---|
-| 0 | Reconcile first pass: flag the self-serve agent path, fix public copy | 1 to 2 | D3 | Yes (copy only) |
-| 1 | Test harness, characterization tests, route registry, close the collaborator gap, `entitlements.ts`, `authorize.ts` on shared surfaces, schema snapshot | 10 to 14 | D2, D5, D6 | Gap fix only |
-| 2 | Agent workspace: entitlement grant (admin), agent nav and home, upgrade explainer, `isAgentUser` review, server-side entitlement replaces `user_metadata` hint | 10 to 14 | Phase 1, D2, D4 | Admin-granted agents only |
-| 3 | Shared deals both directions: participants, invites, "Shared with you", TC Collaboration, duplicate guard, dual-write from `transaction_agents` | 15 to 20 | Phase 1 to 2, D1, D9 | Behind a flag |
-| 4 | Agent billing: Stripe product and price, checkout, webhook flag, pricing audience selector, trial rules, upgrade and downgrade | 5 to 8 | Phase 3 tested, explicit approval, D8, D10 | Yes |
-| 5 | Automation roadmap (extraction confidence, missing-document detection, email matching, approved follow-ups) | per blueprint | Phase 3 | Incremental |
+| 0 | Reconcile first pass: keep the self-serve agent path switched off, fix public copy | 1 to 2 | O3 | Yes (copy only) |
+| 1 | Test harness, characterization tests, route registry, close the collaborator gap, `entitlements.ts`, `authorize.ts` on shared surfaces, schema reconciliation | 10 to 14 | O1, O2 | Gap fix only |
+| 2 | Agent workspace: entitlement with TC-equivalent features, agent trial (admin-set at first), agent wording, `isAgentUser` review, upgrade explainer for free collaborators | 8 to 12 | Phase 1 | Admin-granted agents only |
+| 2b | Agent custom invoices (line items, builder, PDF, send, pay) | 6 to 9 | Phase 2, O5 | With Phase 2 |
+| 3 | Shared deals both directions: participants, invites, equal visibility, messaging and uploads on both sides, "Shared with you", duplicate guard, dual-write from `transaction_agents` | 12 to 16 | Phase 1 to 2 | Behind the switch |
+| 4 | Agent billing: Stripe product and price, checkout, webhook, pricing audience selector, trial end to paid, upgrade and downgrade | 5 to 8 | Phase 3 tested, price decided, explicit approval | Yes |
+| T1 | Templates tab, blank state forms, use on a deal, send for signature | 8 to 12 | Phase 3 | Yes |
+| T2 | Auto-fill templates: new signing field types, form filling, mapping editor | 15 to 25 | T1 | Yes |
+| 5 | Automation roadmap | per blueprint | Phase 3 | Incremental |
 | 6 | Brokerage organization product | per blueprint | Customer validation | Later |
 | 7 | Integrations | per blueprint | Demand | Later |
 
-Phases 0 to 4 together are roughly 41 to 58 engineering days. Phase 1 is the longest pole for risk, not size; it is what makes every later phase safe.
+Phases 0 to 4 total roughly 42 to 61 engineering days; templates add 23 to 37 more.
 
-**Approval gates:** after each phase I stop and report what changed, what works, what remains, and any staging or production step you must take (migrations, env vars, deploys). I do not start the next phase without your go-ahead.
+**Free trial and billing order.** You chose a free trial for agents. A trial that ends before Phase 4 exists would end with no way to pay. So until Phase 4 lands, agents are given a trial by an admin using the existing trial-end override (`app_metadata.trial_ends_at`, the same mechanism your admin page already uses), and public open signup for agents turns on with Phase 4.
+
+**Approval gates:** after each phase I stop and report what changed, what works, what remains, and any staging or production step you must take. I do not start the next phase without your go-ahead.
 
 ---
 
@@ -369,37 +395,48 @@ Phases 0 to 4 together are roughly 41 to 58 engineering days. Phase 1 is the lon
 | `role = 'agent'` is treated as "no workspace" in up to 73 files | Upgraded agents could be locked into the portal or, worse, a collaborator gain too much | Review every call site, tests on both states |
 | Closing the collaborator gap breaks a legitimate collaborator write | Real agents would see errors | Characterization tests first; gate only workspace-creating routes |
 | Existing logins refused as invitees (`other_account`) | Blocks "one identity, several roles" | Change in Phase 3 with tests; keep refusal for unverified cases |
-| Schema drift (teams DDL not in repo) | Migrations could assume wrong state | Snapshot production first (D6) |
+| Schema drift (teams DDL not in repo) | Migrations could assume wrong state | Snapshot production first (O2) |
 | First-pass agent signup ships before the model is settled | Agents get a Starter-priced path you do not intend | Phase 0 flag before you push |
 | Service-role client everywhere | One bug bypasses everything | Central `authorize`, tests, no new direct queries in new routes |
 | Billing changed before access model is proven | Hard to unwind customers | Phase 4 only after Phase 3 passes and you approve |
-| Orphaned deals when an agent subscriber cancels | TC and client lose access mid-deal | Decide retention rule (D9) before Phase 4 |
+| Orphaned deals when an agent subscriber cancels | TC and client lose access mid-deal | Decide retention rule (O7) before Phase 4 |
 
 ---
 
-## 12. Decisions I need from you
+## 12. Decisions: made, and still open
 
-Blocking Phase 0 to 2:
+### Made (from your answers)
 
-- **D2. Interim agent access.** Until billing exists, how do agents get the agent workspace? Recommended: admin-granted only (you grant specific early agents). Alternative: a free 30-day trial like Starter.
-- **D3. The first-pass self-serve agent signup.** Recommended: put it behind a flag, off, until Phase 2, and change the public copy to an early-access request. Alternative: leave it live.
-- **D5. A non-production database for tests.** A Supabase branch or a second free project. Without it I can still ship the registry, matrix and entitlement tests, but not cross-account integration tests.
-- **D6. A schema-only dump of production.** Run `pg_dump --schema-only` (I can give the exact command) or give me read access to the Supabase SQL editor so I can reconcile the missing team tables.
+| Topic | Decision |
+|---|---|
+| TC side | Unchanged. A TC can add agents; a free agent works only on deals a paying TC invites them to. |
+| Paying agent | Gets the full TC-equivalent system: contacts, CRM, invoices, their own deals, and a client portal on any deal. |
+| TC on a deal | A TC must have a subscription (or active trial) to be on any deal. No free TC tier. |
+| Agent access | Free trial. Pricing is TBD; for now the agent plan matches the TC system. |
+| Deal collaboration | Either side invites the other, like sharing a Google Doc. Both sides get the same visibility on the deal and can upload, message, see and check things off. No Owner/Editor/Viewer tiers in v1. |
+| Free agents | Keep generating client portals and inviting buyers and sellers, as they do now. |
+| Invoices (agent) | Custom invoices with custom line items and prices; no fixed price per contact. |
+| Templates | State commission forms, blank or auto-filled. Built after the core collaboration work. |
 
-Blocking Phase 3:
+### Assumptions I am making (tell me if wrong)
 
-- **D1. TC invited onto an agent-owned deal who does not subscribe.** Recommended (and your lean): limited per-deal access, no TC workspace features, upgrade offered inside it.
-- **D9. What happens to an agent-owned deal if the agent cancels.** Recommended: deal stays accessible to participants, owner goes read-only for a defined period, nothing is deleted.
+- On a shared deal each side's **invoices, fees, contacts and CRM stay private** to their own workspace. Only the deal itself is shared.
+- Only the **deal owner** can remove a participant or hand off ownership.
+- A **free agent cannot invite their own TC** onto a deal (that is a paid-agent feature).
+- Relay **ships no forms**; users upload the templates they use.
+- One independent workspace per login for now (a person can still be a collaborator on any number of shared deals).
+- The 3-agent-profile cap on TC Starter stays, described as a contact limit, not a collaborator fee.
 
-Blocking Phase 4:
+### Still open
 
-- **D8. Trial for the agent plan.** None, 14 days, or 30 days.
-- **D10. Agent price.** $29 stays "proposed". Nothing is created in Stripe until you approve it.
-
-Non-blocking, I will use the default unless you object:
-
-- **D4. One independent workspace per login in v1** (a person can still collaborate on any number of shared deals).
-- **D7. Leave the Starter 3-agent-profile cap as is** and describe it as a contact limit.
+- **O1. A test database.** Tests that prove one account cannot see another's data need a database that is not production. I cannot create a Supabase project inside your account. It takes about five minutes: create a free project at supabase.com, then give me its URL and keys through your environment file (never in chat). Without it I can still build the logic, registry and entitlement tests, but not the cross-account database tests.
+- **O2. Matching production to the repo.** The team tables are missing from the repo. A full dump is not needed. Instead I will give you one read-only query to paste into the Supabase SQL editor; you paste the result back and I reconcile. If you would rather not, every new migration will be written defensively and I will mark team-related assumptions as unverified.
+- **O3. What "flag" meant.** A switch in the deployment settings that keeps a finished feature hidden in production. Here: the agent signup screens exist in the code but stay off until the agent plan is ready to bill. Nothing for you to build; I will name one setting for Vercel when we get there.
+- **O4. Agent trial length.** 30 days to match TC Starter, or something else.
+- **O5. Agent invoices.** Who does an agent bill: their clients, other agents, referral partners? And do they get paid through Relay (Stripe Connect, as TCs can today) or just track them?
+- **O6. Lapsed subscriptions.** If a TC's trial or plan lapses, the plan above treats them like an expired Starter today (read yes, create or edit no) and the agent keeps the deal. Confirm, or tell me otherwise.
+- **O7. A paying agent cancels.** Recommended: their deals stay available to participants, the owner becomes read-only, nothing is deleted.
+- **O8. Agent price.** Stays "proposed, $29" until you say. Nothing is created in Stripe.
 
 ---
 
@@ -409,4 +446,4 @@ Change any price, create or modify any Stripe product, change the webhook or che
 
 ## 14. Recommended next step
 
-Approve Phase 0 and Phase 1, answer D2, D3, D5 and D6, and I start with the characterization tests and the closing of the collaborator gap. That delivers the single most important safety property in your brief (free collaboration is not free independent use) before any new feature exists.
+Approve Phase 0 and Phase 1 and settle O1 and O2, and I start with the characterization tests and the closing of the collaborator gap. That delivers the single most important safety property in your brief (free collaboration is not free independent use) before any new feature exists.
