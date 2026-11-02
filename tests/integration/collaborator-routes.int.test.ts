@@ -23,24 +23,24 @@ type Handler = Parameters<typeof call>[0];
 const SOME_ID = '00000000-0000-0000-0000-000000000000';
 
 const WORKSPACE_ROUTES: { name: string; handler: Handler; method: string; path: string; params?: Record<string, string>; body?: unknown }[] = [
-  { name: 'invite an agent to a deal', handler: createAgentInvite as Handler, method: 'POST', path: '/api/agent-invites', body: {} },
-  { name: 'create a checklist template', handler: createTemplate as Handler, method: 'POST', path: '/api/checklist-templates', body: { name: 'X', steps: [] } },
-  { name: 'edit a checklist template', handler: patchTemplate as Handler, method: 'PATCH', path: `/api/checklist-templates/${SOME_ID}`, params: { id: SOME_ID }, body: { name: 'Y' } },
-  { name: 'delete a checklist template', handler: deleteTemplate as Handler, method: 'DELETE', path: `/api/checklist-templates/${SOME_ID}`, params: { id: SOME_ID } },
-  { name: 'start Google Calendar sync', handler: gcalStart as Handler, method: 'POST', path: '/api/google-calendar/start', body: {} },
-  { name: 'run Google Calendar sync', handler: gcalSync as Handler, method: 'POST', path: '/api/google-calendar/sync', body: {} },
-  { name: 'disconnect Google Calendar', handler: gcalDisconnect as Handler, method: 'POST', path: '/api/google-calendar/disconnect', body: {} },
-  { name: 'void a signing request', handler: patchSigning as Handler, method: 'PATCH', path: `/api/signing-requests/${SOME_ID}`, params: { id: SOME_ID }, body: { action: 'void' } },
-  { name: 'create or join a team', handler: teamPost as Handler, method: 'POST', path: '/api/team', body: {} },
-  { name: 'change a team', handler: teamPatch as Handler, method: 'PATCH', path: '/api/team', body: {} },
-  { name: 'delete from a team', handler: teamDelete as Handler, method: 'DELETE', path: '/api/team', body: {} },
-  { name: 'post a team message', handler: teamMessage as Handler, method: 'POST', path: '/api/team/messages', body: { body: 'hi', thread: 'board' } },
-  { name: 'delete a team message', handler: teamMessageDelete as Handler, method: 'DELETE', path: `/api/team/messages/${SOME_ID}`, params: { id: SOME_ID } },
-  { name: 'mark team messages read', handler: teamMessagesRead as Handler, method: 'POST', path: '/api/team/messages/read', body: { thread: 'board' } },
-  { name: 'delete incoming email', handler: inboundDelete as Handler, method: 'DELETE', path: '/api/email/inbound', body: {} },
-  { name: 'start a Stripe checkout', handler: stripeCheckout as Handler, method: 'POST', path: '/api/stripe/checkout', body: { plan: 'starter' } },
-  { name: 'start Stripe payout onboarding', handler: stripeConnectStart as Handler, method: 'POST', path: '/api/stripe/connect/start', body: {} },
-  { name: 'open the Stripe billing portal', handler: stripePortal as Handler, method: 'POST', path: '/api/stripe/portal', body: {} },
+  { name: 'invite an agent to a deal', handler: createAgentInvite as unknown as Handler, method: 'POST', path: '/api/agent-invites', body: {} },
+  { name: 'create a checklist template', handler: createTemplate as unknown as Handler, method: 'POST', path: '/api/checklist-templates', body: { name: 'X', steps: [] } },
+  { name: 'edit a checklist template', handler: patchTemplate as unknown as Handler, method: 'PATCH', path: `/api/checklist-templates/${SOME_ID}`, params: { id: SOME_ID }, body: { name: 'Y' } },
+  { name: 'delete a checklist template', handler: deleteTemplate as unknown as Handler, method: 'DELETE', path: `/api/checklist-templates/${SOME_ID}`, params: { id: SOME_ID } },
+  { name: 'start Google Calendar sync', handler: gcalStart as unknown as Handler, method: 'POST', path: '/api/google-calendar/start', body: {} },
+  { name: 'run Google Calendar sync', handler: gcalSync as unknown as Handler, method: 'POST', path: '/api/google-calendar/sync', body: {} },
+  { name: 'disconnect Google Calendar', handler: gcalDisconnect as unknown as Handler, method: 'POST', path: '/api/google-calendar/disconnect', body: {} },
+  { name: 'void a signing request', handler: patchSigning as unknown as Handler, method: 'PATCH', path: `/api/signing-requests/${SOME_ID}`, params: { id: SOME_ID }, body: { action: 'void' } },
+  { name: 'create or join a team', handler: teamPost as unknown as Handler, method: 'POST', path: '/api/team', body: {} },
+  { name: 'change a team', handler: teamPatch as unknown as Handler, method: 'PATCH', path: '/api/team', body: {} },
+  { name: 'delete from a team', handler: teamDelete as unknown as Handler, method: 'DELETE', path: '/api/team', body: {} },
+  { name: 'post a team message', handler: teamMessage as unknown as Handler, method: 'POST', path: '/api/team/messages', body: { body: 'hi', thread: 'board' } },
+  { name: 'delete a team message', handler: teamMessageDelete as unknown as Handler, method: 'DELETE', path: `/api/team/messages/${SOME_ID}`, params: { id: SOME_ID } },
+  { name: 'mark team messages read', handler: teamMessagesRead as unknown as Handler, method: 'POST', path: '/api/team/messages/read', body: { thread: 'board' } },
+  { name: 'delete incoming email', handler: inboundDelete as unknown as Handler, method: 'DELETE', path: '/api/email/inbound', body: {} },
+  { name: 'start a Stripe checkout', handler: stripeCheckout as unknown as Handler, method: 'POST', path: '/api/stripe/checkout', body: { plan: 'starter' } },
+  { name: 'start Stripe payout onboarding', handler: stripeConnectStart as unknown as Handler, method: 'POST', path: '/api/stripe/connect/start', body: {} },
+  { name: 'open the Stripe billing portal', handler: stripePortal as unknown as Handler, method: 'POST', path: '/api/stripe/portal', body: {} },
 ];
 
 let collaborator: Actor;
@@ -65,13 +65,13 @@ describe('free collaborator is refused on coordinator-only routes', () => {
 
 describe('the same routes still reach a real coordinator (the guard is not a blanket block)', () => {
   it("a coordinator's template request is not refused as a collaborator", async () => {
-    const res = await call(createTemplate as Handler, tc, { method: 'POST', path: '/api/checklist-templates', body: { name: 'Mine', steps: [] } });
+    const res = await call(createTemplate as unknown as Handler, tc, { method: 'POST', path: '/api/checklist-templates', body: { name: 'Mine', steps: [] } });
     expect(JSON.stringify(res.json ?? '')).not.toContain('Agent portal accounts');
     expect([401, 403]).not.toContain(res.status);
   });
 
   it("a coordinator's team message request is not refused as a collaborator", async () => {
-    const res = await call(teamMessage as Handler, tc, { method: 'POST', path: '/api/team/messages', body: { body: 'hi', thread: 'board' } });
+    const res = await call(teamMessage as unknown as Handler, tc, { method: 'POST', path: '/api/team/messages', body: { body: 'hi', thread: 'board' } });
     expect(JSON.stringify(res.json ?? '')).not.toContain('Agent portal accounts');
   });
 });
