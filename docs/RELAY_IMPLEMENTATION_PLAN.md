@@ -432,10 +432,10 @@ Phases 0 to 4 total roughly 42 to 61 engineering days; templates add 23 to 37 mo
 - **O1. A test database.** Tests that prove one account cannot see another's data need a database that is not production. I cannot create a Supabase project inside your account. It takes about five minutes: create a free project at supabase.com, then give me its URL and keys through your environment file (never in chat). Without it I can still build the logic, registry and entitlement tests, but not the cross-account database tests.
 - **O2. Matching production to the repo.** The team tables are missing from the repo. A full dump is not needed. Instead I will give you one read-only query to paste into the Supabase SQL editor; you paste the result back and I reconcile. If you would rather not, every new migration will be written defensively and I will mark team-related assumptions as unverified.
 - **O3. What "flag" meant.** A switch in the deployment settings that keeps a finished feature hidden in production. Here: the agent signup screens exist in the code but stay off until the agent plan is ready to bill. Nothing for you to build; I will name one setting for Vercel when we get there.
-- **O4. Agent trial length.** 30 days to match TC Starter, or something else.
-- **O5. Agent invoices.** Who does an agent bill: their clients, other agents, referral partners? And do they get paid through Relay (Stripe Connect, as TCs can today) or just track them?
-- **O6. Lapsed subscriptions.** If a TC's trial or plan lapses, the plan above treats them like an expired Starter today (read yes, create or edit no) and the agent keeps the deal. Confirm, or tell me otherwise.
-- **O7. A paying agent cancels.** Recommended: their deals stay available to participants, the owner becomes read-only, nothing is deleted.
+- **O4. Agent trial length.** Decided: 30 days, same as TC Starter.
+- **O5. Agent invoices.** Decided: an agent can bill anyone, so "bill to" is any saved contact or a typed name and email. Payment through Relay (Stripe Connect) is optional, and a manual "mark as paid" is always available because commissions often arrive through the closing table, not a card payment.
+- **O6. Lapsed subscriptions.** Decided: a TC whose trial or plan lapses is treated like an expired Starter today (can view, cannot create or edit), and the agent keeps the deal.
+- **O7. A paying agent cancels.** Decided: their deals stay available to participants, the owner becomes read-only, nothing is deleted.
 - **O8. Agent price.** Stays "proposed, $29" until you say. Nothing is created in Stripe.
 
 ---
