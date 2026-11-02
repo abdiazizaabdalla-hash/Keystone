@@ -56,6 +56,7 @@ export default function Home() {
           <nav className="hidden sm:flex items-center gap-8 text-sm text-slate-300">
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
+            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
           </nav>
@@ -183,8 +184,9 @@ export default function Home() {
         <p className="text-slate-400 mb-10 max-w-3xl">
           One platform for the work between contract and closing: every transaction, document and deadline in one place.
         </p>
-        <div className="grid sm:grid-cols-2 gap-5">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {[
+            { href: '/for-agents', kicker: 'Agents', title: 'Stay in the loop', body: 'A free login for every deal your TC adds you to: the checklist, documents, messages, and a live page for your clients.' },
             { href: '/for-tcs', kicker: 'Transaction coordinators', title: 'Take on more files', body: 'Contract intake, checklists, deadlines, agent portals, listings and invoicing in one workspace.' },
             { href: '/for-teams', kicker: 'Teams', title: 'Coordinate together', body: 'A shared board and contacts for your coordinators, while every deal stays private to its owner.' },
           ].map((c) => (
@@ -347,7 +349,7 @@ export default function Home() {
               </li>
             ))}
           </ul>
-          <p className="text-sm font-semibold text-slate-200 mt-5">Agents never need a paid Relay subscription.</p>
+          <p className="text-sm font-semibold text-slate-200 mt-5">Free for every agent on every deal their coordinator adds them to.</p>
         </ShotRow>
       </section>
 
@@ -512,7 +514,7 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-slate-500 mt-6">The agent portal is free on every plan. Agents never need their own Relay subscription.</p>
+        <p className="text-xs text-slate-500 mt-6">The agent portal is free for agents on every plan.</p>
       </section>
 
       {/* CTA */}
@@ -546,6 +548,7 @@ export default function Home() {
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
+            <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>

@@ -77,6 +77,7 @@ export default function PricingPage() {
             <Link href="/" className="hover:text-slate-100 transition">Home</Link>
             <Link href="/pricing" className="text-slate-100">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
+            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
           </nav>
@@ -155,7 +156,7 @@ export default function PricingPage() {
           ))}
         </div>
         <p className="text-center text-sm text-slate-500 mt-8">
-          Team is $89 per month and includes three TC seats. Each additional seat is $30 per month. Agents invited to collaborate on transactions do not require paid TC seats — the agent portal is free on every plan.{' '}
+          Team is $89 per month and includes three TC seats. Each additional seat is $30 per month. Agents you invite to collaborate on transactions do not use a TC seat, and the agent portal is free on every plan.{' '}
           <Link href="/for-teams" className="text-blue-400 hover:text-blue-300">See everything Team includes →</Link>
         </p>
       </section>
@@ -257,6 +258,7 @@ export default function PricingPage() {
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <Link href="/" className="hover:text-slate-200 transition">Home</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
+            <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>

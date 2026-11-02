@@ -34,12 +34,10 @@ const cspHeaderName =
   process.env.CSP_MODE === 'enforce' ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only';
 
 const nextConfig: NextConfig = {
-  // Public pages taken down until the agent workspace and brokerage product are built
-  // (sources kept in docs/parked-pages). Temporary redirects so old links still land somewhere.
+  // The brokerage page is taken down until that product is built (source kept in docs/parked-pages).
+  // Temporary redirect so old links still land somewhere. The free agent portal page is live.
   async redirects() {
     return [
-      { source: '/for-agents', destination: '/', permanent: false },
-      { source: '/for-agents/:path*', destination: '/', permanent: false },
       { source: '/for-brokerages', destination: '/', permanent: false },
     ];
   },

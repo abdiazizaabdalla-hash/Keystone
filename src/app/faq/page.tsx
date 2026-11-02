@@ -55,7 +55,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Pricing & billing',
     q: 'How does Team billing work?',
-    a: 'Team is $89/month and includes three seats. Each extra seat is $30/month, charged prorated right away when you add a teammate beyond your paid seats; removing one credits your next invoice. Seats are for the people coordinating transactions — agents you invite through the agent portal never need a paid seat.',
+    a: 'Team is $89/month and includes three seats. Each extra seat is $30/month, charged prorated right away when you add a teammate beyond your paid seats; removing one credits your next invoice. Seats are for the people coordinating transactions — agents you invite through the agent portal do not use a seat.',
   },
   {
     category: 'Pricing & billing',
@@ -237,6 +237,7 @@ export default function FAQPage() {
             <Link href="/" className="hover:text-slate-100 transition">Home</Link>
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="text-slate-100">FAQ</Link>
+            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
           </nav>
@@ -328,6 +329,7 @@ export default function FAQPage() {
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <Link href="/" className="hover:text-slate-200 transition">Home</Link>
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
+            <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>

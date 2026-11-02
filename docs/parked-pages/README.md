@@ -1,10 +1,10 @@
 # Parked public pages
 
-These pages were taken off the public site on 2026-11-02 until the agent workspace and the brokerage
-product are built to full functionality. They are kept as `.txt` so they are neither routed nor
-type-checked. To bring one back: copy it to `src/app/<name>/` (drop the `.txt`), restore its links in
-`PublicHeader`, `PublicMobileMenu`, `PublicFooter`, the home page cards, `sitemap.ts` and
-`SiteAnalytics`, and remove its redirect in `next.config.ts`.
+Status as of 2026-11-02: the brokerage page is parked; the free agent portal page is live again.
 
-- `for-agents/page.tsx.txt`, `for-agents/layout.tsx.txt`, `for-agents/portal/*`: the agent audience page and the free-portal explainer.
-- `for-brokerages/*`: the brokerage (in development) page.
+- `for-brokerages/*`: the brokerage (in development) page. Not routed, not type-checked. To bring it back:
+  copy it to `src/app/for-brokerages/` (drop the `.txt`), restore its links in `PublicHeader`,
+  `PublicMobileMenu`, `PublicFooter`, the home page cards, `sitemap.ts` and `SiteAnalytics`, and remove its
+  redirect in `next.config.ts`.
+- `for-agents/*`: the original copies of the agent page and free-portal explainer. The live versions are in
+  `src/app/for-agents/` (reworded so nothing implies a paid agent plan). Keep this copy only for reference.

@@ -7,6 +7,7 @@ const LINKS = [
   { href: '/', label: 'Home' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/faq', label: 'FAQ' },
+  { href: '/for-agents', label: 'For Agents' },
   { href: '/for-tcs', label: 'For TCs' },
   { href: '/for-teams', label: 'For Teams' },
   { href: '/auth', label: 'Sign In' },

@@ -112,6 +112,7 @@ function AgentLoginContent() {
           <div className="flex items-center gap-3 sm:gap-6 text-sm text-slate-400">
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
+            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
             <Link
