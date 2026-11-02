@@ -344,7 +344,7 @@ There are no tests today, so the first deliverable is the harness and a safety n
 
 **Tooling.** Vitest. Pure-logic tests need nothing else. Integration tests need a database that is not production (open item O1).
 
-**Test actors:** TC A, TC B (unrelated), Team member of TC A, agent subscriber, collaborator invited by TC A, unrelated collaborator, TC guest on an agent-owned deal.
+**Test actors:** TC A, TC B (unrelated), Team member of TC A, agent subscriber, collaborator invited by TC A, unrelated collaborator, TC with a lapsed trial on an agent-owned deal.
 
 **Layers**
 
