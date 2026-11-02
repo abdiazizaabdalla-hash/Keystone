@@ -223,8 +223,8 @@ You asked for the TC side and the agent side to sit under one Relay umbrella wit
 
 Today's invoice engine (`src/app/api/invoices/route.ts`, `src/lib/invoiceMath.ts`, `invoicePdf.ts`) computes the amount from the agent contact's `flat_fee` and `commission_percent`: a set price attached to a contact. For agents, you want free-form invoices with custom line items and custom prices, no fixed price per contact.
 
-- Reuse: invoice list and detail UI, PDF generation, send-by-email, payment through Stripe Connect (`api/stripe/connect`), QuickBooks export.
-- New: invoice line items (a table or a JSON column on `invoices`; additive), a "custom invoice" mode that skips the fee-schedule lookup, and a builder screen. The TC fee-driven path stays exactly as it is.
+- Reuse: invoice PDF generation, send-by-email, the payment-account setup (Stripe Connect or Helcim), QuickBooks export, parts of the list UI.
+- New (confirmed against the production schema): `invoices.agent_id` and `invoices.transaction_id` are both NOT NULL with a single `amount_owed` and no line items, so agent invoices go in **new tables** (`workspace_invoices` and `workspace_invoice_lines`, bill-to a contact or typed name and email, deal optional), plus a builder screen. The TC fee-driven `invoices` path is not touched.
 - Open question: who the agent bills (section 12, O5).
 
 ### Templates: state commission forms, blank or auto-filled
@@ -312,7 +312,7 @@ alter table public.transaction_invites      enable row level security;
 Notes:
 
 - A participant with role `tc` is only honored while that user holds a TC workspace entitlement (paid or in trial), checked at request time, so a lapse or renewal needs no data change.
-- Transaction events reuse `audit_log` (`src/lib/audit.ts`) instead of a new table in Phase 1.
+- Transaction events reuse `audit_log` (`src/lib/audit.ts`), **but that table does not exist in production today** (see `docs/PROD_SCHEMA_RECONCILIATION.md`); `add-audit-log.sql` must be run first.
 - Entitlements are `app_metadata` flags in Phases 1 to 3. A per-product subscriptions table is only designed in Phase 4, because it touches billing.
 - Rollback for every change above is `drop table`; nothing else references these tables until the feature flag is on.
 - Before any migration runs I need the production schema reconciled with the repo (open item O2). The `teams`, `team_members`, `team_invites` definitions are missing from the repo today. Deliverable: `docs/schema-snapshot.sql` plus a migration verification query file.
@@ -430,7 +430,7 @@ Phases 0 to 4 total roughly 42 to 61 engineering days; templates add 23 to 37 mo
 ### Still open
 
 - **O1. A test database.** Tests that prove one account cannot see another's data need a database that is not production. I cannot create a Supabase project inside your account. It takes about five minutes: create a free project at supabase.com, then give me its URL and keys through your environment file (never in chat). Without it I can still build the logic, registry and entitlement tests, but not the cross-account database tests.
-- **O2. Matching production to the repo.** The team tables are missing from the repo. A full dump is not needed. Instead I will give you one read-only query to paste into the Supabase SQL editor; you paste the result back and I reconcile. If you would rather not, every new migration will be written defensively and I will mark team-related assumptions as unverified.
+- **O2. Matching production to the repo.** DONE: schema received and reconciled in `docs/PROD_SCHEMA_RECONCILIATION.md`. Key results: `audit_log` is missing in production (so there is no audit trail today), and agent-style invoices need their own tables. The original request follows for the record:  The team tables are missing from the repo. A full dump is not needed. Instead I will give you one read-only query to paste into the Supabase SQL editor; you paste the result back and I reconcile. If you would rather not, every new migration will be written defensively and I will mark team-related assumptions as unverified.
 - **O3. What "flag" meant.** A switch in the deployment settings that keeps a finished feature hidden in production. Here: the agent signup screens exist in the code but stay off until the agent plan is ready to bill. Nothing for you to build; I will name one setting for Vercel when we get there.
 - **O4. Agent trial length.** Decided: 30 days, same as TC Starter.
 - **O5. Agent invoices.** Decided: an agent can bill anyone, so "bill to" is any saved contact or a typed name and email. Payment through Relay (Stripe Connect) is optional, and a manual "mark as paid" is always available because commissions often arrive through the closing table, not a card payment.
