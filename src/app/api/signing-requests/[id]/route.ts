@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { logListingActivity, requireListingAccess } from '@/lib/listings';
@@ -18,6 +19,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const { id } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
 
     const body = await request.json().catch(() => ({}));
     if (body?.action !== 'void') {

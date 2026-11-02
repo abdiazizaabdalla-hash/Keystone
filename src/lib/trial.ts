@@ -1,7 +1,7 @@
 import { DEFAULT_PLAN } from './plans';
 import { getStripeCustomerByUserId } from './stripeCustomers';
-import { getUserPlan, hasAgentRole } from './privileged';
-import { AuthError } from './auth';
+import { getUserPlan } from './privileged';
+import { assertNotCollaborator } from './workspaceGuard';
 
 // Starter used to be free forever. It's now a 30-day
 // trial, after which the account needs to add
@@ -120,12 +120,7 @@ export async function assertTrialActive(
   // function therefore refuses them. The few routes that agents legitimately
   // share (direct messages) opt in with { allowCollaborator: true }, and the
   // routes that already branch on the caller being an agent never reach this.
-  if (hasAgentRole(user) && !options.allowCollaborator) {
-    throw new AuthError(
-      'Agent portal accounts can work on deals a coordinator has added them to, but cannot create their own. Ask your coordinator to add you to a deal.',
-      403
-    );
-  }
+  if (!options.allowCollaborator) assertNotCollaborator(user);
   const planId = (getUserPlan(user) as string | undefined) || DEFAULT_PLAN;
   if (planId !== 'starter') return;
 

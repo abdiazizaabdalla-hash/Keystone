@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import crypto from 'crypto';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
@@ -385,6 +386,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
     const id = request.nextUrl.searchParams.get('id');
 
     if (!id) {

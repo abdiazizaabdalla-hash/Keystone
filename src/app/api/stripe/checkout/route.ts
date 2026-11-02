@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { stripe, STRIPE_PRICE_IDS, isBillablePlan } from '@/lib/stripe';
 import { getStripeCustomerByUserId, upsertStripeCustomer } from '@/lib/stripeCustomers';
@@ -13,6 +14,7 @@ import { TEAM_SEAT_LIMIT, BROKERAGE_SEAT_LIMIT } from '@/lib/team';
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
 
     const body = await request.json();
     const { plan } = body;

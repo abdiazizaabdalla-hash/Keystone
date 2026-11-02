@@ -447,3 +447,17 @@ Change any price, create or modify any Stripe product, change the webhook or che
 ## 14. Recommended next step
 
 Approve Phase 0 and Phase 1 and settle O1 and O2, and I start with the characterization tests and the closing of the collaborator gap. That delivers the single most important safety property in your brief (free collaboration is not free independent use) before any new feature exists.
+
+---
+
+## 15. Phase 1 progress (running log)
+
+Done and committed locally (not pushed):
+
+- Vitest harness (`npm test`), route registry test over all 155 API routes (`tests/route-registry.ts`).
+- relay-test Supabase project loaded with a schema-only copy of production; integration suite (`npm run test:int`) runs real route handlers against relay-test only and refuses any other database.
+- Collaborator gap closed: `assertTrialActive` and the new `assertNotCollaborator` (`src/lib/workspaceGuard.ts`) refuse free agent portal logins on every route that creates or changes a coordinator's own work. Proven red/green in relay-test (a collaborator previously got 201 creating an agent and a transaction).
+- The registry test now fails if any writing route has neither a collaborator guard nor a written `collaboratorWrites` reason.
+- Open policies removed on `tasks`, `invoices`, `transactions` (relay-test done; production pending, see the SQL given in chat).
+
+Still to do in Phase 1: `entitlements.ts`, `authorize.ts` on shared surfaces, Stripe webhook replay test, `docs/schema-snapshot.sql`, cross-account read/write tests for the shared surfaces (transactions, documents, messages, tasks).

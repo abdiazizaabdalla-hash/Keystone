@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { setUserPlan } from '@/lib/stripeCustomers';
@@ -124,6 +125,7 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
     const body = await request.json();
 
     const membership = await getTeamForUser(user.id);
@@ -177,6 +179,7 @@ async function accountHasOwnData(userId: string): Promise<boolean> {
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
     const body = await request.json();
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
 
@@ -312,6 +315,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
     const { searchParams } = new URL(request.url);
     const targetUserId = searchParams.get('userId');
 

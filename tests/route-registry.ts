@@ -7,10 +7,12 @@ export interface RouteEntry {
   kind: RouteKind;
   methods: string[];
   why?: string;
+  /** For session routes that write but are deliberately open to free agent portal logins: why that is safe. */
+  collaboratorWrites?: string;
 }
 
 export const ROUTES: Record<string, RouteEntry> = {
-  '/api/account/delete-request': { kind: 'session', methods: ['POST'] },
+  '/api/account/delete-request': { kind: 'session', methods: ['POST'], collaboratorWrites: "Anyone may ask to delete their own account." },
   '/api/account/export': { kind: 'session', methods: ['GET'] },
   '/api/account/summary': { kind: 'session', methods: ['GET'] },
   '/api/admin/users': { kind: 'admin', methods: ['GET'] },
@@ -41,17 +43,17 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/agents/[id]/portal-access': { kind: 'session', methods: ['POST'] },
   '/api/auth/forgot-password': { kind: 'public', methods: ['POST'], why: "Sends a reset email; rate limited." },
   '/api/auth/me': { kind: 'session', methods: ['GET', 'PATCH'] },
-  '/api/auth/mfa/activate': { kind: 'session', methods: ['POST'] },
-  '/api/auth/mfa/disable': { kind: 'session', methods: ['POST'] },
-  '/api/auth/mfa/enroll': { kind: 'session', methods: ['POST'] },
+  '/api/auth/mfa/activate': { kind: 'session', methods: ['POST'], collaboratorWrites: "Personal sign-in security for the caller only." },
+  '/api/auth/mfa/disable': { kind: 'session', methods: ['POST'], collaboratorWrites: "Personal sign-in security for the caller only." },
+  '/api/auth/mfa/enroll': { kind: 'session', methods: ['POST'], collaboratorWrites: "Personal sign-in security for the caller only." },
   '/api/auth/mfa/status': { kind: 'session', methods: ['GET'] },
-  '/api/auth/mfa/verify': { kind: 'session', methods: ['POST'] },
+  '/api/auth/mfa/verify': { kind: 'session', methods: ['POST'], collaboratorWrites: "Personal sign-in security for the caller only." },
   '/api/auth/signin': { kind: 'public', methods: ['POST'], why: "Sign in; rate limited." },
   '/api/auth/signup': { kind: 'public', methods: ['POST'], why: "Sign up; rate limited; agent sign-up gated by AGENT_SELF_SERVE_ENABLED." },
   '/api/calendar/events': { kind: 'session', methods: ['GET'] },
-  '/api/calendar/feed': { kind: 'session', methods: ['GET', 'POST'] },
+  '/api/calendar/feed': { kind: 'session', methods: ['GET', 'POST'], collaboratorWrites: "Personal calendar feed token for the caller only; the feed shows only deals they can see." },
   '/api/calendar/ics/[token]': { kind: 'token', methods: ['GET'], why: "Private calendar feed addressed by an unguessable token." },
-  '/api/calendar/preferences': { kind: 'session', methods: ['GET', 'PUT'] },
+  '/api/calendar/preferences': { kind: 'session', methods: ['GET', 'PUT'], collaboratorWrites: "Personal display preferences for the caller only." },
   '/api/checklist-templates': { kind: 'session', methods: ['GET', 'POST'] },
   '/api/checklist-templates/[id]': { kind: 'session', methods: ['DELETE', 'PATCH'] },
   '/api/client-messages': { kind: 'session', methods: ['GET', 'POST'] },
@@ -119,7 +121,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/listings/uploads': { kind: 'session', methods: ['POST'] },
   '/api/messages': { kind: 'session', methods: ['GET', 'PATCH', 'POST'] },
   '/api/messages/overview': { kind: 'session', methods: ['GET'] },
-  '/api/notifications': { kind: 'session', methods: ['GET', 'PATCH'] },
+  '/api/notifications': { kind: 'session', methods: ['GET', 'PATCH'], collaboratorWrites: "Marks the caller's own notifications read." },
   '/api/quickbooks/callback': { kind: 'oauth-callback', methods: ['GET'], why: "QuickBooks redirect; verifies the signed state parameter." },
   '/api/quickbooks/connect': { kind: 'session', methods: ['POST'] },
   '/api/quickbooks/disconnect': { kind: 'session', methods: ['POST'] },

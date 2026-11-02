@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -75,6 +76,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
     const ctx = await getMessagingContext(user.id);
     const payload = await request.json().catch(() => ({}));
     const thread = parseThread(payload?.thread, user.id, ctx.memberIds);

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getMessagingContext, describeMessagingError, SETUP_MISSING_RESPONSE } from '@/lib/teamMessaging';
@@ -11,6 +12,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
     const ctx = await getMessagingContext(user.id);
     const { id } = await params;
     if (!UUID_RE.test(id)) {

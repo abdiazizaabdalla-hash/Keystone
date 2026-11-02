@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { mergeUserMetadata } from '@/lib/userMetadata';
@@ -17,6 +18,7 @@ import { createStandardConnectedAccount, createOnboardingLink } from '@/lib/stri
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
     const body = await request.json().catch(() => ({}));
     const from = body?.from === 'onboarding' ? 'onboarding' : 'settings';
 

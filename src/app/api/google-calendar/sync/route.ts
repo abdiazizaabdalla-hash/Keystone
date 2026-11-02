@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { decryptSecret } from '@/lib/encryption';
@@ -29,6 +30,7 @@ async function countEvents(userId: string, txIds: string[], listingIds: string[]
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
 
     const { data: connection } = await supabaseServer
       .from('calendar_connections')

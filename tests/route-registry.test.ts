@@ -95,4 +95,18 @@ describe('API route registry', () => {
     const wrong = Object.entries(ROUTES).filter(([r, e]) => e.kind === 'admin' && !r.startsWith('/api/admin/'));
     expect(wrong).toEqual([]);
   });
+
+  // A free agent portal login must not be able to create or change a coordinator's
+  // own work. Every writing route for signed-in users therefore either refuses
+  // collaborators (a guard below), or is registered with a written reason.
+  const COLLABORATOR_GUARD =
+    /assertTrialActive\(|assertNotCollaborator\(|isAgentUser\(|hasAgentRole\(|requireContactsUser\(|requireListingAccess\(|requireAgentListing\(|loadAgentContext\(|loadStaffContext\(/;
+
+  it('guards every writing session route against free agent portal logins, or explains why not', () => {
+    const open = Object.entries(ROUTES)
+      .filter(([, e]) => e.kind === 'session' && e.methods.some((m) => m !== 'GET'))
+      .filter(([r, e]) => !COLLABORATOR_GUARD.test(actual.get(r) ?? '') && !e.collaboratorWrites)
+      .map(([r]) => r);
+    expect(open, 'add assertNotCollaborator(user) to these routes, or register a collaboratorWrites reason').toEqual([]);
+  });
 });

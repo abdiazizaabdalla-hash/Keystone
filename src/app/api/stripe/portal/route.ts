@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { stripe } from '@/lib/stripe';
 import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
@@ -10,6 +11,7 @@ import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
 
     const existing = await getStripeCustomerByUserId(user.id);
     if (!existing) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getPlanLimits } from '@/lib/plans';
@@ -26,6 +27,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const { id } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
     const { customChecklists } = getPlanLimits(getUserPlan(user));
 
     if (!customChecklists && !isAdmin) {
@@ -86,6 +88,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     const { id } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
 
     const existing = isAdmin
       ? (await supabaseServer.from('checklist_templates').select('*').eq('id', id).single()).data

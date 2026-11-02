@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getGoogleAuthUrl } from '@/lib/googleCalendar';
 import { googleCalendarAvailableFor } from '@/lib/googleCalendarAccess';
@@ -11,6 +12,7 @@ import { signOAuthState, type OAuthReturnTo } from '@/lib/oauthState';
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    assertNotCollaborator(user);
     if (!googleCalendarAvailableFor(user.email)) {
       return NextResponse.json({ error: 'Google Calendar sync is not open to everyone yet. Use the calendar link instead.' }, { status: 403 });
     }
