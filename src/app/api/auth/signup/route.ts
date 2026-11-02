@@ -64,9 +64,7 @@ export async function POST(request: NextRequest) {
       password,
       options: {
         ...(sameOriginRedirect(redirectTo, request.nextUrl.origin) ? { emailRedirectTo: sameOriginRedirect(redirectTo, request.nextUrl.origin) } : {}),
-        ...(trimmedName || accountType === 'agent'
-          ? { data: { ...(trimmedName ? { full_name: trimmedName } : {}), ...(accountType === 'agent' ? { account_type: 'agent' } : {}) } }
-          : {}),
+        ...(trimmedName ? { data: { full_name: trimmedName } } : {}),
       },
     });
 
@@ -85,9 +83,12 @@ export async function POST(request: NextRequest) {
       // in app_metadata so a user can't edit it.
       await logAudit(request, data.user, 'auth.signup', { entityType: 'user', entityId: data.user.id, metadata: { termsVersion: LEGAL_VERSION } });
       try {
+        // account_type goes in app_metadata (server-only), not user_metadata,
+        // so it cannot be set by calling Supabase Auth directly.
         await mergeAppMetadata(data.user.id, {
           terms_accepted_at: new Date().toISOString(),
           terms_version: LEGAL_VERSION,
+          ...(accountType === 'agent' ? { account_type: 'agent' } : {}),
         });
       } catch (consentError) {
         console.error('Error recording terms acceptance (non-fatal):', consentError);

@@ -1,9 +1,13 @@
-// Who an account is *for* -- used only to tailor onboarding, navigation and
-// copy. It is stored in user_metadata, which the account owner can edit, so
-// it must NEVER be used to decide what someone is allowed to see or do. Every
-// access check stays in the API routes (ownership of the transaction, plan
-// limits, team membership). A missing value means a coordinator account,
-// which is every account created before this existed.
+// Who an account is *for* -- used to tailor onboarding, navigation and copy.
+//
+// account_type lives in app_metadata, which only our server can write, so a
+// person cannot tag their own account by calling Supabase Auth directly
+// (user_metadata is user-editable and is ignored for this). It still must not
+// be the only thing that decides what someone may see or do: every access
+// check stays in the API routes (ownership of the transaction, plan limits,
+// team membership, entitlements). coordination_mode is a harmless preference
+// and stays in user_metadata. A missing account_type means a coordinator
+// account, which is every account created before this existed.
 
 export type AccountType = 'tc' | 'agent';
 export type CoordinationMode = 'own_tc' | 'self' | 'automate';
@@ -26,8 +30,9 @@ export const COORDINATION_MODES: { id: CoordinationMode; title: string; body: st
   },
 ];
 
-export function getAccountType(metadata: Record<string, unknown> | null | undefined): AccountType {
-  return metadata?.account_type === 'agent' ? 'agent' : 'tc';
+// Pass the user's app_metadata (server-controlled), never user_metadata.
+export function getAccountType(appMetadata: Record<string, unknown> | null | undefined): AccountType {
+  return appMetadata?.account_type === 'agent' ? 'agent' : 'tc';
 }
 
 export function getCoordinationMode(metadata: Record<string, unknown> | null | undefined): CoordinationMode | null {

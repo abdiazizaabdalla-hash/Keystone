@@ -30,7 +30,7 @@ function shapeUser(user: {
     is_admin: isPlatformAdmin(user),
     plan: getUserPlan(user) || DEFAULT_PLAN,
     fullName: typeof meta.full_name === 'string' ? meta.full_name : '',
-    accountType: getAccountType(meta),
+    accountType: getAccountType(user.app_metadata),
     coordinationMode: getCoordinationMode(meta),
     defaultFlatFee:
       typeof meta.default_flat_fee === 'number' ? meta.default_flat_fee : DEFAULT_FLAT_FEE,

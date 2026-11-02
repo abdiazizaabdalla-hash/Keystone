@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { mergeUserMetadata } from '@/lib/userMetadata';
+import { mergeAppMetadata } from '@/lib/privileged';
 import { isCoordinationMode } from '@/lib/accountType';
 import { isAgentUser } from '@/lib/agentPortal';
 import { logAudit } from '@/lib/audit';
@@ -72,8 +73,8 @@ export async function POST(request: NextRequest) {
       if (insertError) throw insertError;
     }
 
+    await mergeAppMetadata(user.id, { account_type: 'agent' });
     await mergeUserMetadata(user.id, {
-      account_type: 'agent',
       coordination_mode: mode,
       full_name: name,
       onboarding_completed: true,
