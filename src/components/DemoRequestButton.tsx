@@ -3,6 +3,10 @@
 import { FormEvent, useState } from 'react';
 import { track } from '@vercel/analytics';
 
+// Self-serve booking page. Opens in a new tab so a visitor can pick a time without
+// filling in the request form first.
+const CALENDLY_URL = 'https://calendly.com/abdiaziz-a-abdalla/relaytc-demo';
+
 interface DemoRequestButtonProps {
   className: string;
   label?: string;
@@ -76,8 +80,21 @@ export default function DemoRequestButton({ className, label = 'Request a Demo' 
             {submitted ? (
               <div className="text-center py-4">
                 <p className="text-slate-100 font-display font-semibold text-lg mb-2">Request sent</p>
-                <p className="text-slate-400 text-sm mb-6">
+                <p className="text-slate-400 text-sm mb-4">
                   Thanks -- we&apos;ll reach out shortly to set up a time.
+                </p>
+                <p className="text-slate-400 text-sm mb-6">
+                  Want to skip the wait?{' '}
+                  <a
+                    href={CALENDLY_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => track('demo_calendly_clicked')}
+                    className="text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Pick a time now
+                  </a>
+                  .
                 </p>
                 <button
                   type="button"
@@ -102,9 +119,23 @@ export default function DemoRequestButton({ className, label = 'Request a Demo' 
                     </svg>
                   </button>
                 </div>
-                <p className="text-sm text-slate-400 mb-6">
-                  Tell us a bit about your business and we&apos;ll reach out to set up a walkthrough.
+                <p className="text-sm text-slate-400 mb-5">
+                  Pick a time that works for you, or send a request and we&apos;ll reach out.
                 </p>
+                <a
+                  href={CALENDLY_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => track('demo_calendly_clicked')}
+                  className="block w-full text-center px-5 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
+                >
+                  Book a time on the calendar
+                </a>
+                <div className="flex items-center gap-3 my-5">
+                  <div className="flex-1 h-px bg-slate-700" />
+                  <span className="text-xs text-slate-500">or send a request</span>
+                  <div className="flex-1 h-px bg-slate-700" />
+                </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">Name</label>
