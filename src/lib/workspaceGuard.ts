@@ -1,5 +1,6 @@
 import { AuthError } from './auth';
-import { hasAgentRole, type WithAppMetadata } from './privileged';
+import { type WithAppMetadata } from './privileged';
+import { getEntitlements } from './entitlements';
 
 export const COLLABORATOR_BLOCKED_MESSAGE =
   'Agent portal accounts can work on deals a coordinator has added them to, but cannot create their own. Ask your coordinator to add you to a deal.';
@@ -14,5 +15,5 @@ export const COLLABORATOR_BLOCKED_MESSAGE =
  * guard with assertTrialActive already get this check.
  */
 export function assertNotCollaborator(user: WithAppMetadata): void {
-  if (hasAgentRole(user)) throw new AuthError(COLLABORATOR_BLOCKED_MESSAGE, 403);
+  if (!getEntitlements(user).canOwnWorkspace) throw new AuthError(COLLABORATOR_BLOCKED_MESSAGE, 403);
 }

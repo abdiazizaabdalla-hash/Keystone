@@ -14,22 +14,7 @@ import { supabaseServer } from './supabase';
 //
 // Harmless per-user preferences (name, fee defaults, due-date workflow
 // settings, onboarding flag) stay in `user_metadata`.
-export interface WithAppMetadata {
-  app_metadata?: Record<string, unknown> | null;
-}
-
-export function getUserPlan(user: WithAppMetadata | null | undefined): string | undefined {
-  const plan = user?.app_metadata?.plan;
-  return typeof plan === 'string' ? plan : undefined;
-}
-
-export function isPlatformAdmin(user: WithAppMetadata | null | undefined): boolean {
-  return user?.app_metadata?.is_admin === true;
-}
-
-export function hasAgentRole(user: WithAppMetadata | null | undefined): boolean {
-  return user?.app_metadata?.role === 'agent';
-}
+export { getUserPlan, isPlatformAdmin, hasAgentRole, type WithAppMetadata } from './appMetadata';
 
 // Same read-fresh-then-merge pattern as mergeUserMetadata (see
 // lib/userMetadata.ts), for the server-only app_metadata blob.
