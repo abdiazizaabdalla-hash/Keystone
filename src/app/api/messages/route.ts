@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
+import { isAgentUser } from '@/lib/agentPortal';
+import { authorizeDeal } from '@/lib/authorize';
 import { sendNewMessageEmail } from '@/lib/agentPortalEmails';
 import { queueDealNotification } from '@/lib/notifications';
 
@@ -11,30 +12,16 @@ import { queueDealNotification } from '@/lib/notifications';
 // direct conversation between the TC who owns the deal and the agent(s)
 // on it, not something every teammate should be dropped into. Agents are
 // scoped the normal way, via transaction_agents.
-async function assertCanMessage(transactionId: string, userId: string, isAdmin: boolean, isAgent: boolean) {
-  if (isAgent) {
-    await assertAgentOnTransaction(transactionId, userId);
-    return;
-  }
-  if (isAdmin) return;
-
-  const { data: transaction, error } = await supabaseServer
-    .from('transactions')
-    .select('agent_id')
-    .eq('id', transactionId)
-    .single();
-  if (error || !transaction) {
-    throw new AuthError('Transaction not found', 404);
-  }
-  const { data: agent } = await supabaseServer
-    .from('agents')
-    .select('id')
-    .eq('id', transaction.agent_id)
-    .eq('tc_user_id', userId)
-    .single();
-  if (!agent) {
-    throw new AuthError('You do not have permission to message on this transaction', 403);
-  }
+async function assertCanMessage(
+  transactionId: string,
+  user: { id: string; app_metadata?: Record<string, unknown> | null },
+  isAdmin: boolean
+) {
+  await authorizeDeal(user, isAdmin, transactionId, {
+    scope: 'owner',
+    collaborators: true,
+    deniedMessage: 'You do not have permission to message on this transaction',
+  });
 }
 
 const ATTACHMENT_BUCKET = 'transaction-documents';
@@ -48,8 +35,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
     }
 
-    const callerIsAgent = isAgentUser(user);
-    await assertCanMessage(transactionId, user.id, isAdmin, callerIsAgent);
+    await assertCanMessage(transactionId, user, isAdmin);
 
     const { data: messages, error } = await supabaseServer
       .from('messages')
@@ -124,7 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     const callerIsAgent = isAgentUser(user);
-    await assertCanMessage(transactionId, user.id, isAdmin, callerIsAgent);
+    await assertCanMessage(transactionId, user, isAdmin);
 
     // Confirm the attached document is actually already on this same
     // transaction -- it was uploaded through POST /api/documents first
@@ -242,7 +228,7 @@ export async function PATCH(request: NextRequest) {
 
     // Same ownership check as assertCanMessage's TC branch -- the caller
     // must own the transaction (or be an admin), never just any TC.
-    await assertCanMessage(existing.transaction_id, user.id, isAdmin, false);
+    await assertCanMessage(existing.transaction_id, user, isAdmin);
 
     const { data: updated, error: updateError } = await supabaseServer
       .from('messages')

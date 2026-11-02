@@ -3,7 +3,8 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { queueDealNotification } from '@/lib/notifications';
-import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
+import { isAgentUser } from '@/lib/agentPortal';
+import { authorizeDeal } from '@/lib/authorize';
 import { computeDueDates, normalizeDueDateSpec } from '@/lib/dueDates';
 
 /**
@@ -50,20 +51,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
 
-    if (callerIsAgent) {
-      await assertAgentOnTransaction(transaction.id as string, user.id);
-    } else if (!isAdmin) {
-      const { data: agent } = await supabaseServer
-        .from('agents')
-        .select('id')
-        .eq('id', transaction.agent_id)
-        .eq('tc_user_id', user.id)
-        .single();
-
-      if (!agent) {
-        return NextResponse.json({ error: 'You do not have permission to update this task' }, { status: 403 });
-      }
-    }
+    await authorizeDeal(user, isAdmin, transaction.id as string, {
+      scope: 'owner',
+      collaborators: true,
+      deniedMessage: 'You do not have permission to update this task',
+    });
 
     const updates: Record<string, unknown> = {};
 

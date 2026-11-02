@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { queueDealNotification } from '@/lib/notifications';
-import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
+import { isAgentUser } from '@/lib/agentPortal';
+import { authorizeDeal } from '@/lib/authorize';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { statusFromTasks } from '@/lib/transactionStages';
 import { getVisibleTcUserIds } from '@/lib/team';
@@ -15,31 +16,14 @@ export async function GET(request: NextRequest) {
 
     if (transactionId) {
       if (!isAdmin) {
-        // Read access follows the same team-wide rule as
-        // /api/transactions and /api/agents (see getVisibleTcUserIds): a
-        // Team owner can view a teammate's checklist too, not just their
-        // own. Fixed 2026-09 -- this previously only checked the
-        // caller's own tc_user_id, which 403'd a team owner opening a
-        // teammate's transaction.
-        const { data: transaction } = await supabaseServer
-          .from('transactions')
-          .select('agent_id')
-          .eq('id', transactionId)
-          .single();
-
-        if (transaction) {
-          const visibleIds = await getVisibleTcUserIds(user.id);
-          const { data: agent } = await supabaseServer
-            .from('agents')
-            .select('id')
-            .eq('id', transaction.agent_id)
-            .in('tc_user_id', visibleIds)
-            .single();
-
-          if (!agent) {
-            return NextResponse.json({ error: 'You do not have permission to view these tasks' }, { status: 403 });
-          }
-        }
+        // Read access follows the same team-wide rule as /api/transactions and
+        // /api/agents: a Team owner can view a teammate's checklist too. Agent
+        // logins read their checklist through /api/agent/transactions/[id] instead.
+        await authorizeDeal(user, isAdmin, transactionId, {
+          scope: 'team',
+          collaborators: false,
+          deniedMessage: 'You do not have permission to view these tasks',
+        });
       }
 
       const { data, error } = await supabaseServer
@@ -114,28 +98,11 @@ export async function PATCH(request: NextRequest) {
 
     if (getError) throw getError;
 
-    if (callerIsAgent) {
-      await assertAgentOnTransaction(task.transaction_id as string, user.id);
-    } else if (!isAdmin) {
-      const { data: transaction } = await supabaseServer
-        .from('transactions')
-        .select('agent_id')
-        .eq('id', task.transaction_id)
-        .single();
-
-      if (transaction) {
-        const { data: agent } = await supabaseServer
-          .from('agents')
-          .select('id')
-          .eq('id', transaction.agent_id)
-          .eq('tc_user_id', user.id)
-          .single();
-
-        if (!agent) {
-          return NextResponse.json({ error: 'You do not have permission to update this task' }, { status: 403 });
-        }
-      }
-    }
+    await authorizeDeal(user, isAdmin, task.transaction_id as string, {
+      scope: 'owner',
+      collaborators: true,
+      deniedMessage: 'You do not have permission to update this task',
+    });
 
     // Toggle completed
     const nowCompleted = !task.completed;

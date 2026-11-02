@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
+import { authorizeDeal } from '@/lib/authorize';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getPlanLimits } from '@/lib/plans';
 import { getVisibleTcUserIds } from '@/lib/team';
@@ -377,18 +378,11 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
 
-    if (!isAdmin) {
-      const { data: agent } = await supabaseServer
-        .from('agents')
-        .select('id')
-        .eq('id', transaction.agent_id)
-        .eq('tc_user_id', user.id)
-        .single();
-
-      if (!agent) {
-        return NextResponse.json({ error: 'You do not have permission to delete this transaction' }, { status: 403 });
-      }
-    }
+    await authorizeDeal(user, isAdmin, id, {
+      scope: 'owner',
+      collaborators: false,
+      deniedMessage: 'You do not have permission to delete this transaction',
+    });
 
     // Clean up everything tied to this transaction before removing it:
     // uploaded documents (storage files + rows), tasks, and any

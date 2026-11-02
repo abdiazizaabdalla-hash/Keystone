@@ -3,8 +3,8 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isValidCategory, isValidDocumentType, typesForCategory, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE } from '@/lib/documentTaxonomy';
-import { getVisibleTcUserIds } from '@/lib/team';
-import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
+import { authorizeDeal } from '@/lib/authorize';
+import { isAgentUser } from '@/lib/agentPortal';
 import { logAudit } from '@/lib/audit';
 import { queueDealNotification } from '@/lib/notifications';
 
@@ -78,51 +78,15 @@ async function ensureBucket() {
 // owner just opening a teammate's transaction's document list.
 async function assertTransactionAccess(
   transactionId: string,
-  userId: string,
+  user: { id: string; app_metadata?: Record<string, unknown> | null },
   isAdmin: boolean,
-  { readOnly = false, allowAgent = false, isAgent = false }: { readOnly?: boolean; allowAgent?: boolean; isAgent?: boolean } = {}
+  { readOnly = false, allowAgent = false }: { readOnly?: boolean; allowAgent?: boolean } = {}
 ) {
-  // An invited agent is scoped to exactly this one transaction, via
-  // transaction_agents -- never the TC ownership check below, which an
-  // agent (no `agents` row of their own) would always fail anyway.
-  if (allowAgent && isAgent) {
-    await assertAgentOnTransaction(transactionId, userId);
-    const { data: transaction, error } = await supabaseServer
-      .from('transactions')
-      .select('id, agent_id')
-      .eq('id', transactionId)
-      .single();
-    if (error || !transaction) {
-      throw new AuthError('Transaction not found', 404);
-    }
-    return transaction;
-  }
-
-  const { data: transaction, error } = await supabaseServer
-    .from('transactions')
-    .select('id, agent_id')
-    .eq('id', transactionId)
-    .single();
-
-  if (error || !transaction) {
-    throw new AuthError('Transaction not found', 404);
-  }
-
-  if (!isAdmin) {
-    const ownerIds = readOnly ? await getVisibleTcUserIds(userId) : [userId];
-    const { data: agent } = await supabaseServer
-      .from('agents')
-      .select('id')
-      .eq('id', transaction.agent_id)
-      .in('tc_user_id', ownerIds)
-      .single();
-
-    if (!agent) {
-      throw new AuthError('You do not have permission to access documents for this transaction', 403);
-    }
-  }
-
-  return transaction;
+  return authorizeDeal(user, isAdmin, transactionId, {
+    scope: readOnly ? 'team' : 'owner',
+    collaborators: allowAgent,
+    deniedMessage: 'You do not have permission to access documents for this transaction',
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -134,10 +98,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
     }
 
-    await assertTransactionAccess(transactionId, user.id, isAdmin, {
+    await assertTransactionAccess(transactionId, user, isAdmin, {
       readOnly: true,
       allowAgent: true,
-      isAgent: isAgentUser(user),
     });
     await ensureBucket();
 
@@ -241,9 +204,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await assertTransactionAccess(transactionId, user.id, isAdmin, {
+    await assertTransactionAccess(transactionId, user, isAdmin, {
       allowAgent: true,
-      isAgent: callerIsAgent,
     });
     await ensureBucket();
 
@@ -369,9 +331,8 @@ export async function PATCH(request: NextRequest) {
     // they're allowed (upload, view). Actually *sending* a signature
     // request (and voiding one) is a separate endpoint
     // (/api/signing-requests) that deliberately stays TC-only.
-    await assertTransactionAccess(doc.transaction_id, user.id, isAdmin, {
+    await assertTransactionAccess(doc.transaction_id, user, isAdmin, {
       allowAgent: true,
-      isAgent: isAgentUser(user),
     });
 
     const updates: Record<string, boolean | string> = {};
@@ -449,7 +410,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    await assertTransactionAccess(doc.transaction_id, user.id, isAdmin);
+    await assertTransactionAccess(doc.transaction_id, user, isAdmin);
 
     const { error: removeError } = await supabaseServer.storage.from(BUCKET).remove([doc.storage_path]);
     if (removeError) console.warn('Warning: storage removal failed, deleting DB row anyway', removeError);

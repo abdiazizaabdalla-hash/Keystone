@@ -460,6 +460,17 @@ Done and committed locally (not pushed):
 - The registry test now fails if any writing route has neither a collaborator guard nor a written `collaboratorWrites` reason.
 - Open policies removed on `tasks`, `invoices`, `transactions` (relay-test done; production pending, see the SQL given in chat).
 
-Still to do in Phase 1: `entitlements.ts`, `authorize.ts` on shared surfaces, Stripe webhook replay test, `docs/schema-snapshot.sql`, cross-account read/write tests for the shared surfaces (transactions, documents, messages, tasks).
+Completed 2026-11-02 (second pass):
+
+- Production policy cleanup run and verified (0 tables without RLS, 0 open policies, 7 total); live app checked.
+- Cross-account isolation tests (`tests/integration/cross-account.int.test.ts`, 46 tests): two unrelated coordinators cannot read or change each other's transactions, documents, messages or tasks; a collaborator reaches only the deals they were added to, cannot delete or edit transactions or delete documents even there, and signed-out callers get 401. Each refusal also checks the data was untouched, with positive controls so the tests cannot pass by accident. No holes found. Two behaviours were pinned as intended: collaborators read their checklist through `/api/agent/transactions/[id]` (the coordinator `/api/tasks` list refuses them), and they may set a step's due date or "waiting on" on their own deal (the agent portal does this).
+- `src/lib/entitlements.ts`: one place that says what an account is (admin, collaborator, agent with workspace grant, coordinator) and whether it can own a workspace. Reads app_metadata only. The `agent_workspace` grant exists but nothing sets it until Phase 2. `src/lib/appMetadata.ts` holds the pure readers.
+- `src/lib/authorize.ts`: `authorizeDeal` is the single deal-access check, now used by documents, messages, `/api/tasks`, `/api/tasks/[id]` and transaction delete. Same rules as before, proven by the isolation tests. `PATCH /api/transactions/[id]` still has its own check (it uses `transactions.tc_user_id` with a team-owner override); it moves over in Phase 3, when `tc_user_id` becomes the workspace owner.
+- Stripe webhook replay tests (`tests/integration/stripe-webhook.int.test.ts`, 8 tests): bad or missing signature changes nothing; replayed checkout and cancel events are idempotent (one customer row, one team); a late checkout for a cancelled subscription does not grant the plan.
+- `docs/schema-snapshot.sql`.
+
+Known edge, not changed: a stale `customer.subscription.updated` with status active arriving after a cancellation records status active on a Starter row. The plan stays Starter, but `assertTrialActive` treats an active Starter row with a subscription id as paid. Rare (Stripe sends events in order), worth a guard when billing is next touched.
+
+Phase 1 is complete apart from the remaining routes that still hold their own deal checks (listed above).
 
 **Public site (2026-11-02):** the agent audience page, the free-portal explainer and the brokerage page are parked in `docs/parked-pages/` and off the public site until the agent workspace and brokerage product are built to full functionality. Old URLs redirect (307) to the home page. The "Agent Login" link stays for agents a coordinator has invited; sentences about a coordinator's own agents (free portal, agent invoicing) stay because they describe the live TC product.
