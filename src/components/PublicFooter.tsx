@@ -8,10 +8,8 @@ export default function PublicFooter() {
         <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-slate-400">
           <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
           <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
-          <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
           <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
           <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
-          <Link href="/for-brokerages" className="hover:text-slate-200 transition">Brokerages</Link>
           <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
           <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
           <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>

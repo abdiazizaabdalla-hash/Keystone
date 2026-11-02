@@ -77,10 +77,8 @@ export default function PricingPage() {
             <Link href="/" className="hover:text-slate-100 transition">Home</Link>
             <Link href="/pricing" className="text-slate-100">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
-            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
-            <Link href="/for-brokerages" className="hover:text-slate-100 transition">Brokerages</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
@@ -107,7 +105,7 @@ export default function PricingPage() {
       <section className="max-w-4xl mx-auto px-6 pt-20 pb-16 text-center">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Pricing</p>
         <h1 className="font-display text-4xl sm:text-5xl font-semibold text-slate-100 mb-5">
-          Simple pricing for agents, coordinators and teams.
+          Simple pricing for coordinators and teams.
         </h1>
         <p className="text-lg text-slate-400 max-w-2xl mx-auto">
           Start free for 30 days with the tools you need today. Upgrade for custom workflows or team collaboration as your business grows.
@@ -259,10 +257,8 @@ export default function PricingPage() {
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <Link href="/" className="hover:text-slate-200 transition">Home</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
-            <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
-            <Link href="/for-brokerages" className="hover:text-slate-200 transition">Brokerages</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>

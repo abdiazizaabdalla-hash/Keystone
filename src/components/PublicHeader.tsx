@@ -4,10 +4,8 @@ import PublicMobileMenu from '@/components/PublicMobileMenu';
 export const PUBLIC_NAV = [
   { href: '/pricing', label: 'Pricing' },
   { href: '/faq', label: 'FAQ' },
-  { href: '/for-agents', label: 'For Agents' },
   { href: '/for-tcs', label: 'For TCs' },
   { href: '/for-teams', label: 'For Teams' },
-  { href: '/for-brokerages', label: 'Brokerages' },
 ] as const;
 
 export default function PublicHeader({ active }: { active?: string }) {

@@ -52,11 +52,10 @@ export default function ForTcsPage() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
         <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-8 sm:p-10">
-          <h2 className="font-display text-2xl font-semibold text-slate-100 mb-3">Your agents can use Relay too</h2>
+          <h2 className="font-display text-2xl font-semibold text-slate-100 mb-3">Your agents stay in the loop</h2>
           <p className="text-slate-400 max-w-3xl mb-6">
             Add an agent to a deal and they get a free portal login. You and the agent see the same deal, and your private notes stay private.
           </p>
-          <Link href="/for-agents" className="text-blue-400 hover:text-blue-300 font-medium text-sm">What agents get →</Link>
         </div>
       </section>
 

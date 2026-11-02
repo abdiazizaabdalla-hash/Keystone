@@ -461,3 +461,5 @@ Done and committed locally (not pushed):
 - Open policies removed on `tasks`, `invoices`, `transactions` (relay-test done; production pending, see the SQL given in chat).
 
 Still to do in Phase 1: `entitlements.ts`, `authorize.ts` on shared surfaces, Stripe webhook replay test, `docs/schema-snapshot.sql`, cross-account read/write tests for the shared surfaces (transactions, documents, messages, tasks).
+
+**Public site (2026-11-02):** the agent audience page, the free-portal explainer and the brokerage page are parked in `docs/parked-pages/` and off the public site until the agent workspace and brokerage product are built to full functionality. Old URLs redirect (307) to the home page. The "Agent Login" link stays for agents a coordinator has invited; sentences about a coordinator's own agents (free portal, agent invoicing) stay because they describe the live TC product.

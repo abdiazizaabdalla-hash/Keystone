@@ -159,7 +159,7 @@ export default function DemoRequestButton({ className, label = 'Request a Demo' 
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">
-                      Brokerage / Company <span className="text-slate-600">(optional)</span>
+                      Company <span className="text-slate-600">(optional)</span>
                     </label>
                     <input
                       type="text"

@@ -9,7 +9,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Getting started',
     q: 'Who is Relay TC for?',
-    a: 'Transaction coordinators and real estate agents who manage the paperwork and checklist between an accepted contract and closing day — solo TCs, brokerage support staff, and small teams, plus the agents they work with.',
+    a: 'Transaction coordinators who manage the paperwork and checklist between an accepted contract and closing day — solo TCs and small teams. The agents you work with get a free portal login for the deals you add them to.',
   },
   {
     category: 'Getting started',
@@ -237,10 +237,8 @@ export default function FAQPage() {
             <Link href="/" className="hover:text-slate-100 transition">Home</Link>
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="text-slate-100">FAQ</Link>
-            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
-            <Link href="/for-brokerages" className="hover:text-slate-100 transition">Brokerages</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
@@ -330,10 +328,8 @@ export default function FAQPage() {
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <Link href="/" className="hover:text-slate-200 transition">Home</Link>
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
-            <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
-            <Link href="/for-brokerages" className="hover:text-slate-200 transition">Brokerages</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>
