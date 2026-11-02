@@ -14,6 +14,7 @@ function AuthContent() {
 
   const [isSignUp, setIsSignUp] = useState(searchParams.get('mode') === 'signup' || !!plan);
   const [fullName, setFullName] = useState('');
+  const [accountType, setAccountType] = useState<'agent' | 'tc'>(searchParams.get('as') === 'agent' ? 'agent' : 'tc');
   const [email, setEmail] = useState(searchParams.get('email') || '');
   const [password, setPassword] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -43,7 +44,7 @@ function AuthContent() {
           password,
           ...(redirectTo ? { redirectTo } : {}),
           ...(isSignUp && fullName.trim() ? { fullName: fullName.trim() } : {}),
-          ...(isSignUp ? { acceptedTerms } : {}),
+          ...(isSignUp ? { acceptedTerms, accountType } : {}),
         }),
       });
 
@@ -236,6 +237,33 @@ function AuthContent() {
                   </form>
                 ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {isSignUp && (
+                    <div>
+                      <span className="text-sm text-slate-400 block mb-2">I am a</span>
+                      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Account type">
+                        {([
+                          { id: 'agent', label: 'Real estate agent' },
+                          { id: 'tc', label: 'Transaction coordinator' },
+                        ] as const).map((o) => (
+                          <button
+                            key={o.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={accountType === o.id}
+                            onClick={() => setAccountType(o.id)}
+                            className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
+                              accountType === o.id
+                                ? 'border-blue-400 bg-blue-500/15 text-blue-100'
+                                : 'border-white/10 bg-slate-800/70 text-slate-300 hover:border-white/20'
+                            }`}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {isSignUp && (
                     <div>
                       <label className="text-sm text-slate-400 block mb-2">Full Name</label>

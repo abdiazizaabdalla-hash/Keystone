@@ -226,6 +226,11 @@ function OnboardingContent() {
       const res = await authFetch('/api/auth/me');
       if (!res.ok) return null;
       const data = await res.json();
+      // Agents who signed up as an agent get a short setup of their own
+      // (see /onboarding/agent). A paid-plan checkout still returns here.
+      if (data.accountType === 'agent' && (!preselected || preselected === 'starter') && !checkoutStatus) {
+        router.replace('/onboarding/agent');
+      }
       setFullName(data.fullName ?? '');
       setDefaultFlatFee(String(data.defaultFlatFee ?? 400));
       setDefaultPercentFee(String(data.defaultPercentFee ?? 0));

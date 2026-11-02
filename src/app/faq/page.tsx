@@ -238,7 +238,9 @@ export default function FAQPage() {
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="text-slate-100">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
+            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-100 transition">Brokerages</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
@@ -329,7 +331,9 @@ export default function FAQPage() {
             <Link href="/" className="hover:text-slate-200 transition">Home</Link>
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
+            <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-200 transition">Brokerages</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>

@@ -8,6 +8,7 @@ import NotificationBell from '@/components/NotificationBell';
 import FirstRunGuide, { saveFirstRunGuideDone, resetFirstRunGuideLocal, type GuideKind } from '@/components/FirstRunGuide';
 import PageHint from '@/components/PageHint';
 import { isTeamPlan } from '@/lib/plans';
+import { savePersona } from '@/lib/persona';
 
 // Collapsed sidebar is icon-only -- narrow enough to stay useful on small
 // screens without hiding navigation entirely. Expanded shows icon + label.
@@ -157,6 +158,8 @@ export default function DashboardLayout({
   const [isLoading, setIsLoading] = useState(true);
   const [userName, setUserName] = useState('');
   const [plan, setPlan] = useState<string | null>(null);
+  // Presentation only (see lib/accountType.ts): an agent running their own deals does not see coordinator-only items.
+  const [isAgentAccount, setIsAgentAccount] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [trial, setTrial] = useState<{
     applies: boolean;
@@ -309,6 +312,8 @@ export default function DashboardLayout({
             return;
           }
           setPlan(data.plan || 'starter');
+          setIsAgentAccount(data.accountType === 'agent');
+          savePersona({ accountType: data.accountType === 'agent' ? 'agent' : 'tc', coordinationMode: data.coordinationMode ?? null });
           setTrial(data.trial || null);
           setUserName(data.fullName || data.email || '');
           setIsAdmin(Boolean(data.is_admin));
@@ -357,9 +362,11 @@ export default function DashboardLayout({
     }
   };
 
+  const primaryNav = isAgentAccount ? PRIMARY_NAV.filter((i) => i.href !== '/dashboard/invoices') : PRIMARY_NAV;
+
   const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
     { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
-    { href: '/dashboard/agents', label: 'Agents', icon: 'agents' },
+    ...(isAgentAccount ? [] : [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }]),
     { href: '/dashboard/search', label: 'Search', icon: 'search' },
     ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: teamUnread }] : []),
     { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
@@ -421,9 +428,9 @@ export default function DashboardLayout({
         {mobileOpen && (
           <div className="absolute left-0 right-0 top-full max-h-[calc(100vh-56px)] overflow-y-auto bg-slate-900 border-b border-white/10 shadow-xl px-3 pb-3 space-y-1">
             {[
-              ...PRIMARY_NAV.map((i) => ({ href: i.href, label: i.label })),
+              ...primaryNav.map((i) => ({ href: i.href, label: i.label })),
               { href: '/dashboard/contacts', label: 'Contacts' },
-              { href: '/dashboard/agents', label: 'Agents' },
+              ...(isAgentAccount ? [] : [{ href: '/dashboard/agents', label: 'Agents' }]),
               { href: '/dashboard/search', label: 'Search' },
               ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: teamUnread > 0 ? `Collaborate (${teamUnread})` : 'Collaborate' }] : []),
               { href: '/dashboard/settings', label: 'Settings' },
@@ -530,7 +537,7 @@ export default function DashboardLayout({
 
         {/* Navigation */}
         <nav className={`flex-1 min-h-0 overflow-y-auto py-3 tiny:py-1.5 space-y-0.5 ${collapsed ? 'px-2' : 'px-3'}`}>
-          {PRIMARY_NAV.map((item) => (
+          {primaryNav.map((item) => (
             <NavLink
               key={item.href}
               href={item.href}

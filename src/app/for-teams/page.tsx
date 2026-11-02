@@ -68,7 +68,9 @@ export default function ForTeamsPage() {
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
+            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-teams" className="text-slate-100">For Teams</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-100 transition">Brokerages</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>

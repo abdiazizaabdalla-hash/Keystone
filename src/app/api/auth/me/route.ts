@@ -8,6 +8,7 @@ import { getUserPlan, isPlatformAdmin } from '@/lib/privileged';
 import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
 import { needsOnboarding } from '@/lib/onboarding';
+import { getAccountType, getCoordinationMode } from '@/lib/accountType';
 import { normalizeDueDateSpec } from '@/lib/dueDates';
 import { BASELINE_CHECKLIST_TEMPLATE, normalizeTemplateSteps } from '@/lib/checklistTemplates';
 import { TASK_TEMPLATE } from '@/lib/transactionStages';
@@ -29,6 +30,8 @@ function shapeUser(user: {
     is_admin: isPlatformAdmin(user),
     plan: getUserPlan(user) || DEFAULT_PLAN,
     fullName: typeof meta.full_name === 'string' ? meta.full_name : '',
+    accountType: getAccountType(meta),
+    coordinationMode: getCoordinationMode(meta),
     defaultFlatFee:
       typeof meta.default_flat_fee === 'number' ? meta.default_flat_fee : DEFAULT_FLAT_FEE,
     defaultPercentFee:

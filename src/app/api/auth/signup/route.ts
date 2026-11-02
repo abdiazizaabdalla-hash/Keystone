@@ -15,7 +15,7 @@ function getClientIp(request: NextRequest): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, redirectTo, fullName, acceptedTerms } = await request.json();
+    const { email, password, redirectTo, fullName, acceptedTerms, accountType } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json(
@@ -59,7 +59,9 @@ export async function POST(request: NextRequest) {
       password,
       options: {
         ...(sameOriginRedirect(redirectTo, request.nextUrl.origin) ? { emailRedirectTo: sameOriginRedirect(redirectTo, request.nextUrl.origin) } : {}),
-        ...(trimmedName ? { data: { full_name: trimmedName } } : {}),
+        ...(trimmedName || accountType === 'agent'
+          ? { data: { ...(trimmedName ? { full_name: trimmedName } : {}), ...(accountType === 'agent' ? { account_type: 'agent' } : {}) } }
+          : {}),
       },
     });
 

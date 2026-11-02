@@ -9,6 +9,7 @@ import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 import CriticalDatesCard from '@/components/CriticalDatesCard';
 import ListingsOverviewCard from '@/components/ListingsOverviewCard';
 import AttentionPanel, { type AttentionSummary } from '@/components/AttentionPanel';
+import { readPersona, type Persona } from '@/lib/persona';
 
 interface Transaction {
   id: string;
@@ -127,6 +128,9 @@ export default function Dashboard() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  // Wording only: an agent running their own deals sees agent-focused copy. See lib/accountType.ts.
+  const [persona, setPersona] = useState<Persona>({ accountType: 'tc', coordinationMode: null });
+  useEffect(() => { setPersona(readPersona()); }, []);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [attention, setAttention] = useState<AttentionSummary | null>(null);
@@ -384,28 +388,35 @@ export default function Dashboard() {
   }
 
   if (transactions.length === 0) {
+    const isAgent = persona.accountType === 'agent';
+    const agentLine =
+      persona.coordinationMode === 'own_tc'
+        ? 'Upload a contract to keep your own view of the deal: dates, checklist and documents, alongside your TC.'
+        : persona.coordinationMode === 'automate'
+          ? 'Upload an executed contract. Relay reads it, builds the deal, the checklist and the deadlines, and reminds you before each one.'
+          : 'Upload an executed contract and Relay builds the deal, the checklist and the deadlines for you.';
     return (
       <div className="p-4 md:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Dashboard</h1>
-            <p className="text-slate-400">Welcome back to Relay TC</p>
+            <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">{isAgent ? 'Your transactions' : 'Dashboard'}</h1>
+            <p className="text-slate-400">{isAgent ? 'Everything from contract to closing, in one place.' : 'Welcome back to Relay TC'}</p>
           </div>
           <Link
             href="/dashboard/transactions/new"
             className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-blue-500/50"
           >
-            + New Deal
+            {isAgent ? '+ Add a transaction' : '+ New Deal'}
           </Link>
         </div>
         <div className="bg-slate-700/50 border border-dashed border-slate-600 rounded-lg p-16 text-center">
-          <h3 className="text-lg font-semibold text-slate-300 mb-2">No transactions yet</h3>
-          <p className="text-slate-400 mb-6">Start by creating your first deal to get organized</p>
+          <h3 className="text-lg font-semibold text-slate-300 mb-2">{isAgent ? 'Start with your first contract' : 'No transactions yet'}</h3>
+          <p className="text-slate-400 mb-6 max-w-xl mx-auto">{isAgent ? agentLine : 'Start by creating your first deal to get organized'}</p>
           <Link
             href="/dashboard/transactions/new"
             className="inline-block px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg transition hover:shadow-lg"
           >
-            Create Your First Deal
+            {isAgent ? 'Upload a contract' : 'Create Your First Deal'}
           </Link>
         </div>
       </div>

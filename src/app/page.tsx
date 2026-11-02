@@ -57,7 +57,9 @@ export default function Home() {
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
+            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-100 transition">Brokerages</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
@@ -88,31 +90,34 @@ export default function Home() {
           </span>
           <div className="flex items-center gap-2 text-xs font-semibold tracking-wider text-blue-400 uppercase mb-6">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-            From listing to closing
+            Contract to closing
           </div>
-          <h1 className="font-display text-5xl sm:text-6xl font-semibold text-slate-100 leading-[1.05] mb-6">
-            Listing to closing,<br />
-            <span className="italic text-blue-400">all in one workspace.</span>
+          <h1 className="font-display text-5xl sm:text-5xl font-semibold text-slate-100 leading-[1.08] mb-6">
+            Transaction coordination,<br />
+            <span className="italic text-blue-400">without the coordination headache.</span>
           </h1>
           <p className="text-lg text-slate-400 mb-8 max-w-lg">
-            Relay helps transaction coordinators keep listings, offers, the checklist, documents,
-            deadlines, agent communication, and invoicing together on every deal.
+            Manage every transaction from contract to closing. Work with your TC, or let Relay
+            handle the coordination for you.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <Link
               href="/auth?mode=signup&plan=starter"
               className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10"
             >
-              Start free
+              Get started
             </Link>
             <a
-              href="#demo"
+              href="#who"
               className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition"
             >
-              Watch the video
+              Explore Relay
             </a>
           </div>
-          <p className="text-xs text-slate-500 mt-4">Free for 30 days. No credit card required.</p>
+          <p className="text-xs text-slate-500 mt-4">
+            Free for 30 days. No credit card required.{' '}
+            <a href="#demo" className="text-blue-400 hover:text-blue-300">Watch the video</a>
+          </p>
         </div>
 
         {/* Mock product preview */}
@@ -172,6 +177,31 @@ export default function Home() {
       </section>
 
       {/* Product video: click to play, nothing loads until then */}
+      {/* Who Relay is for */}
+      <section id="who" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">
+          Have a TC? Work together in Relay. <span className="text-blue-400">No TC? Let Relay handle the coordination.</span>
+        </h2>
+        <p className="text-slate-400 mb-10 max-w-3xl">
+          One platform for the work between contract and closing: every transaction, document and deadline in one place.
+        </p>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {[
+            { href: '/for-agents', kicker: 'Agents', title: 'Run your own deals', body: 'Upload a contract and Relay builds the deal, the checklist and the deadlines. Work with your TC or without one.' },
+            { href: '/for-tcs', kicker: 'Transaction coordinators', title: 'Take on more files', body: 'Contract intake, checklists, deadlines, agent portals, listings and invoicing in one workspace.' },
+            { href: '/for-teams', kicker: 'Teams', title: 'Coordinate together', body: 'A shared board and contacts for your coordinators, while every deal stays private to its owner.' },
+            { href: '/for-brokerages', kicker: 'Brokerages', title: 'See every transaction', body: 'Oversight across agents and offices, standard checklists and coordinator assignment. In development.' },
+          ].map((c) => (
+            <Link key={c.href} href={c.href} className="group bg-slate-800/60 border border-slate-700 hover:border-slate-500 rounded-xl p-6 transition">
+              <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">{c.kicker}</p>
+              <h3 className="text-lg font-semibold text-slate-100 mb-2">{c.title}</h3>
+              <p className="text-sm text-slate-400 mb-4">{c.body}</p>
+              <span className="text-sm text-blue-400 group-hover:text-blue-300">Learn more →</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       <section id="demo" className="max-w-4xl mx-auto px-6 pb-16 scroll-mt-4">
         <div className="text-center mb-8">
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">See it in a minute</p>
@@ -472,7 +502,7 @@ export default function Home() {
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
         <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
           <div>
-            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple plans for solo TCs and teams.</h2>
+            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple plans for agents, coordinators and teams.</h2>
             <p className="text-slate-400">Try Relay free and see how it fits into your workflow. Upgrade when you need more agents, custom templates, or team features.</p>
           </div>
           <Link href="/pricing" className="text-blue-400 hover:text-blue-300 font-medium text-sm">
@@ -527,7 +557,9 @@ export default function Home() {
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
+            <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
             <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-200 transition">Brokerages</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>

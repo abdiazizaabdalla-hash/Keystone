@@ -147,6 +147,8 @@ export default function NewTransactionPage() {
       const data = await res.json();
       if (!Array.isArray(data)) throw new Error('Invalid agents data');
       setAgents(data);
+      // One agent profile (an agent running their own deals): no need to ask.
+      if (data.length === 1) setFormData((prev) => (prev.agentId ? prev : { ...prev, agentId: data[0].id }));
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');

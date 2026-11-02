@@ -68,6 +68,7 @@ export async function sendListingPortalInvite(params: {
     if (!agent) return 'no_agent';
     const email = String(agent.email || '').trim().toLowerCase();
     if (!email.includes('@')) return 'no_email';
+    if (email === String(user.email || '').trim().toLowerCase()) return 'already';
 
     if (params.onlyIfNew) {
       const { data: prior } = await supabaseServer.from('listing_activity').select('id').eq('listing_id', listing.id).like('summary', `Invited % (${email}) to the agent portal`).limit(1);
@@ -126,6 +127,8 @@ export async function inviteAgentToTransaction(params: {
       email = normalize(agent.email as string | null);
     }
     if (!email.includes('@')) return 'no_email';
+    // An agent running their own deal is the account owner: nobody to invite.
+    if (email === normalize(user.email)) return 'already';
 
     const { data: existing } = await supabaseServer.from('agent_invites').select('status').eq('transaction_id', transaction.id).eq('email', email).maybeSingle();
     if (existing) return 'already';
@@ -183,6 +186,8 @@ export async function grantAgentPortalAccess(params: {
     if (!agent) return { ok: false, reason: 'no_agent', ...empty };
     const email = normalize(agent.email as string | null);
     if (!email.includes('@')) return { ok: false, reason: 'no_email', ...empty };
+    // Your own profile is not someone to invite.
+    if (email === normalize(user.email)) return { ok: false, reason: 'no_email', ...empty };
 
     const closed = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1];
     const { data: txs } = await supabaseServer
