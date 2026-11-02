@@ -1,6 +1,7 @@
 import { DEFAULT_PLAN } from './plans';
 import { getStripeCustomerByUserId } from './stripeCustomers';
-import { getUserPlan } from './privileged';
+import { getUserPlan, hasAgentRole } from './privileged';
+import { AuthError } from './auth';
 
 // Starter used to be free forever. It's now a 30-day
 // trial, after which the account needs to add
@@ -109,7 +110,22 @@ type MinimalUser = {
  * purchased). Throws TrialExpiredError (handle it like AuthError — catch
  * it and return its .status) once the trial's actually over.
  */
-export async function assertTrialActive(user: MinimalUser): Promise<void> {
+export async function assertTrialActive(
+  user: MinimalUser,
+  options: { allowCollaborator?: boolean } = {}
+): Promise<void> {
+  // A free agent portal login (an invited collaborator) may work on the deals a
+  // paying coordinator added them to, but may not create or edit work in a
+  // workspace of their own. Every route that guards workspace writes with this
+  // function therefore refuses them. The few routes that agents legitimately
+  // share (direct messages) opt in with { allowCollaborator: true }, and the
+  // routes that already branch on the caller being an agent never reach this.
+  if (hasAgentRole(user) && !options.allowCollaborator) {
+    throw new AuthError(
+      'Agent portal accounts can work on deals a coordinator has added them to, but cannot create their own. Ask your coordinator to add you to a deal.',
+      403
+    );
+  }
   const planId = (getUserPlan(user) as string | undefined) || DEFAULT_PLAN;
   if (planId !== 'starter') return;
 

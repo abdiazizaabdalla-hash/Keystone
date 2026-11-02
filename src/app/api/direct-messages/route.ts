@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user, side } = await whoAmI(request);
-    await assertTrialActive(user);
+    await assertTrialActive(user, { allowCollaborator: true });
     if (!(await checkRateLimit(`direct-message:${user.id}`, 60, 60 * 60))) {
       return NextResponse.json({ error: 'You have sent a lot of messages. Try again a bit later.' }, { status: 429 });
     }
