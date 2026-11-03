@@ -8,6 +8,7 @@ import NotificationBell from '@/components/NotificationBell';
 import FirstRunGuide, { saveFirstRunGuideDone, resetFirstRunGuideLocal, type GuideKind } from '@/components/FirstRunGuide';
 import PageHint from '@/components/PageHint';
 import { isTeamPlan } from '@/lib/plans';
+import { isFeatureOnClient } from '@/lib/features';
 import { savePersona } from '@/lib/persona';
 
 // Collapsed sidebar is icon-only -- narrow enough to stay useful on small
@@ -63,6 +64,11 @@ const NAV_ICONS: Record<string, React.ReactNode> = {
   invoices: (
     <svg className={ICON_CLS} fill="currentColor" viewBox="0 0 20 20">
       <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+    </svg>
+  ),
+  templates: (
+    <svg className={ICON_CLS} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M4 3a2 2 0 00-2 2v2h16V5a2 2 0 00-2-2H4zM2 9v6a2 2 0 002 2h4V9H2zm8 0v8h6a2 2 0 002-2V9h-8z" />
     </svg>
   ),
   settings: (
@@ -375,6 +381,7 @@ export default function DashboardLayout({
   const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
     { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
     ...(isAgentAccount ? [] : [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }]),
+    ...(isFeatureOnClient('templates') && !(isAgentAccount && !hasWorkspace) ? [{ href: '/dashboard/templates', label: 'Templates', icon: 'templates' }] : []),
     { href: '/dashboard/search', label: 'Search', icon: 'search' },
     ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: teamUnread }] : []),
     { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
