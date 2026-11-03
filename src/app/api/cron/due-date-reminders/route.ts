@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isFeatureOn } from '@/lib/features';
 import { evaluateAllTemplateRules } from '@/lib/templateRules';
+import { syncTrecCatalog } from '@/lib/trecCatalog';
 import { supabaseServer } from '@/lib/supabase';
 import { collectListingReminders } from '@/lib/listingReminders';
 import { sendDueDateReminderDigest, sendAgentKeyDateReminder, ReminderTransactionGroup } from '@/lib/dueDateReminders';
@@ -250,6 +251,7 @@ export async function GET(request: NextRequest) {
   // Drafts for automatic template rules (only when the templates feature is on; sends nothing, just makes drafts).
   let templateDrafts: { owners: number; drafts: number; failed: number } | undefined;
   if (isFeatureOn('templates')) {
+    await syncTrecCatalog(); // re-read TREC's list of forms (never throws)
     try {
       templateDrafts = await evaluateAllTemplateRules();
     } catch (err) {

@@ -182,5 +182,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/template-runs': { kind: 'session', methods: ['GET'] },
   '/api/template-runs/outbox': { kind: 'session', methods: ['GET'] },
   '/api/template-runs/[runId]/decide': { kind: 'session', methods: ['POST'] },
+  '/api/templates/trec': { kind: 'session', methods: ['GET'] },
+  '/api/templates/pins': { kind: 'session', methods: ['DELETE', 'GET', 'POST'] },
   '/api/templates/starters': { kind: 'session', methods: ['GET', 'POST'] },
 };

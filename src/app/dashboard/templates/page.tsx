@@ -7,6 +7,7 @@ import { MERGE_FIELDS } from '@/lib/templateMerge';
 import { US_STATES } from '@/lib/usStates';
 import TemplateRules from '@/components/TemplateRules';
 import TemplateApprovals from '@/components/TemplateApprovals';
+import DocumentsLibrary from '@/components/DocumentsLibrary';
 
 type Kind = 'email' | 'letter' | 'form';
 type Section = 'documents' | 'emails';
@@ -238,6 +239,10 @@ export default function TemplatesPage() {
             </div>
           </div>
 
+          {section === 'documents' ? (
+            <DocumentsLibrary reloadKey={reloadKey} showArchived={showArchived} onEdit={(t) => setEditing(t as Template)} />
+          ) : (
+            <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <select className={inputCls} value={state} onChange={(e) => setState(e.target.value)} aria-label="State">
               <option value="">All states</option>
@@ -247,46 +252,34 @@ export default function TemplatesPage() {
                 </option>
               ))}
             </select>
-            {section === 'documents' ? (
-              <select className={inputCls} value={docType} onChange={(e) => setDocType(e.target.value as '' | 'letter' | 'form')} aria-label="Type">
-                <option value="">Letters and forms</option>
-                <option value="letter">Letters only</option>
-                <option value="form">Forms only</option>
-              </select>
-            ) : (
-              <select className={inputCls} value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
-                <option value="">Every category</option>
-                {CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            )}
+            <select className={inputCls} value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
+              <option value="">Every category</option>
+              {CATEGORIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
             <input className={`${inputCls} sm:col-span-2`} placeholder={`Search ${section}`} value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          {state && <p className="text-xs text-slate-500 -mt-2">Showing {US_STATES.find((s) => s.code === state)?.name} templates and the ones that work in every state.</p>}
+          {state && <p className="text-xs text-slate-500 -mt-2">Showing {US_STATES.find((s) => s.code === state)?.name} templates and the General ones that work in any state.</p>}
 
           {loading ? (
             <div className="text-slate-400">Loading…</div>
           ) : templates.length === 0 ? (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-              <p className="text-slate-200 font-semibold mb-1">{q || state || docType || category ? 'Nothing matches those filters.' : section === 'documents' ? 'No letters or forms yet.' : 'No email templates yet.'}</p>
+              <p className="text-slate-200 font-semibold mb-1">{q || state || category ? 'Nothing matches those filters.' : 'No email templates yet.'}</p>
               <p className="text-sm text-slate-400 mb-4 max-w-md mx-auto">
-                {missingStarters.length > 0
-                  ? `Start with the starter ${section === 'emails' ? 'emails: friendly after-closing messages you can rewrite' : 'letters: simple ones you can rewrite'}.`
-                  : section === 'documents'
-                    ? 'Write a letter, or upload a form you already use and tag it with its state.'
-                    : 'Write your first email template.'}
+                {missingStarters.length > 0 ? 'Start with the starter emails: friendly after-closing messages you can rewrite.' : 'Write your first email template.'}
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 {missingStarters.length > 0 && (
                   <button type="button" className={btnPrimary} onClick={installStarters} disabled={installing}>
-                    Add the starter {section === 'emails' ? 'emails' : 'letters'}
+                    Add the starter emails
                   </button>
                 )}
-                <button type="button" className={btnGhost} onClick={() => setEditing({ new: section === 'emails' ? 'email' : 'letter' })}>
-                  {section === 'emails' ? 'New email' : 'New letter'}
+                <button type="button" className={btnGhost} onClick={() => setEditing({ new: 'email' })}>
+                  New email
                 </button>
               </div>
             </div>
@@ -299,15 +292,12 @@ export default function TemplatesPage() {
                       <div className="text-slate-100 font-semibold truncate">{t.name}</div>
                       {t.description && <div className="text-xs text-slate-400 mt-0.5 line-clamp-2">{t.description}</div>}
                     </div>
-                    {section === 'documents' && (
-                      <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40 shrink-0">{KIND_LABEL[t.kind]}</span>
-                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 mt-auto pt-3 text-xs">
                     <span className="text-slate-400">{categoryLabel(t.category)}</span>
                     <span className="text-slate-600">·</span>
                     {t.states.length === 0 ? (
-                      <span className="text-slate-400">Every state</span>
+                      <span className="text-slate-400">General</span>
                     ) : (
                       t.states.slice(0, 5).map((s) => (
                         <span key={s} className="px-1.5 py-0.5 rounded bg-slate-700/70 text-slate-200">
@@ -322,6 +312,9 @@ export default function TemplatesPage() {
                 </button>
               ))}
             </div>
+          )}
+
+            </>
           )}
 
           <label className="flex items-center gap-2 text-xs text-slate-400">
@@ -549,7 +542,7 @@ function TemplateEditor({ template, startKind, onClose, onSaved }: { template: T
                 </button>
               </div>
               <div className="flex flex-wrap gap-1.5 mb-1">
-                {states.length === 0 ? <span className="text-sm text-slate-300">Every state</span> : states.map((s) => (
+                {states.length === 0 ? <span className="text-sm text-slate-300">General</span> : states.map((s) => (
                   <span key={s} className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-200 text-xs">
                     {s}
                   </span>
@@ -569,7 +562,7 @@ function TemplateEditor({ template, startKind, onClose, onSaved }: { template: T
                   <>
                     Shown on deals in {states.join(', ')}.{' '}
                     <button type="button" className="text-slate-400 hover:text-slate-200 underline" onClick={() => setStates([])}>
-                      Use in every state
+                      Use as General (any state)
                     </button>
                   </>
                 )}

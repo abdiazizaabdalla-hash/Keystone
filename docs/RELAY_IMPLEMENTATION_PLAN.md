@@ -642,7 +642,9 @@ Test 9: switch one low-risk deal to Auto, confirm it sends only template-based r
 
 ### Document templates and post-closing automation (local-ai branch, not pushed; feature `templates`)
 
-**What exists.** A template library per coordinator or workspace agent: emails and letters with `{{merge fields}}`, and "forms", which are the person's own PDF or Word files kept by state (Relay ships no state legal forms). Each template lists the states it is for (empty = every state); deals carry a `property_state` (guessed from the address, editable on the deal), and the picker on a deal shows that state's templates plus the all-state ones. A starter pack of 10 generic emails and letters installs on request.
+**What exists.** A template library per coordinator or workspace agent: emails and letters with `{{merge fields}}`, and "forms", which are the person's own PDF or Word files kept by state (Relay ships no state legal forms). Each template lists the states it is for (empty = "General", any state); deals carry a `property_state` (guessed from the address, editable on the deal), and the picker on a deal shows that state's templates plus the all-state ones. A starter pack of 10 generic emails and letters installs on request.
+
+**Texas forms (link-only).** The Documents tab has a Texas folder listing every official TREC form (contracts, addenda, other). Relay stores no copy of any TREC form: each row links to the form's own page on trec.texas.gov, so the person always opens the current version. A daily re-read of TREC's public list notices revised forms and shows "Updated, was ...". Folders for other states, a "General" folder (templates with no state), and pinning of folders, templates or TREC forms sit beside it. Only Texas for now; other states would need a per-state check of the regulator's site before being added.
 
 **Use on a deal.** "Use a template" on the deal page fills in client, agent, address, price and dates, flags anything the deal lacks, then: sends the email (to people on the deal), saves a letter as a PDF in Documents, or copies the form into Documents.
 

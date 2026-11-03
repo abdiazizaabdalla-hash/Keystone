@@ -182,7 +182,7 @@ export default function UseTemplateModal({
           <div>
             <h2 className="text-xl font-semibold text-slate-100">{picked ? picked.name : mode === 'documents' ? 'Add a document from a template' : mode === 'emails' ? 'Send an email from a template' : 'Use a template'}</h2>
             <p className="text-xs text-slate-400">
-              {picked ? 'Check the text, then choose what to do with it.' : dealState ? `Showing templates for ${dealState} and every state.` : 'Pick a template. Set the deal’s state to see only the ones for that state.'}
+              {picked ? 'Check the text, then choose what to do with it.' : dealState ? `Showing templates for ${dealState} and General ones.` : 'Pick a template. Set the deal’s state to see only the ones for that state.'}
             </p>
           </div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200 text-sm">
