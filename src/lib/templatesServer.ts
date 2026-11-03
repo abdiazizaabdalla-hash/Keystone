@@ -24,7 +24,7 @@ export function templateError(error: unknown, what: string) {
   const info = error as { code?: string } | null;
   if (info && (info.code === 'PGRST205' || info.code === '42P01' || info.code === '42703')) {
     console.error(`Error ${what} templates (database not updated):`, error);
-    return NextResponse.json({ error: 'The database needs one more update before templates work. Run add-templates-automation.sql in Supabase.' }, { status: 500 });
+    return NextResponse.json({ error: 'The database needs one more update before templates work. Run add-templates-automation.sql and add-templates-last-used.sql in Supabase.' }, { status: 500 });
   }
   console.error(`Error ${what} templates:`, error);
   return NextResponse.json({ error: `Failed to ${what} templates` }, { status: 500 });
@@ -101,4 +101,18 @@ export async function loadOwnRule(ruleId: string, ownerId: string) {
   const { data } = await supabaseServer.from('template_rules').select('*').eq('id', ruleId).maybeSingle();
   if (!data || data.owner_user_id !== ownerId) throw new AuthError('Rule not found', 404);
   return data;
+}
+
+/** Remembers that a template was just used, for the "recently used" shortcuts. Never fails the request it is part of. */
+export async function markTemplateUsed(templateId: string, ownerId: string): Promise<void> {
+  try {
+    const { data } = await supabaseServer.from('doc_templates').select('use_count').eq('id', templateId).eq('owner_user_id', ownerId).maybeSingle();
+    await supabaseServer
+      .from('doc_templates')
+      .update({ last_used_at: new Date().toISOString(), use_count: ((data?.use_count as number | undefined) ?? 0) + 1 })
+      .eq('id', templateId)
+      .eq('owner_user_id', ownerId);
+  } catch (error) {
+    console.error('Could not note template use:', error);
+  }
 }

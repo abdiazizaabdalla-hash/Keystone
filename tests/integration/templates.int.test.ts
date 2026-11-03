@@ -82,6 +82,21 @@ describe('filtering by state', () => {
   });
 });
 
+describe('documents and emails are listed apart', () => {
+  it('?kinds= splits letters and forms from emails', async () => {
+    const docs = ((await list(tc, '?kinds=letter,form')).json as Array<{ kind: string }>).map((t) => t.kind);
+    expect(docs.length).toBeGreaterThan(0);
+    expect(docs.every((k) => k === 'letter' || k === 'form')).toBe(true);
+    const emails = ((await list(tc, '?kinds=email')).json as Array<{ kind: string }>).map((t) => t.kind);
+    expect(emails.length).toBeGreaterThan(0);
+    expect(emails.every((k) => k === 'email')).toBe(true);
+  });
+
+  it('?recent= is empty until a template has been used', async () => {
+    expect(((await list(tc, '?kinds=letter,form&recent=4')).json as unknown[]).length).toBe(0);
+  });
+});
+
 describe('privacy', () => {
   it('another coordinator cannot see, change or delete mine', async () => {
     const id = idOf(await create(tc, { kind: 'letter', name: 'Mine only', body: 'private' }));

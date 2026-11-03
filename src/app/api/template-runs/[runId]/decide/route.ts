@@ -7,7 +7,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { displayNameOf, loadDealForTemplates, recipientsOf } from '@/lib/templateContext';
 import { EMAIL_RE, sendDealEmail } from '@/lib/dealEmail';
 import { attachFormToDeal, saveLetterToDeal } from '@/lib/templateActions';
-import { requireTemplatesUser, templateError } from '@/lib/templatesServer';
+import { markTemplateUsed, requireTemplatesUser, templateError } from '@/lib/templatesServer';
 
 const DAILY_CAP = 100;
 
@@ -70,6 +70,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
       await supabaseServer.from('template_runs').update({ sent_at: new Date().toISOString(), subject: subject || null, body: text || null, generated_document_id: documentId }).eq('id', runId);
       await logAudit(request, { id: user.id, email: user.email }, 'transaction.template_run_approved', { entityType: 'transaction', entityId: run.transaction_id as string, metadata: { runId, kind: run.kind, recipients: chosen.length } });
+      if (run.template_id) await markTemplateUsed(run.template_id as string, user.id);
       return NextResponse.json({ ok: true, status: 'sent' });
     } catch (error) {
       console.error('Approved template draft failed:', error);

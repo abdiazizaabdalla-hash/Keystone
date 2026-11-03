@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
-import { cleanTemplateInput, requireTemplatesUser, templateError } from '@/lib/templatesServer';
+import { cleanTemplateInput, requireTemplatesUser, templateError, TEMPLATE_KINDS, type TemplateKind } from '@/lib/templatesServer';
 import { templateFitsState, isStateCode } from '@/lib/usStates';
 
 // GET ?state=TX&kind=email&category=post_closing&q=thanks&archived=1
@@ -9,10 +9,17 @@ export async function GET(request: NextRequest) {
   try {
     const { user } = await requireTemplatesUser(request);
     const p = request.nextUrl.searchParams;
-    let query = supabaseServer.from('doc_templates').select('*').eq('owner_user_id', user.id).order('name', { ascending: true }).limit(1000);
+    let query = supabaseServer.from('doc_templates').select('*').eq('owner_user_id', user.id).limit(1000);
+    if (!(Number(request.nextUrl.searchParams.get('recent')) > 0)) query = query.order('name', { ascending: true });
     if (p.get('archived') !== '1') query = query.eq('archived', false);
     const kind = p.get('kind');
     if (kind) query = query.eq('kind', kind);
+    // ?kinds=letter,form: documents; ?kinds=email: emails
+    const kinds = (p.get('kinds') || '').split(',').filter((k) => TEMPLATE_KINDS.includes(k as TemplateKind));
+    if (kinds.length > 0) query = query.in('kind', kinds);
+    // ?recent=5: the ones used most recently, newest first
+    const recent = Number(p.get('recent'));
+    if (recent > 0) query = query.not('last_used_at', 'is', null).order('last_used_at', { ascending: false }).limit(Math.min(recent, 20));
     const category = p.get('category');
     if (category) query = query.eq('category', category);
     const { data, error } = await query;

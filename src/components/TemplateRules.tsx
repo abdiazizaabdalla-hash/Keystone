@@ -109,7 +109,7 @@ export default function TemplateRules({ templateId }: { templateId: string }) {
       {rules && rules.length > 0 && (
         <ul className="mt-3 space-y-2">
           {rules.map((r) => (
-            <li key={r.id} className="flex items-center justify-between gap-3 bg-slate-800/50 rounded-lg px-3 py-2">
+            <li key={r.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-slate-800/50 rounded-lg px-3 py-2">
               <span className={`text-sm ${r.enabled ? 'text-slate-100' : 'text-slate-500'}`}>{describeRule(r)}</span>
               <span className="flex items-center gap-3 shrink-0">
                 <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">

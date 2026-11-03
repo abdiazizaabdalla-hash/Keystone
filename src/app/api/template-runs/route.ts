@@ -28,9 +28,12 @@ export async function GET(request: NextRequest) {
       const { data: ts } = await supabaseServer.from('doc_templates').select('id, name').in('id', templateIds);
       for (const t of ts || []) templateNames.set(t.id as string, t.name as string);
     }
+    const { data: ruleRows } = await supabaseServer.from('template_rules').select('id, enabled, trigger_event, offset_days, repeat_yearly, repeat_years, recipient_roles').eq('owner_user_id', user.id);
+    const ruleById = new Map((ruleRows || []).map((r) => [r.id as string, r]));
     return NextResponse.json({
       outboxOnly: outboxOnly(),
-      runs: runs.map((r) => ({ ...r, deal: names.get(r.transaction_id as string) ?? null, template_name: r.template_id ? templateNames.get(r.template_id as string) ?? null : null })),
+      rules: { total: (ruleRows || []).length, enabled: (ruleRows || []).filter((r) => r.enabled).length },
+      runs: runs.map((r) => ({ ...r, deal: names.get(r.transaction_id as string) ?? null, template_name: r.template_id ? templateNames.get(r.template_id as string) ?? null : null, rule: r.rule_id ? ruleById.get(r.rule_id as string) ?? null : null })),
     });
   } catch (error) {
     return templateError(error, 'load drafts of');

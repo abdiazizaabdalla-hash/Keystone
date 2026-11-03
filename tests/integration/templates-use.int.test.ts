@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST as createAgent } from '@/app/api/agents/route';
 import { POST as createTransaction } from '@/app/api/transactions/route';
-import { POST as createTemplate } from '@/app/api/templates/route';
+import { GET as listTemplates, POST as createTemplate } from '@/app/api/templates/route';
 import { POST as uploadFile } from '@/app/api/templates/[id]/file/route';
 import { POST as renderTemplate } from '@/app/api/templates/[id]/render/route';
 import { POST as applyTemplate } from '@/app/api/templates/[id]/apply/route';
@@ -102,6 +102,15 @@ describe('letters and forms into Documents', () => {
     expect(data![0].file_name).toBe('Summary letter.pdf');
     expect(data![0].content_type).toBe('application/pdf');
     expect(data![0].file_size).toBeGreaterThan(200);
+  });
+
+  it('remembers what was used, newest first, for the quick-access shortcuts', async () => {
+    const res = await call(h(listTemplates), tc, { method: 'GET', path: '/api/templates?kinds=letter,form&recent=4' });
+    const names = (res.json as Array<{ name: string }>).map((t) => t.name);
+    expect(names).toEqual(['Summary letter']);
+    const emails = await call(h(listTemplates), tc, { method: 'GET', path: '/api/templates?kinds=email&recent=4' });
+    expect((emails.json as Array<{ name: string }>).map((t) => t.name)).toEqual(['Hello']);
+    expect(((await call(h(listTemplates), other, { method: 'GET', path: '/api/templates?recent=4' })).json as unknown[]).length).toBe(0);
   });
 
   it('copies an uploaded form onto the deal, and asks for the file first', async () => {

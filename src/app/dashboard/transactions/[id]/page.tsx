@@ -368,7 +368,25 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   // An agent with their own workspace: their deals talk to clients and a coordinator, not to "an agent on the portal".
   const [isAgentAcct, setIsAgentAcct] = useState(false);
   const [showAddCoordinator, setShowAddCoordinator] = useState(false);
-  const [showUseTemplate, setShowUseTemplate] = useState(false);
+  const [useTemplate, setUseTemplate] = useState<{ mode: 'all' | 'documents'; initial?: { id: string; kind: 'email' | 'letter' | 'form'; name: string; description: string | null; states: string[] } } | null>(null);
+  const [recentTemplates, setRecentTemplates] = useState<Array<{ id: string; kind: 'email' | 'letter' | 'form'; name: string; description: string | null; states: string[] }>>([]);
+  const [recentKey, setRecentKey] = useState(0);
+  const templatesOn = isFeatureOnClient('templates');
+  useEffect(() => {
+    if (!templatesOn) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/templates?kinds=letter,form&recent=4');
+        if (!cancelled && res.ok) setRecentTemplates(await res.json());
+      } catch {
+        /* quick access is a convenience; the page works without it */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [templatesOn, recentKey]);
   const [clientFormSignal, setClientFormSignal] = useState(0);
   // The direct conversation with the other professional on the deal exists once someone else is on it.
   const hasThread = Boolean(transaction?.shared) || acceptedAgentUsers.length > 0;
@@ -2491,13 +2509,45 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 doesn&apos;t have to be.
               </p>
             </div>
-            <button
-              onClick={() => setShowUploadForm((prev) => !prev)}
-              className="flex-shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg text-sm transition"
-            >
-              {showUploadForm ? 'Cancel' : '+ Upload Document'}
-            </button>
+            <div className="flex flex-wrap justify-end gap-2 flex-shrink-0">
+              {templatesOn && (
+                <button
+                  type="button"
+                  onClick={() => setUseTemplate({ mode: 'documents' })}
+                  className="px-4 py-2 border border-slate-600 hover:border-blue-500 text-slate-200 hover:text-blue-300 font-semibold rounded-lg text-sm transition"
+                  title="Add a letter or one of your own forms from your templates"
+                >
+                  From a template
+                </button>
+              )}
+              <button
+                onClick={() => setShowUploadForm((prev) => !prev)}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg text-sm transition"
+              >
+                {showUploadForm ? 'Cancel' : '+ Upload Document'}
+              </button>
+            </div>
           </div>
+
+          {templatesOn && recentTemplates.length > 0 && (
+            <div className="mt-4 mb-2">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Recently used templates</p>
+              <div className="flex flex-wrap gap-2">
+                {recentTemplates.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setUseTemplate({ mode: 'documents', initial: t })}
+                    className="max-w-full inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-sm text-slate-100 transition"
+                    title={t.description || `Add “${t.name}” to this deal`}
+                  >
+                    <span className="truncate">{t.name}</span>
+                    <span className="text-[10px] uppercase tracking-wide text-blue-300 shrink-0">{t.kind === 'form' ? 'Form' : 'Letter'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {showUploadForm && (
             <form
@@ -2640,12 +2690,20 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           />
         )}
 
-        {showUseTemplate && (
+        {useTemplate && (
           <UseTemplateModal
             transactionId={resolvedParams.id}
             dealState={transaction.property_state ?? stateFromAddress(transaction.property_address)}
-            onClose={() => setShowUseTemplate(false)}
-            onDocumentAdded={() => void fetchData()}
+            mode={useTemplate.mode}
+            initialTemplate={useTemplate.initial}
+            onClose={() => {
+              setUseTemplate(null);
+              setRecentKey((k) => k + 1);
+            }}
+            onDocumentAdded={() => {
+              void fetchData();
+              setRecentKey((k) => k + 1);
+            }}
           />
         )}
 
@@ -2697,7 +2755,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   {isFeatureOnClient('templates') && (
                     <button
                       type="button"
-                      onClick={() => setShowUseTemplate(true)}
+                      onClick={() => setUseTemplate({ mode: 'all' })}
                       className="text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition"
                       title="Fill in one of your templates with this deal's details"
                     >

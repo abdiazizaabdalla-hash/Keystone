@@ -7,7 +7,7 @@ import { logAudit } from '@/lib/audit';
 import { displayNameOf } from '@/lib/templateContext';
 import { EMAIL_RE, sendDealEmail } from '@/lib/dealEmail';
 import { attachFormToDeal, saveLetterToDeal } from '@/lib/templateActions';
-import { loadOwnTemplate, requireTemplatesUser, templateError } from '@/lib/templatesServer';
+import { loadOwnTemplate, markTemplateUsed, requireTemplatesUser, templateError } from '@/lib/templatesServer';
 
 // POST { transactionId, action: 'send' | 'save_pdf' | 'attach_form', subject?, body?, to? }
 //   send        an email template: send it to the people picked (recorded in the outbox on a developer machine)
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         source: 'template',
       });
       await logAudit(request, { id: user.id, email: user.email }, 'transaction.template_email_sent', { entityType: 'transaction', entityId: transactionId, metadata: { templateId: id, recipients: to.length, mode: result.mode } });
+      await markTemplateUsed(id, user.id);
       return NextResponse.json({ ok: true, mode: result.mode });
     }
 
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (!text) throw new AuthError('The letter is empty.', 400);
       const doc = await saveLetterToDeal(user.id, transactionId, template.name as string, subject, text);
       await logAudit(request, { id: user.id, email: user.email }, 'transaction.template_letter_saved', { entityType: 'transaction', entityId: transactionId, metadata: { templateId: id } });
+      await markTemplateUsed(id, user.id);
       return NextResponse.json({ ok: true, document: doc });
     }
 
@@ -61,6 +63,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (template.kind !== 'form') throw new AuthError('Only a form template carries a file.', 400);
       const doc = await attachFormToDeal(user.id, transactionId, template);
       await logAudit(request, { id: user.id, email: user.email }, 'transaction.template_form_attached', { entityType: 'transaction', entityId: transactionId, metadata: { templateId: id } });
+      await markTemplateUsed(id, user.id);
       return NextResponse.json({ ok: true, document: doc });
     }
 

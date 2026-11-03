@@ -45,14 +45,22 @@ async function readError(res: Response, fallback: string) {
 export default function UseTemplateModal({
   transactionId,
   dealState,
+  mode = 'all',
+  initialTemplate,
   onClose,
   onDocumentAdded,
 }: {
   transactionId: string;
   dealState: string | null;
+  /** Which kind of template to offer: 'documents' (letters and forms), 'emails', or both with a switch. */
+  mode?: 'all' | 'documents' | 'emails';
+  /** Open straight on this template (from a "recently used" shortcut). */
+  initialTemplate?: TemplateRow;
   onClose: () => void;
   onDocumentAdded: () => void;
 }) {
+  const [section, setSection] = useState<'documents' | 'emails'>(mode === 'emails' ? 'emails' : 'documents');
+  const [recent, setRecent] = useState<TemplateRow[]>([]);
   const [templates, setTemplates] = useState<TemplateRow[] | null>(null);
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState<TemplateRow | null>(null);
@@ -65,18 +73,45 @@ export default function UseTemplateModal({
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
 
+  const kindsParam = section === 'emails' ? 'email' : 'letter,form';
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const res = await authFetch(`/api/templates${dealState ? `?state=${dealState}` : ''}`);
+      const stateQs = dealState ? `&state=${dealState}` : '';
+      const [res, recentRes] = await Promise.all([authFetch(`/api/templates?kinds=${kindsParam}${stateQs}`), authFetch(`/api/templates?kinds=${kindsParam}&recent=4${stateQs}`)]);
       if (cancelled) return;
       if (!res.ok) return setError(await readError(res, 'Could not load your templates'));
       setTemplates((await res.json()) as TemplateRow[]);
+      if (recentRes.ok) setRecent((await recentRes.json()) as TemplateRow[]);
     })();
     return () => {
       cancelled = true;
     };
-  }, [dealState]);
+  }, [dealState, kindsParam]);
+
+  // Opened from a "recently used" shortcut: go straight to that template.
+  useEffect(() => {
+    if (!initialTemplate) return;
+    let cancelled = false;
+    (async () => {
+      const res = await authFetch(`/api/templates/${initialTemplate.id}/render`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId }),
+      });
+      if (cancelled) return;
+      if (!res.ok) return setError(await readError(res, 'Could not fill in the template'));
+      const r = (await res.json()) as Rendered;
+      setPicked(initialTemplate);
+      setRendered(r);
+      setSubject(r.subject);
+      setBody(r.body);
+      setChosen(r.recipients.filter((p) => p.category === 'Buyer' || p.category === 'Seller').map((p) => p.email!).slice(0, 1));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialTemplate, transactionId]);
 
   const choose = async (t: TemplateRow, recipientEmail?: string) => {
     setBusy(true);
@@ -145,7 +180,7 @@ export default function UseTemplateModal({
       <div className="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-2xl p-5 md:p-6 my-8" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-xl font-semibold text-slate-100">{picked ? picked.name : 'Use a template'}</h2>
+            <h2 className="text-xl font-semibold text-slate-100">{picked ? picked.name : mode === 'documents' ? 'Add a document from a template' : mode === 'emails' ? 'Send an email from a template' : 'Use a template'}</h2>
             <p className="text-xs text-slate-400">
               {picked ? 'Check the text, then choose what to do with it.' : dealState ? `Showing templates for ${dealState} and every state.` : 'Pick a template. Set the deal’s state to see only the ones for that state.'}
             </p>
@@ -166,12 +201,34 @@ export default function UseTemplateModal({
           </div>
         ) : !picked || !rendered ? (
           <div className="space-y-3">
+            {mode === 'all' && (
+              <div className="grid grid-cols-2 gap-1 p-1 bg-white/5 border border-white/10 rounded-xl text-sm" role="tablist">
+                {(['documents', 'emails'] as const).map((sec) => (
+                  <button key={sec} type="button" role="tab" aria-selected={section === sec} onClick={() => { setSection(sec); setTemplates(null); setRecent([]); }} className={`rounded-lg py-1.5 transition ${section === sec ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-white/10'}`}>
+                    {sec === 'documents' ? 'Documents' : 'Emails'}
+                  </button>
+                ))}
+              </div>
+            )}
+            {recent.length > 0 && !q && (
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Recently used</p>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {recent.map((t) => (
+                    <button key={t.id} type="button" disabled={busy} onClick={() => choose(t)} className="text-left bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-xl px-3 py-2 transition disabled:opacity-50 min-w-0">
+                      <span className="block text-sm text-slate-100 font-medium truncate">{t.name}</span>
+                      <span className="block text-[11px] text-blue-300 uppercase tracking-wide">{kindLabel[t.kind]}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <input className={inputCls} placeholder="Search your templates" value={q} onChange={(e) => setQ(e.target.value)} />
             {templates === null ? (
               <p className="text-sm text-slate-400">Loading…</p>
             ) : shown.length === 0 ? (
               <p className="text-sm text-slate-400">
-                {templates.length === 0 ? 'You have no templates yet. Add the starter pack or make your own on the Templates page.' : 'Nothing matches.'}
+                {templates.length === 0 ? `You have no ${section === 'emails' ? 'email' : 'document'} templates yet. Add some on the Templates page.` : 'Nothing matches.'}
               </p>
             ) : (
               <div className="grid gap-2 max-h-[50vh] overflow-y-auto pr-1">
