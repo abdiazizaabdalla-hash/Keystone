@@ -39,7 +39,8 @@ const TREC_RECOMMENDED: { match: RegExp; why: string }[] = [
 ];
 
 const IABS_RE = /iabs|information about brokerage|agency disclosure|consumer notice/i;
-const card = 'bg-slate-800/40 border border-white/10 rounded-xl p-4';
+const box = 'bg-white/5 border border-white/10 rounded-2xl p-5';
+const card = 'bg-slate-800/40 border border-white/10 rounded-xl p-3';
 
 export default function DealStateDocs({ dealState, onUse }: { dealState: string | null; onUse: (t: DealTemplate) => void }) {
   const [mine, setMine] = useState<DealTemplate[] | null>(null);
@@ -68,9 +69,10 @@ export default function DealStateDocs({ dealState, onUse }: { dealState: string 
 
   if (!dealState) {
     return (
-      <div className={`${card} mt-4`}>
-        <p className="text-sm text-slate-300">Add the property address, or choose the state on the Overview tab, to see the forms and templates for that state here.</p>
-      </div>
+      <section className={box}>
+        <h2 className="text-lg font-bold text-slate-100 mb-1">Documents for this deal&rsquo;s state</h2>
+        <p className="text-sm text-slate-400">Add the property address, or choose the state on the Overview tab, to see the forms and templates for that state here.</p>
+      </section>
     );
   }
 
@@ -96,9 +98,9 @@ export default function DealStateDocs({ dealState, onUse }: { dealState: string 
   );
 
   return (
-    <div className="mt-4 space-y-3">
-      <div className="flex flex-wrap items-baseline gap-x-3">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{stateName} documents for this deal</p>
+    <section className={`${box} space-y-3`}>
+      <div>
+        <h2 className="text-lg font-bold text-slate-100">{stateName} documents for this deal</h2>
         <p className="text-xs text-slate-500">Chosen from the property address ({dealState}). You can change the state on the Overview tab.</p>
       </div>
 
@@ -124,8 +126,10 @@ export default function DealStateDocs({ dealState, onUse }: { dealState: string 
             href="/dashboard/templates?upload=iabs"
             className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-dashed border-slate-600 hover:border-blue-500 px-3 py-2.5 text-sm text-slate-300 hover:text-blue-300 transition"
           >
-            <span>Add your brokerage&rsquo;s IABS{dealState === 'TX' ? ' (Information About Brokerage Services)' : ' or agency disclosure'}</span>
-            <span className="text-xs text-slate-500">Upload once, use on every {stateName} deal</span>
+            <span>
+              Add your brokerage&rsquo;s IABS{dealState === 'TX' ? ' (Information About Brokerage Services)' : ' or agency disclosure'}
+              <span className="block text-xs text-slate-500">Upload once, use on every {stateName} deal</span>
+            </span>
           </Link>
         )}
       </div>
@@ -138,10 +142,11 @@ export default function DealStateDocs({ dealState, onUse }: { dealState: string 
             <ul className="divide-y divide-white/5">
               {trecPicks.map(({ r, form }) => (
                 <li key={form.slug}>
-                  <a href={form.url} target="_blank" rel="noreferrer" className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-2 text-sm hover:bg-white/5 -mx-2 px-2 rounded-lg transition">
-                    <span className="text-slate-100">{form.name}</span>
-                    <span className="text-xs text-slate-500">{form.formId}</span>
-                    <span className="text-xs text-slate-400 ml-auto">{r.why} ↗</span>
+                  <a href={form.url} target="_blank" rel="noreferrer" className="block py-2 text-sm hover:bg-white/5 -mx-2 px-2 rounded-lg transition">
+                    <span className="block text-slate-100">{form.name}</span>
+                    <span className="block text-xs text-slate-400">
+                      {form.formId} · {r.why} ↗
+                    </span>
                   </a>
                 </li>
               ))}
@@ -171,6 +176,6 @@ export default function DealStateDocs({ dealState, onUse }: { dealState: string 
           <p className="text-sm text-slate-400">We have not checked official sources for {stateName} yet.</p>
         )}
       </div>
-    </div>
+    </section>
   );
 }

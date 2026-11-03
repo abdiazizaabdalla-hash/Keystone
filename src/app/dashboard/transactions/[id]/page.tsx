@@ -2530,13 +2530,6 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             </div>
           </div>
 
-          {templatesOn && (
-            <DealStateDocs
-              dealState={transaction?.property_state ?? stateFromAddress(transaction?.property_address)}
-              onUse={(t) => setUseTemplate({ mode: 'documents', initial: t })}
-            />
-          )}
-
           {templatesOn && recentTemplates.length > 0 && (
             <div className="mt-4 mb-2">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Recently used templates</p>
@@ -3195,6 +3188,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 </div>
               </section>
 
+              {tab === 'overview' && templatesOn && (
+              <DealStateDocs
+                dealState={transaction?.property_state ?? stateFromAddress(transaction?.property_address)}
+                onUse={(t) => setUseTemplate({ mode: 'documents', initial: t })}
+              />
+            )}
+
               <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-bold text-slate-100">Contacts</h2>
@@ -3515,6 +3515,12 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 <MessagePreview messages={messages} agentName={otherPartyName} selfRole={mySide} limit={4} onAttachmentDragStart={startDocDrag} />
               )}
             </div>
+            {tab === 'documents' && templatesOn && (
+              <DealStateDocs
+                dealState={transaction?.property_state ?? stateFromAddress(transaction?.property_address)}
+                onUse={(t) => setUseTemplate({ mode: 'documents', initial: t })}
+              />
+            )}
         {/* Communication -- emails forwarded/CC'd to this transaction's
               own inbound address land here (see src/app/api/email/inbound/
               route.ts). Deliberately placed at the very bottom of the page,
