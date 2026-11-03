@@ -3,7 +3,8 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getVisibleTcUserIds } from '@/lib/team';
-import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
+import { assertAgentOnTransaction } from '@/lib/agentPortal';
+import { actsAsCollaborator } from '@/lib/authorize';
 import { autoAddContact } from '@/lib/contactsAuto';
 
 // The "Deal Contacts" list shown right under the Checklist card on the
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // An invited agent reads the same contact list the TC sees (view-only
     // -- see /agent/transactions/[id]), scoped via transaction_agents
     // rather than the TC-ownership check below.
-    if (isAgentUser(user)) {
+    if (await actsAsCollaborator(user, isAdmin, transactionId)) {
       await assertAgentOnTransaction(transactionId, user.id);
     } else if (!(await assertCanAccessTransaction(transactionId, user.id, isAdmin))) {
       return NextResponse.json({ error: 'You do not have permission to view this transaction' }, { status: 403 });
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id: transactionId } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
-    const callerIsAgent = isAgentUser(user);
+    const callerIsAgent = await actsAsCollaborator(user, isAdmin, transactionId);
     // Agents aren't TCs and have no plan/trial of their own -- same
     // reasoning as the document-upload trial-gate skip in
     // /api/documents.

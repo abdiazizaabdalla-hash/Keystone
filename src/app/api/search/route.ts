@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser, getAgentTransactionIds } from '@/lib/agentPortal';
+import { isAgentUser, isCollaboratorOnly, getAgentTransactionIds } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 
 // Every transaction id the caller is allowed to see anything about --
@@ -115,8 +115,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ results: [] });
     }
 
-    const callerIsAgent = isAgentUser(user);
-    const transactionIds = await getVisibleTransactionIds(user.id, isAdmin, callerIsAgent);
+    // A free agent sees only the deals they were added to; an agent with a workspace sees their own
+    // deals as well as the ones shared with them.
+    const callerIsAgent = isCollaboratorOnly(user);
+    let transactionIds = await getVisibleTransactionIds(user.id, isAdmin, callerIsAgent);
+    if (isAgentUser(user) && !callerIsAgent) {
+      transactionIds = Array.from(new Set([...transactionIds, ...(await getAgentTransactionIds(user.id))]));
+    }
     // Agents never see listings here (their own portal view is separate).
     const listingResults = callerIsAgent ? [] : await searchListings(user.id, isAdmin, q);
 

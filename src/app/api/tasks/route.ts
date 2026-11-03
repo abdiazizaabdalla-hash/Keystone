@@ -3,7 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { queueDealNotification } from '@/lib/notifications';
 import { isAgentUser } from '@/lib/agentPortal';
-import { authorizeDeal } from '@/lib/authorize';
+import { authorizeDeal, assertTrialForOwnWork } from '@/lib/authorize';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { statusFromTasks } from '@/lib/transactionStages';
 import { getVisibleTcUserIds } from '@/lib/team';
@@ -103,6 +103,7 @@ export async function PATCH(request: NextRequest) {
       collaborators: true,
       deniedMessage: 'You do not have permission to update this task',
     });
+    if (callerIsAgent) await assertTrialForOwnWork(user, isAdmin, task.transaction_id as string);
 
     // Toggle completed
     const nowCompleted = !task.completed;

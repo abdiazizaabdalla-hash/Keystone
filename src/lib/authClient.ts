@@ -1,4 +1,5 @@
 'use client';
+import { isFeatureOnClient } from './features';
 
 import { supabaseBrowser as supabase } from './supabaseClient';
 
@@ -44,6 +45,24 @@ export function decodeStoredRole(): string | null {
     return typeof role === 'string' ? role : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * True when the stored token belongs to an agent the admin has given a workspace of their own
+ * (and the agent_workspace feature is switched on for this environment). Used only to pick
+ * where to send them after sign-in; the server decides what they may actually do.
+ */
+export function decodeStoredWorkspace(): boolean {
+  if (!isFeatureOnClient('agent_workspace')) return false;
+  try {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (!token) return false;
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(base64));
+    return payload?.app_metadata?.role === 'agent' && payload?.app_metadata?.agent_workspace === true;
+  } catch {
+    return false;
   }
 }
 

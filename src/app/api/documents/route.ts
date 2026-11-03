@@ -3,8 +3,8 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isValidCategory, isValidDocumentType, typesForCategory, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE } from '@/lib/documentTaxonomy';
-import { authorizeDeal } from '@/lib/authorize';
-import { isAgentUser } from '@/lib/agentPortal';
+import { authorizeDeal, actsAsCollaborator, assertTrialForOwnWork } from '@/lib/authorize';
+import { isAgentUser, isCollaboratorOnly } from '@/lib/agentPortal';
 import { logAudit } from '@/lib/audit';
 import { queueDealNotification } from '@/lib/notifications';
 
@@ -204,6 +204,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (callerIsAgent) await assertTrialForOwnWork(user, isAdmin, transactionId);
     await assertTransactionAccess(transactionId, user, isAdmin, {
       allowAgent: true,
     });
@@ -306,7 +307,7 @@ export async function PATCH(request: NextRequest) {
     }
     // Filing a document under a different category is a TC job; invited
     // agents can upload and view but not reorganise the file.
-    if ((category !== undefined || documentType !== undefined) && isAgentUser(user)) {
+    if ((category !== undefined || documentType !== undefined) && isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Only the coordinator can move documents' }, { status: 403 });
     }
     if (isSigned !== undefined && typeof isSigned !== 'boolean') {
@@ -324,6 +325,12 @@ export async function PATCH(request: NextRequest) {
 
     if (fetchError || !doc) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+    }
+    if (isAgentUser(user)) {
+      await assertTrialForOwnWork(user, isAdmin, doc.transaction_id);
+      if ((category !== undefined || documentType !== undefined) && (await actsAsCollaborator(user, isAdmin, doc.transaction_id))) {
+        return NextResponse.json({ error: 'Only the coordinator can move documents' }, { status: 403 });
+      }
     }
 
     // Agents may toggle a document's signed / requires-signature state on

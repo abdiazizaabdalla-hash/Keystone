@@ -5,7 +5,8 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { mergeUserMetadata } from '@/lib/userMetadata';
 import { mergeAppMetadata } from '@/lib/privileged';
 import { isCoordinationMode } from '@/lib/accountType';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
+import { getEntitlements } from '@/lib/entitlements';
 import { logAudit } from '@/lib/audit';
 import { agentSelfServeEnabled, AGENT_SELF_SERVE_OFF_MESSAGE } from '@/lib/agentSelfServe';
 
@@ -20,11 +21,12 @@ import { agentSelfServeEnabled, AGENT_SELF_SERVE_OFF_MESSAGE } from '@/lib/agent
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (!agentSelfServeEnabled()) {
+    // Public agent signup is off; an agent the admin gave a workspace still finishes setup.
+    if (!agentSelfServeEnabled() && getEntitlements(user).kind !== 'agent_workspace') {
       return NextResponse.json({ error: AGENT_SELF_SERVE_OFF_MESSAGE }, { status: 403 });
     }
     // Free portal logins have no workspace to set up.
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'This account is a portal login, not a workspace account.' }, { status: 403 });
     }
     await assertTrialActive(user);

@@ -3,7 +3,7 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { saveSession } from '@/lib/authClient';
+import { saveSession, decodeStoredWorkspace } from '@/lib/authClient';
 
 // Returning-agent login. Password is the default now that every agent
 // sets one during /agent/welcome (their first-ever invite acceptance) --
@@ -51,7 +51,7 @@ function AgentLoginContent() {
         return;
       }
       saveSession(data.session.access_token, data.session.refresh_token, data.user.id);
-      router.push('/agent');
+      router.push(decodeStoredWorkspace() ? '/dashboard' : '/agent');
     } catch (err) {
       console.error('Error signing in as agent:', err);
       setError('Something went wrong signing you in. Please try again.');

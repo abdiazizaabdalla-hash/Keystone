@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
+import { getEntitlements } from '@/lib/entitlements';
 import { mergeUserMetadata } from '@/lib/userMetadata';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { getUserPlan, isPlatformAdmin } from '@/lib/privileged';
@@ -31,6 +32,8 @@ function shapeUser(user: {
     plan: getUserPlan(user) || DEFAULT_PLAN,
     fullName: typeof meta.full_name === 'string' ? meta.full_name : '',
     accountType: getAccountType(user.app_metadata),
+    // True for an agent the admin has given a workspace (and only while the feature is switched on).
+    agentWorkspace: getEntitlements(user).kind === 'agent_workspace',
     coordinationMode: getCoordinationMode(meta),
     defaultFlatFee:
       typeof meta.default_flat_fee === 'number' ? meta.default_flat_fee : DEFAULT_FLAT_FEE,
@@ -77,7 +80,7 @@ export async function GET(request: NextRequest) {
     // auth_token) -- returning this early and distinctly lets the caller
     // redirect to /agent instead of silently routing them into the TC
     // onboarding wizard.
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       const meta = user.user_metadata || {};
       return NextResponse.json({
         isAgent: true,

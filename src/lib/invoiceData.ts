@@ -35,7 +35,10 @@ export async function loadInvoiceBundle(
     .eq('id', invoice.agent_id)
     .single();
 
-  if (opts.allowAgent && opts.isAgent) {
+  // An agent with a workspace owns their own invoices; the invited-agent path is only for invoices on deals
+  // they were added to.
+  const ownsInvoice = !!agent && agent.tc_user_id === userId;
+  if (opts.allowAgent && opts.isAgent && !ownsInvoice) {
     await assertAgentOnTransaction(invoice.transaction_id, userId);
   } else if (!isAdmin) {
     if (!agent || agent.tc_user_id !== userId) {

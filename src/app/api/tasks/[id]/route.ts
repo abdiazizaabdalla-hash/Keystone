@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { queueDealNotification } from '@/lib/notifications';
 import { isAgentUser } from '@/lib/agentPortal';
-import { authorizeDeal } from '@/lib/authorize';
+import { authorizeDeal, assertTrialForOwnWork } from '@/lib/authorize';
 import { computeDueDates, normalizeDueDateSpec } from '@/lib/dueDates';
 
 /**
@@ -56,6 +56,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       collaborators: true,
       deniedMessage: 'You do not have permission to update this task',
     });
+    if (callerIsAgent) await assertTrialForOwnWork(user, isAdmin, transaction.id as string);
 
     const updates: Record<string, unknown> = {};
 

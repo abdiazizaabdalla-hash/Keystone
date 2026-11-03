@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { clearSession } from '@/lib/authClient';
+import { clearSession, decodeStoredWorkspace } from '@/lib/authClient';
 import NotificationBell from '@/components/NotificationBell';
 
 // Lightweight mirror of the TC sidebar (dashboard/layout.tsx) -- just
@@ -50,6 +50,12 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   const [collapsed, setCollapsed] = useState(false);
   // Phones only: the sidebar becomes a slide-down menu behind a top bar.
   const [mobileOpen, setMobileOpen] = useState(false);
+  // An agent the admin gave a workspace to gets a way back to it from the shared-deals portal.
+  const [hasWorkspace, setHasWorkspace] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setHasWorkspace(decodeStoredWorkspace()), 0);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     const initCollapsed = async () => {
@@ -128,6 +134,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
         {mobileOpen && (
           <div className="absolute left-0 right-0 top-full bg-slate-800 border-b border-slate-700 shadow-xl px-3 pb-3 space-y-1">
             {[
+              ...(hasWorkspace ? [{ href: '/dashboard', label: 'My workspace', active: false }] : []),
               { href: '/agent', label: 'Dashboard', active: isDeals },
               { href: '/agent/transactions', label: 'Transactions', active: isTransactions },
               { href: '/agent/listings', label: 'Listings', active: isListings },
@@ -201,6 +208,19 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
         )}
 
         <nav className={`flex-1 min-h-0 overflow-y-auto py-6 space-y-2 ${collapsed ? 'px-2' : 'px-3'}`}>
+          {hasWorkspace && (
+            <SideLink
+              href="/dashboard"
+              label="My workspace"
+              collapsed={collapsed}
+              active={false}
+              icon={
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10l9-7 9 7v10a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1V10z" />
+                </svg>
+              }
+            />
+          )}
           <SideLink
             href="/agent"
             label="Dashboard"

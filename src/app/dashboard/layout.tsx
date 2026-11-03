@@ -160,6 +160,8 @@ export default function DashboardLayout({
   const [plan, setPlan] = useState<string | null>(null);
   // Presentation only (see lib/accountType.ts): an agent running their own deals does not see coordinator-only items.
   const [isAgentAccount, setIsAgentAccount] = useState(false);
+  // An agent the admin gave a workspace to: also reaches the deals coordinators shared with them.
+  const [hasSharedDeals, setHasSharedDeals] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [trial, setTrial] = useState<{
     applies: boolean;
@@ -313,6 +315,7 @@ export default function DashboardLayout({
           }
           setPlan(data.plan || 'starter');
           setIsAgentAccount(data.accountType === 'agent');
+          setHasSharedDeals(Boolean(data.agentWorkspace));
           savePersona({ accountType: data.accountType === 'agent' ? 'agent' : 'tc', coordinationMode: data.coordinationMode ?? null });
           setTrial(data.trial || null);
           setUserName(data.fullName || data.email || '');
@@ -367,6 +370,7 @@ export default function DashboardLayout({
   const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
     { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
     ...(isAgentAccount ? [] : [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }]),
+    ...(hasSharedDeals ? [{ href: '/agent', label: 'Shared with you', icon: 'collaborate' }] : []),
     { href: '/dashboard/search', label: 'Search', icon: 'search' },
     ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: teamUnread }] : []),
     { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
