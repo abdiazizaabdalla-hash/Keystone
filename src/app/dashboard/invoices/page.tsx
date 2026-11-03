@@ -501,14 +501,17 @@ function CoordinatorInvoicesPage() {
 export default function InvoicesPage() {
   const [mode, setMode] = useState<'unknown' | 'agent' | 'coordinator'>('unknown');
   const [dealId, setDealId] = useState<string | undefined>(undefined);
+  const [startNew, setStartNew] = useState(false);
   const owner = useBrokerageOwner();
   const [tab, setTab] = useState<'commissions' | 'fees' | 'custom'>('commissions');
   useEffect(() => {
     setMode(readPersona().workspace ? 'agent' : 'coordinator');
-    setDealId(new URLSearchParams(window.location.search).get('transactionId') || undefined);
+    const qs = new URLSearchParams(window.location.search);
+    setDealId(qs.get('transactionId') || undefined);
+    setStartNew(qs.get('new') === '1');
   }, []);
   if (mode === 'unknown') return null;
-  if (mode === 'agent') return <AgentInvoices initialTransactionId={dealId} />;
+  if (mode === 'agent') return <AgentInvoices initialTransactionId={dealId} startNew={startNew} />;
   if (!owner) return <CoordinatorInvoicesPage />;
   return (
     <div>

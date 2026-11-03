@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import { isFeatureOnClient } from '@/lib/features';
-import BrokerageMessages from '@/components/BrokerageMessages';
+import Link from 'next/link';
 import BrokerageCommissions from '@/components/BrokerageCommissions';
 
 // The agent's side: see exactly what a brokerage can see, then accept, decline, or leave later.
@@ -121,7 +121,11 @@ export default function BrokeragePage() {
 
       {data.current && <BrokerageCommissions mode="agent" />}
 
-      {data.current && <BrokerageMessages title={`Private messages with ${data.current.owner.name}`} />}
+      {data.current && (
+        <p className={`${card} text-sm text-slate-300`}>
+          Questions about a split or a deal? <Link href="/dashboard/messages" className="text-blue-400 hover:text-blue-300">Message {data.current.owner.name}</Link>.
+        </p>
+      )}
 
       {!data.current && data.invites.length === 0 && <p className={`${card} text-sm text-slate-400`}>No invitations right now.</p>}
     </div>

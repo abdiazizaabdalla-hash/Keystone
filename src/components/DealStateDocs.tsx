@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type DragEvent } from 'react';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { US_STATES } from '@/lib/usStates';
@@ -43,8 +43,25 @@ const IABS_RE = /iabs|information about brokerage|agency disclosure|consumer not
 const box = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 const card = 'bg-slate-800/40 border border-white/10 rounded-xl p-3';
 
-export default function DealStateDocs({ dealState, onUse }: { dealState: string | null; onUse: (t: DealTemplate) => void }) {
+const OPEN_KEY = 'relay.stateDocsOpen';
+
+export default function DealStateDocs({ dealState, onUse, onDropFiles }: { dealState: string | null; onUse: (t: DealTemplate) => void; onDropFiles?: (files: FileList) => void }) {
   const [mine, setMine] = useState<DealTemplate[] | null>(null);
+  // The folder remembers whether you left it open. Closed by default so the page stays quiet.
+  const [open, setOpen] = useState(false);
+  const [over, setOver] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try { setOpen(window.localStorage.getItem(OPEN_KEY) === '1'); } catch { /* storage is optional */ }
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+  const toggle = () => {
+    setOpen((v) => {
+      try { window.localStorage.setItem(OPEN_KEY, v ? '0' : '1'); } catch { /* storage is optional */ }
+      return !v;
+    });
+  };
   const [trec, setTrec] = useState<TrecForm[]>([]);
 
   useEffect(() => {
@@ -99,12 +116,35 @@ export default function DealStateDocs({ dealState, onUse }: { dealState: string 
     </button>
   );
 
+  const yours = stateOnly.length + allState.length;
+  const recommended = dealState === 'TX' && trecPicks.length > 0 ? trecPicks.length : sources.length;
+  const isFile = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
+
   return (
-    <section className={`${box} space-y-3`}>
-      <div>
-        <h2 className="text-lg font-bold text-slate-100">{stateName} documents for this deal</h2>
-        <p className="text-xs text-slate-500">Chosen from the property address ({dealState}). You can change the state on the Overview tab.</p>
-      </div>
+    <section
+      className={`${box} ${over ? 'ring-2 ring-blue-400/70' : ''}`}
+      onDragOver={onDropFiles ? (e) => { if (!isFile(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; if (!over) setOver(true); } : undefined}
+      onDragLeave={onDropFiles ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false); } : undefined}
+      onDrop={onDropFiles ? (e) => { setOver(false); if (!isFile(e)) return; e.preventDefault(); onDropFiles(e.dataTransfer.files); } : undefined}
+    >
+      <button type="button" onClick={toggle} aria-expanded={open} className="w-full flex items-center gap-3 text-left">
+        <svg className="w-6 h-6 text-amber-300 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+        </svg>
+        <span className="flex-1 min-w-0">
+          <span className="block text-lg font-bold text-slate-100">{stateName} documents for this deal</span>
+          <span className="block text-xs text-slate-500">
+            {mine === null ? 'Loading…' : `${yours} of yours · ${recommended} recommended`}
+            {onDropFiles ? ' · drop files here to add them to this deal' : ''}
+          </span>
+        </span>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+        </svg>
+      </button>
+      {open && (
+      <div className="space-y-3 mt-3">
+      <p className="text-xs text-slate-500">Chosen from the property address ({dealState}). You can change the state on the Overview tab.</p>
 
       <div className={card}>
         <p className="text-sm font-semibold text-slate-100 mb-2">Your {stateName} forms and letters</p>
@@ -178,6 +218,8 @@ export default function DealStateDocs({ dealState, onUse }: { dealState: string 
           <p className="text-sm text-slate-400">We have not checked official sources for {stateName} yet.</p>
         )}
       </div>
+      </div>
+      )}
     </section>
   );
 }

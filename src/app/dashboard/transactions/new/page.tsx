@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { DueDateSpec } from '@/lib/dueDates';
+import { readPersona } from '@/lib/persona';
 
 interface Agent {
   id: string;
@@ -27,6 +28,13 @@ const BASELINE_TEMPLATE_ID = 'baseline';
 export default function NewTransactionPage() {
   const router = useRouter();
   const [agents, setAgents] = useState<Agent[]>([]);
+  // An agent running their own deals is the agent on every deal: nothing to choose.
+  const [isAgentAcct, setIsAgentAcct] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setIsAgentAcct(readPersona().workspace === true), 0);
+    return () => clearTimeout(t);
+  }, []);
+  const soloAgentId = isAgentAcct && agents.length > 0 ? agents[0].id : null;
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [canUseCustomTemplates, setCanUseCustomTemplates] = useState(false);
   const [formData, setFormData] = useState({
@@ -297,7 +305,7 @@ export default function NewTransactionPage() {
     setSubmitting(true);
 
     try {
-      if (!formData.agentId) throw new Error('Please select an agent');
+      if (!soloAgentId && !formData.agentId) throw new Error('Please select an agent');
       if (!formData.fileNumber) throw new Error('Please enter a file number');
       if (!formData.propertyAddress) throw new Error('Please enter a property address');
       if (!formData.purchasePrice) throw new Error('Please enter a purchase price');
@@ -306,14 +314,14 @@ export default function NewTransactionPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agentId: formData.agentId,
+          agentId: soloAgentId ?? formData.agentId,
           fileNumber: formData.fileNumber,
           propertyAddress: formData.propertyAddress,
           purchasePrice: parseFloat(formData.purchasePrice.replace(/,/g, '')),
           acceptanceDate: formData.acceptanceDate || null,
           closingDate: formData.closingDate || null,
           templateId: formData.templateId,
-          inviteAgent,
+          inviteAgent: soloAgentId ? false : inviteAgent,
           allowDuplicate,
         }),
       });
@@ -595,8 +603,8 @@ export default function NewTransactionPage() {
 
         {/* Form */}
         <form onSubmit={(e) => handleSubmit(e)} className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-8">
-          {/* Agent Selection */}
-          <div>
+          {/* Agent Selection (not shown to an agent running their own deals) */}
+          {!soloAgentId && <div>
             <label className="block text-sm font-semibold text-slate-200 mb-3">
               <span className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
@@ -642,7 +650,7 @@ export default function NewTransactionPage() {
                 </p>
               );
             })()}
-          </div>
+          </div>}
 
           {/* File Number */}
           <div>

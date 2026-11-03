@@ -54,12 +54,12 @@ const inputCls = 'w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 
 
 // An agent with their own workspace: invoices from templates, billed to anyone in their contacts (or typed in), with an
 // optional link to a deal when a coordinator is on it. Separate from the coordinator's commission invoices.
-export default function AgentInvoices({ initialTransactionId }: { initialTransactionId?: string }) {
+export default function AgentInvoices({ initialTransactionId, startNew }: { initialTransactionId?: string; startNew?: boolean }) {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | 'draft' | 'sent' | 'paid' | 'void'>('all');
-  const [picking, setPicking] = useState(Boolean(initialTransactionId));
+  const [picking, setPicking] = useState(Boolean(initialTransactionId) || Boolean(startNew));
   const [editing, setEditing] = useState<InvoiceRow | null>(null);
   const [busy, setBusy] = useState(false);
 

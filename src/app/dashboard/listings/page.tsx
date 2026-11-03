@@ -11,6 +11,7 @@ import { formatDisplayDate } from '@/lib/dueDates';
 import { LISTING_STATUS_LABEL, daysOnMarket, type ListingStatus } from '@/lib/listingsShared';
 import { useListingsImport } from '@/components/useListingsImport';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { readPersona } from '@/lib/persona';
 import AgentListingsList from '@/components/AgentListingsList';
 
 interface ListingRow {
@@ -63,6 +64,13 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
   const router = useRouter();
   const [listings, setListings] = useState<ListingRow[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
+  // An agent listing their own property is the listing agent: nothing to choose.
+  const [isAgentAcct, setIsAgentAcct] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setIsAgentAcct(readPersona().workspace === true), 0);
+    return () => clearTimeout(t);
+  }, []);
+  const soloAgentId = isAgentAcct && agents.length > 0 ? agents[0].id : null;
   // Whether the listing agent is emailed a portal invite on create (turn off to invite them yourself later).
   const [inviteAgent, setInviteAgent] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -208,7 +216,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
       setFound(people.filter((p) => p !== firstSeller));
       setReadMsg(
         `Read the agreement. Check everything below before creating — ${people.length} ${people.length === 1 ? 'person' : 'people'} found.` +
-          (agentPerson && !matchedAgent ? ` The listing agent (${agentPerson.name}) isn't set up in Relay yet, so pick one below.` : '')
+          (agentPerson && !matchedAgent && !soloAgentId ? ` The listing agent (${agentPerson.name}) isn't set up in Relay yet, so pick one below.` : '')
       );
     } catch (err) {
       if (handleAuth(err)) return;
@@ -230,8 +238,8 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
         body: JSON.stringify({
           ...form,
           allowDuplicate,
-          inviteAgent,
-          agentId: form.agentId || null,
+          inviteAgent: soloAgentId ? false : inviteAgent,
+          agentId: soloAgentId ?? (form.agentId || null),
           contacts: found.filter((p) => p.include).map((p) => ({ role: p.role, name: p.name, email: p.email, phone: p.phone })),
         }),
       });
@@ -399,7 +407,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Property address *</label>
               <input data-tour="listing-address" className={inputCls} placeholder="123 Main St, Austin, TX 78701" value={form.propertyAddress} onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })} required autoFocus />
             </div>
-            <div data-tour="listing-agent-field">
+            {!soloAgentId && <div data-tour="listing-agent-field">
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Listing agent *</label>
               <select className={inputCls} value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })}>
                 <option value="">Choose the agent who holds this listing</option>
@@ -424,7 +432,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
                   </p>
                 );
               })()}
-            </div>
+            </div>}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Seller name</label>

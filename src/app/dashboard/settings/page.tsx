@@ -1,6 +1,7 @@
 'use client';
 
 import MoneyInput from '@/components/MoneyInput';
+import { readPersona } from '@/lib/persona';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -33,6 +34,12 @@ function SettingsContent() {
   const [isSavingDueDateWorkflow, setIsSavingDueDateWorkflow] = useState(false);
   const [dueDateWorkflowMessage, setDueDateWorkflowMessage] = useState('');
   const [paymentPreference, setPaymentPreference] = useState<'stripe' | 'manual' | null>(null);
+  // An agent with their own workspace gets paid by their clients, brokerage and coordinator, not by agents.
+  const [isAgentAcct, setIsAgentAcct] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setIsAgentAcct(readPersona().workspace === true), 0);
+    return () => clearTimeout(t);
+  }, []);
   const [stripeConnectStatus, setStripeConnectStatus] = useState<{ connected: boolean; status: string | null } | null>(null);
   const [isStartingStripeConnect, setIsStartingStripeConnect] = useState(false);
   const [isSavingPaymentPreference, setIsSavingPaymentPreference] = useState(false);
@@ -89,8 +96,10 @@ function SettingsContent() {
   // fetchSettings/fetchTemplates resolve.
   useEffect(() => {
     if (loading) return;
-    if (typeof window === 'undefined' || window.location.hash !== '#checklist-templates') return;
-    const el = document.getElementById('checklist-templates');
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (hash !== '#checklist-templates' && hash !== '#getting-paid') return;
+    const el = document.getElementById(hash.slice(1));
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [loading]);
 
@@ -762,14 +771,24 @@ function SettingsContent() {
           )}
         </div>
 
-        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
-          <h2 className="text-lg font-bold text-slate-100 mb-1">Getting Paid by Agents</h2>
+        <div id="getting-paid" className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 scroll-mt-6">
+          <h2 className="text-lg font-bold text-slate-100 mb-1">{isAgentAcct ? 'Getting paid' : 'Getting Paid by Agents'}</h2>
           <p className="text-sm text-slate-400 mb-6">
-            Choose how agents pay your transaction coordination invoices. Connect Stripe for a real
-            &quot;Pay Online&quot; link &mdash; agents pay by card or bank transfer without creating an account, and
-            the money lands directly in your own Stripe account (Relay never touches the funds). Or handle it
-            yourself outside the platform (Zelle, PayPal, a check, etc.) and mark invoices paid yourself as the
-            money comes in.
+            {isAgentAcct ? (
+              <>
+                Connect Stripe so the money you are owed, such as your commission from your brokerage and invoices you send, can be paid to you
+                online. It lands directly in your own Stripe account (Relay never touches the funds). Until payments through Relay are switched
+                on, your brokerage pays you the usual way and records it in Relay, so connecting now just gets you ready.
+              </>
+            ) : (
+              <>
+                Choose how agents pay your transaction coordination invoices. Connect Stripe for a real
+                &quot;Pay Online&quot; link &mdash; agents pay by card or bank transfer without creating an account, and
+                the money lands directly in your own Stripe account (Relay never touches the funds). Or handle it
+                yourself outside the platform (Zelle, PayPal, a check, etc.) and mark invoices paid yourself as the
+                money comes in.
+              </>
+            )}
           </p>
 
           {paymentMessage && (
@@ -833,7 +852,7 @@ function SettingsContent() {
             >
               <h3 className="font-semibold text-slate-100 text-sm mb-3">Handle it yourself</h3>
               <p className="text-xs text-slate-500 mb-4">
-                Agents pay you directly (Zelle, Venmo, PayPal, a check, etc.). Mark invoices paid yourself once
+                {isAgentAcct ? 'You are paid directly (Zelle, Venmo, PayPal, a check, etc.).' : 'Agents pay you directly (Zelle, Venmo, PayPal, a check, etc.).'} Mark invoices paid yourself once
                 you&apos;ve received the money.
               </p>
               {paymentPreference === 'manual' ? (

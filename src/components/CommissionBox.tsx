@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { authFetch } from '@/lib/authClient';
 import { openStatement } from '@/lib/commissionClient';
 
@@ -43,6 +44,8 @@ const field = 'px-2 py-1.5 rounded-lg bg-slate-900/60 border border-white/10 tex
 const btn = 'px-3 py-1.5 rounded-lg text-sm font-semibold transition disabled:opacity-50';
 
 export default function CommissionBox({ transactionId }: { transactionId: string }) {
+  const router = useRouter();
+  const [confirmStripe, setConfirmStripe] = useState(false);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -153,7 +156,12 @@ export default function CommissionBox({ transactionId }: { transactionId: string
                   </button>
                 ))}
               </div>
-              {c.paymentPreference === 'relay' && <p className="text-xs text-slate-400 mt-1">Payments through Relay are not switched on yet, so your brokerage will pay you the usual way and record it here.</p>}
+              {c.paymentPreference === 'relay' && (
+                <div className="mt-2 text-xs text-slate-400">
+                  <p>Payments through Relay are not switched on yet, so your brokerage will pay you the usual way and record it here. You can get your Stripe account ready now so you are set when it is.</p>
+                  <button type="button" onClick={() => setConfirmStripe(true)} className="mt-1.5 text-blue-400 hover:text-blue-300 font-semibold">Set up payouts with Stripe →</button>
+                </div>
+              )}
             </div>
           )}
           {isOwner && c.paymentPreference && c.status !== 'paid' && <p className="text-xs text-slate-400 mt-2">The agent chose to be paid {c.paymentPreference === 'relay' ? 'through Relay (not switched on yet, so pay and record it here)' : 'outside Relay'}.</p>}
@@ -232,6 +240,23 @@ export default function CommissionBox({ transactionId }: { transactionId: string
             <button type="button" onClick={() => setEditing(false)} className={`${btn} text-slate-300`}>Cancel</button>
           </div>
         </form>
+      )}
+      {confirmStripe && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="stripe-confirm-title" onClick={() => setConfirmStripe(false)}>
+          <div className="w-full max-w-md bg-slate-800 border border-white/10 rounded-2xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 id="stripe-confirm-title" className="text-lg font-bold text-slate-100 mb-2">Go to Settings to connect Stripe?</h3>
+            <ul className="text-sm text-slate-300 space-y-2 list-disc ml-5 mb-4">
+              <li>This takes you to <span className="font-semibold">Settings → Getting paid</span>, where you choose Connect Stripe.</li>
+              <li>Stripe opens in a new tab and asks for your identity and bank details. Relay never sees or stores them.</li>
+              <li>It takes a few minutes, and nothing is charged. You can stop at any point and finish later.</li>
+              <li>Your brokerage still records this commission as paid in Relay until online payments are switched on.</li>
+            </ul>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmStripe(false)} className="px-4 py-2 text-sm text-slate-300 hover:text-slate-100">Not now</button>
+              <button type="button" onClick={() => router.push('/dashboard/settings#getting-paid')} className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-500 hover:bg-blue-400 text-white">Go to Settings</button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );
