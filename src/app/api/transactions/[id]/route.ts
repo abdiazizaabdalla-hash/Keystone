@@ -10,7 +10,8 @@ import { queueCalendarSync } from '@/lib/calendarSync';
 import { isFeatureOn } from '@/lib/features';
 import { evaluateTemplateRulesQuietly } from '@/lib/templateRules';
 import { isStateCode } from '@/lib/usStates';
-import { canOverseeDeal } from '@/lib/oversight';
+import { brokerageOn, brokerageOwnersForDeal, canOverseeDeal } from '@/lib/oversight';
+import { notifyDeal } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 export async function PATCH(request: NextRequest) {
   try {
@@ -25,6 +26,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Transaction ID is required' }, { status: 400 });
     }
 
+    let overseerEdit = false;
     if (!isAdmin) {
       const { data: existingTx } = await supabaseServer
         .from('transactions')
@@ -43,6 +45,7 @@ export async function PATCH(request: NextRequest) {
         const visibleIds = isOwnerOfVisibleTeam ? await getVisibleTcUserIds(user.id) : [user.id];
         const overseer = !visibleIds.includes(existingTx.tc_user_id) && (await canOverseeDeal(user.id, transactionId));
         const allowed = visibleIds.includes(existingTx.tc_user_id) || (await isFullParticipant(user.id, transactionId)) || overseer;
+        overseerEdit = allowed && overseer;
         if (allowed && overseer) {
           await logAudit(request, user, 'brokerage.deal_edit', { entityType: 'transaction', entityId: transactionId, metadata: { fields: Object.keys(body).filter((k) => ['status', 'acceptanceDate', 'closingDate'].includes(k)) } });
         }
@@ -141,6 +144,15 @@ export async function PATCH(request: NextRequest) {
         );
 
         responseTasks = updatedTasks;
+      }
+    }
+
+    // Brokerage oversight: when the brokerage owner changes a deal, the agent hears about it; when the agent changes
+    // the stage or dates of a deal their brokerage oversees, the owner hears. Deals outside a brokerage are unchanged.
+    if (brokerageOn() && (status !== undefined || acceptanceDate !== undefined || closingDate !== undefined)) {
+      if (overseerEdit || (await brokerageOwnersForDeal(transactionId)).length > 0) {
+        if (status !== undefined) await notifyDeal({ transactionId, actorUserId: user.id, type: 'stage_changed', title: overseerEdit ? `Your brokerage moved the stage to ${status}` : `Stage moved to ${status}` });
+        if (acceptanceDate !== undefined || closingDate !== undefined) await notifyDeal({ transactionId, actorUserId: user.id, type: 'date_changed', title: overseerEdit ? 'Your brokerage changed the key dates' : 'Key dates changed' });
       }
     }
 

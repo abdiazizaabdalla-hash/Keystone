@@ -698,3 +698,140 @@ Test 9: switch one low-risk deal to Auto, confirm it sends only template-based r
 **Team board card on the dashboard.** With the flag on and a team, a small card on the right of the dashboard shows the latest four posts from the team board, the unread count, and a link to Collaborate → Messages. Without a team the page is laid out exactly as before.
 
 **Tests.** 241 unit; integration adds brokerage-messages (10: flag off, login, strangers/teammates/other brokerages refused, only your own partners listed, unread and read, burst notifications, link ended, plan lapsed). Not yet seen in a browser: the new screens need the dev server restarted with the flags and seed.
+
+## 17. Brokerage and agent launch readiness: the unautomated version (audit of 2026-11-03)
+
+Status words: **Works** = built and covered by automated tests; **Works, not seen** = built and tested through the API, screen never viewed in a browser; **Gap** = missing but buildable now; **Blocker** = cannot launch without a decision or outside action.
+
+### 17.1 What a brokerage owner does, step by step
+
+| Step | Status |
+|---|---|
+| Buy a plan. Team ($89, 3 seats, +$30 each) is the public plan; Brokerage ($15/seat, 10 minimum) still works but is hidden from the pricing page. | Works (existing billing) |
+| Name the brokerage (Collaborate → Settings). | Works, not seen |
+| Invite an agent who already has a workspace; they see exactly what you can see and accept. | Works |
+| Invite an agent who has no account yet. The invite email waits for them, but they cannot create a workspace (see 17.3). | **Blocker** |
+| Invite coordinators or staff (role tags show in People); seats billed as before. | Works |
+| See who is pending, active, removed; cancel an invite; remove an agent. | Works. Gap: no "resend invitation" button |
+| See every agent's deals with a health flag (overdue steps, closing soon, no closing date) and production (closed 30 days, this year, volume, pipeline). | Works, not seen |
+| Open a deal read-only: checklist, key dates, document names. | Works, not seen. **Gap: cannot open the documents themselves** (brokers review files for compliance) |
+| Edit any agent deal (stage, dates, tick or edit steps), recorded in the audit log, and **the agent is now told** (added today; before this, a stage or date change by the owner notified nobody). | Works |
+| Compliance report CSV of open files. It covered only team members; **joined agents are now included** (fixed today). | Works |
+| Production export (CSV by agent and month). | Gap |
+| Hear about updates: bell notifications for every deal event except private messages. Email digest to the owner. | Bell works. Gap: no digest email |
+| Team board, direct messages with teammates, **private messages with each agent** (new). | Works, not seen. Gap: no email when a private message arrives (bell only) |
+| Share templates (the brokerage's IABS, letters, forms) pinned for agents and team members; state forms on each deal. | Works, not seen |
+| Push a brokerage-wide checklist to agents' new deals. | Gap (later) |
+| Commission splits and payments. | Gap, designed in section 18 |
+| Leave and lapse: agent leaves, owner removes, plan lapses: access ends at once, nothing deleted. | Works |
+| Delete the account: **removed links, private messages and template data (fixed today; before, these were left behind).** | Works |
+
+### 17.2 What an agent does, step by step
+
+| Step | Status |
+|---|---|
+| Get a workspace account. Self-serve sign-up is off; today only an admin can grant a workspace. | **Blocker** |
+| Short setup: states you work in, focus, volume, how you work. | Works, not seen |
+| Free trial, then paying. The trial exists; the agent price and charging do not (Phase 4). | **Blocker** |
+| Create a deal from a contract (reads the contract), checklist with computed dates, documents, calendar, contacts, client messages and portal, invite your own coordinator, invoices to clients. | Works (earlier phases, tested) |
+| State forms for the deal's state, your own forms, the brokerage's forms, filled automatically. | Works, not seen |
+| Join a brokerage: read the terms, accept or decline; one brokerage at a time; leave any time. | Works |
+| See what the brokerage changed (bell now fires on stage and date edits) and message your broker privately. | Works, not seen |
+| If the brokerage's plan lapses: the page now says **sharing is paused** (fixed today; before, it still showed as active). | Works |
+| Commission statement and payment for a closed deal. | Gap, section 18 |
+| Delete account or leave: your deals stay yours; deletion clears links and messages. | Works |
+
+### 17.3 What stands between this and a first real brokerage
+
+**Blockers (decisions or actions only you can take):**
+
+1. **How an agent gets a workspace and pays.** Agent price is undecided, agent billing is Phase 4, and sign-up is off. Without it, a broker can only onboard agents you grant by hand in Admin. Three options to choose from: (a) agents pay their own plan (needs the price and Phase 4); (b) the brokerage pays a per-agent seat and the agent has no bill; (c) pilot: you grant workspaces by hand for the first brokerage. Option (c) needs no new code and is the fastest honest way to test with real users.
+2. **Terms and Privacy** need a lawyer's review for the "brokerage can see and edit my deals" consent, the private-message retention, and commission payments (section 18).
+3. **Email sending:** invitations go through Resend in production (domain and sender must be verified). Never tested live.
+4. **Deploying the database update** `add-brokerage-oversight.sql` to production, and switching the `brokerage` flag on, are yours to approve; nothing here has been pushed.
+
+**Buildable now, small:** open documents as the owner (with a download log); resend invitation; production CSV export; owner email digest; email on private message. **Buildable now, bigger:** brokerage-wide checklist push; commission splits.
+
+**Not yet verified, needs your eyes:** none of the new screens has been seen in a browser (dev server was not running in my environment). Click-through script, using the logins in `.local-accounts.txt` (all use the same demo password):
+
+1. Log in as `broker@local.relay` → Collaborate opens on Agents → see the agent, health flag, production → open the Live Oak Dr deal → change the closing date.
+2. Log in as `agent-workspace@local.relay` → bell shows "Your brokerage changed the key dates" → More → Brokerage shows the terms and a private thread with the broker → reply.
+3. Back as broker: Collaborate → Messages shows the unread badge and the agent's reply under Team messages; Dashboard shows the Team board card on the right.
+4. Broker: Templates → upload an IABS and tick "share with my brokerage" → agent: Templates shows it pinned; open the Live Oak Dr deal → Documents tab shows Texas documents in the side box.
+5. People shows role tags; Settings shows the team name; remove the agent and check the agent's page says they are no longer in a brokerage.
+
+Also not tested: very small phone screens, a brokerage with 100+ agents (the deals list is capped at 2,000 rows), and real email delivery.
+
+## 18. Commission splits and payments (design, nothing built yet; needs your decisions)
+
+### 18.1 What you asked for, restated
+
+When a deal closes, the agent can get a commission statement showing the split between the agent and the brokerage. The brokerage sets the split per deal, as a percentage or a fixed dollar amount, and can keep a default per agent. The agent is asked, per deal, whether they want to have the payment handled through Relay. Stripe is used to move the money, with brokers and agents connected.
+
+### 18.2 How it would work
+
+1. **Default agreement** per agent (on the brokerage link): split type and value. Optional; a deal can override it.
+2. **Per deal** (a Commission box in the deal's right column, brokerage owner and agent only; coordinators and the team never see it): gross commission (entered, or taken from price × commission rate if the deal has one), the split as **agent keeps X%**, **agent gets $X**, or **brokerage fee $X (agent keeps the rest)**, and optional fixed deductions (transaction fee, E&O, desk fee). Relay shows the resulting agent and brokerage amounts.
+3. **Agreement per deal:** the owner proposes, the agent accepts or asks for a change. Nothing is payable until the agent accepts. Every change is in the audit log; an accepted agreement is locked unless both agree again.
+4. **When the deal closes:** the agent is asked "Handle this commission payment through Relay?" Yes creates a payment request; No records it as paid outside Relay (the statement still exists for both).
+5. **Statement:** a PDF for both sides (gross, deductions, split, net), numbered, reusing the invoice PDF code.
+6. **Payment through Stripe**, using the Connect code already in the product (Standard accounts, hosted onboarding, Checkout, webhook): the agent connects a Stripe account once; the brokerage pays the agent's net through Stripe Checkout (card or bank account) straight into the agent's own Stripe account, and a webhook marks it paid. Relay never holds the money. The reverse direction (agent collects the whole commission and pays the brokerage its share) uses the same pieces with the roles swapped and needs the broker to connect a Stripe account too.
+7. **Reporting:** the owner gets a commission ledger (per agent, per month, CSV); the agent gets year-to-date totals.
+
+### 18.3 Build order (each step useful on its own)
+
+- **C0, no Stripe:** default and per-deal agreements, percent or flat, agent acceptance, statements, "paid outside Relay" marking, owner ledger. This alone makes the unautomated version complete for commissions. Tables: `commission_defaults`, `deal_commissions` (with an event trail).
+- **C1, Stripe:** agent connects; "pay through Relay" for the net amount; webhook; refund and failure handling.
+- **C2, both directions, reports, tax exports.**
+
+### 18.4 Decisions needed from you
+
+1. Which direction is the default: the brokerage pays the agent (the usual way, since title pays the brokerage), or the agent pays the brokerage, or both?
+2. Who pays Stripe's processing fees (card is about 2.9% + 30 cents; bank transfer is about 0.8%, capped at $5): the payer, the agent out of their net, or the brokerage? Bank transfer is recommended for commission-size amounts.
+3. Does Relay take a fee on commission payments? My suggestion: none to start.
+4. Build C0 now (no money moves, safe to ship locally) and hold C1 until you approve the Stripe flows?
+
+Cautions to take to your accountant and lawyer, not legal or tax advice from me: most brokerages pay agents as independent contractors and must issue a 1099-NEC; Stripe's own tax forms cover the payee's receipts but not the brokerage's obligation. Several states restrict who may pay an agent a commission, and brokerages have trust-account rules. Relay does not hold or route client money, so that line stays where it is today.
+
+## 19. Custom workflows: the automated version, mapped (not built)
+
+### 19.1 What you described
+
+A workflow is a chain: after step X comes Y, then Z. An agent (and later a coordinator) can start it from wherever the deal currently stands, work downstream from that point, and every hand-off can require an approval and tell the next person by email when something has been received or is ready.
+
+This changes an earlier decision. Section 16.1 said the assistant would work "without a workflow builder." You now want a builder. I recommend keeping both ideas: the chain is the visible structure, and the assistant of section 16 is one kind of step inside it. Everything below sits on top of the Auto-0 foundation in 16.4 (event log, action log, approval queue, guards, runner), so it adds no second system.
+
+### 19.2 Parts
+
+- **Workflow** (a saved template): name, who owns it (you, your brokerage, or later a coordinator), the states it applies to, and an ordered set of steps. Brokerages can publish one to their agents, the way templates are shared now.
+- **Step**: a name, who does it (agent, coordinator, broker, client, title), what kind of step it is, and what makes the next step ready.
+  - Kinds: do a task; collect a document (ready when it arrives by upload or the deal's email address); request a signature (ready when completed); send an email or letter from a saved template (drafted, then approved); wait for a date; **approval** (named approver says yes or sends it back); commission statement.
+  - Timing: due offset from acceptance, closing or the previous step; reminder after N days; quiet hours.
+- **Run** (a workflow on one deal): the current position, which steps are done, waiting, awaiting approval, or skipped. **Start from here:** pick any step as the starting point; earlier steps are marked "already done."
+- **Hand-offs and emails:** when a step becomes ready, the assignee gets a bell notification and an email ("Documents received, ready for your review"), with one link to open the step. When an approval is needed, the approver gets the email with approve, edit or send back. Sender-facing emails to clients are always drafts until a person approves them.
+- **Guards:** all emails are only to people already on the deal, with send limits, quiet hours and a per-account kill switch. Email text received from outside is data and can never change a workflow.
+
+### 19.3 How it grows from what exists
+
+| Existing piece | Becomes |
+|---|---|
+| Checklist steps with computed due dates | The "task" step and the due-date logic |
+| Template rules and the approval queue for post-closing drafts | The "send from template" step and the approval step |
+| Signing requests; deal email address and incoming uploads | Triggers for "signature completed" and "document received" |
+| Notification bell, outbox, Resend | Ready-for-you notices and emails |
+| Brokerage template sharing | Brokerage-published workflows |
+| Team and role model | Assignee roles, so the coordinator side reuses the same engine |
+
+### 19.4 Stages
+
+- **W0, manual chain:** workflows, steps, runs and "start from here," with a person marking each step done; approval steps with email notices to the approver; ready-for-you bell and email. No automatic triggers, no AI. Testable end to end by two accounts.
+- **W1, triggers:** steps become ready by themselves when a document arrives, a signature completes, or a date passes (needs the Auto-0 event log and an hourly runner; the cron limit on your Vercel plan applies).
+- **W2, builder screen:** a visual chain editor with drag to reorder and "start from here" on the deal timeline; brokerage-published workflows.
+- **W3, coordinator side:** assignee role "coordinator," hand-offs agent ↔ coordinator, and the assistant as a step kind (draft only, with approval).
+- Commission statements (section 18) are a step kind, so a workflow can end with "statement drafted → broker approves → agent accepts → paid."
+
+### 19.5 Risks and open questions
+
+- A workflow is easy to over-build. W0 on purpose has no triggers, so the shape can be tested with real users before the engine is built.
+- Email volume and deliverability grow with this; the send caps and the Resend domain need to be right first.
+- Who may edit a workflow already running on a deal (the agent, the broker, both)? Suggestion: the owner of the deal; brokerage-published workflows are copied onto the deal, so later edits to the original never change a running deal.

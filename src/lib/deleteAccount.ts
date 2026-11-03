@@ -31,6 +31,13 @@ async function deleteWhere(table: string, column: string, values: string[]): Pro
   }
 }
 
+/** Like deleteWhere, for tables that only exist where an optional feature has been set up (templates, brokerage). A missing table means there is nothing to clear. */
+async function deleteIfPresent(table: string, column: string, values: string[]): Promise<void> {
+  if (values.length === 0) return;
+  const { error } = await supabaseServer.from(table).delete().in(column, values);
+  if (error && error.code !== 'PGRST205' && error.code !== '42P01') throw new Error(`Failed clearing ${table}: ${error.message}`);
+}
+
 export async function deleteUserCompletely(userId: string): Promise<{ transactions: number; files: number }> {
   // --- Team: owner with other members is a stop; otherwise tear it down.
   const { data: membership } = await supabaseServer
@@ -157,6 +164,16 @@ export async function deleteUserCompletely(userId: string): Promise<{ transactio
     await deleteWhere('team_messages', 'team_id', [teamIdToRemove]);
     await deleteWhere('brokerage_agents', 'team_id', [teamIdToRemove]);
     await deleteWhere('teams', 'id', [teamIdToRemove]);
+  }
+  // Brokerage links and private broker-agent messages (either side), and template data, where those features exist.
+  await deleteIfPresent('brokerage_messages', 'owner_user_id', [userId]);
+  await deleteIfPresent('brokerage_messages', 'agent_user_id', [userId]);
+  await deleteIfPresent('brokerage_links', 'owner_user_id', [userId]);
+  await deleteIfPresent('brokerage_links', 'agent_user_id', [userId]);
+  const { data: templateFiles } = await supabaseServer.storage.from(BUCKET).list(`templates/${userId}`);
+  if (templateFiles && templateFiles.length > 0) await supabaseServer.storage.from(BUCKET).remove(templateFiles.map((f) => `templates/${userId}/${f.name}`));
+  for (const table of ['template_runs', 'template_rules', 'template_pins', 'template_folders', 'doc_templates', 'email_outbox']) {
+    await deleteIfPresent(table, 'owner_user_id', [userId]);
   }
   await deleteWhere('stripe_customers', 'user_id', [userId]);
 

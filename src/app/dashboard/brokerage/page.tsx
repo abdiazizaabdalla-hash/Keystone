@@ -9,7 +9,7 @@ import BrokerageMessages from '@/components/BrokerageMessages';
 
 interface Owner { id: string; name: string; email: string | null }
 interface Terms { sees: string[]; canDo: string[]; private: string[]; leave: string }
-interface Data { current: { id: string; owner: Owner; since: string | null } | null; invites: { id: string; owner: Owner; invitedAt: string }[]; terms: Terms }
+interface Data { current: { id: string; owner: Owner; since: string | null; paused?: boolean } | null; invites: { id: string; owner: Owner; invitedAt: string }[]; terms: Terms }
 
 const card = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 
@@ -81,6 +81,7 @@ export default function BrokeragePage() {
         <div className={card}>
           <p className="text-slate-100 text-lg font-semibold">You are in {data.current.owner.name}’s brokerage</p>
           {data.current.since && <p className="text-xs text-slate-400 mb-3">Since {new Date(data.current.since).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>}
+          {data.current.paused && <p className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mb-3">Sharing is paused: this brokerage’s plan is not active right now, so they cannot see or change your deals. Nothing was removed, and it resumes if they renew.</p>}
           {terms}
           <p className="text-xs text-slate-500 mt-3">{data.terms.leave}</p>
           <button type="button" disabled={busy === data.current.id} onClick={() => act(data.current!.id, 'leave')} className="mt-3 px-4 py-2 border border-slate-600 hover:border-red-400 text-slate-200 hover:text-red-300 text-sm font-semibold rounded-lg transition">

@@ -4,6 +4,9 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getTeamForUser, getTeamMemberUserIds } from '@/lib/team';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { logAudit } from '@/lib/audit';
+import { activeAgentIds, brokerageOn } from '@/lib/oversight';
+import { isTeamPlan } from '@/lib/plans';
+import { getUserPlan } from '@/lib/appMetadata';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1];
 
@@ -41,7 +44,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Only the team owner can download the team compliance report.' }, { status: 403 });
     }
 
-    const memberIds = await getTeamMemberUserIds(membership.team.id);
+    // With brokerage oversight on, agents who joined this brokerage are in the report too (their open files only).
+    const teamIds = await getTeamMemberUserIds(membership.team.id);
+    const joined = brokerageOn() && isTeamPlan(getUserPlan(user)) ? await activeAgentIds(user.id) : [];
+    const memberIds = [...new Set([...teamIds, ...joined])];
     const labels = new Map(await Promise.all(memberIds.map(async (id) => [id, await memberLabel(id)] as const)));
 
     const { data: txs, error: txError } = await supabaseServer

@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { NextRequest } from 'next/server';
 import { GET as overview, POST as invite } from '@/app/api/oversight/route';
 import { DELETE as removeLink } from '@/app/api/oversight/[id]/route';
 import { GET as dealList } from '@/app/api/oversight/deals/route';
@@ -8,6 +9,7 @@ import { PATCH as answer } from '@/app/api/brokerage/[id]/route';
 import { PATCH as patchTransaction } from '@/app/api/transactions/[id]/route';
 import { PATCH as toggleTask } from '@/app/api/tasks/route';
 import { notifyDeal } from '@/lib/notifications';
+import { GET as complianceExport } from '@/app/api/team/compliance-export/route';
 import { admin, call, cleanup, createActor, createCollaborator, seedDeal, type Actor, type Deal } from './helpers';
 
 // Brokerage oversight. A brokerage owner sees and edits the deals of agents who accepted an invitation, and nobody else's.
@@ -205,5 +207,44 @@ describe('leaving and removing', () => {
     const before = (await notificationsFor(broker)).length;
     await notifyDeal({ transactionId: dealA.transactionId, actorUserId: agentA.id, type: 'stage_changed', title: 'Stage changed' });
     expect((await notificationsFor(broker)).length).toBe(before);
+    // The agent is told sharing is paused rather than shown as active.
+    expect(((await call(h(myBrokerage), agentA, { method: 'GET', path: '/api/brokerage' })).json as { current: { paused: boolean } }).current.paused).toBe(true);
+  });
+});
+
+describe('stage and date changes reach the right people', () => {
+  it('the agent hears when the owner moves a deal, and the owner hears when the agent does', async () => {
+    await admin.auth.admin.updateUserById(broker.id, { app_metadata: { plan: 'team' } });
+    await admin.from('brokerage_links').update({ status: 'active' }).eq('owner_user_id', broker.id).eq('agent_user_id', agentA.id);
+    const mine = async (user: Actor) => (await admin.from('notifications').select('title, event_type').eq('recipient_user_id', user.id).in('event_type', ['stage_changed', 'date_changed'])).data ?? [];
+    const agentBefore = (await mine(agentA)).length;
+    const brokerBefore = (await mine(broker)).length;
+    expect((await call(h(patchTransaction), broker, { method: 'PATCH', path: `/api/transactions/x?id=${dealA.transactionId}`, body: { closingDate: '2031-01-15' } })).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 1500));
+    const afterOwner = await mine(agentA);
+    expect(afterOwner.length).toBe(agentBefore + 1);
+    expect(afterOwner.some((n) => /brokerage changed the key dates/.test(n.title as string))).toBe(true);
+    expect((await mine(broker)).length).toBe(brokerBefore); // you do not hear about your own edit
+    expect((await call(h(patchTransaction), agentA, { method: 'PATCH', path: `/api/transactions/x?id=${dealA.transactionId}`, body: { closingDate: '2031-02-20' } })).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 1500));
+    expect((await mine(broker)).length).toBe(brokerBefore + 1);
+  });
+});
+
+describe('the compliance report', () => {
+  it('includes the open files of agents who joined, and nobody else’s', async () => {
+    await admin.auth.admin.updateUserById(broker.id, { app_metadata: { plan: 'team' } });
+    await admin.from('brokerage_links').update({ status: 'active' }).eq('owner_user_id', broker.id).eq('agent_user_id', agentA.id);
+    await admin.from('transactions').update({ status: 'Contract & File Setup' }).eq('id', dealA.transactionId); // earlier tests may have closed it
+    const { data: existing } = await admin.from('teams').select('id').eq('owner_id', broker.id).maybeSingle();
+    if (!existing) {
+      const { data: team } = await admin.from('teams').insert({ owner_id: broker.id }).select('id').single();
+      await admin.from('team_members').insert({ team_id: team!.id, user_id: broker.id, role: 'owner' });
+    }
+    const res = await complianceExport(new NextRequest('http://localhost/api/team/compliance-export', { headers: { authorization: `Bearer ${broker.token}` } }));
+    expect(res.status).toBe(200);
+    const csv = await res.text();
+    expect(csv).toContain(dealA.marker);
+    expect(csv).not.toContain(dealC.marker);
   });
 });
