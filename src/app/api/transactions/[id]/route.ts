@@ -10,6 +10,8 @@ import { queueCalendarSync } from '@/lib/calendarSync';
 import { isFeatureOn } from '@/lib/features';
 import { evaluateTemplateRulesQuietly } from '@/lib/templateRules';
 import { isStateCode } from '@/lib/usStates';
+import { canOverseeDeal } from '@/lib/oversight';
+import { logAudit } from '@/lib/audit';
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
@@ -39,7 +41,11 @@ export async function PATCH(request: NextRequest) {
         const membership = await getTeamForUser(user.id);
         const isOwnerOfVisibleTeam = membership?.role === 'owner';
         const visibleIds = isOwnerOfVisibleTeam ? await getVisibleTcUserIds(user.id) : [user.id];
-        const allowed = visibleIds.includes(existingTx.tc_user_id) || (await isFullParticipant(user.id, transactionId));
+        const overseer = !visibleIds.includes(existingTx.tc_user_id) && (await canOverseeDeal(user.id, transactionId));
+        const allowed = visibleIds.includes(existingTx.tc_user_id) || (await isFullParticipant(user.id, transactionId)) || overseer;
+        if (allowed && overseer) {
+          await logAudit(request, user, 'brokerage.deal_edit', { entityType: 'transaction', entityId: transactionId, metadata: { fields: Object.keys(body).filter((k) => ['status', 'acceptanceDate', 'closingDate'].includes(k)) } });
+        }
 
         if (!allowed) {
           return NextResponse.json({ error: 'You do not have permission to update this transaction' }, { status: 403 });

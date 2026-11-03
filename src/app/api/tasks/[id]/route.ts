@@ -54,6 +54,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     await authorizeDeal(user, isAdmin, transaction.id as string, {
       scope: 'owner',
       collaborators: true,
+      oversight: true,
       deniedMessage: 'You do not have permission to update this task',
     });
     if (callerIsAgent) await assertTrialForOwnWork(user, isAdmin, transaction.id as string);

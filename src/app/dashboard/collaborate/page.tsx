@@ -6,6 +6,8 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import Link from 'next/link';
 import TeamMessaging from '@/components/TeamMessaging';
 import TeamContacts from '@/components/TeamContacts';
+import BrokerageOversight from '@/components/BrokerageOversight';
+import { isFeatureOnClient } from '@/lib/features';
 import type { ContactRow } from '@/lib/contactsCrm';
 
 interface Member {
@@ -37,7 +39,7 @@ interface TeamResponse {
   pendingInvites: PendingInvite[];
 }
 
-type Tab = 'overview' | 'messages' | 'contacts' | 'people' | 'settings';
+type Tab = 'overview' | 'messages' | 'contacts' | 'people' | 'agents' | 'settings';
 
 export default function CollaboratePage() {
   const router = useRouter();
@@ -58,7 +60,7 @@ export default function CollaboratePage() {
   useEffect(() => {
     const t = setTimeout(async () => {
       const wanted = window.location.hash.replace('#', '');
-      if (['overview', 'messages', 'contacts', 'people', 'settings'].includes(wanted)) setTabState(wanted as Tab);
+      if (['overview', 'messages', 'contacts', 'people', 'agents', 'settings'].includes(wanted)) setTabState(wanted as Tab);
       try {
         const [sum, list] = await Promise.all([authFetch('/api/team/messages/summary'), authFetch('/api/contacts')]);
         if (sum.ok) setUnread((await sum.json()).total || 0);
@@ -247,9 +249,10 @@ export default function CollaboratePage() {
     { id: 'messages', label: 'Messages', badge: unread },
     { id: 'contacts', label: 'Contacts', badge: undefined },
     { id: 'people', label: 'People' },
+    ...(isOwner && isFeatureOnClient('brokerage') ? [{ id: 'agents' as Tab, label: 'Agents' }] : []),
     ...(isOwner ? [{ id: 'settings' as Tab, label: 'Settings' }] : []),
   ];
-  const activeTab: Tab = tab === 'settings' && !isOwner ? 'overview' : tab;
+  const activeTab: Tab = (tab === 'settings' && !isOwner) || (tab === 'agents' && !(isOwner && isFeatureOnClient('brokerage'))) ? 'overview' : tab;
   const cardCls = 'bg-white/5 border border-white/10 rounded-2xl p-5';
   const initial = (m: Member) => ((m.name || m.email || '?')[0] || '?').toUpperCase();
   const recentShared = [...teamContacts].sort((a, b) => (b.shared_at || b.created_at).localeCompare(a.shared_at || a.created_at)).slice(0, 5);
@@ -466,6 +469,8 @@ export default function CollaboratePage() {
           )}
         </div>
       )}
+
+      {activeTab === 'agents' && isOwner && isFeatureOnClient('brokerage') && <BrokerageOversight />}
 
       {activeTab === 'settings' && isOwner && (
         <div className="max-w-4xl">

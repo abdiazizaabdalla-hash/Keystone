@@ -18,6 +18,7 @@ const ACCOUNTS = [
   { label: 'Coordinator, second (Pro plan)', email: 'tc2@local.relay', app: { plan: 'pro' } },
   { label: 'Free invited agent', email: 'agent-free@local.relay', app: { role: 'agent', account_type: 'agent' } },
   { label: 'Agent to give a workspace', email: 'agent-workspace@local.relay', app: { role: 'agent', account_type: 'agent' } },
+  { label: 'Brokerage owner (Team plan)', email: 'broker@local.relay', app: { plan: 'team' } },
   { label: 'Platform admin', email: 'admin@local.relay', app: { is_admin: true, plan: 'team' } },
 ];
 

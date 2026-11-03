@@ -8,9 +8,10 @@
 //   NEXT_PUBLIC_RELAY_FEATURES  same list, for pages and components in the browser
 //
 // Names: agent_workspace (agent workspace screens and routing), automation (the AI assistant),
-// templates (state-filtered document and email templates, and rules that generate them).
+// templates (state-filtered document and email templates, and rules that generate them),
+// brokerage (a brokerage owner oversees the deals of agents who accept an invite).
 
-export type FeatureName = 'agent_workspace' | 'automation' | 'templates';
+export type FeatureName = 'agent_workspace' | 'automation' | 'templates' | 'brokerage';
 
 function parse(list: string | undefined): Set<string> {
   return new Set(

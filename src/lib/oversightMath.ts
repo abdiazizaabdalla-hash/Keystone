@@ -1,0 +1,95 @@
+import { TRANSACTION_STAGES } from './transactionStages';
+
+// The numbers a brokerage owner sees. Pure (no database), so they can be unit tested.
+
+export const CLOSED_STAGE = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1];
+
+/** A trimmed, lower-case email, or null when it is not a plausible address. */
+export function normaliseEmail(value: unknown): string | null {
+  const email = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(email) && email.length <= 254 ? email : null;
+}
+
+// ---- Numbers the owner sees (pure, so they can be tested without a database) ----
+
+export interface OversightDeal {
+  id: string;
+  tc_user_id: string;
+  property_address: string | null;
+  file_number: string | null;
+  status: string | null;
+  purchase_price: number | string | null;
+  acceptance_date: string | null;
+  closing_date: string | null;
+  updated_at: string | null;
+}
+export interface OversightTask {
+  transaction_id: string;
+  name?: string;
+  completed: boolean | null;
+  due_date: string | null;
+}
+
+export type AttentionFlag = 'overdue' | 'closing_soon' | 'no_closing_date';
+
+export interface DealHealth {
+  openTasks: number;
+  overdueTasks: number;
+  nextDue: string | null;
+  flags: AttentionFlag[];
+}
+
+const addDays = (iso: string, days: number) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/** Open and overdue steps, the next due date, and what needs attention, for one deal. `today` is YYYY-MM-DD. */
+export function dealHealth(deal: Pick<OversightDeal, 'status' | 'acceptance_date' | 'closing_date'>, tasks: Pick<OversightTask, 'completed' | 'due_date'>[], today: string): DealHealth {
+  if (deal.status === CLOSED_STAGE) return { openTasks: 0, overdueTasks: 0, nextDue: null, flags: [] };
+  const open = tasks.filter((t) => !t.completed);
+  const dated = open.filter((t) => t.due_date).map((t) => String(t.due_date).slice(0, 10)).sort();
+  const overdue = dated.filter((d) => d < today).length;
+  const nextDue = dated.find((d) => d >= today) ?? null;
+  const flags: AttentionFlag[] = [];
+  if (overdue > 0) flags.push('overdue');
+  if (deal.closing_date && deal.closing_date >= today && deal.closing_date <= addDays(today, 14) && open.length > 0) flags.push('closing_soon');
+  if (deal.acceptance_date && !deal.closing_date) flags.push('no_closing_date');
+  return { openTasks: open.length, overdueTasks: overdue, nextDue, flags };
+}
+
+export interface Production {
+  closedThisYear: number;
+  volumeThisYear: number;
+  closedLast30Days: number;
+  activeDeals: number;
+  pipelineVolume: number;
+}
+
+const money = (v: number | string | null | undefined) => {
+  const n = typeof v === 'string' ? parseFloat(v) : v;
+  return typeof n === 'number' && Number.isFinite(n) ? n : 0;
+};
+
+/** Production for a set of deals. A closed deal counts on its closing date (or the day it was last updated if none). */
+export function productionFor(deals: OversightDeal[], today: string): Production {
+  const year = today.slice(0, 4);
+  const since = addDays(today, -30);
+  const out: Production = { closedThisYear: 0, volumeThisYear: 0, closedLast30Days: 0, activeDeals: 0, pipelineVolume: 0 };
+  for (const d of deals) {
+    if (d.status === CLOSED_STAGE) {
+      const closedOn = (d.closing_date || d.updated_at || '').slice(0, 10);
+      if (closedOn.startsWith(year)) {
+        out.closedThisYear += 1;
+        out.volumeThisYear += money(d.purchase_price);
+      }
+      if (closedOn >= since && closedOn <= today) out.closedLast30Days += 1;
+    } else {
+      out.activeDeals += 1;
+      out.pipelineVolume += money(d.purchase_price);
+    }
+  }
+  return out;
+}
+

@@ -1,6 +1,7 @@
 import { after } from 'next/server';
 import { supabaseServer } from './supabase';
 import { getDealPeople } from './dealPeople';
+import { brokerageOwnersForDeal } from './oversight';
 
 // The notification bell: one row in `notifications` per person per event,
 // written here and read back by GET /api/notifications. Every writer in
@@ -76,6 +77,12 @@ export async function notifyDeal(event: DealNotification): Promise<void> {
       .filter((p) => (audience === 'all' ? true : audience === 'tc' ? p.side === 'tc' : p.side === 'agent'))
       .map((p) => p.userId)
       .filter((id) => id !== event.actorUserId);
+
+    // The owner of a brokerage the deal's agent has joined hears about every update except private messages
+    // (the agent agreed to share their deals, not their conversations).
+    const brokerIds = event.type === 'message' ? [] : (await brokerageOwnersForDeal(event.transactionId)).filter((id) => id !== event.actorUserId && !recipients.includes(id));
+    const brokerSet = new Set(brokerIds);
+    recipients.push(...brokerIds);
     if (recipients.length === 0) return;
 
     const body = clip(event.body, 160);
@@ -86,9 +93,11 @@ export async function notifyDeal(event: DealNotification): Promise<void> {
         try {
           if ((await getMutedTypes(recipientId)).includes(event.type)) return;
 
-          const link = byId.get(recipientId)?.portal === 'agent'
-            ? `/agent/transactions/${event.transactionId}`
-            : `/dashboard/transactions/${event.transactionId}`;
+          const link = brokerSet.has(recipientId)
+            ? `/dashboard/collaborate/deals/${event.transactionId}`
+            : byId.get(recipientId)?.portal === 'agent'
+              ? `/agent/transactions/${event.transactionId}`
+              : `/dashboard/transactions/${event.transactionId}`;
 
           if (event.coalesce) {
             const since = new Date(Date.now() - COALESCE_WINDOW_MS).toISOString();

@@ -663,3 +663,22 @@ Test 9: switch one low-risk deal to Auto, confirm it sends only template-based r
 **Tests.** 210 unit; integration: templates (12), use on a deal (7), rules and approvals (12), plus all earlier suites.
 
 **Not yet.** Per-recipient greeting when a draft goes to several clients (the draft is written for the first one; edit before approving). Quiet hours and a global kill switch (part of the Auto-0 guard). Merge fields for lender/title contacts. Template sharing within a team.
+
+### Brokerage oversight (local-ai branch, not pushed; feature `brokerage`)
+
+**What it is.** A brokerage owner (Team or Brokerage plan) invites agents who have their own workspace. The agent sees, before accepting, exactly what the brokerage can see, then accepts or declines; they can leave at any time. Until acceptance the owner sees nothing of theirs. The older rule that a team's members keep their deals private from the team owner is unchanged: oversight exists only through an accepted brokerage link.
+
+**What the owner gets** (Collaborate → Agents tab; deal pages at `/dashboard/collaborate/deals/[id]`): every deal of each joined agent (read-only page with the checklist, key dates and document names, never file contents or messages); deadlines and a "needs attention" flag (overdue steps, closing within 14 days with steps still open, accepted but no closing date); production per agent and in total (deals closed in the last 30 days and this year, sales volume, open pipeline); the ability to edit any of those deals (stage, acceptance and closing dates, tick or edit checklist steps), logged as `brokerage.deal_edit` in the audit log; and notification-bell updates for every deal event except private messages. Roster events (joined, left) also reach the bell.
+
+**What stays private.** The agent's templates, contacts, messages with clients, invoices and settings are never read by any oversight route.
+
+**Agent side** (`/dashboard/brokerage`, in the More menu for workspace agents): invitations, the plain-language list of what the brokerage can see and change, Accept / Decline, and Leave. One brokerage at a time. Joining needs an agent workspace of their own (an invite sent to an address with no account waits for it).
+
+**How it works.** Table `brokerage_links` (`add-brokerage-oversight.sql`, run in relay-test): owner, agent, invited email, status pending/active/declined/removed/left. `src/lib/oversight.ts` holds the rules; `oversightMath.ts` the pure numbers. `authorizeDeal` has a new `oversight` option, switched on only for the deal PATCH, task toggle and task edit routes, so the owner can edit but nothing else opens. Access is checked live against an active link and that the owner is still on a Team or Brokerage plan; a lapsed plan switches oversight off without deleting anything. Routes: `/api/oversight` (roster, invite), `/api/oversight/[id]` (remove or cancel), `/api/oversight/deals` and `/deals/[id]` (read-only), `/api/brokerage` and `/api/brokerage/[id]` (agent side). Invitations go to the email outbox locally, through Resend in production.
+
+**Billing.** Nothing changes yet: the owner stays on the existing Team ($89, 3 seats) or Brokerage ($15 per seat, 10 minimum) plan, and joined agents are not counted as seats, do not change their own plan and are not added to `team_members`. Seat counting, any agent price, and charging the brokerage per joined agent belong to Phase 4 billing and need your approval first.
+
+**Not yet.** Document file viewing for the owner (names only today); full parallel deal editor (only stage, dates and checklist for now); per-agent permission settings (all or nothing by design); a brokerage-wide checklist template pushed to agents; production by month/chart; owner email digest.
+
+**Tests.** 237 unit; integration: brokerage-oversight (17: flag off, plan gating, invite rules, nothing visible before accepting, isolation between owners and agents, edits and audit, notifications excluding messages, one brokerage at a time, leave/remove, lapsed plan) plus all earlier suites (204 total across 15 files).
+
