@@ -5,6 +5,7 @@ import { DEFAULT_PLAN } from '@/lib/plans';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getTrialStatus } from '@/lib/trial';
 import { getUserPlan, isPlatformAdmin, hasAgentRole } from '@/lib/privileged';
+import { hasAgentWorkspace } from '@/lib/entitlements';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -167,6 +168,8 @@ export async function GET(request: NextRequest) {
         last_sign_in_at: u.last_sign_in_at || null,
         suspended: !!bannedUntil && new Date(bannedUntil) > new Date(),
         deals,
+        workspace: hasAgentWorkspace(u),
+        workspace_trial_ends_at: (u.app_metadata as { trial_ends_at?: string } | null)?.trial_ends_at || null,
       };
     };
     const agentAccountById = new Map(agentAccounts.map((u) => [u.id, u]));

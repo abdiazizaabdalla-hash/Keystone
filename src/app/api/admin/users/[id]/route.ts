@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isPlatformAdmin } from '@/lib/privileged';
+import { isPlatformAdmin, hasAgentRole } from '@/lib/privileged';
+import { hasAgentWorkspace } from '@/lib/entitlements';
 import { logAudit } from '@/lib/audit';
 import { isValidPlan, isTeamPlan, DEFAULT_PLAN } from '@/lib/plans';
 import { setUserPlan } from '@/lib/stripeCustomers';
@@ -93,6 +94,43 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         id: targetUserId,
         trial: { applies: status.applies, expired: status.expired, trialEndsAt: status.trialEndsAt ? status.trialEndsAt.toISOString() : null },
       });
+    }
+
+    // Give an agent login (or take away) a workspace of their own: their own transactions,
+    // checklists, documents and client portals, on top of working the deals coordinators
+    // added them to. Admin-granted only for now; no billing is involved. Switching it off puts
+    // them back to a free collaborator and keeps their access to the deals they were added to.
+    // Granting also starts a trial (default 30 days) unless a longer one is already running.
+    if (body?.action === 'set_agent_workspace') {
+      if (typeof body.enabled !== 'boolean') {
+        return NextResponse.json({ error: 'enabled must be true or false' }, { status: 400 });
+      }
+      const { data: wsTarget, error: wsTargetError } = await supabaseServer.auth.admin.getUserById(targetUserId);
+      if (wsTargetError || !wsTarget.user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      if (!hasAgentRole(wsTarget.user) || isPlatformAdmin(wsTarget.user)) {
+        return NextResponse.json({ error: 'Only agent portal logins can be given an agent workspace' }, { status: 400 });
+      }
+      const wasEnabled = hasAgentWorkspace(wsTarget.user);
+      const changes: Record<string, unknown> = { agent_workspace: body.enabled };
+      let trialEndsAt = (wsTarget.user.app_metadata as { trial_ends_at?: string } | null)?.trial_ends_at || null;
+      if (body.enabled) {
+        const days = Number.isInteger(body.trialDays) && body.trialDays > 0 && body.trialDays <= 365 ? body.trialDays : 30;
+        const proposed = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+        const existing = trialEndsAt ? new Date(trialEndsAt) : null;
+        if (!existing || Number.isNaN(existing.getTime()) || existing < proposed) {
+          trialEndsAt = proposed.toISOString();
+          changes.trial_ends_at = trialEndsAt;
+        }
+      }
+      await mergeAppMetadata(targetUserId, changes);
+      await logAudit(request, caller, body.enabled ? 'admin.grant_agent_workspace' : 'admin.revoke_agent_workspace', {
+        entityType: 'user',
+        entityId: targetUserId,
+        metadata: { was_enabled: wasEnabled, trial_ends_at: trialEndsAt },
+      });
+      return NextResponse.json({ id: targetUserId, workspace: body.enabled, trialEndsAt });
     }
 
     if (targetUserId === caller.id) {

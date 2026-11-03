@@ -474,3 +474,9 @@ Known edge, not changed: a stale `customer.subscription.updated` with status act
 Phase 1 is complete apart from the remaining routes that still hold their own deal checks (listed above).
 
 **Public site (2026-11-02):** the agent audience page, the free-portal explainer and the brokerage page are parked in `docs/parked-pages/` and off the public site until the agent workspace and brokerage product are built to full functionality. Old URLs redirect (307) to the home page. The "Agent Login" link stays for agents a coordinator has invited; sentences about a coordinator's own agents (free portal, agent invoicing) stay because they describe the live TC product.
+
+### Phase 2 progress (running log)
+
+**Step 1, 2026-11-03: admin grant switch.** `PATCH /api/admin/users/[id]` action `set_agent_workspace` (`enabled` true/false, optional `trialDays`, default 30) sets `app_metadata.agent_workspace` on an agent login and starts the trial (`trial_ends_at`) unless a longer one is running. Audited as `admin.grant_agent_workspace` / `admin.revoke_agent_workspace`. Admin page: each agent login row has "Give workspace" / "Remove workspace" and an "Agent workspace" badge. Only platform admins can call it; only agent logins can be targets. 10 integration tests (`agent-workspace-grant.int.test.ts`) prove: grant lets the agent create their own agents and transactions; revoke puts them back to a free collaborator who keeps the deals they were added to; free agents stay blocked; nobody else sees the agent's own deals. No billing, nothing public. Self-serve paid agent accounts remain Phase 4.
+
+**Step 2 (next): make the workspace usable.** 71 files reference `isAgentUser` / `hasAgentRole` (152 uses). Each is either "act as a collaborator on this deal" (keep) or "agents are not allowed here" (must now allow workspace agents). Plan: add `isCollaboratorOnly`, review each use, route workspace agents to the coordinator dashboard at login, and show the trial banner.

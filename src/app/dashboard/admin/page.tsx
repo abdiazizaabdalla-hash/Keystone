@@ -12,6 +12,8 @@ interface AgentAccount {
   last_sign_in_at: string | null;
   suspended: boolean;
   deals: number;
+  workspace?: boolean;
+  workspace_trial_ends_at?: string | null;
 }
 
 interface AgentProfile {
@@ -140,6 +142,39 @@ export default function AdminPage() {
       }
       console.error('Error updating suspension state:', error);
       setActionError(error instanceof Error ? error.message : 'Failed to update user');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Gives an agent login (or removes) a workspace of their own. Admin-granted only for now.
+  const handleWorkspaceToggle = async (agent: AgentAccount) => {
+    const enable = !agent.workspace;
+    const question = enable
+      ? `Give ${agent.email} their own agent workspace?\n\nThey will be able to create their own transactions, checklists, documents and client portals, and they start a 30-day trial. They keep working the deals coordinators added them to.`
+      : `Remove the agent workspace from ${agent.email}?\n\nThey go back to a free portal login. They keep access to deals they were added to; their own transactions stay in their account but they can no longer open or change them.`;
+    if (!window.confirm(question)) return;
+    setActionError(null);
+    setActionLoadingId(agent.id);
+    try {
+      const response = await authFetch(`/api/admin/users/${agent.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_agent_workspace', enabled: enable }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to update the agent workspace');
+      const mark = <T extends { id: string }>(list: T[]) =>
+        list.map(u => (u.id === agent.id ? { ...u, workspace: data.workspace, workspace_trial_ends_at: data.trialEndsAt } : u));
+      setUsers(prev => prev.map(u => ({ ...u, portal_agents: u.portal_agents ? mark(u.portal_agents) : u.portal_agents })));
+      setUnlinkedAgents(prev => mark(prev));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error updating agent workspace:', error);
+      setActionError(error instanceof Error ? error.message : 'Failed to update the agent workspace');
     } finally {
       setActionLoadingId(null);
     }
@@ -513,6 +548,7 @@ export default function AdminPage() {
                                   agent={agent}
                                   busy={actionLoadingId === agent.id}
                                   onSuspend={() => handleSuspendToggle(agent)}
+                                  onWorkspace={() => handleWorkspaceToggle(agent)}
                                   onDelete={() => handleDelete(agent)}
                                 />
                               ))}
@@ -559,6 +595,7 @@ export default function AdminPage() {
                 agent={agent}
                 busy={actionLoadingId === agent.id}
                 onSuspend={() => handleSuspendToggle(agent)}
+                onWorkspace={() => handleWorkspaceToggle(agent)}
                 onDelete={() => handleDelete(agent)}
               />
             ))}
@@ -573,11 +610,13 @@ function AgentRow({
   agent,
   busy,
   onSuspend,
+  onWorkspace,
   onDelete,
 }: {
   agent: AgentAccount;
   busy: boolean;
   onSuspend: () => void;
+  onWorkspace: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -588,6 +627,14 @@ function AgentRow({
           {agent.suspended && (
             <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/30 text-red-300">Suspended</span>
           )}
+          {agent.workspace && (
+            <span
+              className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-900/30 text-blue-300"
+              title={agent.workspace_trial_ends_at ? `Trial ends ${new Date(agent.workspace_trial_ends_at).toLocaleDateString()}` : undefined}
+            >
+              Agent workspace
+            </span>
+          )}
         </p>
         <p className="text-xs text-slate-500">
           {agent.deals > 0 ? `${agent.deals} deal${agent.deals === 1 ? '' : 's'} · ` : ''}
@@ -596,6 +643,17 @@ function AgentRow({
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={onWorkspace}
+          disabled={busy}
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
+            agent.workspace
+              ? 'bg-slate-700/60 text-slate-300 hover:bg-slate-600/60'
+              : 'bg-blue-900/30 text-blue-300 hover:bg-blue-900/50'
+          }`}
+        >
+          {agent.workspace ? 'Remove workspace' : 'Give workspace'}
+        </button>
         <button
           onClick={onSuspend}
           disabled={busy}
