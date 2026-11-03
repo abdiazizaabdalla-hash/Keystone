@@ -10,6 +10,20 @@ export async function GET(request: NextRequest) {
   try {
     const { user } = await requireTemplatesUser(request);
     const p = request.nextUrl.searchParams;
+
+    // ?counts=1: just how many documents and emails there are (for the tab badges), without loading any of them.
+    if (p.get('counts') === '1') {
+      const count = async (forms: boolean) => {
+        let q = supabaseServer.from('doc_templates').select('id', { count: 'exact', head: true }).eq('owner_user_id', user.id).eq('archived', false);
+        q = forms ? q.eq('kind', 'form') : q.neq('kind', 'form');
+        const { count: n, error } = await q;
+        if (error) throw error;
+        return n ?? 0;
+      };
+      const [documents, emails] = await Promise.all([count(true), count(false)]);
+      return NextResponse.json({ documents, emails });
+    }
+
     let query = supabaseServer.from('doc_templates').select('*').eq('owner_user_id', user.id).limit(1000);
     if (!(Number(request.nextUrl.searchParams.get('recent')) > 0)) query = query.order('name', { ascending: true });
     if (p.get('archived') !== '1') query = query.eq('archived', false);
@@ -23,7 +37,8 @@ export async function GET(request: NextRequest) {
     if (recent > 0) query = query.not('last_used_at', 'is', null).order('last_used_at', { ascending: false }).limit(Math.min(recent, 20));
     const category = p.get('category');
     if (category) query = query.eq('category', category);
-    const { data, error } = await query;
+    const wantShared = !(Number(p.get('recent')) > 0) && p.get('archived') !== '1';
+    const [{ data, error }, owners] = await Promise.all([query, wantShared ? brokerageOwnersFor(user.id) : Promise.resolve([] as string[])]);
     if (error) throw error;
     const state = p.get('state');
     const q = (p.get('q') || '').trim().toLowerCase();
@@ -32,15 +47,13 @@ export async function GET(request: NextRequest) {
       .filter((t) => (q ? `${t.name} ${t.description ?? ''} ${t.subject ?? ''}`.toLowerCase().includes(q) : true));
 
     // Templates the brokerage you belong to shared with you: listed after your own, marked, and never editable here.
-    if (!(recent > 0) && p.get('archived') !== '1') {
-      const owners = await brokerageOwnersFor(user.id);
+    if (wantShared) {
       if (owners.length > 0) {
         let sharedQuery = supabaseServer.from('doc_templates').select('*').in('owner_user_id', owners).eq('brokerage_shared', true).eq('archived', false).order('name', { ascending: true }).limit(500);
         if (kind) sharedQuery = sharedQuery.eq('kind', kind);
         if (kinds.length > 0) sharedQuery = sharedQuery.in('kind', kinds);
         if (category) sharedQuery = sharedQuery.eq('category', category);
-        const { data: sharedRows } = await sharedQuery;
-        const labels = await agentLabels(owners);
+        const [{ data: sharedRows }, labels] = await Promise.all([sharedQuery, agentLabels(owners)]);
         const shared = (sharedRows || [])
           .filter((t) => (state && isStateCode(state) ? templateFitsState(t.states as string[], state) : true))
           .filter((t) => (q ? `${t.name} ${t.description ?? ''} ${t.subject ?? ''}`.toLowerCase().includes(q) : true))

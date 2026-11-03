@@ -26,6 +26,7 @@ export interface OversightDeal {
 export interface OversightTask {
   transaction_id: string;
   name?: string;
+  sort_order?: number | null;
   completed: boolean | null;
   due_date: string | null;
 }
@@ -93,3 +94,17 @@ export function productionFor(deals: OversightDeal[], today: string): Production
   return out;
 }
 
+
+export interface NextStep {
+  name: string;
+  dueDate: string | null;
+}
+
+/** The step to do next on a deal: the earliest-dated open step (an overdue one counts), else the first open step in checklist order. */
+export function nextStepFor(tasks: Pick<OversightTask, 'name' | 'completed' | 'due_date' | 'sort_order'>[]): NextStep | null {
+  const open = tasks.filter((t) => !t.completed && t.name);
+  if (open.length === 0) return null;
+  const key = (t: (typeof open)[number]) => `${t.due_date ? String(t.due_date).slice(0, 10) : '9999-99-99'}|${String(t.sort_order ?? 0).padStart(6, '0')}`;
+  const first = [...open].sort((a, b) => key(a).localeCompare(key(b)))[0];
+  return { name: first.name as string, dueDate: first.due_date ? String(first.due_date).slice(0, 10) : null };
+}

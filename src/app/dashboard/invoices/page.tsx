@@ -8,6 +8,8 @@ import { formatDisplayDate } from '@/lib/dueDates';
 import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 import { readPersona } from '@/lib/persona';
 import AgentInvoices from '@/components/AgentInvoices';
+import BrokerageInvoices from '@/components/BrokerageInvoices';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 
 interface Agent {
   name: string;
@@ -495,13 +497,35 @@ function CoordinatorInvoicesPage() {
 }
 
 // An agent with their own workspace gets their own invoices (templates, contacts); everyone else sees the coordinator's.
+// A brokerage owner gets three tabs: commissions by agent, the agent fee invoices, and free-form invoices to anyone.
 export default function InvoicesPage() {
   const [mode, setMode] = useState<'unknown' | 'agent' | 'coordinator'>('unknown');
   const [dealId, setDealId] = useState<string | undefined>(undefined);
+  const owner = useBrokerageOwner();
+  const [tab, setTab] = useState<'commissions' | 'fees' | 'custom'>('commissions');
   useEffect(() => {
     setMode(readPersona().workspace ? 'agent' : 'coordinator');
     setDealId(new URLSearchParams(window.location.search).get('transactionId') || undefined);
   }, []);
   if (mode === 'unknown') return null;
-  return mode === 'agent' ? <AgentInvoices initialTransactionId={dealId} /> : <CoordinatorInvoicesPage />;
+  if (mode === 'agent') return <AgentInvoices initialTransactionId={dealId} />;
+  if (!owner) return <CoordinatorInvoicesPage />;
+  return (
+    <div>
+      <div className="px-4 pt-6 md:px-6 md:pt-12 max-w-7xl mx-auto">
+        <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">Invoices</h1>
+        <p className="text-slate-400 mb-4">Commissions by agent, agent fee invoices, and invoices to anyone.</p>
+        <div className="flex flex-wrap gap-2 text-sm" role="tablist" aria-label="Invoices">
+          {([['commissions', 'Agent commissions'], ['fees', 'Agent fee invoices'], ['custom', 'Invoices to anyone']] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full border transition ${tab === id ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {tab === 'commissions' && <div className="px-4 py-6 md:px-6 max-w-7xl mx-auto"><BrokerageInvoices onCreateInvoice={() => setTab('custom')} /></div>}
+      {tab === 'fees' && <CoordinatorInvoicesPage />}
+      {tab === 'custom' && <AgentInvoices />}
+    </div>
+  );
 }

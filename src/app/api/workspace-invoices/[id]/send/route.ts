@@ -6,13 +6,13 @@ import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { escapeHtml } from '@/lib/escapeHtml';
 import { logAudit } from '@/lib/audit';
 import { generateWorkspaceInvoicePdf } from '@/lib/workspaceInvoicePdf';
-import { assertWorkspaceAgent, invoiceTotals, loadOwnInvoice } from '@/lib/workspaceInvoices';
+import { assertInvoiceSender, invoiceTotals, loadOwnInvoice } from '@/lib/workspaceInvoices';
 
 // POST: email the invoice (with the PDF attached) to its bill-to address and mark it sent. Replies go to the agent.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertWorkspaceAgent(user);
+    assertInvoiceSender(user);
     await assertTrialActive(user);
     const { id } = await params;
     const body = (await request.json().catch(() => ({}))) as { message?: unknown };

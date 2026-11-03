@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normaliseEmail, dealHealth, productionFor, type OversightDeal } from '@/lib/oversightMath';
+import { normaliseEmail, dealHealth, productionFor, nextStepFor, type OversightDeal } from '@/lib/oversightMath';
 import { isFeatureOn } from '@/lib/features';
 
 const today = '2026-11-03';
@@ -50,5 +50,20 @@ describe('email check and the feature flag', () => {
     expect(isFeatureOn('brokerage', '')).toBe(false);
     expect(isFeatureOn('brokerage', 'agent_workspace,templates')).toBe(false);
     expect(isFeatureOn('brokerage', 'templates,brokerage')).toBe(true);
+  });
+});
+
+describe('nextStepFor', () => {
+  const t = (name: string, completed: boolean, due_date: string | null, sort_order: number) => ({ name, completed, due_date, sort_order });
+  it('picks the open step with the earliest due date', () => {
+    expect(nextStepFor([t('Inspection', false, '2026-11-10', 2), t('Earnest money', false, '2026-11-05', 1), t('Contract', true, '2026-10-01', 0)])).toEqual({ name: 'Earnest money', dueDate: '2026-11-05' });
+  });
+  it('falls back to checklist order when nothing is dated, and dated steps beat undated ones', () => {
+    expect(nextStepFor([t('B', false, null, 5), t('A', false, null, 1)])).toEqual({ name: 'A', dueDate: null });
+    expect(nextStepFor([t('Undated', false, null, 0), t('Dated', false, '2027-01-01', 9)])).toEqual({ name: 'Dated', dueDate: '2027-01-01' });
+  });
+  it('is null when everything is done', () => {
+    expect(nextStepFor([t('A', true, null, 1)])).toBeNull();
+    expect(nextStepFor([])).toBeNull();
   });
 });

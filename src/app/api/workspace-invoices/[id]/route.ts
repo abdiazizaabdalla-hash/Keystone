@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { assertWorkspaceAgent, cleanHeader, cleanLines, invoiceTotals, loadOwnInvoice, replaceLines } from '@/lib/workspaceInvoices';
+import { assertInvoiceSender, cleanHeader, cleanLines, invoiceTotals, loadOwnInvoice, replaceLines } from '@/lib/workspaceInvoices';
 
 function fail(error: unknown, what: string) {
   if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
@@ -19,7 +19,7 @@ function fail(error: unknown, what: string) {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertWorkspaceAgent(user);
+    assertInvoiceSender(user);
     const { id } = await params;
     const { invoice, lines } = await loadOwnInvoice(id, user.id);
     return NextResponse.json({ ...invoice, lines, ...invoiceTotals(lines, invoice.tax_percent) });
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertWorkspaceAgent(user);
+    assertInvoiceSender(user);
     await assertTrialActive(user);
     const { id } = await params;
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -76,7 +76,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertWorkspaceAgent(user);
+    assertInvoiceSender(user);
     const { id } = await params;
     const { invoice } = await loadOwnInvoice(id, user.id);
     if (invoice.status !== 'draft' || invoice.sent_at) {

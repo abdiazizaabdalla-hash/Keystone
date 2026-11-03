@@ -10,6 +10,13 @@ export async function GET(request: NextRequest) {
   try {
     const { user } = await requireTemplatesUser(request);
     const status = request.nextUrl.searchParams.get('status') || 'pending';
+    // ?countOnly=1: how many drafts are waiting, from what is already there (no rules check). The Templates page uses this for its badge;
+    // the drafts list itself still checks for newly due drafts, and the daily job does too.
+    if (request.nextUrl.searchParams.get('countOnly') === '1') {
+      const { count, error } = await supabaseServer.from('template_runs').select('id', { count: 'exact', head: true }).eq('owner_user_id', user.id).eq('status', 'pending');
+      if (error) throw error;
+      return NextResponse.json({ pending: count ?? 0 });
+    }
     if (status === 'pending') await evaluateTemplateRulesQuietly(user.id);
     let query = supabaseServer.from('template_runs').select('*').eq('owner_user_id', user.id).order('due_on', { ascending: false }).order('created_at', { ascending: false }).limit(200);
     if (status !== 'all') query = query.eq('status', status);

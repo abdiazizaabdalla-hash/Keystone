@@ -100,23 +100,28 @@ export default function TemplatesPage() {
         if (category) params.set('category', category);
         if (q.trim()) params.set('q', q.trim());
         if (showArchived) params.set('archived', '1');
-        const [tRes, sRes, pRes, allRes] = await Promise.all([
-          authFetch(`/api/templates?${params}`),
-          authFetch('/api/templates/starters'),
-          authFetch('/api/template-runs?status=pending'),
-          authFetch('/api/templates'),
-        ]);
+        // Start everything together, but show the list as soon as it arrives; the badges and starters fill in after.
+        const listReq = authFetch(`/api/templates?${params}`);
+        // The built-in starters only matter on the Emails tab.
+        const startersReq = section === 'emails' ? authFetch('/api/templates/starters') : Promise.resolve(null);
+        const pendingReq = authFetch('/api/template-runs?status=pending&countOnly=1');
+        const countsReq = authFetch('/api/templates?counts=1');
+        const tRes = await listReq;
         if (!tRes.ok) throw new Error(await readError(tRes, 'Failed to load templates'));
         const t = (await tRes.json()) as Template[];
-        const s = sRes.ok ? ((await sRes.json()) as Starter[]) : [];
-        const pendingCount = pRes.ok ? ((await pRes.json()) as { runs: unknown[] }).runs.length : 0;
-        const all = allRes.ok ? ((await allRes.json()) as Template[]) : [];
         if (!cancelled) {
           setTemplates(t);
+          setError(null);
+          setLoading(false);
+        }
+        const [sRes, pRes, countRes] = await Promise.all([startersReq, pendingReq, countsReq]);
+        const s = sRes && sRes.ok ? ((await sRes.json()) as Starter[]) : [];
+        const pendingCount = pRes.ok ? ((await pRes.json()) as { pending: number }).pending : 0;
+        const counted = countRes.ok ? ((await countRes.json()) as { documents: number; emails: number }) : { documents: 0, emails: 0 };
+        if (!cancelled) {
           setStarters(s);
           setPending(pendingCount);
-          setCounts({ documents: all.filter((x) => x.kind === 'form').length, emails: all.filter((x) => x.kind !== 'form').length });
-          setError(null);
+          setCounts(counted);
         }
       } catch (e) {
         if (!cancelled && !(e instanceof AuthRequiredError)) setError(e instanceof Error ? e.message : 'Failed to load templates');

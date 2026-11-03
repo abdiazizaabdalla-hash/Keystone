@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
         userId: l.status === 'active' ? l.agent_user_id : null,
         invitedAt: l.invited_at,
         joinedAt: l.responded_at,
+        baseCommission: l.default_split_type && l.default_split_value !== null && l.default_split_value !== undefined ? { type: l.default_split_type, value: Number(l.default_split_value) } : null,
         production,
         overdueTasks: mine.reduce((n, d) => n + d.health.overdueTasks, 0),
         needsAttention: mine.filter((d) => d.health.flags.length > 0).length,

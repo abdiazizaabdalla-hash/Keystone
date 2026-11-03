@@ -25,6 +25,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/commissions/[id]/statement': { kind: 'session', methods: ['GET'], why: 'PDF statement for the owner or the agent on that commission only.' },
   '/api/oversight': { kind: 'session', methods: ['GET', 'POST'], why: 'Brokerage owner roster and invites; requires a Team or Brokerage plan and the brokerage feature.', collaboratorWrites: 'A free agent login has no Team or Brokerage plan, so assertBrokerageOwner refuses it (403); proven in brokerage-oversight.int.test.ts.' },
   '/api/oversight/[id]': { kind: 'session', methods: ['DELETE', 'PATCH'], why: 'Brokerage owner removes an agent or cancels an invite; matched on owner_user_id.', collaboratorWrites: 'Needs a Team or Brokerage plan (assertBrokerageOwner), which a free agent login never has.' },
+  '/api/oversight/agents/[id]': { kind: 'session', methods: ['GET'], why: 'Read-only profile of one agent; 404 unless the caller has an active brokerage link with that agent.' },
   '/api/oversight/deals': { kind: 'session', methods: ['GET'], why: 'Only deals of agents with an active link to the caller.' },
   '/api/oversight/deals/[id]': { kind: 'session', methods: ['GET'], why: 'Read-only; 404 unless the caller oversees the deal owner.' },
   '/api/agent-invites': { kind: 'session', methods: ['GET', 'POST'] },

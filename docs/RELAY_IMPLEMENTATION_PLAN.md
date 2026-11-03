@@ -803,6 +803,14 @@ Cautions to take to your accountant and lawyer, not legal or tax advice from me:
 - **Not built:** Stripe payments (C1), the reverse direction, tax forms, per-deal "commission plans" with caps and tiers, and an email when a statement is proposed (bell only).
 - **Tests.** 251 unit (10 new for the math); integration brokerage-commissions (17: flag off, plan and ownership, validation, defaults, numbering, privacy from teammates and other brokerages, change requests, agreement, preference, PDF, CSV, payment, void, agent leaves).
 
+### 18.6 Owner screens built after C0 (brokerage owners only, behind the `brokerage` flag)
+
+- **Home:** the Team board (posts and replies) sits on the dashboard home, in a right-hand column that exists only when the person has a team.
+- **Transactions:** opens on "Your agents' deals": every deal of every joined agent, read-only, with stage, progress and the next step (earliest-dated open step, else first in checklist order), filters for agent, open, needs attention and closed. "Your own deals" is one tab away. Opening a deal still shows the oversight deal page (which today lets the owner edit; a read-only switch is a small change if wanted).
+- **Agents:** each agent's name opens a full profile (contact details, license, focus, states, joined date, base commission, production, open and closed deals with the next step, commissions and totals). Base commission is the default split on the link.
+- **Invoices:** three tabs. *Agent commissions* groups every commission statement under its agent, with base commission, totals, unpaid amounts, statement PDFs and a CSV. *Agent fee invoices* is the existing TC-to-agent list. *Invoices to anyone* reuses the workspace invoice tool (templates, bill to a contact or any typed email, PDF, email send) and is open to brokerage owners as well as workspace agents (`assertInvoiceSender`).
+- **Templates speed:** the list loads first; starters load only on the Emails tab; tab counts and the pending count use cheap count-only requests (`?counts=1`, `?countOnly=1`) so rule evaluation no longer runs on every page open.
+
 ## 19. Custom workflows: the automated version, mapped (not built)
 
 ### 19.1 What you described

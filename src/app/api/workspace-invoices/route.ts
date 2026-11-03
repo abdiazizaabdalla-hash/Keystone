@@ -6,7 +6,7 @@ import { authorizeDeal } from '@/lib/authorize';
 import { logAudit } from '@/lib/audit';
 import { getInvoiceTemplate } from '@/lib/workspaceInvoiceTemplates';
 import {
-  assertWorkspaceAgent,
+  assertInvoiceSender,
   cleanDate,
   cleanHeader,
   cleanLines,
@@ -32,7 +32,7 @@ function fail(error: unknown, what: string) {
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertWorkspaceAgent(user);
+    assertInvoiceSender(user);
     let query = supabaseServer.from('workspace_invoices').select('*').eq('owner_user_id', user.id).order('created_at', { ascending: false }).limit(500);
     const transactionId = request.nextUrl.searchParams.get('transactionId');
     if (transactionId) query = query.eq('transaction_id', transactionId);
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertWorkspaceAgent(user);
+    assertInvoiceSender(user);
     await assertTrialActive(user);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 

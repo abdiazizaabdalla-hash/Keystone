@@ -431,7 +431,7 @@ export default function Dashboard() {
   return (
     <div className={`p-4 md:p-10 mx-auto ${teamBoard ? 'max-w-7xl' : 'max-w-6xl'}`}>
       {/* With a team, a small Team board card sits in a narrow column on the right; otherwise the page is exactly as before. */}
-      <div className={teamBoard ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-6 lg:items-start' : ''}>
+      <div className={teamBoard ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-6 lg:items-start' : ''}>
       <div className="min-w-0">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">

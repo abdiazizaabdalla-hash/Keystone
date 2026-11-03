@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { generateWorkspaceInvoicePdf } from '@/lib/workspaceInvoicePdf';
-import { assertWorkspaceAgent, loadOwnInvoice } from '@/lib/workspaceInvoices';
+import { assertInvoiceSender, loadOwnInvoice } from '@/lib/workspaceInvoices';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertWorkspaceAgent(user);
+    assertInvoiceSender(user);
     const { id } = await params;
     const { invoice, lines } = await loadOwnInvoice(id, user.id);
     const meta = user.user_metadata || {};

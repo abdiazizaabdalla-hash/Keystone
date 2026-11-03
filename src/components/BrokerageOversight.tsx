@@ -25,6 +25,7 @@ interface RosterRow {
   production: Production;
   overdueTasks: number;
   needsAttention: number;
+  baseCommission?: { type: 'percent' | 'flat_agent' | 'flat_brokerage'; value: number } | null;
 }
 interface Overview {
   agents: RosterRow[];
@@ -198,8 +199,8 @@ export default function BrokerageOversight() {
                 {overview.agents.map((a) => (
                   <tr key={a.linkId} className="border-t border-white/5">
                     <td className="py-2 pr-3">
-                      <p className="text-slate-100">{a.name}</p>
-                      {a.status === 'pending' ? <p className="text-xs text-amber-300">Invitation pending · {a.email}</p> : <p className="text-xs text-slate-500">{a.email}</p>}
+                      {a.status === 'active' && a.userId ? <Link href={`/dashboard/collaborate/agents/${a.userId}`} className="text-slate-100 hover:text-blue-300">{a.name}</Link> : <p className="text-slate-100">{a.name}</p>}
+                      {a.status === 'pending' ? <p className="text-xs text-amber-300">Invitation pending · {a.email}</p> : <p className="text-xs text-slate-500">{a.email}{a.status === 'active' && <span className="ml-2 text-slate-400">Base: {a.baseCommission ? (a.baseCommission.type === 'percent' ? `${a.baseCommission.value}%` : a.baseCommission.type === 'flat_agent' ? `$${a.baseCommission.value.toLocaleString()} flat to agent` : `$${a.baseCommission.value.toLocaleString()} brokerage fee`) : 'not set'}</span>}</p>}
                     </td>
                     {a.status === 'active' ? (
                       <>
@@ -213,6 +214,7 @@ export default function BrokerageOversight() {
                       <td colSpan={5} className="py-2 pr-3 text-xs text-slate-500">Nothing is shared until they accept.</td>
                     )}
                     <td className="py-2 text-right whitespace-nowrap">
+                      {a.status === 'active' && a.userId && <Link href={`/dashboard/collaborate/agents/${a.userId}`} className="text-xs text-blue-400 hover:text-blue-300 mr-3">Profile</Link>}
                       {a.status === 'active' && (
                         <button type="button" onClick={() => setAgentFilter(agentFilter === a.userId ? '' : (a.userId ?? ''))} className="text-xs text-blue-400 hover:text-blue-300 mr-3">
                           {agentFilter === a.userId ? 'Show all' : 'Their deals'}

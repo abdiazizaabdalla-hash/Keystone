@@ -4,7 +4,7 @@ import { AuthError } from './auth';
 import { isTeamPlan } from './plans';
 import { getUserPlan, type WithAppMetadata } from './appMetadata';
 import { getEntitlements } from './entitlements';
-import { normaliseEmail, dealHealth, type DealHealth, type OversightDeal, type OversightTask } from './oversightMath';
+import { CLOSED_STAGE, normaliseEmail, dealHealth, nextStepFor, type DealHealth, type NextStep, type OversightDeal, type OversightTask } from './oversightMath';
 
 export * from './oversightMath';
 
@@ -30,6 +30,8 @@ export interface BrokerageLink {
   invited_at: string;
   responded_at: string | null;
   ended_at: string | null;
+  default_split_type?: 'percent' | 'flat_agent' | 'flat_brokerage' | null;
+  default_split_value?: number | string | null;
 }
 
 export const brokerageOn = () => isFeatureOn('brokerage');
@@ -37,6 +39,7 @@ export const brokerageOn = () => isFeatureOn('brokerage');
 /** What an agent is told, in plain words, before accepting. Shown on the agent's page and in the invite. */
 export const OVERSIGHT_TERMS = {
   sees: [
+    'Your name, email, phone, license number, the states you work in and what you focus on.',
     'Every deal in your workspace: address, stage, key dates and the checklist.',
     'Deadlines, overdue steps and which deals need attention.',
     'Production numbers: deals closed and sales volume.',
@@ -104,17 +107,20 @@ export async function pendingInvitesFor(agentUserId: string, email: string | nul
 /** Brokerage owners whose shared templates this person may use: the brokerage they joined as an agent, or the team they are on. */
 export async function brokerageOwnersFor(userId: string): Promise<string[]> {
   if (!brokerageOn()) return [];
+  // The two ways in (a joined agent's link, a team membership) are looked up together, then the owners' plans together.
+  const [link, member] = await Promise.all([
+    activeLinkForAgent(userId),
+    supabaseServer.from('team_members').select('team_id').eq('user_id', userId).maybeSingle().then(async ({ data }) => {
+      if (!data) return null;
+      const { data: team } = await supabaseServer.from('teams').select('owner_id').eq('id', data.team_id).maybeSingle();
+      return team && team.owner_id !== userId ? (team.owner_id as string) : null;
+    }),
+  ]);
   const owners = new Set<string>();
-  const link = await activeLinkForAgent(userId);
   if (link) owners.add(link.owner_user_id);
-  const { data: member } = await supabaseServer.from('team_members').select('team_id').eq('user_id', userId).maybeSingle();
-  if (member) {
-    const { data: team } = await supabaseServer.from('teams').select('owner_id').eq('id', member.team_id).maybeSingle();
-    if (team && team.owner_id !== userId) owners.add(team.owner_id as string);
-  }
-  const ok: string[] = [];
-  for (const id of owners) if (await ownerStillOnTeamPlan(id)) ok.push(id);
-  return ok;
+  if (member) owners.add(member);
+  const checked = await Promise.all([...owners].map(async (id) => ((await ownerStillOnTeamPlan(id)) ? id : null)));
+  return checked.filter((id): id is string => id !== null);
 }
 
 /** Does this brokerage owner currently oversee this agent? (Active link and the owner is still on a team plan.) */
@@ -170,7 +176,7 @@ const chunk = <T,>(items: T[], size: number) => Array.from({ length: Math.ceil(i
 
 /** Every deal of these agents with its checklist health. */
 export async function loadOversightDeals(agentIds: string[], today: string) {
-  if (agentIds.length === 0) return [] as (OversightDeal & { health: DealHealth })[];
+  if (agentIds.length === 0) return [] as (OversightDeal & { health: DealHealth; nextStep: NextStep | null; tasksTotal: number; tasksDone: number })[];
   const { data, error } = await supabaseServer
     .from('transactions')
     .select('id, tc_user_id, property_address, file_number, status, purchase_price, acceptance_date, closing_date, updated_at')
@@ -181,11 +187,14 @@ export async function loadOversightDeals(agentIds: string[], today: string) {
   const deals = (data ?? []) as OversightDeal[];
   const tasks: OversightTask[] = [];
   for (const ids of chunk(deals.map((d) => d.id), 80)) {
-    const { data: rows, error: tErr } = await supabaseServer.from('tasks').select('transaction_id, completed, due_date').in('transaction_id', ids);
+    const { data: rows, error: tErr } = await supabaseServer.from('tasks').select('transaction_id, name, sort_order, completed, due_date').in('transaction_id', ids);
     if (tErr) throw tErr;
     tasks.push(...((rows ?? []) as OversightTask[]));
   }
   const byDeal = new Map<string, OversightTask[]>();
   for (const t of tasks) byDeal.set(t.transaction_id, [...(byDeal.get(t.transaction_id) ?? []), t]);
-  return deals.map((d) => ({ ...d, health: dealHealth(d, byDeal.get(d.id) ?? [], today) }));
+  return deals.map((d) => {
+    const mine = byDeal.get(d.id) ?? [];
+    return { ...d, health: dealHealth(d, mine, today), nextStep: d.status === CLOSED_STAGE ? null : nextStepFor(mine), tasksTotal: mine.length, tasksDone: mine.filter((t) => t.completed).length };
+  });
 }

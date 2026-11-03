@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { useWorkspaceAgent } from '@/lib/useWorkspaceAgent';
 import { formatDisplayDate } from '@/lib/dueDates';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import AgentDealsList from '@/components/AgentDealsList';
 
 interface Transaction {
   id: string;
@@ -39,7 +41,7 @@ interface Agent {
   name: string;
 }
 
-export default function TransactionsPage() {
+function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
   const router = useRouter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [agents, setAgents] = useState<Map<string, string>>(new Map());
@@ -254,10 +256,12 @@ export default function TransactionsPage() {
         </div>
       )}
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Transactions</h1>
-          <p className="text-slate-400">Every deal from contract to closing, with the next step due.</p>
-        </div>
+        {hideTitle ? <div /> : (
+          <div>
+            <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Transactions</h1>
+            <p className="text-slate-400">Every deal from contract to closing, with the next step due.</p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <Link href="/dashboard/transactions/import" className="hidden sm:inline text-sm text-slate-400 hover:text-slate-200">
             Import CSV
@@ -380,6 +384,33 @@ export default function TransactionsPage() {
             </div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+// A brokerage owner opens on their agents' deals (read-only, with the next step on each); their own deals are one tab away.
+export default function TransactionsPage() {
+  const owner = useBrokerageOwner();
+  const [tab, setTab] = useState<'agents' | 'mine'>('agents');
+  if (!owner) return <OwnTransactions />;
+  return (
+    <div>
+      <div className="px-4 md:px-10 pt-4 md:pt-10 max-w-5xl mx-auto">
+        <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Transactions</h1>
+        <p className="text-slate-400 mb-4">Every deal from contract to closing, with the next step.</p>
+        <div className="flex gap-2 text-sm" role="tablist" aria-label="Whose transactions">
+          {([['agents', 'Your agents’ deals'], ['mine', 'Your own deals']] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full border transition ${tab === id ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {tab === 'agents' ? (
+        <div className="p-4 md:p-10 max-w-5xl mx-auto"><AgentDealsList /></div>
+      ) : (
+        <OwnTransactions hideTitle />
       )}
     </div>
   );

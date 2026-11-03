@@ -3,6 +3,9 @@ import { AuthError } from '@/lib/auth';
 import { getEntitlements } from '@/lib/entitlements';
 import type { WithAppMetadata } from '@/lib/privileged';
 import { hasAgentRole } from '@/lib/privileged';
+import { isFeatureOn } from '@/lib/features';
+import { isTeamPlan } from '@/lib/plans';
+import { getUserPlan } from '@/lib/appMetadata';
 
 export interface InvoiceLineInput {
   description: string;
@@ -17,6 +20,16 @@ export function assertWorkspaceAgent(user: WithAppMetadata): void {
   if (getEntitlements(user).kind !== 'agent_workspace') {
     throw new AuthError('Invoices are available on an agent workspace account', 403);
   }
+}
+
+/**
+ * Who may write free-form invoices: an agent with a workspace, or a brokerage owner (Team/Brokerage plan, brokerage
+ * feature on) who bills agents, vendors or anyone else from the Invoices page.
+ */
+export function assertInvoiceSender(user: WithAppMetadata): void {
+  if (getEntitlements(user).kind === 'agent_workspace') return;
+  if (isFeatureOn('brokerage') && isTeamPlan(getUserPlan(user))) return;
+  throw new AuthError('Invoices are available on an agent workspace or a brokerage account', 403);
 }
 
 /** The next free number for this owner, such as INV-0007. */
