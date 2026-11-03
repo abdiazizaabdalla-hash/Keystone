@@ -1,4 +1,5 @@
 import { supabaseServer } from './supabase';
+import { isFullParticipant } from './authorize';
 import { getVisibleTcUserIds } from './team';
 
 // Critical dates: the contract's own deadlines, kept separate from the
@@ -81,7 +82,7 @@ export async function canAccessTransactionDates(
     .eq('id', tx.agent_id)
     .in('tc_user_id', visibleIds)
     .single();
-  return Boolean(agent);
+  return Boolean(agent) || (await isFullParticipant(userId, transactionId));
 }
 
 /** Whole days from today (UTC date) until an ISO date; negative = overdue. */

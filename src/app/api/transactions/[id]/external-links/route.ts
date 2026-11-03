@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isFullParticipant } from '@/lib/authorize';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
@@ -34,7 +35,8 @@ async function loadTransactionForAccess(
     .eq('id', transaction.agent_id)
     .in('tc_user_id', ownerIds)
     .single();
-  return agent ? transaction : null;
+  if (agent) return transaction;
+  return (await isFullParticipant(userId, transactionId)) ? transaction : null;
 }
 
 // GET /api/transactions/[id]/external-links -- every external-access

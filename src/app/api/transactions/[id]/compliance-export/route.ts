@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isFullParticipant } from '@/lib/authorize';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
@@ -39,10 +40,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .eq('id', transaction.agent_id)
         .in('tc_user_id', visibleIds)
         .single();
-      if (!agentRow) {
+      if (agentRow) {
+        agent = { name: agentRow.name, brokerage: agentRow.brokerage };
+      } else if (await isFullParticipant(user.id, transactionId)) {
+        const { data: ownerAgent } = await supabaseServer.from('agents').select('name, brokerage').eq('id', transaction.agent_id).single();
+        agent = ownerAgent ? { name: ownerAgent.name, brokerage: ownerAgent.brokerage } : null;
+      } else {
         return NextResponse.json({ error: 'You do not have permission to export this transaction' }, { status: 403 });
       }
-      agent = { name: agentRow.name, brokerage: agentRow.brokerage };
     } else {
       const { data: agentRow } = await supabaseServer
         .from('agents')

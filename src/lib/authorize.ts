@@ -3,7 +3,7 @@ import { AuthError } from './auth';
 import { getEntitlements } from './entitlements';
 import { getVisibleTcUserIds } from './team';
 import type { WithAppMetadata } from './appMetadata';
-import { assertTrialActive } from './trial';
+import { assertTrialActive, TrialExpiredError } from './trial';
 
 // The one place that answers "may this person touch this deal?".
 //
@@ -23,8 +23,15 @@ export interface DealAccessOptions {
    * 'owner' = the owner only (writes, messaging).
    */
   scope: 'team' | 'owner';
-  /** May an agent added to this deal (a collaborator) use this route? */
-  collaborators: boolean;
+  /**
+   * People who were added to the deal (a row in transaction_agents) rather than owning it:
+   *   'none' = refused;
+   *   'any'  = every participant, free or paid (what an invited agent may do: message, upload, tick steps);
+   *   'full' = only participants who are on a paid account or active trial (coordinator-level editing).
+   */
+  participants?: 'none' | 'any' | 'full';
+  /** Older spelling of participants: true = 'any'. */
+  collaborators?: boolean;
   /** 403 message for a coordinator who is not allowed. */
   deniedMessage: string;
 }
@@ -34,54 +41,89 @@ export interface DealRef {
   agent_id: string;
 }
 
+/**
+ * Is this participant on a paid account or active trial ('full'), or free ('limited')?
+ * Free agents are always limited. A coordinator or agent workspace whose trial has ended
+ * unpaid drops to limited until they pay; nothing is stored, it is worked out per request.
+ */
+export async function participantLevel(user: { id: string; created_at: string } & WithAppMetadata): Promise<'full' | 'limited'> {
+  if (getEntitlements(user).isCollaborator) return 'limited';
+  try {
+    await assertTrialActive(user);
+    return 'full';
+  } catch (error) {
+    if (error instanceof TrialExpiredError) return 'limited';
+    throw error;
+  }
+}
+
+async function hasParticipantLink(userId: string, transactionId: string): Promise<boolean> {
+  const { data } = await supabaseServer
+    .from('transaction_agents')
+    .select('transaction_id')
+    .eq('transaction_id', transactionId)
+    .eq('agent_user_id', userId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
+/**
+ * For the older helper functions that only have a user id: is this person on the deal as a
+ * participant with coordinator-level (paid or trial) editing rights?
+ */
+export async function isFullParticipant(userId: string, transactionId: string): Promise<boolean> {
+  if (!(await hasParticipantLink(userId, transactionId))) return false;
+  const { data } = await supabaseServer.auth.admin.getUserById(userId);
+  if (!data.user) return false;
+  return (await participantLevel(data.user)) === 'full';
+}
+
 export async function authorizeDeal(
-  user: { id: string } & WithAppMetadata,
+  user: { id: string; created_at?: string } & WithAppMetadata,
   isAdmin: boolean,
   transactionId: string,
-  { scope, collaborators, deniedMessage }: DealAccessOptions
+  { scope, participants, collaborators, deniedMessage }: DealAccessOptions
 ): Promise<DealRef> {
-  const entitlements = getEntitlements(user);
-  const isAgentLogin = user.app_metadata?.role === 'agent';
+  const mode = participants ?? (collaborators ? 'any' : 'none');
+  const canOwn = getEntitlements(user).canOwnWorkspace;
 
-  // An agent login is scoped to exactly the deals they were added to.
-  if (isAgentLogin && !isAdmin) {
-    if (collaborators) {
-      const { data: link } = await supabaseServer
-        .from('transaction_agents')
-        .select('transaction_id')
-        .eq('transaction_id', transactionId)
-        .eq('agent_user_id', user.id)
+  if (isAdmin) return fetchDeal(transactionId);
+
+  // The owner (or, for reads, their team).
+  let deal: DealRef | null = null;
+  if (canOwn) {
+    deal = await findDeal(transactionId);
+    if (deal) {
+      const ownerIds = scope === 'team' ? await getVisibleTcUserIds(user.id) : [user.id];
+      const { data: agent } = await supabaseServer
+        .from('agents')
+        .select('id')
+        .eq('id', deal.agent_id)
+        .in('tc_user_id', ownerIds)
         .maybeSingle();
-      if (link) return fetchDeal(transactionId);
-    }
-    // No link (or a route that is not open to collaborators): only an agent who owns a
-    // workspace of their own can fall through to the owner check below.
-    if (entitlements.isCollaborator) {
-      throw new AuthError(
-        collaborators ? 'You do not have access to this transaction' : deniedMessage,
-        403
-      );
+      if (agent) return deal;
     }
   }
 
-  const deal = await fetchDeal(transactionId);
-  if (isAdmin) return deal;
+  // Someone added to the deal.
+  if (mode !== 'none' && (await hasParticipantLink(user.id, transactionId))) {
+    if (mode === 'any') return deal ?? fetchDeal(transactionId);
+    if ((await participantLevel(user as { id: string; created_at: string } & WithAppMetadata)) === 'full') return deal ?? fetchDeal(transactionId);
+  }
 
-  const ownerIds = scope === 'team' ? await getVisibleTcUserIds(user.id) : [user.id];
-  const { data: agent } = await supabaseServer
-    .from('agents')
-    .select('id')
-    .eq('id', deal.agent_id)
-    .in('tc_user_id', ownerIds)
-    .maybeSingle();
-  if (!agent) throw new AuthError(deniedMessage, 403);
-  return deal;
+  if (canOwn && !deal) throw new AuthError('Transaction not found', 404);
+  throw new AuthError(canOwn ? deniedMessage : mode !== 'none' ? 'You do not have access to this transaction' : deniedMessage, 403);
+}
+
+async function findDeal(transactionId: string): Promise<DealRef | null> {
+  const { data } = await supabaseServer.from('transactions').select('id, agent_id').eq('id', transactionId).maybeSingle();
+  return (data as DealRef | null) ?? null;
 }
 
 async function fetchDeal(transactionId: string): Promise<DealRef> {
-  const { data, error } = await supabaseServer.from('transactions').select('id, agent_id').eq('id', transactionId).maybeSingle();
-  if (error || !data) throw new AuthError('Transaction not found', 404);
-  return data as DealRef;
+  const deal = await findDeal(transactionId);
+  if (!deal) throw new AuthError('Transaction not found', 404);
+  return deal;
 }
 
 /**

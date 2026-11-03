@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { assertAgentOnTransaction } from '@/lib/agentPortal';
-import { actsAsCollaborator } from '@/lib/authorize';
+import { actsAsCollaborator, isFullParticipant } from '@/lib/authorize';
 import { autoAddContact } from '@/lib/contactsAuto';
 
 // The "Deal Contacts" list shown right under the Checklist card on the
@@ -37,7 +37,7 @@ async function assertCanAccessTransaction(
     .in('tc_user_id', visibleIds)
     .single();
 
-  return Boolean(agent);
+  return Boolean(agent) || (await isFullParticipant(userId, transactionId));
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
