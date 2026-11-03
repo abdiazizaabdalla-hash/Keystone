@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
       if (!callerIsWorkspaceAgent) {
         return NextResponse.json({ error: 'Only an agent with a workspace invites a coordinator' }, { status: 403 });
       }
-      const outcome = await inviteTcToTransaction({ transaction, user, appUrl: request.nextUrl.origin, email });
+      const outcome = await inviteTcToTransaction({ transaction, user, appUrl: request.nextUrl.origin, email, usesRelay: body.usesRelay !== false });
       if (outcome === 'already') {
         return NextResponse.json({ error: 'This person has already been invited to this transaction.' }, { status: 400 });
       }

@@ -74,11 +74,11 @@ describe('on their own deal the workspace agent is the owner', () => {
     expect(tick.status, JSON.stringify(tick.json)).toBeLessThan(300);
   });
 
-  it('their messages there are posted as the coordinator side, not as an invited agent', async () => {
+  it('their messages there are posted as the agent side, so a coordinator they add is clearly the other party', async () => {
     const res = await call(h(postMessage), ws, { method: 'POST', path: '/api/messages', body: { transactionId: ownTx, body: 'note to self' } });
     expect(res.status).toBeLessThan(300);
     const { data } = await admin.from('messages').select('sender_role').eq('transaction_id', ownTx).eq('body', 'note to self').single();
-    expect(data!.sender_role).toBe('tc');
+    expect(data!.sender_role).toBe('agent');
   });
 
   it('can list contacts for it and finds it in search', async () => {

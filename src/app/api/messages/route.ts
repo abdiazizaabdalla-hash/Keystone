@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
-import { authorizeDeal, isAgentSideOnDeal } from '@/lib/authorize';
+import { authorizeDeal } from '@/lib/authorize';
+import { getDealPeople, messageSide } from '@/lib/dealPeople';
 import { sendNewMessageEmail } from '@/lib/agentPortalEmails';
 import { queueDealNotification } from '@/lib/notifications';
 
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is too long (4000 characters max)' }, { status: 400 });
     }
 
-    const callerIsAgent = await isAgentSideOnDeal(user, isAdmin, transactionId);
+    const callerIsAgent = messageSide(user, isAdmin) === 'agent';
     await assertCanMessage(transactionId, user, isAdmin);
 
     // Confirm the attached document is actually already on this same
@@ -263,12 +264,8 @@ async function notifyOtherParty(
   appUrl: string,
   newMessageId: string
 ) {
-  const { data: transaction } = await supabaseServer
-    .from('transactions')
-    .select('agent_id, property_address')
-    .eq('id', transactionId)
-    .single();
-  if (!transaction) return;
+  const { people, address } = await getDealPeople(transactionId);
+  if (people.length === 0) return;
 
   const { data: priorMessage } = await supabaseServer
     .from('messages')
@@ -284,46 +281,17 @@ async function notifyOtherParty(
   }
 
   const senderLabel = sender.user_metadata?.full_name || sender.email || (senderIsAgent ? 'The agent' : 'Your TC');
-  const portalUrl = senderIsAgent
-    ? `${appUrl}/dashboard/transactions/${transactionId}`
-    : `${appUrl}/agent/transactions/${transactionId}`;
-
-  let recipients: string[] = [];
-  if (senderIsAgent) {
-    // Agent sent it -- notify the TC.
-    const { data: agentRecord } = await supabaseServer
-      .from('agents')
-      .select('tc_user_id')
-      .eq('id', transaction.agent_id)
-      .maybeSingle();
-    if (agentRecord?.tc_user_id) {
-      const { data } = await supabaseServer.auth.admin.getUserById(agentRecord.tc_user_id);
-      if (data.user?.email) recipients = [data.user.email];
-    }
-  } else {
-    // TC sent it -- notify every agent who's accepted access to this deal.
-    const { data: grants } = await supabaseServer
-      .from('transaction_agents')
-      .select('agent_user_id')
-      .eq('transaction_id', transactionId);
-    recipients = (
-      await Promise.all(
-        (grants || []).map(async (g) => {
-          const { data } = await supabaseServer.auth.admin.getUserById(g.agent_user_id);
-          return data.user?.email || null;
-        })
-      )
-    ).filter((email): email is string => Boolean(email));
-  }
+  // The other side hears about it: the coordinator side when an agent wrote, the agent side when a coordinator did.
+  const recipients = people.filter((p) => p.userId !== sender.id && p.email && p.side === (senderIsAgent ? 'tc' : 'agent'));
 
   await Promise.all(
-    recipients.map((toEmail) =>
+    recipients.map((p) =>
       sendNewMessageEmail({
-        toEmail,
+        toEmail: p.email as string,
         senderLabel,
-        propertyAddress: transaction.property_address || null,
+        propertyAddress: address,
         preview: text,
-        portalUrl,
+        portalUrl: p.portal === 'agent' ? `${appUrl}/agent/transactions/${transactionId}` : `${appUrl}/dashboard/transactions/${transactionId}`,
       })
     )
   );

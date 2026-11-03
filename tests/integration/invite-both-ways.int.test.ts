@@ -6,6 +6,9 @@ import { GET as listInvites, POST as sendInvite } from '@/app/api/agent-invites/
 import { POST as acceptInvite } from '@/app/api/agent-invites/accept/route';
 import { PATCH as patchTransaction } from '@/app/api/transactions/[id]/route';
 import { PATCH as patchTask } from '@/app/api/tasks/route';
+import { GET as listMessages, POST as postMessage } from '@/app/api/messages/route';
+import { GET as clientMessages, POST as postClientMessage } from '@/app/api/client-messages/route';
+import { GET as clientLinks } from '@/app/api/agent/transactions/[id]/clients/route';
 import { addCollaboratorToDeal, admin, call, cleanup, createActor, createCollaborator, seedDeal, type Actor } from './helpers';
 
 // Phase 3b. A paid agent can invite a coordinator onto their own deal; the coordinator accepts from their
@@ -115,5 +118,42 @@ describe('both sides edit everything except deleting the deal', () => {
     const list = await call(h(listTransactions), agentWs, { method: 'GET', path: '/api/transactions' });
     const row = (list.json as Array<Record<string, unknown>>).find((t) => t.id === dealId);
     expect(row?.shared).toBe(false);
+  });
+});
+
+describe('messages and the client portal on the agent’s own deal', () => {
+  it('each side posts as itself, and each can read the other’s messages', async () => {
+    const fromAgent = await call(h(postMessage), agentWs, { method: 'POST', path: '/api/messages', body: { transactionId: dealId, body: 'from the agent' } });
+    expect(fromAgent.status, JSON.stringify(fromAgent.json)).toBeLessThan(300);
+    const fromTc = await call(h(postMessage), tcPro, { method: 'POST', path: '/api/messages', body: { transactionId: dealId, body: 'from the coordinator' } });
+    expect(fromTc.status, JSON.stringify(fromTc.json)).toBeLessThan(300);
+    const { data } = await admin.from('messages').select('body, sender_role').eq('transaction_id', dealId);
+    const role = (b: string) => data!.find((m) => m.body === b)!.sender_role;
+    expect(role('from the agent')).toBe('agent');
+    expect(role('from the coordinator')).toBe('tc');
+    for (const who of [agentWs, tcPro]) {
+      const read = await call(h(listMessages), who, { method: 'GET', path: `/api/messages?transactionId=${dealId}` });
+      expect(read.status).toBe(200);
+      expect((read.json as unknown[]).length).toBeGreaterThanOrEqual(2);
+    }
+    expect((await call(h(listMessages), otherTc, { method: 'GET', path: `/api/messages?transactionId=${dealId}` })).status).toBe(403);
+  });
+
+  it('the agent runs the client portal on their own deal; strangers cannot', async () => {
+    const links = await call(h(clientLinks), agentWs, { method: 'GET', path: '/x', params: { id: dealId } });
+    expect(links.status, JSON.stringify(links.json)).toBe(200);
+    expect((await call(h(clientLinks), otherTc, { method: 'GET', path: '/x', params: { id: dealId } })).status).toBe(403);
+    expect((await call(h(clientLinks), freeAgent, { method: 'GET', path: '/x', params: { id: dealId } })).status).toBe(403);
+  });
+
+  it('the shared client board works for both the agent and the coordinator', async () => {
+    const post = await call(h(postClientMessage), agentWs, { method: 'POST', path: '/api/client-messages', body: { transactionId: dealId, channel: 'board', body: 'hello clients' } });
+    expect(post.status, JSON.stringify(post.json)).toBeLessThan(300);
+    for (const who of [agentWs, tcPro]) {
+      const read = await call(h(clientMessages), who, { method: 'GET', path: `/api/client-messages?transactionId=${dealId}&channel=board` });
+      expect(read.status, JSON.stringify(read.json)).toBe(200);
+      expect(JSON.stringify(read.json)).toContain('hello clients');
+    }
+    expect((await call(h(clientMessages), otherTc, { method: 'GET', path: `/api/client-messages?transactionId=${dealId}&channel=board` })).status).toBe(403);
   });
 });

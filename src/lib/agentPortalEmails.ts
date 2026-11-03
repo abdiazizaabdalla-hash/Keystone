@@ -53,14 +53,20 @@ export async function sendTcInviteEmail(params: {
   agentLabel: string;
   propertyAddress: string | null;
   appUrl: string;
+  /** False when the agent said this coordinator is not on Relay TC yet. */
+  usesRelay?: boolean;
 }) {
-  const { toEmail, agentLabel, propertyAddress, appUrl } = params;
+  const { toEmail, agentLabel, propertyAddress, appUrl, usesRelay = true } = params;
   const dealLabel = propertyAddress ? `the deal at ${propertyAddress}` : 'a deal';
   const html = wrapper(
     "You've been invited to coordinate a deal",
-    `<p><strong>${escapeHtml(agentLabel)}</strong> invited you to coordinate ${escapeHtml(dealLabel)} on Relay TC.</p>
-     <p><a href="${appUrl}/auth" style="color: #b45309;">Sign in or create your Relay TC account</a> with this email address, then accept the invitation at the top of your Transactions page.</p>
+    usesRelay
+      ? `<p><strong>${escapeHtml(agentLabel)}</strong> invited you to coordinate ${escapeHtml(dealLabel)} on Relay TC.</p>
+     <p><a href="${appUrl}/auth" style="color: #b45309;">Sign in to Relay TC</a> with this email address, then accept the invitation at the top of your Transactions page.</p>
      <p style="font-size: 13px; color: #555;">Once you accept, the deal shows up in your normal transaction list and you can work it like any other.</p>`
+      : `<p><strong>${escapeHtml(agentLabel)}</strong> would like you to coordinate ${escapeHtml(dealLabel)} and invited you to do it on Relay TC, a workspace for transaction coordinators: checklist, documents, messages and key dates in one place, shared with the agent.</p>
+     <p><a href="${appUrl}/auth" style="color: #b45309;">Create your Relay TC account</a> with this email address, then accept the invitation at the top of your Transactions page.</p>
+     <p style="font-size: 13px; color: #555;">If you were not expecting this, you can ignore the email. Nothing is shared with you until you accept.</p>`
   );
   const resend = getResendClient();
   return resend.emails.send({

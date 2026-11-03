@@ -178,6 +178,7 @@ export async function inviteTcToTransaction(params: {
   user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null };
   appUrl: string;
   email: string;
+  usesRelay?: boolean;
 }): Promise<TcInviteOutcome> {
   try {
     const { transaction, user, appUrl } = params;
@@ -196,7 +197,7 @@ export async function inviteTcToTransaction(params: {
     if (insertError) throw insertError;
 
     const agentLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'An agent';
-    await sendTcInviteEmail({ toEmail: email, agentLabel, propertyAddress: (transaction.property_address as string | null) || null, appUrl });
+    await sendTcInviteEmail({ toEmail: email, agentLabel, propertyAddress: (transaction.property_address as string | null) || null, appUrl, usesRelay: params.usesRelay });
     return 'sent';
   } catch (error) {
     console.error('inviteTcToTransaction failed (ignored):', error);

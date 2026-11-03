@@ -1,5 +1,6 @@
 import { after } from 'next/server';
 import { supabaseServer } from './supabase';
+import { getDealPeople } from './dealPeople';
 
 // The notification bell: one row in `notifications` per person per event,
 // written here and read back by GET /api/notifications. Every writer in
@@ -44,7 +45,7 @@ export interface DealNotification {
   body?: string | null;
   /** When set, a recent unread row of this type on this deal is updated instead of adding another. */
   coalesce?: { title: (count: number) => string };
-  /** Who should hear about it. Default: the TC and every agent on the deal. Private client threads use 'tc' or 'agents'. */
+  /** Who should hear about it. Default: everyone on the deal. Private client threads use 'tc' or 'agents'. */
   audience?: 'all' | 'tc' | 'agents';
 }
 
@@ -53,41 +54,6 @@ function clip(text: string | null | undefined, max: number): string | null {
   const clean = text.replace(/\s+/g, ' ').trim();
   if (!clean) return null;
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
-}
-
-/** Everyone involved in a deal: the owning TC plus every agent who has accepted access. */
-async function getDealParticipants(transactionId: string): Promise<{
-  tcUserId: string | null;
-  agentUserIds: string[];
-  address: string | null;
-}> {
-  const { data: transaction } = await supabaseServer
-    .from('transactions')
-    .select('agent_id, property_address')
-    .eq('id', transactionId)
-    .maybeSingle();
-  if (!transaction) return { tcUserId: null, agentUserIds: [], address: null };
-
-  let tcUserId: string | null = null;
-  if (transaction.agent_id) {
-    const { data: agentRecord } = await supabaseServer
-      .from('agents')
-      .select('tc_user_id')
-      .eq('id', transaction.agent_id)
-      .maybeSingle();
-    tcUserId = (agentRecord?.tc_user_id as string | null) ?? null;
-  }
-
-  const { data: grants } = await supabaseServer
-    .from('transaction_agents')
-    .select('agent_user_id')
-    .eq('transaction_id', transactionId);
-
-  return {
-    tcUserId,
-    agentUserIds: (grants || []).map((g) => g.agent_user_id as string),
-    address: (transaction.property_address as string | null) ?? null,
-  };
 }
 
 /** Event types this person has muted in the bell's settings (stored on their auth user_metadata). */
@@ -103,17 +69,13 @@ export async function getMutedTypes(userId: string): Promise<string[]> {
 
 export async function notifyDeal(event: DealNotification): Promise<void> {
   try {
-    const { tcUserId, agentUserIds, address } = await getDealParticipants(event.transactionId);
-    const agentSet = new Set(agentUserIds);
+    const { people, address } = await getDealPeople(event.transactionId);
     const audience = event.audience ?? 'all';
-    const recipients = [
-      ...new Set([
-        ...(tcUserId && audience !== 'agents' ? [tcUserId] : []),
-        ...(audience !== 'tc' ? agentUserIds : []),
-      ]),
-    ].filter(
-      (id) => id !== event.actorUserId
-    );
+    const byId = new Map(people.map((p) => [p.userId, p]));
+    const recipients = people
+      .filter((p) => (audience === 'all' ? true : audience === 'tc' ? p.side === 'tc' : p.side === 'agent'))
+      .map((p) => p.userId)
+      .filter((id) => id !== event.actorUserId);
     if (recipients.length === 0) return;
 
     const body = clip(event.body, 160);
@@ -124,7 +86,7 @@ export async function notifyDeal(event: DealNotification): Promise<void> {
         try {
           if ((await getMutedTypes(recipientId)).includes(event.type)) return;
 
-          const link = agentSet.has(recipientId)
+          const link = byId.get(recipientId)?.portal === 'agent'
             ? `/agent/transactions/${event.transactionId}`
             : `/dashboard/transactions/${event.transactionId}`;
 

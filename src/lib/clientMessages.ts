@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
 import { after } from 'next/server';
 import { supabaseServer } from './supabase';
-import { getUserFromRequest, AuthError } from './auth';
-import { assertAgentOnTransaction } from './agentPortal';
-import { isAgentSideOnDeal } from './authorize';
+import { getUserFromRequest } from './auth';
+import { authorizeDeal } from './authorize';
+import { getDealPeople, messageSide } from './dealPeople';
 import { queueDealNotification } from './notifications';
 import { sendClientMessageEmail, sendNewMessageEmail } from './agentPortalEmails';
 
@@ -29,22 +29,15 @@ export interface StaffContext {
 /** Who may read and post on a deal's client messages: an agent who accepted the deal, or the TC who owns it (or an admin). */
 export async function loadStaffContext(request: NextRequest, transactionId: string): Promise<StaffContext> {
   const { user, isAdmin } = await getUserFromRequest(request);
-  const role: StaffRole = (await isAgentSideOnDeal(user, isAdmin, transactionId)) ? 'agent' : 'tc';
+  const role: StaffRole = messageSide(user, isAdmin);
   const meta = (user as { user_metadata?: Record<string, unknown> }).user_metadata;
 
-  if (role === 'agent') {
-    await assertAgentOnTransaction(transactionId, user.id);
-  } else if (!isAdmin) {
-    const { data: transaction } = await supabaseServer.from('transactions').select('agent_id').eq('id', transactionId).single();
-    if (!transaction) throw new AuthError('Transaction not found', 404);
-    const { data: agent } = await supabaseServer
-      .from('agents')
-      .select('id')
-      .eq('id', transaction.agent_id)
-      .eq('tc_user_id', user.id)
-      .single();
-    if (!agent) throw new AuthError('You do not have permission to message on this transaction', 403);
-  }
+  // The deal's owner, or anyone they added.
+  await authorizeDeal(user, isAdmin, transactionId, {
+    scope: 'owner',
+    collaborators: true,
+    deniedMessage: 'You do not have permission to message on this transaction',
+  });
 
   const fullName = typeof meta?.full_name === 'string' ? meta.full_name.trim() : '';
   return {
@@ -115,29 +108,14 @@ export async function fetchPrivate(transactionId: string, linkId: string, channe
 }
 
 async function getParties(transactionId: string) {
-  const { data: transaction } = await supabaseServer
-    .from('transactions')
-    .select('agent_id, property_address')
-    .eq('id', transactionId)
-    .maybeSingle();
-  let tcEmail: string | null = null;
-  if (transaction?.agent_id) {
-    const { data: agentRecord } = await supabaseServer.from('agents').select('tc_user_id').eq('id', transaction.agent_id).maybeSingle();
-    if (agentRecord?.tc_user_id) {
-      const { data } = await supabaseServer.auth.admin.getUserById(agentRecord.tc_user_id as string);
-      tcEmail = data.user?.email ?? null;
-    }
-  }
-  const { data: grants } = await supabaseServer.from('transaction_agents').select('agent_user_id').eq('transaction_id', transactionId);
-  const agentEmails = (
-    await Promise.all(
-      (grants || []).map(async (g) => {
-        const { data } = await supabaseServer.auth.admin.getUserById(g.agent_user_id as string);
-        return data.user?.email ?? null;
-      })
-    )
-  ).filter((e): e is string => Boolean(e));
-  return { address: (transaction?.property_address as string | null) ?? null, tcEmail, agentEmails };
+  const { people, address } = await getDealPeople(transactionId);
+  const emailOf = (side: 'agent' | 'tc') => people.filter((p) => p.side === side && p.email).map((p) => p.email as string);
+  return {
+    address,
+    tcEmail: emailOf('tc'),
+    agentEmails: emailOf('agent'),
+    limitedEmails: people.filter((p) => p.portal === 'agent' && p.email).map((p) => p.email as string),
+  };
 }
 
 function runAfter(task: () => Promise<void>) {
@@ -235,8 +213,8 @@ export function afterClientMessage(params: {
   runAfter(async () => {
     const throttled = await recentlySent({ channel, sender_type: 'client', link_id: linkId }, transactionId);
     if (throttled) return;
-    const { address, tcEmail, agentEmails } = await getParties(transactionId);
-    const emails = [...(audience !== 'agents' && tcEmail ? [tcEmail] : []), ...(audience !== 'tc' ? agentEmails : [])];
+    const { address, tcEmail, agentEmails, limitedEmails } = await getParties(transactionId);
+    const emails = [...(audience !== 'agents' ? tcEmail : []), ...(audience !== 'tc' ? agentEmails : [])];
     await Promise.all(
       [...new Set(emails)].map((toEmail) =>
         sendNewMessageEmail({
@@ -244,7 +222,7 @@ export function afterClientMessage(params: {
           senderLabel: `${clientName} (client)`,
           propertyAddress: address,
           preview: body,
-          portalUrl: agentEmails.includes(toEmail) ? `${origin}/agent/transactions/${transactionId}` : `${origin}/dashboard/transactions/${transactionId}`,
+          portalUrl: limitedEmails.includes(toEmail) ? `${origin}/agent/transactions/${transactionId}` : `${origin}/dashboard/transactions/${transactionId}`,
         }).catch((err) => console.error('Error emailing staff about client message:', err))
       )
     );

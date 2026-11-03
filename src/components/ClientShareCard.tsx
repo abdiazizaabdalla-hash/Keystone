@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 
@@ -34,6 +34,7 @@ export default function ClientShareCard({
   documents,
   onDocumentsShared,
   contacts,
+  openFormSignal = 0,
 }: {
   transactionId: string;
   steps: StepOption[];
@@ -41,6 +42,8 @@ export default function ClientShareCard({
   onDocumentsShared: (ids: string[]) => void;
   /** This deal's contacts; the agent can pick a client from here instead of typing them. */
   contacts: { id: string; name: string | null; email: string | null; role: string | null }[];
+  /** Bump this number to open the add-client form from outside the card. */
+  openFormSignal?: number;
 }) {
   const router = useRouter();
   const [links, setLinks] = useState<ClientLink[]>([]);
@@ -105,6 +108,15 @@ export default function ClientShareCard({
     setShowForm(true);
     setMessage('');
   };
+
+  // Lets a button elsewhere on the page open the form.
+  const lastSignal = useRef(openFormSignal);
+  useEffect(() => {
+    if (openFormSignal !== lastSignal.current) {
+      lastSignal.current = openFormSignal;
+      openForm();
+    }
+  });
 
   const toggle = (id: string) =>
     setPickedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -325,7 +337,7 @@ export default function ClientShareCard({
         </button>
       </div>
       <p className="text-xs text-slate-500 mb-3">
-        Give your buyer or seller a live progress page. They get an email, no account needed, and it updates as your TC completes each step.
+        Give your buyer or seller a live progress page. They get an email, no account needed, and it updates as each step is completed.
       </p>
 
       {!loaded && <p className="text-xs text-slate-500">Checking client access…</p>}

@@ -6,6 +6,8 @@ import { use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import ClientMessagesPanel from '@/components/ClientMessagesPanel';
+import ClientShareCard from '@/components/ClientShareCard';
+import AddCoordinatorModal from '@/components/AddCoordinatorModal';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import DragHandle from '@/components/DragHandle';
 import MoveMenu from '@/components/MoveMenu';
@@ -359,9 +361,16 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [inviteEmailDraft, setInviteEmailDraft] = useState('');
   const [isInvitingAgent, setIsInvitingAgent] = useState(false);
   const [inviteMessage, setInviteMessage] = useState('');
-  // An agent running their own deal invites their coordinator here; a coordinator invites agents (wording only, the server decides).
+  // An agent with their own workspace: their deals talk to clients and a coordinator, not to "an agent on the portal".
   const [isAgentAcct, setIsAgentAcct] = useState(false);
-  useEffect(() => { { const p = readPersona(); setIsAgentAcct(p.accountType === 'agent' || p.workspace === true); } }, []);
+  const [showAddCoordinator, setShowAddCoordinator] = useState(false);
+  const [clientFormSignal, setClientFormSignal] = useState(0);
+  // The direct conversation with the other professional on the deal exists once someone else is on it.
+  const hasThread = Boolean(transaction?.shared) || acceptedAgentUsers.length > 0;
+  // Which side your own message bubbles are on.
+  const mySide: 'tc' | 'agent' = isAgentAcct ? 'agent' : 'tc';
+  const otherPartyName = isAgentAcct ? 'Coordinator' : agentName;
+  useEffect(() => { setIsAgentAcct(readPersona().workspace === true); }, []);
   const [messages, setMessages] = useState<
     {
       id: string;
@@ -2596,6 +2605,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           Back to Transactions
         </Link>
 
+        {showAddCoordinator && (
+          <AddCoordinatorModal
+            transactionId={resolvedParams.id}
+            onClose={() => setShowAddCoordinator(false)}
+            onInvited={() => void fetchAgentAccess()}
+          />
+        )}
+
         {/* Main Card */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8 mb-8">
           <div className="mb-8">
@@ -2607,16 +2624,50 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   </span>
                 )}
               </div>
-              <div className="text-right">
-                <button
-                  type="button"
-                  onClick={handleExportCompliance}
-                  disabled={isExportingCompliance}
-                  className="text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition disabled:opacity-50"
-                  title="Download a timestamped PDF of this deal's documents, messages, and checklist"
-                >
-                  {isExportingCompliance ? 'Exporting...' : 'Export Compliance Report'}
-                </button>
+              <div className="flex flex-col items-end">
+                <div className="flex flex-wrap justify-end gap-2">
+                  {isAgentAcct && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClientFormSignal((n) => n + 1);
+                        selectTab('overview');
+                        window.setTimeout(() => document.getElementById('client-portal-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+                      }}
+                      className="text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition"
+                      title="Give your buyer or seller a live progress page and a way to message you"
+                    >
+                      Add client to portal
+                    </button>
+                  )}
+                  {isAgentAcct && !transaction.shared && (() => {
+                    const pending = agentInvites.find((i) => i.status !== 'accepted');
+                    if (acceptedAgentUsers.length > 0) {
+                      return <span className="text-sm px-3 py-1.5 border border-green-500/40 text-green-300 rounded-lg">Coordinator: {acceptedAgentUsers[0].email}</span>;
+                    }
+                    if (pending) {
+                      return <span className="text-sm px-3 py-1.5 border border-amber-500/40 text-amber-300 rounded-lg" title="They have not accepted yet">Coordinator invited: {pending.email}</span>;
+                    }
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddCoordinator(true)}
+                        className="text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition"
+                      >
+                        Add a transaction coordinator
+                      </button>
+                    );
+                  })()}
+                  <button
+                    type="button"
+                    onClick={handleExportCompliance}
+                    disabled={isExportingCompliance}
+                    className="text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition disabled:opacity-50"
+                    title="Download a timestamped PDF of this deal's documents, messages, and checklist"
+                  >
+                    {isExportingCompliance ? 'Exporting...' : 'Export Compliance Report'}
+                  </button>
+                </div>
                 {complianceExportError && <p className="text-xs text-red-400 mt-1">{complianceExportError}</p>}
               </div>
             </div>
@@ -2651,7 +2702,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 </div>
               )}
               {/* Whether the agent can open this deal in their portal, always visible under the agent's name. */}
-              {(() => {
+              {!isAgentAcct && (() => {
                 if (!agentAccessLoaded) return <p data-tour="tx-portal-status" className="mt-2 text-xs text-slate-500">Checking portal access…</p>;
                 const agentEmail = agent?.email?.trim().toLowerCase() || '';
                 const hasAccess = !!agentEmail && acceptedAgentUsers.some((a) => a.email.toLowerCase() === agentEmail);
@@ -2913,25 +2964,39 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
             <div className="lg:order-2 lg:self-start flex flex-col gap-8 min-w-0">
+              {isAgentAcct && (
+                <section id="client-portal-box" className="bg-white/5 border border-white/10 rounded-2xl p-6 [&>div]:mt-0 [&>div]:pt-0 [&>div]:border-t-0">
+                  <ClientShareCard
+                    transactionId={resolvedParams.id}
+                    steps={tasks.map((t) => ({ id: t.id, name: t.name }))}
+                    contacts={contacts.map((c) => ({ id: c.id, name: c.name, email: c.email, role: c.role }))}
+                    documents={documents.map((d) => ({ id: d.id, name: d.file_name, clientVisible: Boolean(d.client_visible) }))}
+                    onDocumentsShared={(ids) => setDocuments((prev) => prev.map((d) => ({ ...d, client_visible: ids.includes(d.id) })))}
+                    openFormSignal={clientFormSignal}
+                  />
+                </section>
+              )}
               <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-bold text-slate-100">Messages</h2>
+                  <h2 className="text-lg font-bold text-slate-100">{isAgentAcct ? 'Coordinator' : 'Messages'}</h2>
                   <button type="button" onClick={() => selectTab('messages')} className="text-sm text-blue-400 hover:text-blue-300 font-medium transition">
                     Open Messages →
                   </button>
                 </div>
                 {messages.length === 0 ? (
                   <p className="text-sm text-slate-500">
-                    {acceptedAgentUsers.length === 0
-                      ? 'Invite your agent on the Contacts tab to start a conversation.'
-                      : 'No messages yet.'}
+                    {hasThread
+                      ? 'No messages yet.'
+                      : isAgentAcct
+                        ? 'No coordinator on this deal. Message your clients below, or add a coordinator from the top of the page.'
+                        : 'Invite your agent on the Contacts tab to start a conversation.'}
                   </p>
                 ) : (
-                  <MessagePreview messages={messages} agentName={agentName} limit={4} onAttachmentDragStart={startDocDrag} />
+                  <MessagePreview messages={messages} agentName={otherPartyName} selfRole={mySide} limit={4} onAttachmentDragStart={startDocDrag} />
                 )}
               </section>
 
-              {tab === 'overview' && <ClientMessagesPanel transactionId={resolvedParams.id} viewerRole="tc" />}
+              {tab === 'overview' && <ClientMessagesPanel transactionId={resolvedParams.id} viewerRole={mySide} />}
 
               <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
                 <div className="flex items-start justify-between gap-3 mb-1">
@@ -3311,7 +3376,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               {messages.length === 0 ? (
                 <p className="text-sm text-slate-500">No messages yet.</p>
               ) : (
-                <MessagePreview messages={messages} agentName={agentName} limit={4} onAttachmentDragStart={startDocDrag} />
+                <MessagePreview messages={messages} agentName={otherPartyName} selfRole={mySide} limit={4} onAttachmentDragStart={startDocDrag} />
               )}
             </div>
         {/* Communication -- emails forwarded/CC'd to this transaction's
@@ -3478,8 +3543,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             to drive the preview and the unread-feeling "latest line". */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6 flex flex-col h-[34rem]">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-slate-100">Messages</h2>
-            {acceptedAgentUsers.length > 0 && (
+            <h2 className="text-lg font-bold text-slate-100">{isAgentAcct ? 'Coordinator' : 'Messages'}</h2>
+            {hasThread && (
               <Link
                 href={`/dashboard/transactions/${resolvedParams.id}/messages`}
                 className="text-sm text-blue-400 hover:text-blue-300 font-medium transition"
@@ -3488,20 +3553,31 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               </Link>
             )}
           </div>
-          {acceptedAgentUsers.length === 0 ? (
-            <p className="text-slate-500 text-sm">
-              Invite an agent on the Contacts tab to start a conversation here -- it stays on this deal instead of your
-              regular inbox.
-            </p>
+          {!hasThread ? (
+            isAgentAcct ? (
+              <div className="text-sm text-slate-400">
+                <p className="mb-3">No coordinator on this deal yet. Add one to message them here. Your client conversations are below.</p>
+                {!transaction.shared && (
+                  <button type="button" onClick={() => setShowAddCoordinator(true)} className="px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition">
+                    Add a transaction coordinator
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-sm">
+                Invite an agent on the Contacts tab to start a conversation here -- it stays on this deal instead of your
+                regular inbox.
+              </p>
+            )
           ) : (
             <>
               <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
                 {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet -- say hello.</p>}
                 {messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.sender_role === 'tc' ? 'justify-end' : 'justify-start'}`}>
+                  <div key={m.id} className={`flex ${m.sender_role === mySide ? 'justify-end' : 'justify-start'}`}>
                     <div
                       className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                        m.sender_role === 'tc' ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
+                        m.sender_role === mySide ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
                       }`}
                     >
                       {m.body && <p>{m.body}</p>}
@@ -3511,7 +3587,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                           target="_blank"
                           rel="noopener noreferrer"
                           className={`flex items-center gap-1.5 text-xs underline underline-offset-2 ${
-                            m.sender_role === 'tc' ? 'text-blue-100' : 'text-blue-300'
+                            m.sender_role === mySide ? 'text-blue-100' : 'text-blue-300'
                           } ${m.body ? 'mt-1.5' : ''}`}
                         >
                           📎 {m.attachment.fileName}
@@ -3561,7 +3637,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                       handleSendMessage();
                     }
                   }}
-                  placeholder="Message the agent…"
+                  placeholder={isAgentAcct ? 'Message your coordinator…' : 'Message the agent…'}
                   className="flex-1 bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
                 />
                 <button
@@ -3576,7 +3652,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           )}
         </div>
         <div className="mt-6">
-          {tab === 'messages' && <ClientMessagesPanel transactionId={resolvedParams.id} viewerRole="tc" />}
+          {tab === 'messages' && <ClientMessagesPanel transactionId={resolvedParams.id} viewerRole={mySide} />}
         </div>
         </div>
 

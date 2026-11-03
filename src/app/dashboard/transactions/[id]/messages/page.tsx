@@ -12,6 +12,7 @@ interface TransactionSummary {
   agent_id: string;
   file_number: string;
   property_address: string;
+  shared_agent?: { id: string; name: string } | null;
 }
 
 interface AgentSummary {
@@ -83,6 +84,8 @@ export default function TransactionMessagesPage({ params }: { params: Promise<{ 
   const [transaction, setTransaction] = useState<TransactionSummary | null>(null);
   const [agent, setAgent] = useState<AgentSummary | null>(null);
   const [tcName, setTcName] = useState('');
+  // Which side of the conversation you speak for: an agent with their own workspace is the agent side, everyone else the coordinator side.
+  const [selfRole, setSelfRole] = useState<'tc' | 'agent'>('tc');
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -149,11 +152,12 @@ export default function TransactionMessagesPage({ params }: { params: Promise<{ 
         if (agentsRes.ok) {
           const agentsList = await agentsRes.json();
           const matched = Array.isArray(agentsList) ? agentsList.find((a: AgentSummary) => a.id === tx.agent_id) : null;
-          setAgent(matched || null);
+          setAgent(matched || tx.shared_agent || null);
         }
         if (meRes.ok) {
           const me = await meRes.json();
           setTcName(me.fullName || '');
+          setSelfRole(me.agentWorkspace ? 'agent' : 'tc');
         }
         setMessages(messagesRes.ok ? await messagesRes.json() : []);
       } catch (err) {
@@ -237,7 +241,8 @@ export default function TransactionMessagesPage({ params }: { params: Promise<{ 
     }
   };
 
-  const agentLabel = agent?.name || 'the agent';
+  // The other party: your coordinator when you are the agent, otherwise the agent on the deal.
+  const agentLabel = selfRole === 'agent' ? 'your coordinator' : agent?.name || 'the agent';
   const tcLabel = tcName || 'You';
 
   // created_at comes back from Postgres without a timezone suffix, so we
@@ -294,10 +299,10 @@ export default function TransactionMessagesPage({ params }: { params: Promise<{ 
             ← Back
           </Link>
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-sm font-bold text-white shrink-0">
-            {agentLabel[0]?.toUpperCase() || 'A'}
+            {(selfRole === 'agent' ? 'C' : agentLabel[0]?.toUpperCase()) || 'A'}
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-slate-100 font-display font-semibold truncate">{agentLabel}</h1>
+            <h1 className="text-slate-100 font-display font-semibold truncate">{selfRole === 'agent' ? 'Coordinator' : agentLabel}</h1>
             <p className="text-slate-500 text-xs truncate">{transaction.property_address || transaction.file_number}</p>
           </div>
           {hiddenIds.size > 0 && (
@@ -319,8 +324,8 @@ export default function TransactionMessagesPage({ params }: { params: Promise<{ 
             <p className="text-slate-500 text-sm text-center mt-10">No messages yet -- say hello.</p>
           )}
           {visibleMessages.map((m, index) => {
-            const isSelf = m.sender_role === 'tc';
-            const label = isSelf ? tcLabel : agentLabel;
+            const isSelf = m.sender_role === selfRole;
+            const label = isSelf ? tcLabel : selfRole === 'agent' ? 'Coordinator' : agentLabel;
             const initial = label[0]?.toUpperCase() || (isSelf ? 'Y' : 'A');
             const isHidden = hiddenIds.has(m.id);
             const prevMessage = index > 0 ? visibleMessages[index - 1] : null;
