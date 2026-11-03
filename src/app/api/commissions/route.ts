@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
-import { agentLabels, assertBrokerageOwner, brokerageOn, canOverseeDeal, listOwnerLinks, overseesAgent } from '@/lib/oversight';
+import { activeLinkForAgent, agentLabels, assertBrokerageOwner, brokerageOn, canOverseeDeal, listOwnerLinks, overseesAgent } from '@/lib/oversight';
 import { CLOSED_STAGE } from '@/lib/oversightMath';
 import { oversightError } from '@/lib/oversightServer';
 import { cleanDeductions, computeSplit, isSplitType, SplitError, splitLabel, toCents, type SplitType } from '@/lib/commissionMath';
@@ -40,13 +40,19 @@ export async function GET(request: NextRequest) {
     const transactionId = params.get('transaction');
 
     if (transactionId) {
-      const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id, status').eq('id', transactionId).maybeSingle();
+      const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id, status, purchase_price').eq('id', transactionId).maybeSingle();
       if (!tx) return NextResponse.json({ role: null });
       const row = await commissionForTransaction(transactionId);
       const dealClosed = tx.status === CLOSED_STAGE;
       if (tx.tc_user_id === user.id) {
         // The agent who owns the deal sees it only if there is a commission on it (or a brokerage that could propose one).
-        return NextResponse.json({ role: row ? 'agent' : null, canPropose: false, dealClosed, commission: row ? viewOf(row) : null });
+        if (row) return NextResponse.json({ role: 'agent', canPropose: false, dealClosed, commission: viewOf(row) });
+        // No statement yet: an agent in a brokerage can generate one, pre-filled with the split their brokerage set for them.
+        const link = await activeLinkForAgent(user.id);
+        if (!link || !(await overseesAgent(link.owner_user_id, user.id))) return NextResponse.json({ role: null, canPropose: false, dealClosed, commission: null });
+        const owner = (await agentLabels([link.owner_user_id])).get(link.owner_user_id);
+        const split = link.default_split_type && link.default_split_value !== null && link.default_split_value !== undefined ? { type: link.default_split_type as SplitType, value: Number(link.default_split_value) } : null;
+        return NextResponse.json({ role: null, canPropose: false, canGenerate: true, brokerage: { name: owner?.name ?? 'Your brokerage', email: owner?.email ?? null }, defaultSplit: split, purchasePrice: Number(tx.purchase_price) || null, dealClosed, commission: null });
       }
       const owns = row ? row.owner_user_id === user.id : false;
       const oversees = await canOverseeDeal(user.id, transactionId);

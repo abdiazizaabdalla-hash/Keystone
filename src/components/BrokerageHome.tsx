@@ -14,7 +14,7 @@ interface Home {
   attentionDeals: Item[];
   attentionListings: Item[];
   closingSoon: Item[];
-  commissions: { changeRequested: number; awaitingAgent: number; readyToPay: number; unpaidCount: number; unpaidAgentCents: number; closedWithoutStatement: number };
+  commissions: { changeRequested: number; needsApproval: number; awaitingAgent: number; readyToPay: number; unpaidCount: number; unpaidAgentCents: number; closedWithoutStatement: number };
   unreadMessages: number;
   agents: { id: string; name: string; openDeals: number; openListings: number; needsAttention: number; closedThisYear: number; baseCommission: { type: 'percent' | 'flat_agent' | 'flat_brokerage'; value: number } | null }[];
 }
@@ -59,6 +59,7 @@ export default function BrokerageHome({ compact = false }: { compact?: boolean }
 
   const { totals: t, commissions: c } = home;
   const todo: { text: string; href: string; tone: 'red' | 'amber' | 'slate' }[] = [
+    ...(c.needsApproval > 0 ? [{ text: `${c.needsApproval} commission invoice${c.needsApproval === 1 ? '' : 's'} from your agents ${c.needsApproval === 1 ? 'needs' : 'need'} your approval`, href: '/dashboard/invoices', tone: 'red' as const }] : []),
     ...(c.changeRequested > 0 ? [{ text: `${c.changeRequested} agent${c.changeRequested === 1 ? '' : 's'} asked for a change to a commission split`, href: '/dashboard/invoices', tone: 'red' as const }] : []),
     ...(home.unreadMessages > 0 ? [{ text: `${home.unreadMessages} unread message${home.unreadMessages === 1 ? '' : 's'} from your agents`, href: '/dashboard/collaborate#messages', tone: 'amber' as const }] : []),
     ...(c.closedWithoutStatement > 0 ? [{ text: `${c.closedWithoutStatement} recently closed deal${c.closedWithoutStatement === 1 ? ' has' : 's have'} no commission statement yet`, href: '/dashboard/transactions', tone: 'amber' as const }] : []),
@@ -186,7 +187,8 @@ export default function BrokerageHome({ compact = false }: { compact?: boolean }
           <h2 className="text-lg font-semibold text-slate-100">Commissions</h2>
           <Link href="/dashboard/invoices" className="text-sm text-blue-400 hover:text-blue-300">Open agent commissions</Link>
         </div>
-        <div className="grid sm:grid-cols-4 gap-3 text-sm">
+        <div className="grid sm:grid-cols-5 gap-3 text-sm">
+          <div><p className="text-xs text-slate-400">Needs your approval</p><p className={`text-xl font-semibold ${c.needsApproval ? 'text-amber-300' : 'text-slate-100'}`}>{c.needsApproval}</p></div>
           <div><p className="text-xs text-slate-400">Not paid yet</p><p className="text-xl font-semibold text-slate-100">{c.unpaidCount}</p><p className="text-[11px] text-slate-500">{money(c.unpaidAgentCents / 100)} owed to agents</p></div>
           <div><p className="text-xs text-slate-400">Waiting for the agent</p><p className="text-xl font-semibold text-slate-100">{c.awaitingAgent}</p></div>
           <div><p className="text-xs text-slate-400">Ready to mark paid</p><p className="text-xl font-semibold text-emerald-300">{c.readyToPay}</p></div>

@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
           needsAttention: open.filter((d) => d.health.flags.length > 0).length + ml.filter((x) => x.health.flags.length > 0).length,
           currentDeals: [...open].sort((a, b) => (a.closing_date ?? '9999').localeCompare(b.closing_date ?? '9999')).slice(0, 3).map((d) => ({ id: d.id, address: d.property_address, status: d.status, closingDate: d.closing_date, flags: d.health.flags, nextStep: d.nextStep })),
           currentListings: ml.slice(0, 2).map((x) => ({ id: x.id, address: x.property_address, status: x.status, listPrice: x.list_price, flags: x.health.flags })),
-          recentCommissions: mc.slice(0, 3).map((c) => ({ id: c.id, transactionId: c.transactionId, statementNumber: c.statementNumber, property: c.property, agentNet: c.agentNet, status: c.status, paidOn: c.paidOn })),
+          recentCommissions: mc.slice(0, 3).map((c) => ({ id: c.id, transactionId: c.transactionId, statementNumber: c.statementNumber, property: c.property, agentNet: c.agentNet, status: c.status, submitted: c.submitted, paidOn: c.paidOn })),
           unpaidAgentCents: mc.filter((c) => c.status !== 'paid').reduce((n, c) => n + c.agentNetCents, 0),
         };
       })

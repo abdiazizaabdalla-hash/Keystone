@@ -16,6 +16,7 @@ interface Row {
   splitType: SplitType;
   splitValue: number;
   status: 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
+  submitted?: boolean;
   gross: number;
   agentNet: number;
   brokerageNet: number;
@@ -147,7 +148,7 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
                           <td className="py-2 pr-3 text-slate-300">{splitText(r.splitType, r.splitValue)}</td>
                           <td className="py-2 pr-3 text-right text-slate-200">{money(r.gross)}</td>
                           <td className="py-2 pr-3 text-right text-emerald-300">{money(r.agentNet)}</td>
-                          <td className="py-2 pr-3 text-slate-300">{STATUS[r.status]}{r.paidOn ? ` ${r.paidOn}` : ''}</td>
+                          <td className="py-2 pr-3 text-slate-300">{r.submitted ? <span className="text-amber-300">Needs your approval</span> : STATUS[r.status]}{r.paidOn ? ` ${r.paidOn}` : ''}</td>
                           <td className="py-2 text-right"><button type="button" onClick={() => openStatement(r.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="text-xs text-blue-400 hover:text-blue-300">Statement</button></td>
                         </tr>
                       ))}

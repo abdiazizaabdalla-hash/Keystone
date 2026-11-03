@@ -9,7 +9,7 @@ import { isMissingTable, loadCommissionFor, notifyCommission, viewOf, type Commi
 
 // PATCH { action }
 //   agent:  'accept' | 'request_change' (note) | 'set_preference' (preference: 'relay' | 'outside')
-//   owner:  'mark_paid' (paidOn, note) | 'void'
+//   owner:  'approve' (an invoice the agent generated) | 'mark_paid' (paidOn, note) | 'void'
 // Each action checks the caller is that side of this commission and that the commission is in a state that allows it.
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -55,7 +55,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return bad('Unknown action.');
       }
     } else {
-      if (action === 'mark_paid') {
+      if (action === 'approve') {
+        if (row.status !== 'change_requested' || row.change_note) return bad('There is no agent invoice waiting for your approval.', 409);
+        if (!(await overseesAgent(user.id, row.agent_user_id))) return bad('This agent is not in your brokerage right now.', 409);
+        update.status = 'accepted';
+        update.accepted_at = now;
+        notify = { recipientId: row.agent_user_id, title: `${row.statement_number}: your brokerage approved your commission invoice`, link };
+      } else if (action === 'mark_paid') {
         if (row.status !== 'accepted') return bad('The agent has to agree to the split before it can be marked paid.', 409);
         const paidOn = typeof body.paidOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.paidOn) ? body.paidOn : today();
         if (paidOn > today()) return bad('The paid date cannot be in the future.');

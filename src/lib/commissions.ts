@@ -53,6 +53,9 @@ export function viewOf(row: CommissionRow) {
     deductions: row.deductions ?? [],
     status: row.status,
     changeNote: row.change_note,
+    // The agent generated this invoice themselves and it is waiting for the brokerage to approve or edit it.
+    // (Stored as a change request with no note; a real change request always carries one.)
+    submitted: row.status === 'change_requested' && !row.change_note,
     paymentPreference: row.payment_preference,
     proposedAt: row.proposed_at,
     acceptedAt: row.accepted_at,

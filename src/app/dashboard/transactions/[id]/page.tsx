@@ -10,6 +10,7 @@ import ClientShareCard from '@/components/ClientShareCard';
 import AddCoordinatorModal from '@/components/AddCoordinatorModal';
 import UseTemplateModal from '@/components/UseTemplateModal';
 import DealStateDocs from '@/components/DealStateDocs';
+import AgentCommissionInvoice from '@/components/AgentCommissionInvoice';
 import CommissionBox from '@/components/CommissionBox';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import DragHandle from '@/components/DragHandle';
@@ -2976,20 +2977,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
 
           {isAgentAcct && (
-          <OverviewSection defaultOpen title="Invoice" summary={(transaction.shared || acceptedAgentUsers.length > 0) ? 'Bill your coordinator or anyone else' : 'Bill a client or anyone else'}>
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <p className="text-sm text-slate-400 max-w-xl">
-                {(transaction.shared || acceptedAgentUsers.length > 0)
-                  ? 'A coordinator is on this deal, so the invoice is attached to it and starts addressed to them. You can change who it is billed to.'
-                  : 'Create an invoice for this deal and send it to anyone. Add a coordinator to this deal and the invoice attaches to it automatically.'}
-              </p>
-              <Link
-                href={(transaction.shared || acceptedAgentUsers.length > 0) ? `/dashboard/invoices?transactionId=${transaction.id}` : '/dashboard/invoices?new=1'}
-                className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition"
-              >
-                Generate invoice
-              </Link>
-            </div>
+          <OverviewSection defaultOpen title="Invoice" summary={isFeatureOnClient('brokerage') ? 'Commission invoice to your brokerage, or bill someone else' : 'Bill a coordinator, client or anyone else'}>
+            <AgentCommissionInvoice transactionId={transaction.id} purchasePrice={Number(transaction.purchase_price) || null} hasCoordinator={Boolean(transaction.shared) || acceptedAgentUsers.length > 0} />
           </OverviewSection>
           )}
 

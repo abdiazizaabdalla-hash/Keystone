@@ -24,7 +24,7 @@ interface Snap {
   needsAttention: number;
   currentDeals: { id: string; address: string | null; status: string | null; closingDate: string | null; flags: string[]; nextStep: { name: string; dueDate: string | null } | null }[];
   currentListings: { id: string; address: string | null; status: string | null; listPrice: number | string | null; flags: string[] }[];
-  recentCommissions: { id: string; transactionId: string; statementNumber: string; property: string | null; agentNet: number; status: string; paidOn: string | null }[];
+  recentCommissions: { id: string; transactionId: string; statementNumber: string; property: string | null; agentNet: number; status: string; submitted?: boolean; paidOn: string | null }[];
   unpaidAgentCents: number;
 }
 interface Pending { linkId: string; email: string; invitedAt: string }
@@ -139,13 +139,13 @@ export default function AgentSnapshotCards() {
                 </div>
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5">Recent commission invoices</p>
-                  {a.recentCommissions.length === 0 ? <p className="text-xs text-slate-500">None yet. Propose a split from one of their deals.</p> : (
+                  {a.recentCommissions.length === 0 ? <p className="text-xs text-slate-500">None yet. They appear when an agent generates one, or when you propose a split on one of their deals.</p> : (
                     <ul className="space-y-1.5">
                       {a.recentCommissions.map((c) => (
                         <li key={c.id} className="text-xs flex items-start justify-between gap-2">
                           <span className="min-w-0">
                             <span className="block text-slate-100 truncate">{c.property || c.statementNumber}</span>
-                            <span className={`block ${STATUS_CLS[c.status] ?? 'text-slate-400'}`}>{STATUS[c.status] ?? c.status}{c.paidOn ? ` ${fmt(c.paidOn)}` : ''}</span>
+                            <span className={`block ${c.submitted ? 'text-amber-300' : STATUS_CLS[c.status] ?? 'text-slate-400'}`}>{c.submitted ? 'Needs your approval' : STATUS[c.status] ?? c.status}{c.paidOn ? ` ${fmt(c.paidOn)}` : ''}</span>
                           </span>
                           <span className="shrink-0 text-emerald-300">{money(c.agentNet)}</span>
                         </li>

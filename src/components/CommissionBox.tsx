@@ -18,6 +18,7 @@ interface View {
   deductions: Fee[];
   status: 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
   changeNote: string | null;
+  submitted?: boolean;
   paymentPreference: 'relay' | 'outside' | null;
   paidOn: string | null;
   paidNote: string | null;
@@ -113,7 +114,10 @@ export default function CommissionBox({ transactionId }: { transactionId: string
           <h2 className="text-lg font-bold text-slate-100">Commission</h2>
           <p className="text-xs text-slate-400">{isOwner ? 'Between you and this agent only.' : 'Between you and your brokerage only.'}</p>
         </div>
-        {c && <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${STATUS[c.status].cls}`}>{STATUS[c.status].label}</span>}
+        {c && (() => {
+          const st = c.submitted ? (isOwner ? { label: 'Needs your approval', cls: 'bg-amber-500/20 text-amber-300' } : { label: 'Sent to your brokerage', cls: 'bg-blue-500/20 text-blue-300' }) : STATUS[c.status];
+          return <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>;
+        })()}
       </div>
       {error && <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1.5 mb-3">{error}</p>}
 
@@ -168,7 +172,9 @@ export default function CommissionBox({ transactionId }: { transactionId: string
 
           {isOwner && (
             <div className="flex gap-2 flex-wrap mt-3">
-              {data.canPropose && c.status !== 'paid' && <button type="button" onClick={() => startForm(c, data)} className={`${btn} border border-slate-600 text-slate-200 hover:border-slate-500`}>{c.status === 'accepted' ? 'Revise (agent must agree again)' : 'Edit'}</button>}
+              {c.submitted && <button type="button" disabled={busy} onClick={() => action('approve')} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Approve</button>}
+              {data.canPropose && c.status !== 'paid' && <button type="button" onClick={() => startForm(c, data)} className={`${btn} border border-slate-600 text-slate-200 hover:border-slate-500`}>{c.status === 'accepted' ? 'Revise (agent must agree again)' : c.submitted ? 'Edit before approving (agent agrees again)' : 'Edit'}</button>}
+              {c.status === 'accepted' && !paying && <button type="button" disabled title="Payments through Relay are not switched on yet" className={`${btn} border border-slate-700 text-slate-500 cursor-not-allowed`}>Pay through Relay (soon)</button>}
               {c.status === 'accepted' && !paying && <button type="button" onClick={() => { setPaidOn(new Date().toISOString().slice(0, 10)); setPaying(true); }} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Mark paid</button>}
               {c.status !== 'paid' && <button type="button" disabled={busy} onClick={() => window.confirm('Void this commission statement? The agent will be told.') && action('void')} className={`${btn} text-slate-400 hover:text-red-300`}>Void</button>}
             </div>
