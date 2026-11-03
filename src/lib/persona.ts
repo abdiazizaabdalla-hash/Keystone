@@ -10,6 +10,8 @@ const KEY = 'relay_persona';
 export interface Persona {
   accountType: AccountType;
   coordinationMode: CoordinationMode | null;
+  /** An agent with their own workspace (presentation only; the server decides what they may do). */
+  workspace?: boolean;
 }
 
 export function savePersona(p: Persona) {
@@ -27,11 +29,12 @@ export function readPersona(): Persona {
       const p = JSON.parse(raw);
       return {
         accountType: p.accountType === 'agent' ? 'agent' : 'tc',
+        workspace: p.workspace === true,
         coordinationMode: p.coordinationMode === 'own_tc' || p.coordinationMode === 'self' || p.coordinationMode === 'automate' ? p.coordinationMode : null,
       };
     }
   } catch {
     // fall through
   }
-  return { accountType: 'tc', coordinationMode: null };
+  return { accountType: 'tc', coordinationMode: null, workspace: false };
 }

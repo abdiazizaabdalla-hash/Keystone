@@ -361,7 +361,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [inviteMessage, setInviteMessage] = useState('');
   // An agent running their own deal invites their coordinator here; a coordinator invites agents (wording only, the server decides).
   const [isAgentAcct, setIsAgentAcct] = useState(false);
-  useEffect(() => { setIsAgentAcct(readPersona().accountType === 'agent'); }, []);
+  useEffect(() => { { const p = readPersona(); setIsAgentAcct(p.accountType === 'agent' || p.workspace === true); } }, []);
   const [messages, setMessages] = useState<
     {
       id: string;
@@ -2794,6 +2794,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
           </div>
 
+          {!isAgentAcct && !transaction.shared && (
           <OverviewSection defaultOpen title="Invoice" summary={invoice ? `${invoice.invoice_number} · $${invoice.amount_owed.toLocaleString()} · ${invoice.paid ? 'Paid' : 'Unpaid'}` : 'Not created yet'}>
           {/* Invoice: no longer gated on the deal being manually walked to
               Closed via the checklist -- some TCs don't want to check off
@@ -2908,6 +2909,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             )}
           </div>
           </OverviewSection>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
             <div className="lg:order-2 lg:self-start flex flex-col gap-8 min-w-0">
@@ -3786,6 +3788,15 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         </div>
 
 
+          {isAgentAcct && (transaction.shared || acceptedAgentUsers.length > 0) && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-8">
+              <h2 className="text-lg font-bold text-slate-100 mb-2">Invoice for this deal</h2>
+              <p className="text-xs text-slate-500 mb-4">A coordinator is on this deal, so you can attach an invoice to it. It starts addressed to them.</p>
+              <Link href={`/dashboard/invoices?transactionId=${transaction.id}`} className="inline-block px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-100 text-sm font-semibold rounded-lg transition">
+                Create invoice
+              </Link>
+            </div>
+          )}
           {!transaction.shared && (
           <div id="agent-portal-box" className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-8">
             <h2 className="text-lg font-bold text-slate-100 mb-5">{isAgentAcct ? 'Your coordinator' : 'Agent portal access'}</h2>

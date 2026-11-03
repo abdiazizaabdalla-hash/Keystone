@@ -113,7 +113,11 @@ export async function cleanup(): Promise<void> {
     await admin.from('documents').delete().in('transaction_id', txIds);
     await admin.from('tasks').delete().in('transaction_id', txIds);
     await admin.from('transaction_agents').delete().in('transaction_id', txIds);
+    await admin.from('agent_invites').delete().in('transaction_id', txIds);
   }
+  // Agents' own invoices (the table may not exist yet on an older test database; errors are ignored).
+  await admin.from('workspace_invoices').delete().in('owner_user_id', created);
+  await admin.from('contacts').delete().in('tc_user_id', created);
   await admin.from('transactions').delete().in('tc_user_id', created);
   await admin.from('agents').delete().in('tc_user_id', created);
   for (const id of created) await admin.auth.admin.deleteUser(id);

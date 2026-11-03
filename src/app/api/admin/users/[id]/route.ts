@@ -116,6 +116,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const changes: Record<string, unknown> = { agent_workspace: body.enabled };
       let trialEndsAt = (wsTarget.user.app_metadata as { trial_ends_at?: string } | null)?.trial_ends_at || null;
       if (body.enabled) {
+        // The workspace shows agent wording (own deals, invoices) rather than coordinator wording.
+        changes.account_type = 'agent';
         const days = Number.isInteger(body.trialDays) && body.trialDays > 0 && body.trialDays <= 365 ? body.trialDays : 30;
         const proposed = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
         const existing = trialEndsAt ? new Date(trialEndsAt) : null;

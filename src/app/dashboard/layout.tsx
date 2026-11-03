@@ -160,6 +160,8 @@ export default function DashboardLayout({
   const [plan, setPlan] = useState<string | null>(null);
   // Presentation only (see lib/accountType.ts): an agent running their own deals does not see coordinator-only items.
   const [isAgentAccount, setIsAgentAccount] = useState(false);
+  // An agent with their own workspace keeps the Invoices tab (their own invoices, not the coordinator's).
+  const [hasWorkspace, setHasWorkspace] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [trial, setTrial] = useState<{
     applies: boolean;
@@ -313,7 +315,8 @@ export default function DashboardLayout({
           }
           setPlan(data.plan || 'starter');
           setIsAgentAccount(data.accountType === 'agent');
-          savePersona({ accountType: data.accountType === 'agent' ? 'agent' : 'tc', coordinationMode: data.coordinationMode ?? null });
+          savePersona({ accountType: data.accountType === 'agent' ? 'agent' : 'tc', coordinationMode: data.coordinationMode ?? null, workspace: Boolean(data.agentWorkspace) });
+          setHasWorkspace(Boolean(data.agentWorkspace));
           setTrial(data.trial || null);
           setUserName(data.fullName || data.email || '');
           setIsAdmin(Boolean(data.is_admin));
@@ -362,7 +365,7 @@ export default function DashboardLayout({
     }
   };
 
-  const primaryNav = isAgentAccount ? PRIMARY_NAV.filter((i) => i.href !== '/dashboard/invoices') : PRIMARY_NAV;
+  const primaryNav = isAgentAccount && !hasWorkspace ? PRIMARY_NAV.filter((i) => i.href !== '/dashboard/invoices') : PRIMARY_NAV;
 
   const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
     { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },

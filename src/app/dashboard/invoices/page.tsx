@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { netReceived, paidInMonth } from '@/lib/invoiceMath';
+import { readPersona } from '@/lib/persona';
+import AgentInvoices from '@/components/AgentInvoices';
 
 interface Agent {
   name: string;
@@ -60,7 +62,7 @@ function QbNote({ invoice }: { invoice: Invoice }) {
   return null;
 }
 
-export default function InvoicesPage() {
+function CoordinatorInvoicesPage() {
   const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
@@ -490,4 +492,16 @@ export default function InvoicesPage() {
       </div>
     </div>
   );
+}
+
+// An agent with their own workspace gets their own invoices (templates, contacts); everyone else sees the coordinator's.
+export default function InvoicesPage() {
+  const [mode, setMode] = useState<'unknown' | 'agent' | 'coordinator'>('unknown');
+  const [dealId, setDealId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    setMode(readPersona().workspace ? 'agent' : 'coordinator');
+    setDealId(new URLSearchParams(window.location.search).get('transactionId') || undefined);
+  }, []);
+  if (mode === 'unknown') return null;
+  return mode === 'agent' ? <AgentInvoices initialTransactionId={dealId} /> : <CoordinatorInvoicesPage />;
 }
