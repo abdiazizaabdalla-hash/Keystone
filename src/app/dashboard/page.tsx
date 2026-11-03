@@ -10,6 +10,7 @@ import CriticalDatesCard from '@/components/CriticalDatesCard';
 import ListingsOverviewCard from '@/components/ListingsOverviewCard';
 import TeamBoardCard from '@/components/TeamBoardCard';
 import BrokerageHome from '@/components/BrokerageHome';
+import AgentBrokerageStrip from '@/components/AgentBrokerageStrip';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 import { isFeatureOnClient } from '@/lib/features';
 import AttentionPanel, { type AttentionSummary } from '@/components/AttentionPanel';
@@ -275,6 +276,13 @@ export default function Dashboard() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
+  const closingSoonCount = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const end = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    return transactions.filter((t) => t.status !== 'Closed' && t.closing_date && t.closing_date >= today && t.closing_date <= end).length;
+  }, [transactions]);
+  const overdueDealCount = useMemo(() => transactions.filter((t) => t.status !== 'Closed' && (t.overdue_count ?? 0) > 0).length, [transactions]);
+
   const stats = useMemo(() => {
     const activeTransactions = transactions.filter((t) => t.status !== 'Closed');
     const closedTransactions = transactions.filter((t) => t.status === 'Closed');
@@ -480,6 +488,7 @@ export default function Dashboard() {
       </div>
 
       {brokerageOwner && <BrokerageHome compact />}
+      {persona.workspace === true && <AgentBrokerageStrip />}
 
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
@@ -488,6 +497,19 @@ export default function Dashboard() {
           <div className="text-3xl font-bold text-blue-400">{stats.activeCount}</div>
         </div>
 
+        {persona.workspace === true ? (
+          <>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <div className="text-xs text-slate-400 mb-1">Closing in 30 days</div>
+              <div className="text-3xl font-bold text-emerald-400">{closingSoonCount}</div>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <div className="text-xs text-slate-400 mb-1">Deals with overdue steps</div>
+              <div className={`text-3xl font-bold ${overdueDealCount > 0 ? 'text-red-400' : 'text-slate-200'}`}>{overdueDealCount}</div>
+            </div>
+          </>
+        ) : (
+          <>
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
           <div className="text-xs text-slate-400 mb-1">Unpaid Invoices</div>
           <div className={`text-3xl font-bold ${stats.overdueUnpaidCount > 0 ? 'text-red-400' : 'text-amber-400'}`}>
@@ -506,6 +528,8 @@ export default function Dashboard() {
           <div className="text-3xl font-bold text-green-400">{formatCurrency(stats.revenueThisMonth)}</div>
           <div className="text-xs text-slate-500 mt-1">{formatCurrency(stats.revenueAllTime)} received all time</div>
         </div>
+          </>
+        )}
       </div>
 
       <details className="mb-8 group">
@@ -586,10 +610,10 @@ export default function Dashboard() {
                 <thead>
                   <tr className="border-b border-slate-700 bg-slate-800/60">
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Property</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Agent</th>
+                    {persona.workspace !== true && <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Agent</th>}
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Stage</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Closing</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Fee</th>
+                    {persona.workspace !== true && <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Fee</th>}
                     <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
@@ -610,7 +634,7 @@ export default function Dashboard() {
                           <div className="text-slate-100 font-medium truncate max-w-xs">{tx.property_address}</div>
                           <div className="text-xs text-slate-500 font-mono">{tx.file_number}</div>
                         </td>
-                        <td className="px-4 py-3 text-slate-300">{agentById.get(tx.agent_id)?.name || 'Unknown'}</td>
+                        {persona.workspace !== true && <td className="px-4 py-3 text-slate-300">{agentById.get(tx.agent_id)?.name || 'Unknown'}</td>}
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(tx.status)}`}>
                             {tx.status}
@@ -622,12 +646,14 @@ export default function Dashboard() {
                           </div>
                           <div className="mt-0.5">{getDueBadge(tx)}</div>
                         </td>
+                        {persona.workspace !== true && (
                         <td className="px-4 py-3">
                           <div className="text-slate-200 text-sm font-medium">{fee !== null ? formatCurrency(fee) : '—'}</div>
                           <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${paymentBadgeClasses(invoice, isOverdue)}`}>
                             {paymentBadgeLabel(invoice, isOverdue)}
                           </span>
                         </td>
+                        )}
                         <td className="px-4 py-3 text-right">
                           <Link
                             href={`/dashboard/transactions/${tx.id}`}
@@ -666,16 +692,18 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
-                      <span>{agentById.get(tx.agent_id)?.name || 'Unknown'}</span>
+                      <span>{persona.workspace === true ? '' : agentById.get(tx.agent_id)?.name || 'Unknown'}</span>
                       <span>{tx.closing_date ? new Date(`${tx.closing_date}T00:00:00`).toLocaleDateString() : 'No closing date'}</span>
                     </div>
                     <div className="flex items-center justify-between">
+                      {persona.workspace === true ? <span /> : (
                       <div className="flex items-center gap-2">
                         <span className="text-slate-200 text-sm font-medium">{fee !== null ? formatCurrency(fee) : '—'}</span>
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${paymentBadgeClasses(invoice, isOverdue)}`}>
                           {paymentBadgeLabel(invoice, isOverdue)}
                         </span>
                       </div>
+                      )}
                       {getDueBadge(tx)}
                     </div>
                   </Link>

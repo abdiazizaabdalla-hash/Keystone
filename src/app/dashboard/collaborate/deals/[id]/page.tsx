@@ -72,7 +72,7 @@ export default function OversightDealPage({ params }: { params: Promise<{ id: st
   if (!detail) {
     return (
       <div className="p-4 md:p-8 max-w-4xl">
-        <Link href="/dashboard/collaborate#agents" className="text-sm text-blue-400 hover:text-blue-300">← Back to your agents</Link>
+        <Link href="/dashboard/transactions" className="text-sm text-blue-400 hover:text-blue-300">← Back to transactions</Link>
         <p className="text-slate-400 text-sm mt-4">{error || 'Loading…'}</p>
       </div>
     );
@@ -85,7 +85,7 @@ export default function OversightDealPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="p-4 md:p-8 max-w-4xl space-y-5">
-      <Link href="/dashboard/collaborate#agents" className="text-sm text-blue-400 hover:text-blue-300">← Back to your agents</Link>
+      <Link href="/dashboard/transactions" className="text-sm text-blue-400 hover:text-blue-300">← Back to transactions</Link>
       <div>
         <h1 className="text-2xl font-display font-semibold text-slate-100">{deal.property_address || deal.file_number || 'Deal'}</h1>
         <p className="text-slate-400 text-sm">

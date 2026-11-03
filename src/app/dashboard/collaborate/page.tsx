@@ -318,7 +318,7 @@ export default function CollaboratePage() {
       </div>
       <p className="text-slate-400 mb-6 max-w-3xl">
         {brokerageMode
-          ? 'Your brokerage’s home base: its agents, the people who work with you, and the templates you share. Agents and coordinators keep their own contacts and messages private; only what they choose to share appears here.'
+          ? 'Invite and manage your agents and coordinators, message them, and share templates. Agents and coordinators keep their own contacts private.'
           : 'Your team’s home base. Each coordinator’s deals, agents and contacts stay private to their own login; only contacts someone chooses to share appear here.'}
       </p>
 

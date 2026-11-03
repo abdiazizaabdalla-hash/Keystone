@@ -10,6 +10,7 @@ import { formatPhoneNumber } from '@/lib/formatPhone';
 import { readPersona } from '@/lib/persona';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 import AgentSnapshotCards from '@/components/AgentSnapshotCards';
+import MembersPanel from '@/components/MembersPanel';
 
 interface Agent {
   id: string;
@@ -40,7 +41,7 @@ interface DirectoryAgent {
   phone: string | null;
 }
 
-function ClientAgentsPage({ hideTitle = false }: { hideTitle?: boolean }) {
+function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?: boolean; embedded?: boolean }) {
   const router = useRouter();
   // An agent is the agent: there is no agents list for them to manage.
   useEffect(() => {
@@ -331,7 +332,7 @@ function ClientAgentsPage({ hideTitle = false }: { hideTitle?: boolean }) {
   }
 
   return (
-    <div className="p-4 md:p-8">
+    <div className={embedded ? '' : 'p-4 md:p-8'}>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         {hideTitle ? <div /> : (
           <div>
@@ -506,8 +507,8 @@ function ClientAgentsPage({ hideTitle = false }: { hideTitle?: boolean }) {
           <svg className="w-16 h-16 text-slate-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.856-1.487M15 10a3 3 0 11-6 0 3 3 0 016 0zM6 20a3 3 0 003-3v-2a3 3 0 00-3-3H3a3 3 0 00-3 3v2a3 3 0 003 3h3z" />
           </svg>
-          <h3 className="text-lg font-semibold text-slate-300 mb-2">No agents yet</h3>
-          <p className="text-slate-400">Add your first agent to get started</p>
+          <h3 className="text-lg font-semibold text-slate-300 mb-2">{embedded ? 'Nobody else yet' : 'No agents yet'}</h3>
+          <p className="text-slate-400">{embedded ? 'Add an agent or client you coordinate deals for who is not in your brokerage.' : 'Add your first agent to get started'}</p>
         </div>
       ) : (
         <>
@@ -671,26 +672,26 @@ function ClientAgentsPage({ hideTitle = false }: { hideTitle?: boolean }) {
   );
 }
 
-// A brokerage owner opens on the agents in their brokerage, each as a quick-snapshot card; the agents they coordinate
-// for (the usual list, with fees) are one tab away.
+// A brokerage owner opens on the agents in their brokerage, each as a quick-snapshot card. The Members tab lists everyone
+// (agents, coordinators) and keeps the usual agent list, with fees, under "Other".
 export default function AgentsPage() {
   const owner = useBrokerageOwner();
-  const [tab, setTab] = useState<'brokerage' | 'clients'>('brokerage');
+  const [tab, setTab] = useState<'brokerage' | 'members'>('brokerage');
   if (!owner) return <ClientAgentsPage />;
   return (
     <div>
       <div className="px-4 md:px-8 pt-4 md:pt-8">
         <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Agents</h1>
-        <p className="text-slate-400 mb-4">Your brokerage’s agents at a glance: deals, listings, commissions and base commission.</p>
+        <p className="text-slate-400 mb-4">Your agents at a glance, and everyone in your brokerage.</p>
         <div className="flex gap-2 text-sm" role="tablist" aria-label="Which agents">
-          {([['brokerage', 'Your brokerage’s agents'], ['clients', 'Agents you coordinate for']] as const).map(([id, label]) => (
+          {([['brokerage', 'Agents'], ['members', 'Members']] as const).map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full border transition ${tab === id ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}>
               {label}
             </button>
           ))}
         </div>
       </div>
-      {tab === 'brokerage' ? <div className="p-4 md:p-8"><AgentSnapshotCards /></div> : <ClientAgentsPage hideTitle />}
+      <div className="p-4 md:p-8">{tab === 'brokerage' ? <AgentSnapshotCards /> : <MembersPanel other={<ClientAgentsPage hideTitle embedded />} />}</div>
     </div>
   );
 }

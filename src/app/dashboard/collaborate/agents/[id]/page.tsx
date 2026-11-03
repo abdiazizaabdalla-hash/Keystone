@@ -68,7 +68,7 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
   if (!data) {
     return (
       <div className="p-4 md:p-8 max-w-5xl">
-        <Link href="/dashboard/collaborate#agents" className="text-sm text-blue-400 hover:text-blue-300">← Back to your agents</Link>
+        <Link href="/dashboard/agents" className="text-sm text-blue-400 hover:text-blue-300">← Back to agents</Link>
         <p className="text-slate-400 text-sm mt-4">{error || 'Loading…'}</p>
       </div>
     );
@@ -81,7 +81,7 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="p-4 md:p-8 max-w-5xl space-y-5">
-      <Link href="/dashboard/collaborate#agents" className="text-sm text-blue-400 hover:text-blue-300">← Back to your agents</Link>
+      <Link href="/dashboard/agents" className="text-sm text-blue-400 hover:text-blue-300">← Back to agents</Link>
 
       <div className={card}>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -90,7 +90,7 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
             <p className="text-sm text-slate-400">{[agent.email, agent.phone, agent.license && `License ${agent.license}`].filter(Boolean).join(' · ')}</p>
             {agent.joinedAt && <p className="text-xs text-slate-500 mt-0.5">In your brokerage since {new Date(agent.joinedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>}
           </div>
-          <Link href="/dashboard/collaborate#messages" className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-slate-600 text-slate-200 hover:border-slate-500">Message</Link>
+          <Link href={`/dashboard/collaborate?with=${id}#messages`} className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-slate-600 text-slate-200 hover:border-slate-500">Message</Link>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {agent.states.map((s) => <span key={s} className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300">{s}</span>)}

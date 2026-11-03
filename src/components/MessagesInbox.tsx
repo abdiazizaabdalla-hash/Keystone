@@ -36,8 +36,12 @@ export default function MessagesInbox({ members, isOwner, onAgentUnreadChange }:
 
   const [agents, setAgents] = useState<AgentConv[]>([]);
   const [teamUnread, setTeamUnread] = useState<Record<string, number>>({});
-  const [active, setActive] = useState<Thread>({ kind: 'board' });
-  const [showChat, setShowChat] = useState(false); // small screens: list or conversation
+  // /dashboard/collaborate?with=<agent id>#messages opens that agent's conversation.
+  const [active, setActive] = useState<Thread>(() => {
+    const w = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('with') : null;
+    return w ? { kind: 'agent', id: w } : { kind: 'board' };
+  });
+  const [showChat, setShowChat] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('with')); // small screens: list or conversation
   const [lines, setLines] = useState<ChatLine[]>([]);
   const [boardPreview, setBoardPreview] = useState<{ who: string; body: string; at: string } | null>(null);
   const [loading, setLoading] = useState(true);

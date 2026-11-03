@@ -74,26 +74,9 @@ export default function BrokeragePage() {
     <div className="p-4 md:p-8 max-w-4xl space-y-5">
       <div>
         <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100">Your brokerage</h1>
-        <p className="text-slate-400 mt-1 max-w-2xl">A brokerage can invite you to share your deals with them. Nothing is shared until you accept, and you can leave whenever you like.</p>
+        <p className="text-slate-400 mt-1 max-w-2xl">Your brokerage sees your deals and agrees commission splits with you here. Nothing is shared until you accept an invitation, and you can leave whenever you like.</p>
       </div>
       {error && <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</p>}
-
-      {data.current && (
-        <div className={card}>
-          <p className="text-slate-100 text-lg font-semibold">You are in {data.current.owner.name}’s brokerage</p>
-          {data.current.since && <p className="text-xs text-slate-400 mb-3">Since {new Date(data.current.since).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>}
-          {data.current.paused && <p className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mb-3">Sharing is paused: this brokerage’s plan is not active right now, so they cannot see or change your deals. Nothing was removed, and it resumes if they renew.</p>}
-          {terms}
-          <p className="text-xs text-slate-500 mt-3">{data.terms.leave}</p>
-          <button type="button" disabled={busy === data.current.id} onClick={() => act(data.current!.id, 'leave')} className="mt-3 px-4 py-2 border border-slate-600 hover:border-red-400 text-slate-200 hover:text-red-300 text-sm font-semibold rounded-lg transition">
-            Leave this brokerage
-          </button>
-        </div>
-      )}
-
-      {data.current && <BrokerageCommissions mode="agent" />}
-
-      {data.current && <BrokerageMessages title={`Private messages with ${data.current.owner.name}`} />}
 
       {data.invites.map((inv) => (
         <div key={inv.id} className={card}>
@@ -111,6 +94,34 @@ export default function BrokeragePage() {
           {data.current && <p className="text-xs text-slate-500 mt-2">Leave your current brokerage first to join this one.</p>}
         </div>
       ))}
+
+      {data.current && (
+        <div className={card}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-slate-100 text-lg font-semibold">{data.current.owner.name}</p>
+              <p className="text-xs text-slate-400">
+                Your brokerage{data.current.since ? ` since ${new Date(data.current.since).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}
+              </p>
+            </div>
+            <button type="button" disabled={busy === data.current.id} onClick={() => act(data.current!.id, 'leave')} className="px-3 py-1.5 border border-slate-600 hover:border-red-400 text-slate-300 hover:text-red-300 text-xs font-semibold rounded-lg transition">
+              Leave
+            </button>
+          </div>
+          {data.current.paused && <p className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mt-3">Sharing is paused: this brokerage’s plan is not active right now, so they cannot see or change your deals. Nothing was removed, and it resumes if they renew.</p>}
+          <details className="mt-3 group">
+            <summary className="cursor-pointer text-sm text-blue-400 hover:text-blue-300">What they can see and change</summary>
+            <div className="mt-3">
+              {terms}
+              <p className="text-xs text-slate-500 mt-3">{data.terms.leave}</p>
+            </div>
+          </details>
+        </div>
+      )}
+
+      {data.current && <BrokerageCommissions mode="agent" />}
+
+      {data.current && <BrokerageMessages title={`Private messages with ${data.current.owner.name}`} />}
 
       {!data.current && data.invites.length === 0 && <p className={`${card} text-sm text-slate-400`}>No invitations right now.</p>}
     </div>

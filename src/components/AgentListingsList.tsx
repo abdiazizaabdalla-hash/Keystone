@@ -65,7 +65,7 @@ export default function AgentListingsList() {
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search agent, address, MLS or next step" aria-label="Search agents’ listings" className="flex-1 min-w-[12rem] bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
       </div>
       {listings.length === 0 ? (
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center text-slate-300">Listings show up here once an agent joins your brokerage and adds one.</div>
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center text-slate-300">No listings yet. They show up here when your agents add them.</div>
       ) : visible.length === 0 ? (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center text-slate-300">Nothing matches.</div>
       ) : (

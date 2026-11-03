@@ -122,8 +122,8 @@ export default function BrokerageCommissions({ mode }: { mode: 'owner' | 'agent'
               <td className="py-2 pr-3 text-slate-300">{splitText(r.splitType, r.splitValue)}</td>
               <td className="py-2 pr-3 text-right text-slate-200">{money(r.gross)}</td>
               <td className="py-2 pr-3 text-right text-emerald-300">{money(r.agentNet)}</td>
-              <td className="py-2 pr-3 text-slate-300">{STATUS[r.status]}{r.paidOn ? ` ${r.paidOn}` : ''}</td>
-              <td className="py-2 text-right"><button type="button" onClick={() => openStatement(r.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="text-xs text-blue-400 hover:text-blue-300">Statement</button></td>
+              <td className="py-2 pr-3 text-slate-300">{mode === 'agent' && r.status === 'proposed' ? <span className="text-amber-300">Waiting for you</span> : mode === 'agent' && r.status === 'change_requested' ? 'Waiting for your brokerage' : STATUS[r.status]}{r.paidOn ? ` ${r.paidOn}` : ''}</td>
+              <td className="py-2 text-right whitespace-nowrap">{mode === 'agent' && r.status === 'proposed' && <Link href={`/dashboard/transactions/${r.transactionId}`} className="text-xs font-semibold text-amber-300 hover:text-amber-200 mr-3">Review and agree</Link>}<button type="button" onClick={() => openStatement(r.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="text-xs text-blue-400 hover:text-blue-300">Statement</button></td>
             </tr>
           ))}
         </tbody>
@@ -172,7 +172,7 @@ export default function BrokerageCommissions({ mode }: { mode: 'owner' | 'agent'
         <div className="flex items-center justify-between gap-2 mb-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-100">{mode === 'owner' ? 'Commission ledger' : 'Your commission statements'}</h2>
-            <p className="text-xs text-slate-400">{mode === 'owner' ? 'Propose a split from any deal’s page (Collaborate → Agents → open a deal).' : 'Your brokerage proposes a split on each deal; you agree to it on the deal’s page.'}</p>
+            <p className="text-xs text-slate-400">{mode === 'owner' ? 'Propose a split from any deal’s page (Transactions → open a deal).' : 'Your brokerage proposes a split on each deal; you agree to it on the deal’s page.'}</p>
           </div>
           {mode === 'owner' && rows.length > 0 && <button type="button" onClick={downloadCsv} className="shrink-0 px-3 py-1.5 rounded-lg text-sm font-semibold border border-slate-600 text-slate-200 hover:border-slate-500">Download CSV</button>}
         </div>

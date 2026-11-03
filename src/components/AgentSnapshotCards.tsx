@@ -157,7 +157,7 @@ export default function AgentSnapshotCards() {
 
               <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center gap-4 text-sm">
                 <Link href={`/dashboard/collaborate/agents/${a.id}`} className="text-blue-400 hover:text-blue-300 font-medium">Full profile</Link>
-                <Link href="/dashboard/collaborate#messages" className="text-slate-300 hover:text-slate-100">Message</Link>
+                <Link href={`/dashboard/collaborate?with=${a.id}#messages`} className="text-slate-300 hover:text-slate-100">Message</Link>
                 <Link href="/dashboard/invoices" className="text-slate-300 hover:text-slate-100">Invoices</Link>
               </div>
             </section>

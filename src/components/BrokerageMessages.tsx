@@ -121,7 +121,7 @@ export default function BrokerageMessages({ title, onUnreadChange }: { title?: s
     <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
       <div className="px-4 md:px-6 py-4 border-b border-slate-600">
         <h2 className="font-display font-semibold text-slate-100">{title ?? 'Private messages with your agents'}</h2>
-        <p className="text-xs text-slate-400 mt-0.5">One-to-one and private: only you and that agent can read these. They are not shown to the rest of your team.</p>
+        <p className="text-xs text-slate-400 mt-0.5">{title ? 'One-to-one and private: only you and your brokerage can read these.' : 'One-to-one and private: only you and that agent can read these. They are not shown to the rest of your team.'}</p>
       </div>
 
       {conversations.length === 0 ? (
