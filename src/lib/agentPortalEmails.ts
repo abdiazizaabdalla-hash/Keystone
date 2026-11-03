@@ -46,6 +46,31 @@ export async function sendAgentInviteEmail(params: {
   });
 }
 
+// An agent with their own workspace asking a coordinator to run a deal with them. The coordinator signs in (or signs up)
+// to their normal Relay TC account with this address and accepts from the transactions page; nothing here signs anyone in.
+export async function sendTcInviteEmail(params: {
+  toEmail: string;
+  agentLabel: string;
+  propertyAddress: string | null;
+  appUrl: string;
+}) {
+  const { toEmail, agentLabel, propertyAddress, appUrl } = params;
+  const dealLabel = propertyAddress ? `the deal at ${propertyAddress}` : 'a deal';
+  const html = wrapper(
+    "You've been invited to coordinate a deal",
+    `<p><strong>${escapeHtml(agentLabel)}</strong> invited you to coordinate ${escapeHtml(dealLabel)} on Relay TC.</p>
+     <p><a href="${appUrl}/auth" style="color: #b45309;">Sign in or create your Relay TC account</a> with this email address, then accept the invitation at the top of your Transactions page.</p>
+     <p style="font-size: 13px; color: #555;">Once you accept, the deal shows up in your normal transaction list and you can work it like any other.</p>`
+  );
+  const resend = getResendClient();
+  return resend.emails.send({
+    from: INVOICE_FROM_EMAIL,
+    to: toEmail,
+    subject: `${agentLabel} invited you to coordinate a deal on Relay TC`,
+    html,
+  });
+}
+
 // The sign-in link an agent asks for on /agent/login. Works for `minutes` minutes and can be opened more than once,
 // so a mail app or security scanner opening it first does not use it up.
 export async function sendAgentLoginLinkEmail(params: { toEmail: string; loginUrl: string; minutes: number }) {

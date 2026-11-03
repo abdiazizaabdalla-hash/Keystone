@@ -27,6 +27,7 @@ interface Transaction {
   source?: string | null;
   /** True when someone else owns this deal and added you to it. */
   shared?: boolean;
+  shared_agent?: { name: string | null } | null;
 }
 
 // Deals saved by the QuickBooks import (also recognised before the source column exists: closed, named after an invoice number).
@@ -44,6 +45,9 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  // Deals an agent has invited this account to coordinate, waiting to be accepted.
+  const [invitations, setInvitations] = useState<Array<{ inviteId: string; transactionId: string; propertyAddress: string | null; agentLabel: string }>>([]);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [view, setView] = useState<'active' | 'attention' | 'closed' | 'quickbooks' | 'all'>('active');
   useEffect(() => {
     fetchData();
@@ -73,6 +77,15 @@ export default function TransactionsPage() {
         agentMap.set(agent.id, agent.name);
       });
       setAgents(agentMap);
+
+      // Non-fatal: the page works without it.
+      try {
+        const invRes = await authFetch('/api/agent-invites');
+        const invData = await invRes.json();
+        if (Array.isArray(invData)) setInvitations(invData);
+      } catch {
+        // ignore
+      }
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
@@ -199,8 +212,45 @@ export default function TransactionsPage() {
     { id: 'all', label: 'All' },
   ];
 
+  const acceptInvitation = async (transactionId: string) => {
+    try {
+      setAcceptingId(transactionId);
+      const res = await authFetch('/api/agent-invites/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId }),
+      });
+      if (!res.ok) throw new Error('Could not accept the invitation');
+      setInvitations((prev) => prev.filter((i) => i.transactionId !== transactionId));
+      await fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not accept the invitation');
+    } finally {
+      setAcceptingId(null);
+    }
+  };
+
   return (
     <div className="p-4 md:p-10 max-w-5xl mx-auto">
+      {invitations.length > 0 && (
+        <div className="mb-6 space-y-2" aria-label="Invitations">
+          {invitations.map((inv) => (
+            <div key={inv.inviteId} className="flex flex-wrap items-center justify-between gap-3 bg-sky-500/10 border border-sky-400/30 rounded-2xl px-4 py-3">
+              <p className="text-sm text-slate-200">
+                <span className="font-semibold">{inv.agentLabel}</span> invited you to coordinate {inv.propertyAddress ? <span className="font-semibold">{inv.propertyAddress}</span> : 'a deal'}.
+              </p>
+              <button
+                type="button"
+                onClick={() => acceptInvitation(inv.transactionId)}
+                disabled={acceptingId === inv.transactionId}
+                className="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
+              >
+                {acceptingId === inv.transactionId ? 'Accepting…' : 'Accept'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Transactions</h1>
@@ -285,7 +335,7 @@ export default function TransactionsPage() {
                 const done = tx.tasks_done ?? 0;
                 const pct = total ? Math.round((done / total) * 100) : 0;
                 const closed = tx.status === 'Closed';
-                const agentName = agents.get(tx.agent_id);
+                const agentName = agents.get(tx.agent_id) || tx.shared_agent?.name;
                 const price = tx.purchase_price ? `$${Number(tx.purchase_price).toLocaleString()}` : null;
                 return (
                   <Link

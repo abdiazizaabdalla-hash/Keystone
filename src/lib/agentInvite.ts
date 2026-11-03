@@ -1,6 +1,6 @@
 import { supabaseServer } from '@/lib/supabase';
 import { hasAgentRole, mergeAppMetadata } from '@/lib/privileged';
-import { sendAgentInviteEmail, sendAgentListingInviteEmail, sendAgentAccessSummaryEmail } from '@/lib/agentPortalEmails';
+import { sendAgentInviteEmail, sendAgentListingInviteEmail, sendAgentAccessSummaryEmail, sendTcInviteEmail } from '@/lib/agentPortalEmails';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { logListingActivity } from '@/lib/listings';
 import { queueCalendarSync } from '@/lib/calendarSync';
@@ -161,6 +161,45 @@ export async function inviteAgentToTransaction(params: {
     return 'sent';
   } catch (error) {
     console.error('inviteAgentToTransaction failed (ignored):', error);
+    return 'failed';
+  }
+}
+
+export type TcInviteOutcome = 'sent' | 'already' | 'no_email' | 'agent_account' | 'failed';
+
+/**
+ * An agent with a workspace invites a coordinator onto their deal. Only the pending invite row is made and the
+ * coordinator is emailed: no account is created or tagged, and nothing is granted until they accept (the accept route
+ * knows an invite from an agent-role inviter is a coordinator invite). An address that belongs to an agent login is
+ * refused, because those are collaborators and are invited the other way round. Never throws.
+ */
+export async function inviteTcToTransaction(params: {
+  transaction: { id: string; property_address?: unknown };
+  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null };
+  appUrl: string;
+  email: string;
+}): Promise<TcInviteOutcome> {
+  try {
+    const { transaction, user, appUrl } = params;
+    const email = normalize(params.email);
+    if (!email.includes('@')) return 'no_email';
+    if (email === normalize(user.email)) return 'already';
+
+    const { data: existing } = await supabaseServer.from('agent_invites').select('status').eq('transaction_id', transaction.id).eq('email', email).maybeSingle();
+    if (existing) return 'already';
+
+    const { data: usersPage } = await supabaseServer.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const holder = (usersPage?.users || []).find((u) => normalize(u.email) === email);
+    if (holder && hasAgentRole(holder)) return 'agent_account';
+
+    const { error: insertError } = await supabaseServer.from('agent_invites').insert({ transaction_id: transaction.id, email, invited_by: user.id, status: 'pending' });
+    if (insertError) throw insertError;
+
+    const agentLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'An agent';
+    await sendTcInviteEmail({ toEmail: email, agentLabel, propertyAddress: (transaction.property_address as string | null) || null, appUrl });
+    return 'sent';
+  } catch (error) {
+    console.error('inviteTcToTransaction failed (ignored):', error);
     return 'failed';
   }
 }

@@ -41,7 +41,15 @@ export async function POST(request: NextRequest) {
     // otherwise silently let a TC's own login end up with agent access
     // too. Self-heals by setting the flag rather than erroring, since the
     // invite itself already proves they were meant to get access.
-    if (!hasAgentRole(user)) {
+    // An invite from an agent with a workspace is a coordinator invite: it must never turn the coordinator into an agent
+    // login, and an agent login cannot take it. (Coordinator invites to agents are the other case, below.)
+    const { data: inviter } = await supabaseServer.auth.admin.getUserById(invite.invited_by as string);
+    const fromAgent = Boolean(inviter.user && hasAgentRole(inviter.user));
+    if (fromAgent) {
+      if (hasAgentRole(user)) {
+        throw new AuthError('This invitation is for a coordinator account', 403);
+      }
+    } else if (!hasAgentRole(user)) {
       await mergeAppMetadata(user.id, { role: 'agent' });
     }
 

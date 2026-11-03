@@ -19,6 +19,7 @@ import StepEmailModal from '@/components/StepEmailModal';
 import ContactPicker from '@/components/ContactPicker';
 import KeyDatesPanel from '@/components/KeyDatesPanel';
 import OverviewSection from '@/components/OverviewSection';
+import { readPersona } from '@/lib/persona';
 import SignatureFieldPlacer from '@/components/SignatureFieldPlacer';
 import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
 
@@ -358,6 +359,9 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [inviteEmailDraft, setInviteEmailDraft] = useState('');
   const [isInvitingAgent, setIsInvitingAgent] = useState(false);
   const [inviteMessage, setInviteMessage] = useState('');
+  // An agent running their own deal invites their coordinator here; a coordinator invites agents (wording only, the server decides).
+  const [isAgentAcct, setIsAgentAcct] = useState(false);
+  useEffect(() => { setIsAgentAcct(readPersona().accountType === 'agent'); }, []);
   const [messages, setMessages] = useState<
     {
       id: string;
@@ -3782,16 +3786,18 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         </div>
 
 
+          {!transaction.shared && (
           <div id="agent-portal-box" className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-8">
-            <h2 className="text-lg font-bold text-slate-100 mb-5">Agent portal access</h2>
+            <h2 className="text-lg font-bold text-slate-100 mb-5">{isAgentAcct ? 'Your coordinator' : 'Agent portal access'}</h2>
           {/* Agent portal access: invite the agent (or anyone else who
               needs it) onto this deal's read-only portal -- checklist
               status, documents, and the message thread below. Free for
               them, scoped to just this transaction. */}
           <div>
-                        <p className="text-xs text-slate-500 mb-3">
-              Give someone a free login scoped to this deal -- checklist status, documents, and
-              messaging. No password for them to set; they just click the emailed link.
+            <p className="text-xs text-slate-500 mb-3">
+              {isAgentAcct
+                ? 'Invite a transaction coordinator to run this deal with you. They accept from their own Relay TC account, and the deal then appears in both of your transaction lists.'
+                : 'Give someone a free login scoped to this deal -- checklist status, documents, and messaging. No password for them to set; they just click the emailed link.'}
             </p>
 
             {(acceptedAgentUsers.length > 0 || agentInvites.length > 0) && (
@@ -3815,7 +3821,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               </div>
             )}
 
-            {allAgents.length > 0 && (() => {
+            {!isAgentAcct && allAgents.length > 0 && (() => {
               // Emails that already have access or a pending invite --
               // shown but not selectable, so nobody is invited twice.
               const alreadyHave = new Set([
@@ -3857,7 +3863,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 type="email"
                 value={inviteEmailDraft}
                 onChange={(e) => setInviteEmailDraft(e.target.value)}
-                placeholder="or type any email address"
+                placeholder={isAgentAcct ? 'Coordinator’s email address' : 'or type any email address'}
                 className="flex-1 min-w-[12rem] bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
               />
               <button
@@ -3865,13 +3871,14 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 disabled={isInvitingAgent || !inviteEmailDraft.trim()}
                 className="px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-100 text-sm font-semibold rounded-lg transition disabled:opacity-50"
               >
-                {isInvitingAgent ? 'Sending…' : 'Invite'}
+                {isInvitingAgent ? 'Sending…' : isAgentAcct ? 'Invite coordinator' : 'Invite'}
               </button>
             </div>
             {inviteMessage && <p className="text-xs text-slate-400 mt-2">{inviteMessage}</p>}
           </div>
 
           </div>
+          )}
         {/* External Access: magic links for a lender, title company, or
             inspector -- one document, or just this deal's key dates, no
             login required on their end. See /api/transactions/[id]/

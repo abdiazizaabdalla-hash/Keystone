@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { inviteAgentToTransaction } from '@/lib/agentInvite';
+import { inviteAgentToTransaction, inviteTcToTransaction } from '@/lib/agentInvite';
+import { getEntitlements } from '@/lib/entitlements';
+import { hasAgentRole } from '@/lib/privileged';
 
 // Confirms the caller (a TC) owns `transactionId`, the same ownership
 // check src/app/api/documents/route.ts uses -- direct-owner only, not the
@@ -34,6 +36,33 @@ async function assertOwnsTransaction(transactionId: string, userId: string, isAd
   return transaction;
 }
 
+// Pending invitations addressed to this coordinator's email that an agent with a workspace sent.
+async function pendingInvitesFromAgents(user: { email?: string | null } & Parameters<typeof hasAgentRole>[0]) {
+  if (!user.email || hasAgentRole(user)) return [];
+  const { data: invites, error } = await supabaseServer
+    .from('agent_invites')
+    .select('id, transaction_id, invited_by, created_at')
+    .eq('email', user.email.toLowerCase())
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  const out: Array<{ inviteId: string; transactionId: string; propertyAddress: string | null; agentLabel: string; createdAt: string }> = [];
+  for (const invite of invites || []) {
+    const { data: inviter } = await supabaseServer.auth.admin.getUserById(invite.invited_by as string);
+    if (!inviter.user || !hasAgentRole(inviter.user)) continue; // an older coordinator-to-agent invite: not for this list
+    const { data: tx } = await supabaseServer.from('transactions').select('id, property_address').eq('id', invite.transaction_id).maybeSingle();
+    if (!tx) continue;
+    out.push({
+      inviteId: invite.id as string,
+      transactionId: tx.id as string,
+      propertyAddress: (tx.property_address as string | null) ?? null,
+      agentLabel: (inviter.user.user_metadata?.full_name as string | undefined) || inviter.user.email || 'An agent',
+      createdAt: invite.created_at as string,
+    });
+  }
+  return out;
+}
+
 // GET: invited/accepted agents for one transaction -- TC-only, used to
 // render the "who's on this deal" list on the transaction detail page.
 export async function GET(request: NextRequest) {
@@ -41,7 +70,9 @@ export async function GET(request: NextRequest) {
     const { user, isAdmin } = await getUserFromRequest(request);
     const transactionId = request.nextUrl.searchParams.get('transactionId');
     if (!transactionId) {
-      return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
+      // No deal named: the invitations waiting for this person. Only a coordinator account is invited by an agent
+      // (agents are invited by coordinators and answer on their own portal), so anyone else just gets an empty list.
+      return NextResponse.json(await pendingInvitesFromAgents(user));
     }
 
     await assertOwnsTransaction(transactionId, user.id, isAdmin);
@@ -110,6 +141,25 @@ export async function POST(request: NextRequest) {
     }
 
     const transaction = await assertOwnsTransaction(transactionId, user.id, isAdmin);
+
+    // An agent with a workspace invites a coordinator, never another agent; a coordinator invites agents as before.
+    const callerIsWorkspaceAgent = getEntitlements(user).kind === 'agent_workspace';
+    if (callerIsWorkspaceAgent || body.inviteeRole === 'tc') {
+      if (!callerIsWorkspaceAgent) {
+        return NextResponse.json({ error: 'Only an agent with a workspace invites a coordinator' }, { status: 403 });
+      }
+      const outcome = await inviteTcToTransaction({ transaction, user, appUrl: request.nextUrl.origin, email });
+      if (outcome === 'already') {
+        return NextResponse.json({ error: 'This person has already been invited to this transaction.' }, { status: 400 });
+      }
+      if (outcome === 'agent_account') {
+        return NextResponse.json({ error: 'That email belongs to an agent account. Invite a coordinator here.' }, { status: 400 });
+      }
+      if (outcome !== 'sent') {
+        return NextResponse.json({ error: 'Failed to send invite' }, { status: 500 });
+      }
+      return NextResponse.json({ status: 'invited', email, inviteEmailSent: true });
+    }
 
     // Block re-inviting the same email to the same transaction outright,
     // rather than silently refreshing the existing row -- an accepted
