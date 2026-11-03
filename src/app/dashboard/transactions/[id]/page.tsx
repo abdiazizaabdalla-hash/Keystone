@@ -9,6 +9,7 @@ import ClientMessagesPanel from '@/components/ClientMessagesPanel';
 import ClientShareCard from '@/components/ClientShareCard';
 import AddCoordinatorModal from '@/components/AddCoordinatorModal';
 import UseTemplateModal from '@/components/UseTemplateModal';
+import DealStateDocs from '@/components/DealStateDocs';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import DragHandle from '@/components/DragHandle';
 import MoveMenu from '@/components/MoveMenu';
@@ -2528,6 +2529,13 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               </button>
             </div>
           </div>
+
+          {templatesOn && (
+            <DealStateDocs
+              dealState={transaction?.property_state ?? stateFromAddress(transaction?.property_address)}
+              onUse={(t) => setUseTemplate({ mode: 'documents', initial: t })}
+            />
+          )}
 
           {templatesOn && recentTemplates.length > 0 && (
             <div className="mt-4 mb-2">

@@ -78,6 +78,14 @@ export default function TemplatesPage() {
 
   const section: Section = view === 'emails' ? 'emails' : 'documents';
 
+  // /dashboard/templates?upload=iabs (from a deal's Documents tab) opens the form editor ready for the brokerage's IABS.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (new URLSearchParams(window.location.search).get('upload') === 'iabs') setEditing({ new: 'form', name: 'Our brokerage’s IABS' });
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
