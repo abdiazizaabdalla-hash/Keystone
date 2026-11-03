@@ -7,9 +7,10 @@
 //   RELAY_FEATURES              server side, comma separated
 //   NEXT_PUBLIC_RELAY_FEATURES  same list, for pages and components in the browser
 //
-// Names: agent_workspace (agent workspace screens and routing), automation (the AI assistant).
+// Names: agent_workspace (agent workspace screens and routing), automation (the AI assistant),
+// templates (state-filtered document and email templates, and rules that generate them).
 
-export type FeatureName = 'agent_workspace' | 'automation';
+export type FeatureName = 'agent_workspace' | 'automation' | 'templates';
 
 function parse(list: string | undefined): Set<string> {
   return new Set(

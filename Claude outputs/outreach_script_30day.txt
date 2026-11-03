@@ -1,0 +1,19 @@
+SUBJECT: Potential partnership with Relay TC
+
+Hello {first_name},
+
+I'm Abdi, the founder of Relay TC. I'm based in Austin and have been building Relay around the day-to-day work of transaction coordinators.
+
+I'm looking to connect with a few TCs who would be willing to try it and tell me what works, what doesn't, and what would actually make their job easier. Coordinators who've given me feedback have already shaped our latest update: e-signatures with signing order, listing management, a lightweight CRM, ready-to-send checklist emails, and Google Calendar sync for agents.
+
+Relay brings the checklist, documents, agent communication, contacts, invoicing and e-signatures into one workspace. You can start a deal by uploading the purchase contract and Relay fills in the details, and every deal gets its own email address you can CC so messages land on the transaction.
+
+You can take a look here: https://www.relaytc.com/
+
+I'd be happy to set you up with 30 days of full access (Pro, or Team if you work with other coordinators) so you can try it on real deals. No commitment, I'm mainly looking for honest feedback.
+
+If you're open to it, just reply with the email you'd like me to use. If this isn't for you, no worries, just let me know and I won't follow up.
+
+Thanks,
+Abdi
+Founder, Relay TC

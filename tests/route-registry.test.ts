@@ -33,7 +33,7 @@ function methodsOf(source: string): string[] {
 
 // A signed-in user is required: the shared helpers all call getUserFromRequest.
 const SESSION_GUARD =
-  /getUserFromRequest\(|requireListingAccess\(|requireAgentListing\(|requireContactsUser\(|loadStaffContext\(|loadAgentContext\(/;
+  /getUserFromRequest\(|requireListingAccess\(|requireAgentListing\(|requireContactsUser\(|requireTemplatesUser\(|loadStaffContext\(|loadAgentContext\(/;
 
 const files = findRouteFiles(API_ROOT);
 const actual = new Map(files.map((f) => [routeOf(f), fs.readFileSync(f, 'utf8')]));
@@ -100,7 +100,7 @@ describe('API route registry', () => {
   // own work. Every writing route for signed-in users therefore either refuses
   // collaborators (a guard below), or is registered with a written reason.
   const COLLABORATOR_GUARD =
-    /assertTrialActive\(|assertNotCollaborator\(|isAgentUser\(|isCollaboratorOnly\(|hasAgentRole\(|requireContactsUser\(|requireListingAccess\(|requireAgentListing\(|loadAgentContext\(|loadStaffContext\(/;
+    /assertTrialActive\(|assertNotCollaborator\(|isAgentUser\(|isCollaboratorOnly\(|hasAgentRole\(|requireContactsUser\(|requireTemplatesUser\(|requireListingAccess\(|requireAgentListing\(|loadAgentContext\(|loadStaffContext\(/;
 
   it('guards every writing session route against free agent portal logins, or explains why not', () => {
     const open = Object.entries(ROUTES)

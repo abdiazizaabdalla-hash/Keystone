@@ -1,0 +1,23 @@
+RELAY TC DEMO v3 - script / caption timestamps (2:29)
+
+0:00  Relay TC - transaction coordination, organized.
+0:05  Step 1: add your agent. Agents get client-portal access so they can add their own clients.
+0:13  Start a new transaction.
+0:18  Upload the contract; Relay extracts the parties, price and key dates for you.
+0:29  Critical dates are laid out automatically, with days remaining.
+0:38  A baseline checklist runs every deal, with one-click emails.
+0:46  Documents are filed by category; request signatures right from the deal.
+0:55  Every deal gets its own email address for communication.
+1:03  Agents invite their clients to a live progress page, free. A game changer for keeping clients in the loop.
+1:12  The client portal link the agent shares.
+1:21  This is what the client sees: their agent, their coordinator, and where things stand.
+1:29  Key dates as a timeline, plus the documents the agent chooses to share.
+1:37  A shared message board, plus private threads with the agent and the coordinator.
+1:45  Checklist progress updates automatically as each step is completed.
+1:52  Dashboard: see at a glance that nothing is overdue.
+2:00  Calendar of every deadline across deals.
+2:07  Invoicing, with QuickBooks sync.
+2:14  Pricing: Starter $19 (30 days free), Pro $39, Team $89.
+2:23  Relay TC - try it free.
+
+Note: record your own voiceover to these timestamps; each line is a suggested narration.

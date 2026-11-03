@@ -171,4 +171,8 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/workspace-invoices/[id]': { kind: 'session', methods: ['DELETE', 'GET', 'PATCH'] },
   '/api/workspace-invoices/[id]/pdf': { kind: 'session', methods: ['GET'] },
   '/api/workspace-invoices/[id]/send': { kind: 'session', methods: ['POST'] },
+  '/api/templates': { kind: 'session', methods: ['GET', 'POST'] },
+  '/api/templates/[id]': { kind: 'session', methods: ['DELETE', 'GET', 'PATCH'] },
+  '/api/templates/[id]/file': { kind: 'session', methods: ['GET', 'POST'] },
+  '/api/templates/starters': { kind: 'session', methods: ['GET', 'POST'] },
 };

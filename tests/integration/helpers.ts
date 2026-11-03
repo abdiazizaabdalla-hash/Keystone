@@ -117,6 +117,14 @@ export async function cleanup(): Promise<void> {
   }
   // Agents' own invoices (the table may not exist yet on an older test database; errors are ignored).
   await admin.from('workspace_invoices').delete().in('owner_user_id', created);
+  // Templates, their rules and runs, and any uploaded form files.
+  for (const id of created) {
+    const { data: files } = await admin.storage.from('transaction-documents').list(`templates/${id}`);
+    if (files && files.length > 0) await admin.storage.from('transaction-documents').remove(files.map((f) => `templates/${id}/${f.name}`));
+  }
+  await admin.from('template_runs').delete().in('owner_user_id', created);
+  await admin.from('template_rules').delete().in('owner_user_id', created);
+  await admin.from('doc_templates').delete().in('owner_user_id', created);
   await admin.from('contacts').delete().in('tc_user_id', created);
   await admin.from('transactions').delete().in('tc_user_id', created);
   await admin.from('agents').delete().in('tc_user_id', created);
