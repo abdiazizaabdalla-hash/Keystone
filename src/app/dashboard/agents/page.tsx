@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatPhoneNumber } from '@/lib/formatPhone';
 import { readPersona } from '@/lib/persona';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import AgentSnapshotCards from '@/components/AgentSnapshotCards';
 
 interface Agent {
   id: string;
@@ -38,7 +40,7 @@ interface DirectoryAgent {
   phone: string | null;
 }
 
-export default function AgentsPage() {
+function ClientAgentsPage({ hideTitle = false }: { hideTitle?: boolean }) {
   const router = useRouter();
   // An agent is the agent: there is no agents list for them to manage.
   useEffect(() => {
@@ -331,12 +333,14 @@ export default function AgentsPage() {
   return (
     <div className="p-4 md:p-8">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Agents</h1>
-          <p className="text-slate-400">
-            {agents.length === 0 ? 'Manage your real estate agents' : `${agents.length} agent${agents.length === 1 ? '' : 's'}`}
-          </p>
-        </div>
+        {hideTitle ? <div /> : (
+          <div>
+            <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Agents</h1>
+            <p className="text-slate-400">
+              {agents.length === 0 ? 'Manage your real estate agents' : `${agents.length} agent${agents.length === 1 ? '' : 's'}`}
+            </p>
+          </div>
+        )}
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
@@ -663,6 +667,30 @@ export default function AgentsPage() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// A brokerage owner opens on the agents in their brokerage, each as a quick-snapshot card; the agents they coordinate
+// for (the usual list, with fees) are one tab away.
+export default function AgentsPage() {
+  const owner = useBrokerageOwner();
+  const [tab, setTab] = useState<'brokerage' | 'clients'>('brokerage');
+  if (!owner) return <ClientAgentsPage />;
+  return (
+    <div>
+      <div className="px-4 md:px-8 pt-4 md:pt-8">
+        <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Agents</h1>
+        <p className="text-slate-400 mb-4">Your brokerage’s agents at a glance: deals, listings, commissions and base commission.</p>
+        <div className="flex gap-2 text-sm" role="tablist" aria-label="Which agents">
+          {([['brokerage', 'Your brokerage’s agents'], ['clients', 'Agents you coordinate for']] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full border transition ${tab === id ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {tab === 'brokerage' ? <div className="p-4 md:p-8"><AgentSnapshotCards /></div> : <ClientAgentsPage hideTitle />}
     </div>
   );
 }

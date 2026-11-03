@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
+import ChatBubbles, { type ChatLine } from './chat/ChatBubbles';
 
 // Private messages between a brokerage owner and one agent. Owners see one conversation per agent; an agent sees one with their broker.
 // Only those two people can read a thread (the rest of the team cannot). Plain polling, like the team board.
@@ -18,13 +19,6 @@ interface Msg { id: string; sender_id: string; body: string; created_at: string 
 
 const MAX_LENGTH = 4000;
 const POLL_MS = 8000;
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const sameDay = d.toDateString() === new Date().toDateString();
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  return sameDay ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
-}
 
 export default function BrokerageMessages({ title, onUnreadChange }: { title?: string; onUnreadChange?: (n: number) => void }) {
   const [conversations, setConversations] = useState<Conversation[] | null>(null);
@@ -161,17 +155,11 @@ export default function BrokerageMessages({ title, onUnreadChange }: { title?: s
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-5 py-4 space-y-3 h-72 md:h-auto">
               {loadingThread && <p className="text-sm text-slate-400">Loading…</p>}
               {!loadingThread && messages.length === 0 && !error && <p className="text-sm text-slate-400">No messages with {activeConv?.name ?? 'them'} yet. Say hello.</p>}
-              {messages.map((m) => {
-                const mine = m.sender_id !== active;
-                return (
-                  <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
-                      <div className="text-[11px] text-slate-400 mb-0.5">{formatTime(m.created_at)}</div>
-                      <div className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words ${mine ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-slate-600 text-slate-100 rounded-bl-sm'}`}>{m.body}</div>
-                    </div>
-                  </div>
-                );
-              })}
+              {messages.length > 0 && (
+                <ChatBubbles
+                  lines={messages.map((m): ChatLine => ({ id: m.id, senderKey: m.sender_id, senderName: m.sender_id === active ? activeConv?.name ?? 'Them' : 'You', mine: m.sender_id !== active, body: m.body, createdAt: m.created_at, tag: m.sender_id === active ? (activeConv?.role === 'owner' ? 'Broker' : 'Agent') : undefined }))}
+                />
+              )}
             </div>
             <div className="border-t border-slate-600 p-3">
               {error && <p className="text-xs text-red-400 mb-2">{error}</p>}

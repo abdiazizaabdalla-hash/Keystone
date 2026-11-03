@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import Link from 'next/link';
 import TeamMessaging from '@/components/TeamMessaging';
-import BrokerageMessages from '@/components/BrokerageMessages';
+import MessagesInbox from '@/components/MessagesInbox';
 import BrokerageCommissions from '@/components/BrokerageCommissions';
 import TeamContacts from '@/components/TeamContacts';
 import BrokerageOversight from '@/components/BrokerageOversight';
@@ -439,8 +439,9 @@ export default function CollaboratePage() {
         </div>
       )}
 
-      {activeTab === 'messages' && <TeamMessaging members={data.members} isOwner={isOwner} />}
-      {activeTab === 'messages' && brokerageMode && isOwner && <BrokerageMessages onUnreadChange={setAgentUnread} />}
+      {activeTab === 'messages' && (brokerageMode && isOwner
+        ? <MessagesInbox members={data.members} isOwner={isOwner} onAgentUnreadChange={setAgentUnread} />
+        : <TeamMessaging members={data.members} isOwner={isOwner} />)}
 
       {activeTab === 'contacts' && <TeamContacts onLoaded={setTeamContacts} />}
 

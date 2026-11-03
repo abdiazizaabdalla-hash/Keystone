@@ -3,21 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
+import ChatBubbles, { Avatar, type ChatLine } from './chat/ChatBubbles';
 
 // The team board on the dashboard: the latest posts, with a box to post. Renders nothing (and tells the page so) unless the person is on a team.
 
-interface Member { userId: string; email: string; name: string; isYou: boolean }
+interface Member { userId: string; email: string; name: string; isYou: boolean; kind?: 'broker' | 'agent' | 'tc' }
 interface BoardMessage { id: string; senderId: string; body: string; createdAt: string }
 
 const POLL_MS = 20000;
 const SHOWN = 8;
 const MAX_LENGTH = 2000;
-
-function when(iso: string): string {
-  const d = new Date(iso);
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
-}
 
 export default function TeamBoardCard({ onAvailable }: { onAvailable?: (available: boolean) => void }) {
   const [teamName, setTeamName] = useState('');
@@ -29,7 +24,7 @@ export default function TeamBoardCard({ onAvailable }: { onAvailable?: (availabl
   const [error, setError] = useState('');
   const availableRef = useRef(onAvailable);
   const markedRef = useRef('');
-  const listRef = useRef<HTMLUListElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     availableRef.current = onAvailable;
   }, [onAvailable]);
@@ -97,54 +92,61 @@ export default function TeamBoardCard({ onAvailable }: { onAvailable?: (availabl
   };
 
   if (!ready) return null;
-  const nameOf = (id: string) => {
-    const m = members.find((x) => x.userId === id);
-    if (!m) return 'Former teammate';
-    return m.isYou ? 'You' : m.name || m.email.split('@')[0];
-  };
-  const latest = messages.slice(-SHOWN);
+  const KIND = { broker: 'Broker', agent: 'Agent', tc: 'TC' } as const;
+  const lines: ChatLine[] = messages.slice(-SHOWN).map((m) => {
+    const who = members.find((x) => x.userId === m.senderId);
+    return {
+      id: m.id,
+      senderKey: m.senderId,
+      senderName: who ? who.name || who.email.split('@')[0] : 'Former teammate',
+      mine: Boolean(who?.isYou),
+      body: m.body,
+      createdAt: m.createdAt,
+      tag: who?.kind ? KIND[who.kind] : undefined,
+    };
+  });
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-      <div className="flex items-center justify-between gap-2 mb-3">
+    <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/10">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-slate-100">Team board</h2>
           {teamName && <p className="text-[11px] text-slate-500 truncate">{teamName} · everyone on your team sees this</p>}
         </div>
-        <Link href="/dashboard/collaborate#messages" className="shrink-0 text-xs text-blue-400 hover:text-blue-300 font-medium">Open →</Link>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="hidden sm:flex -space-x-1.5" aria-label={`${members.length} on the team`}>
+            {members.slice(0, 4).map((m) => (
+              <span key={m.userId} className="rounded-full ring-2 ring-slate-900"><Avatar name={m.name || m.email} id={m.userId} size="sm" /></span>
+            ))}
+          </div>
+          <Link href="/dashboard/collaborate#messages" className="text-xs text-blue-400 hover:text-blue-300 font-medium">Open →</Link>
+        </div>
       </div>
-      {latest.length === 0 ? (
-        <p className="text-xs text-slate-400 mb-3">Nothing posted yet. Share an update with the team.</p>
-      ) : (
-        <ul ref={listRef} className="space-y-3 mb-3 max-h-80 overflow-y-auto pr-1">
-          {latest.map((m) => (
-            <li key={m.id} className="text-xs">
-              <div className="flex items-center justify-between gap-2 text-slate-400">
-                <span className={`font-medium truncate ${nameOf(m.senderId) === 'You' ? 'text-blue-300' : 'text-slate-300'}`}>{nameOf(m.senderId)}</span>
-                <span className="shrink-0">{when(m.createdAt)}</span>
-              </div>
-              <p className="text-slate-200 whitespace-pre-wrap break-words">{m.body}</p>
-            </li>
-          ))}
-        </ul>
-      )}
-      {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
-      <textarea
-        value={draft}
-        onChange={(e) => setDraft(e.target.value.slice(0, MAX_LENGTH))}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            post();
-          }
-        }}
-        rows={2}
-        placeholder="Post to the team… (Enter to send)"
-        className="w-full px-3 py-2 bg-slate-900/60 border border-slate-600 rounded-lg text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-blue-400 resize-none"
-      />
-      <button type="button" onClick={post} disabled={sending || !draft.trim()} className="mt-2 w-full px-3 py-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50">
-        {sending ? 'Posting…' : 'Post'}
-      </button>
+      <div ref={listRef} className="px-4 py-3 max-h-80 overflow-y-auto bg-slate-900/30">
+        {lines.length === 0 ? <p className="text-xs text-slate-400 py-2">Nothing posted yet. Share an update with the team.</p> : <ChatBubbles lines={lines} compact />}
+      </div>
+      <div className="px-3 py-3 border-t border-white/10">
+        {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+        <div className="flex items-end gap-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value.slice(0, MAX_LENGTH))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                post();
+              }
+            }}
+            rows={1}
+            placeholder="Post to the team…"
+            aria-label="Post to the team board"
+            className="flex-1 min-w-0 px-3 py-2 bg-slate-900/60 border border-slate-600 rounded-xl text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-blue-400 resize-none"
+          />
+          <button type="button" onClick={post} disabled={sending || !draft.trim()} aria-label="Post" className="shrink-0 h-8 w-8 rounded-full bg-blue-500 hover:bg-blue-400 text-white flex items-center justify-center transition disabled:opacity-40">
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden><path d="M3.4 2.3a.8.8 0 0 1 .9-.1l13 7.2a.8.8 0 0 1 0 1.4l-13 7.2a.8.8 0 0 1-1.1-1L5 11H11a1 1 0 1 0 0-2H5L3.2 3.2a.8.8 0 0 1 .2-.9Z" /></svg>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GET as agentProfile } from '@/app/api/oversight/agents/[id]/route';
 import { GET as deals } from '@/app/api/oversight/deals/route';
+import { GET as roster } from '@/app/api/oversight/roster/route';
 import { GET as home } from '@/app/api/oversight/home/route';
 import { GET as listings } from '@/app/api/oversight/listings/route';
 import { GET as listingDetail } from '@/app/api/oversight/listings/[id]/route';
@@ -170,6 +171,34 @@ describe('owner home', () => {
     process.env.RELAY_FEATURES = 'agent_workspace,templates';
     try {
       expect((await call(h(home), broker, { method: 'GET', path: '/api/oversight/home' })).status).toBe(404);
+    } finally {
+      process.env.RELAY_FEATURES = saved;
+    }
+  });
+});
+
+describe('agents snapshot', () => {
+  it('gives one card of data per agent in this brokerage, with current work and commission statements', async () => {
+    const res = await call(h(roster), broker, { method: 'GET', path: '/api/oversight/roster' });
+    expect(res.status, JSON.stringify(res.json)).toBe(200);
+    const j = res.json as { agents: Array<{ id: string; name: string; openDeals: number; openListings: number; baseCommission: { value: number } | null; currentDeals: Array<{ id: string }>; currentListings: Array<{ id: string }>; recentCommissions: unknown[] }> };
+    expect(j.agents.map((a) => a.id)).toEqual([agentA.id]);
+    const a = j.agents[0];
+    expect(a.openDeals).toBe(1);
+    expect(a.openListings).toBe(1);
+    expect(a.baseCommission?.value).toBe(75);
+    expect(a.currentDeals.map((d) => d.id)).toEqual([dealA.transactionId]);
+    expect(a.currentListings.map((l) => l.id)).toEqual([listingA]);
+    expect(JSON.stringify(res.json)).not.toMatch(/Secret|secret-seller/);
+  });
+  it('is refused for non-owners and off with the feature', async () => {
+    expect((await call(h(roster), pro, { method: 'GET', path: '/api/oversight/roster' })).status).toBe(403);
+    expect((await call(h(roster), agentA, { method: 'GET', path: '/api/oversight/roster' })).status).toBe(403);
+    expect((await call(h(roster), null, { method: 'GET', path: '/api/oversight/roster' })).status).toBe(401);
+    const saved = process.env.RELAY_FEATURES;
+    process.env.RELAY_FEATURES = 'agent_workspace,templates';
+    try {
+      expect((await call(h(roster), broker, { method: 'GET', path: '/api/oversight/roster' })).status).toBe(404);
     } finally {
       process.env.RELAY_FEATURES = saved;
     }
