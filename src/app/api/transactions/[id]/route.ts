@@ -7,6 +7,8 @@ import { syncTasksToStatus } from '@/lib/closeTransaction';
 import { computeDueDates, normalizeDueDateSpec, dueDaysToSpec } from '@/lib/dueDates';
 import { getVisibleTcUserIds, getTeamForUser } from '@/lib/team';
 import { queueCalendarSync } from '@/lib/calendarSync';
+import { isFeatureOn } from '@/lib/features';
+import { isStateCode } from '@/lib/usStates';
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
@@ -14,7 +16,7 @@ export async function PATCH(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const transactionId = searchParams.get('id');
     const body = await request.json();
-    const { status, acceptanceDate, closingDate } = body;
+    const { status, acceptanceDate, closingDate, propertyState } = body;
 
     if (!transactionId) {
       return NextResponse.json({ error: 'Transaction ID is required' }, { status: 400 });
@@ -52,6 +54,12 @@ export async function PATCH(request: NextRequest) {
     if (status !== undefined) updateFields.status = status;
     if (acceptanceDate !== undefined) updateFields.acceptance_date = acceptanceDate || null;
     if (closingDate !== undefined) updateFields.closing_date = closingDate || null;
+    if (propertyState !== undefined && isFeatureOn('templates')) {
+      if (propertyState !== null && propertyState !== '' && !isStateCode(propertyState)) {
+        return NextResponse.json({ error: 'That is not a US state code' }, { status: 400 });
+      }
+      updateFields.property_state = propertyState || null;
+    }
 
     const { data: transaction, error: updateError } = await supabaseServer
       .from('transactions')

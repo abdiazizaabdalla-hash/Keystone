@@ -22,6 +22,8 @@ import ContactPicker from '@/components/ContactPicker';
 import KeyDatesPanel from '@/components/KeyDatesPanel';
 import OverviewSection from '@/components/OverviewSection';
 import { readPersona } from '@/lib/persona';
+import { isFeatureOnClient } from '@/lib/features';
+import { US_STATES, stateFromAddress } from '@/lib/usStates';
 import SignatureFieldPlacer from '@/components/SignatureFieldPlacer';
 import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
 
@@ -35,6 +37,7 @@ interface Transaction {
   checklist_template_name?: string | null;
   acceptance_date?: string | null;
   closing_date?: string | null;
+  property_state?: string | null;
   inbound_token?: string | null;
   /** Someone else owns this deal and added you to it. */
   shared?: boolean;
@@ -324,7 +327,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [savingDateField, setSavingDateField] = useState<'acceptanceDate' | 'closingDate' | null>(null);
+  const [savingDateField, setSavingDateField] = useState<'acceptanceDate' | 'closingDate' | 'propertyState' | null>(null);
   const [uploadingSlot, setUploadingSlot] = useState<string | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [isDeletingTransaction, setIsDeletingTransaction] = useState(false);
@@ -1257,6 +1260,28 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       }
       console.error('Error updating date:', error);
       alert('Failed to update date. Check console for details.');
+    } finally {
+      setSavingDateField(null);
+    }
+  };
+
+  const handleStateChange = async (value: string) => {
+    if (!transaction) return;
+    try {
+      setSavingDateField('propertyState');
+      const response = await authFetch(`/api/transactions/[id]?id=${transaction.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyState: value || null }),
+      });
+      if (!response.ok) throw new Error('Failed to update state');
+      const updated = await response.json();
+      const { tasks: _ignored, ...transactionFields } = updated;
+      void _ignored;
+      setTransaction(transactionFields);
+    } catch (error) {
+      console.error('Error updating state:', error);
+      alert('Failed to update the state.');
     } finally {
       setSavingDateField(null);
     }
@@ -2838,6 +2863,25 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
               />
             </div>
+            {isFeatureOnClient('templates') && (
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Property State</p>
+                <select
+                  value={transaction.property_state ?? stateFromAddress(transaction.property_address) ?? ''}
+                  onChange={(e) => handleStateChange(e.target.value)}
+                  disabled={savingDateField === 'propertyState'}
+                  className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                >
+                  <option value="">Not set</option>
+                  {US_STATES.map((st) => (
+                    <option key={st.code} value={st.code}>
+                      {st.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">Picks which templates are suggested for this deal.</p>
+              </div>
+            )}
             </div>
           <div className="mt-6">
           <KeyDatesPanel

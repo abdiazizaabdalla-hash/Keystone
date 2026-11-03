@@ -4,6 +4,9 @@ import { GET as listTemplates, POST as createTemplate } from '@/app/api/template
 import { GET as getTemplate, PATCH as patchTemplate, DELETE as deleteTemplate } from '@/app/api/templates/[id]/route';
 import { GET as fileLink, POST as uploadFile } from '@/app/api/templates/[id]/file/route';
 import { GET as listStarters, POST as installStarters } from '@/app/api/templates/starters/route';
+import { POST as createAgent } from '@/app/api/agents/route';
+import { POST as createTransaction } from '@/app/api/transactions/route';
+import { PATCH as patchTransaction } from '@/app/api/transactions/[id]/route';
 import { STARTER_TEMPLATES } from '@/lib/templateStarters';
 import { call, cleanup, createActor, createCollaborator, type Actor } from './helpers';
 
@@ -146,5 +149,23 @@ describe('starter pack', () => {
   it('can install just the ones you pick', async () => {
     const res = await call(h(installStarters), tc, { method: 'POST', path: '/api/templates/starters', body: { keys: [STARTER_TEMPLATES[0].key] } });
     expect((res.json as { added: number }).added).toBe(1);
+  });
+});
+
+describe('the state of a deal', () => {
+  it('is guessed from the address, can be set, and rejects nonsense', async () => {
+    const a = await call(h(createAgent), tc, { method: 'POST', path: '/api/agents', body: { name: 'State Agent', email: 'stateagent@example.test', flatFee: 0, percentFee: 0 } });
+    const agentId = (a.json as { id: string }).id;
+    const t = await call(h(createTransaction), tc, { method: 'POST', path: '/api/transactions', body: { agentId, propertyAddress: '12 Oak St, Austin, TX 78701', purchasePrice: 300000, fileNumber: 'ST-1' } });
+    expect(t.status, JSON.stringify(t.json)).toBeLessThan(300);
+    const tx = ((t.json as { transaction?: Record<string, unknown> }).transaction ?? t.json) as { id: string; property_state: string | null };
+    expect(tx.property_state).toBe('TX');
+    const set = await call(h(patchTransaction), tc, { method: 'PATCH', path: `/api/transactions/x?id=${tx.id}`, body: { propertyState: 'OK' } });
+    expect(set.status, JSON.stringify(set.json)).toBe(200);
+    expect((set.json as { property_state: string }).property_state).toBe('OK');
+    const bad = await call(h(patchTransaction), tc, { method: 'PATCH', path: `/api/transactions/x?id=${tx.id}`, body: { propertyState: 'ZZ' } });
+    expect(bad.status).toBe(400);
+    const cleared = await call(h(patchTransaction), tc, { method: 'PATCH', path: `/api/transactions/x?id=${tx.id}`, body: { propertyState: '' } });
+    expect((cleared.json as { property_state: string | null }).property_state).toBeNull();
   });
 });

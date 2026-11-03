@@ -20,6 +20,7 @@ import { queueCalendarSync, removeTransactionCalendarEvents } from '@/lib/calend
 import { logAudit } from '@/lib/audit';
 import { findOpenTransactionDuplicate } from '@/lib/duplicates';
 import { inviteAgentToTransaction } from '@/lib/agentInvite';
+import { isStateCode, stateFromAddress } from '@/lib/usStates';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -170,7 +171,7 @@ export async function POST(request: NextRequest) {
     const { user, isAdmin } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { agentId, fileNumber, propertyAddress, purchasePrice, templateId, acceptanceDate, closingDate, allowDuplicate, fromListingId } = body;
+    const { agentId, fileNumber, propertyAddress, purchasePrice, templateId, acceptanceDate, closingDate, allowDuplicate, fromListingId, propertyState } = body;
 
     if (!isAdmin) {
       const { data: agent } = await supabaseServer
@@ -270,6 +271,10 @@ export async function POST(request: NextRequest) {
     // collision (astronomically unlikely with 32 bits of randomness, but
     // the UNIQUE constraint is what actually guarantees safety, not the
     // odds -- see add-email-ingestion.sql) rather than ever reusing one.
+    // The deal's state decides which templates are suggested. Taken from the form when given, otherwise guessed from the
+    // address; stored only when the templates feature is on (the column comes with add-templates-automation.sql).
+    const dealState = isStateCode(propertyState) ? propertyState : stateFromAddress(typeof propertyAddress === 'string' ? propertyAddress : null);
+    const stateField = isFeatureOn('templates') && dealState ? { property_state: dealState } : {};
     let transaction: ({ id: string; agent_id: string } & Record<string, unknown>) | null = null;
     let txError: { code?: string; message?: string } | null = null;
     for (let attempt = 0; attempt < 5 && !transaction; attempt++) {
@@ -286,6 +291,7 @@ export async function POST(request: NextRequest) {
           acceptance_date: acceptanceDate || null,
           closing_date: closingDate || null,
           inbound_token: generateInboundToken(),
+          ...stateField,
         })
         .select()
         .single();
