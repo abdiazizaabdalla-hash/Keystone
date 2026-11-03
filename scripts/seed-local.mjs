@@ -3,7 +3,6 @@
 // Refuses to run against anything other than relay-test.
 import nextEnv from '@next/env';
 import { createClient } from '@supabase/supabase-js';
-import { randomBytes } from 'node:crypto';
 import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 
 nextEnv.loadEnvConfig(process.cwd(), true);
@@ -33,7 +32,8 @@ if (existsSync('.local-accounts.txt')) {
 const { data: list } = await admin.auth.admin.listUsers({ perPage: 1000 });
 const lines = ['# Local demo logins (relay-test database only). Not for production.', ''];
 for (const a of ACCOUNTS) {
-  const password = existing[a.email] || randomBytes(9).toString('hex') + 'Aa1!';
+  // One easy-to-type password for every local demo account (relay-test only, never production).
+  const password = process.env.LOCAL_DEMO_PASSWORD || 'LocalRelay-2026!';
   const found = list.users.find((u) => u.email === a.email);
   if (found) {
     await admin.auth.admin.updateUserById(found.id, { password, app_metadata: { ...found.app_metadata, ...a.app }, email_confirm: true });
