@@ -639,3 +639,21 @@ Test 9: switch one low-risk deal to Auto, confirm it sends only template-based r
 **Invites both ways (3b, done).** No database change was needed: an invite's direction comes from who sent it. An invite from an agent with a workspace is a coordinator invite (`inviteTcToTransaction`; email sent, nothing granted until accepted; refuses an email that belongs to an agent login). `POST /api/agent-invites` takes `inviteeRole: 'tc'` and only a workspace agent may use it. `GET /api/agent-invites` with no deal returns the invitations waiting for the signed-in coordinator, shown as a banner with Accept on the Transactions page. The accept route never turns a coordinator into an agent login and refuses an agent login on a coordinator invite.
 
 **Still to do.** Limited portal screens for an unpaid coordinator on an agent's deal (today they get the limited API rights but no dedicated screens). Aggregate surfaces (dashboard stats, calendar, tasks list) do not yet include shared deals. Then agent invoices with templates (Phase 2b).
+
+### Document templates and post-closing automation (local-ai branch, not pushed; feature `templates`)
+
+**What exists.** A template library per coordinator or workspace agent: emails and letters with `{{merge fields}}`, and "forms", which are the person's own PDF or Word files kept by state (Relay ships no state legal forms). Each template lists the states it is for (empty = every state); deals carry a `property_state` (guessed from the address, editable on the deal), and the picker on a deal shows that state's templates plus the all-state ones. A starter pack of 10 generic emails and letters installs on request.
+
+**Use on a deal.** "Use a template" on the deal page fills in client, agent, address, price and dates, flags anything the deal lacks, then: sends the email (to people on the deal), saves a letter as a PDF in Documents, or copies the form into Documents.
+
+**Automatic drafts.** Each template can have rules: when the deal is marked Closed, N days before or after the closing or acceptance date, optionally every year for up to 20 years (home anniversary). A rule never sends. It writes a draft (`template_runs`, status pending) that waits under Templates → Approvals, where the person reads, edits, then approves or dismisses. Approving is the only thing that sends. Guards: an email may go only to people on the deal; at most 100 approved emails per person per day; a draft is only made for a date that came due in the last 7 days, so switching a rule on never floods old deals; one draft per rule, deal and date. Starter templates come with their suggested rule installed switched OFF.
+
+**Email delivery.** All deal email goes through `src/lib/dealEmail.ts`: sent under the person's name, replies to the deal's inbound address (filed on the deal), blind copy to it. With `RELAY_OUTBOX_ONLY=1` (set locally and for tests, never in production) emails are recorded in `email_outbox` instead and shown under Approvals → Test outbox.
+
+**When drafts are made.** Immediately when a deal's status or dates change (`transactions/[id]` PATCH), whenever the Approvals list is opened, and once a day from the existing `/api/cron/due-date-reminders` job. `/api/cron/template-rules` exists to run it by hand. Vercel's free plan allows two cron jobs and both are used, so no third job was added to `vercel.json`.
+
+**Database.** `add-templates-automation.sql` (`doc_templates`, `template_rules`, `template_runs`, `transactions.property_state`) and `add-email-outbox.sql`, both already run in relay-test. Production needs the first one before this branch is ever released (the second only if outbox mode is wanted there, which it should not be).
+
+**Tests.** 210 unit; integration: templates (12), use on a deal (7), rules and approvals (12), plus all earlier suites.
+
+**Not yet.** Per-recipient greeting when a draft goes to several clients (the draft is written for the first one; edit before approving). Quiet hours and a global kill switch (part of the Auto-0 guard). Merge fields for lender/title contacts. Template sharing within a team.

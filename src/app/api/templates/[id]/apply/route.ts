@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'node:crypto';
 import { AuthError } from '@/lib/auth';
 import { authorizeDeal } from '@/lib/authorize';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { supabaseServer } from '@/lib/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { logAudit } from '@/lib/audit';
 import { displayNameOf } from '@/lib/templateContext';
 import { EMAIL_RE, sendDealEmail } from '@/lib/dealEmail';
-import { generateLetterPdf } from '@/lib/templatePdf';
-import { loadOwnTemplate, requireTemplatesUser, templateError, TEMPLATE_BUCKET } from '@/lib/templatesServer';
+import { attachFormToDeal, saveLetterToDeal } from '@/lib/templateActions';
+import { loadOwnTemplate, requireTemplatesUser, templateError } from '@/lib/templatesServer';
 
 // POST { transactionId, action: 'send' | 'save_pdf' | 'attach_form', subject?, body?, to? }
 //   send        an email template: send it to the people picked (recorded in the outbox on a developer machine)
@@ -54,32 +52,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (input.action === 'save_pdf') {
       if (template.kind !== 'letter') throw new AuthError('Only a letter template can be saved as a PDF.', 400);
       if (!text) throw new AuthError('The letter is empty.', 400);
-      const fileName = `${(template.name as string).replace(/[^A-Za-z0-9._ -]/g, '').trim().slice(0, 80) || 'Letter'}.pdf`;
-      const pdf = await generateLetterPdf(subject, text);
-      const storagePath = `${transactionId}/${randomUUID()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const { error: uploadError } = await supabaseServer.storage.from(TEMPLATE_BUCKET).upload(storagePath, pdf, { contentType: 'application/pdf', upsert: false });
-      if (uploadError) throw uploadError;
-      const { data: doc, error } = await insertDocument(transactionId, user.id, fileName, storagePath, 'application/pdf', pdf.length);
-      if (error) {
-        await supabaseServer.storage.from(TEMPLATE_BUCKET).remove([storagePath]);
-        throw error;
-      }
+      const doc = await saveLetterToDeal(user.id, transactionId, template.name as string, subject, text);
       await logAudit(request, { id: user.id, email: user.email }, 'transaction.template_letter_saved', { entityType: 'transaction', entityId: transactionId, metadata: { templateId: id } });
       return NextResponse.json({ ok: true, document: doc });
     }
 
     if (input.action === 'attach_form') {
       if (template.kind !== 'form') throw new AuthError('Only a form template carries a file.', 400);
-      if (!template.storage_path) throw new AuthError('Upload your form to this template first.', 400);
-      const fileName = (template.file_name as string) || 'Form.pdf';
-      const storagePath = `${transactionId}/${randomUUID()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const { error: copyError } = await supabaseServer.storage.from(TEMPLATE_BUCKET).copy(template.storage_path as string, storagePath);
-      if (copyError) throw copyError;
-      const { data: doc, error } = await insertDocument(transactionId, user.id, fileName, storagePath, (template.content_type as string) || 'application/pdf', (template.file_size as number) || 0);
-      if (error) {
-        await supabaseServer.storage.from(TEMPLATE_BUCKET).remove([storagePath]);
-        throw error;
-      }
+      const doc = await attachFormToDeal(user.id, transactionId, template);
       await logAudit(request, { id: user.id, email: user.email }, 'transaction.template_form_attached', { entityType: 'transaction', entityId: transactionId, metadata: { templateId: id } });
       return NextResponse.json({ ok: true, document: doc });
     }
@@ -89,21 +69,4 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
     return templateError(error, 'use');
   }
-}
-
-function insertDocument(transactionId: string, userId: string, fileName: string, storagePath: string, contentType: string, size: number) {
-  return supabaseServer
-    .from('documents')
-    .insert({
-      transaction_id: transactionId,
-      category: 'other',
-      document_type: 'General',
-      file_name: fileName,
-      storage_path: storagePath,
-      content_type: contentType,
-      file_size: size,
-      uploaded_by: userId,
-    })
-    .select()
-    .single();
 }

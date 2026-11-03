@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from './auth';
 import { isFeatureOn } from './features';
 import { assertNotCollaborator } from './workspaceGuard';
 import { isStateCode } from './usStates';
+import { CONTACT_CATEGORIES } from './contactCategories';
 
 export const TEMPLATE_BUCKET = 'transaction-documents';
 export const TEMPLATE_KINDS = ['email', 'letter', 'form'] as const;
@@ -63,5 +64,41 @@ export function cleanTemplateInput(body: Record<string, unknown>, forCreate: boo
 export async function loadOwnTemplate(templateId: string, ownerId: string) {
   const { data } = await supabaseServer.from('doc_templates').select('*').eq('id', templateId).maybeSingle();
   if (!data || data.owner_user_id !== ownerId) throw new AuthError('Template not found', 404);
+  return data;
+}
+
+export const RULE_TRIGGERS = ['deal_closed', 'closing_date', 'acceptance_date'] as const;
+
+/** Only the rule fields that were sent, cleaned. `forCreate` requires a trigger. */
+export function cleanRuleInput(body: Record<string, unknown>, forCreate: boolean): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (forCreate || body.trigger_event !== undefined) {
+    if (!RULE_TRIGGERS.includes(body.trigger_event as (typeof RULE_TRIGGERS)[number])) throw new AuthError('Choose when this should happen.', 400);
+    out.trigger_event = body.trigger_event;
+  }
+  if (body.offset_days !== undefined) {
+    const n = Number(body.offset_days);
+    if (!Number.isInteger(n) || n < -365 || n > 3650) throw new AuthError('Days must be a whole number between -365 and 3650.', 400);
+    out.offset_days = n;
+  }
+  if (body.repeat_yearly !== undefined) out.repeat_yearly = body.repeat_yearly === true;
+  if (body.repeat_years !== undefined) {
+    const n = Number(body.repeat_years);
+    if (!Number.isInteger(n) || n < 1 || n > 20) throw new AuthError('Repeat for between 1 and 20 years.', 400);
+    out.repeat_years = n;
+  }
+  if (body.enabled !== undefined) out.enabled = body.enabled === true;
+  if (body.recipient_roles !== undefined) {
+    if (!Array.isArray(body.recipient_roles)) throw new AuthError('Recipients must be a list.', 400);
+    const roles = body.recipient_roles.filter((r): r is string => typeof r === 'string').map((r) => CONTACT_CATEGORIES.find((c) => c.toLowerCase() === r.trim().toLowerCase()));
+    if (roles.some((r) => !r)) throw new AuthError('One of the recipient roles is not recognised.', 400);
+    out.recipient_roles = [...new Set(roles as string[])];
+  }
+  return out;
+}
+
+export async function loadOwnRule(ruleId: string, ownerId: string) {
+  const { data } = await supabaseServer.from('template_rules').select('*').eq('id', ruleId).maybeSingle();
+  if (!data || data.owner_user_id !== ownerId) throw new AuthError('Rule not found', 404);
   return data;
 }

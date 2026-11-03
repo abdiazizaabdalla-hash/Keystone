@@ -5,6 +5,8 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { isFeatureOnClient } from '@/lib/features';
 import { MERGE_FIELDS } from '@/lib/templateMerge';
 import { US_STATES } from '@/lib/usStates';
+import TemplateRules from '@/components/TemplateRules';
+import TemplateApprovals from '@/components/TemplateApprovals';
 
 interface Template {
   id: string;
@@ -70,6 +72,8 @@ export default function TemplatesPage() {
   const [editing, setEditing] = useState<Template | 'new' | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [installing, setInstalling] = useState(false);
+  const [view, setView] = useState<'library' | 'approvals'>('library');
+  const [pending, setPending] = useState(0);
 
   useEffect(() => {
     if (!enabled) return;
@@ -82,11 +86,13 @@ export default function TemplatesPage() {
         if (category) params.set('category', category);
         if (q.trim()) params.set('q', q.trim());
         if (showArchived) params.set('archived', '1');
-        const [tRes, sRes] = await Promise.all([authFetch(`/api/templates?${params}`), authFetch('/api/templates/starters')]);
+        const [tRes, sRes, pRes] = await Promise.all([authFetch(`/api/templates?${params}`), authFetch('/api/templates/starters'), authFetch('/api/template-runs?status=pending')]);
         if (!tRes.ok) throw new Error(await readError(tRes, 'Failed to load templates'));
         const t = (await tRes.json()) as Template[];
         const s = sRes.ok ? ((await sRes.json()) as Starter[]) : [];
+        const pendingCount = pRes.ok ? ((await pRes.json()) as { runs: unknown[] }).runs.length : 0;
         if (!cancelled) {
+          setPending(pendingCount);
           setTemplates(t);
           setStarters(s);
           setError(null);
@@ -160,6 +166,24 @@ export default function TemplatesPage() {
         </div>
       </div>
 
+      <div className="flex gap-2 border-b border-white/10">
+        {(['library', 'approvals'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 transition ${view === v ? 'border-blue-400 text-slate-100' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+          >
+            {v === 'library' ? 'Library' : 'Approvals'}
+            {v === 'approvals' && pending > 0 && <span className="ml-2 text-[11px] bg-blue-500 text-white rounded-full px-2 py-0.5">{pending}</span>}
+          </button>
+        ))}
+      </div>
+
+      {view === 'approvals' && <TemplateApprovals onChanged={reload} />}
+
+      {view === 'library' && (
+        <>
       {notice && <div className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5">{notice}</div>}
       {error && <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5">{error}</div>}
 
@@ -254,6 +278,8 @@ export default function TemplatesPage() {
         <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
         Show archived templates
       </label>
+        </>
+      )}
     </div>
   );
 }
@@ -496,6 +522,8 @@ function TemplateEditor({ template, onClose, onSaved }: { template: Template | n
           {!name.trim() && <p className="text-xs text-amber-300 mt-2">Give the template a name first.</p>}
         </div>
       )}
+
+      {saved && <TemplateRules templateId={saved.id} />}
 
       <div className="flex flex-wrap items-center gap-2 pt-2">
         <button

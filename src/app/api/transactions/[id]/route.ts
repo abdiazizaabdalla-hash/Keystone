@@ -8,6 +8,7 @@ import { computeDueDates, normalizeDueDateSpec, dueDaysToSpec } from '@/lib/dueD
 import { getVisibleTcUserIds, getTeamForUser } from '@/lib/team';
 import { queueCalendarSync } from '@/lib/calendarSync';
 import { isFeatureOn } from '@/lib/features';
+import { evaluateTemplateRulesQuietly } from '@/lib/templateRules';
 import { isStateCode } from '@/lib/usStates';
 export async function PATCH(request: NextRequest) {
   try {
@@ -69,6 +70,11 @@ export async function PATCH(request: NextRequest) {
       .single();
 
     if (updateError) throw updateError;
+
+    // A deal that just closed, or whose dates moved, may have template drafts coming due (drafts only, nothing is sent).
+    if (isFeatureOn('templates') && (status !== undefined || acceptanceDate !== undefined || closingDate !== undefined) && transaction.tc_user_id) {
+      await evaluateTemplateRulesQuietly(transaction.tc_user_id as string, transactionId);
+    }
 
     // Hand back whichever rows changed so the frontend can update state
     // directly instead of re-fetching everything. Both branches can run

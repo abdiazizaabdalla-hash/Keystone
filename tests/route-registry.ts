@@ -74,6 +74,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/contacts/sync': { kind: 'session', methods: ['GET', 'POST'] },
   '/api/contacts/tidy-tags': { kind: 'session', methods: ['POST'] },
   '/api/cron/cleanup': { kind: 'cron', methods: ['GET'], why: "Scheduled job; requires CRON_SECRET." },
+  '/api/cron/template-rules': { kind: 'cron', methods: ['GET'], why: "Scheduled job; requires CRON_SECRET." },
   '/api/cron/due-date-reminders': { kind: 'cron', methods: ['GET'], why: "Scheduled job; requires CRON_SECRET." },
   '/api/dashboard/attention': { kind: 'session', methods: ['GET'] },
   '/api/dashboard/attention/dismiss': { kind: 'session', methods: ['DELETE', 'POST'] },
@@ -176,5 +177,10 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/templates/[id]/file': { kind: 'session', methods: ['GET', 'POST'] },
   '/api/templates/[id]/render': { kind: 'session', methods: ['POST'] },
   '/api/templates/[id]/apply': { kind: 'session', methods: ['POST'] },
+  '/api/templates/[id]/rules': { kind: 'session', methods: ['GET', 'POST'] },
+  '/api/template-rules/[ruleId]': { kind: 'session', methods: ['DELETE', 'PATCH'] },
+  '/api/template-runs': { kind: 'session', methods: ['GET'] },
+  '/api/template-runs/outbox': { kind: 'session', methods: ['GET'] },
+  '/api/template-runs/[runId]/decide': { kind: 'session', methods: ['POST'] },
   '/api/templates/starters': { kind: 'session', methods: ['GET', 'POST'] },
 };

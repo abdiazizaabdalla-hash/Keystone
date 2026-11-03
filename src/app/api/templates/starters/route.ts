@@ -39,8 +39,19 @@ export async function POST(request: NextRequest) {
       states: [] as string[],
     }));
     if (rows.length > 0) {
-      const { error } = await supabaseServer.from('doc_templates').insert(rows);
+      const { data: inserted, error } = await supabaseServer.from('doc_templates').insert(rows).select('id, starter_key');
       if (error) throw error;
+      // Each starter that has a sensible automatic rule gets it, switched OFF. Turning it on is the person's choice.
+      const rules = (inserted || []).flatMap((row) => {
+        const starter = STARTER_TEMPLATES.find((t) => t.key === row.starter_key);
+        if (!starter?.suggestedRule) return [];
+        const r = starter.suggestedRule;
+        return [{ owner_user_id: user.id, template_id: row.id, enabled: false, trigger_event: r.trigger, offset_days: r.offsetDays, repeat_yearly: r.repeatYearly === true, recipient_roles: r.roles }];
+      });
+      if (rules.length > 0) {
+        const { error: ruleError } = await supabaseServer.from('template_rules').insert(rules);
+        if (ruleError) console.error('starter rules not added:', ruleError);
+      }
     }
     return NextResponse.json({ added: rows.length });
   } catch (error) {
