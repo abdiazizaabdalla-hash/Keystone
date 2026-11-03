@@ -19,6 +19,11 @@ import {
 function fail(error: unknown, what: string) {
   if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
+  const info = error as { code?: string } | null;
+  if (info && (info.code === 'PGRST205' || info.code === '42P01')) {
+    console.error(`Error ${what} workspace invoices (table missing):`, error);
+    return NextResponse.json({ error: 'The database needs one more update before invoices work. Run add-workspace-invoices.sql in Supabase.' }, { status: 500 });
+  }
   console.error(`Error ${what} workspace invoices:`, error);
   return NextResponse.json({ error: `Failed to ${what} invoices` }, { status: 500 });
 }
