@@ -682,3 +682,19 @@ Test 9: switch one low-risk deal to Auto, confirm it sends only template-based r
 
 **Tests.** 237 unit; integration: brokerage-oversight (17: flag off, plan gating, invite rules, nothing visible before accepting, isolation between owners and agents, edits and audit, notifications excluding messages, one brokerage at a time, leave/remove, lapsed plan) plus all earlier suites (204 total across 15 files).
 
+
+#### Brokerage round 2 (local-ai, same `brokerage` flag)
+
+**Collaborate becomes the brokerage's home.** The TC "Overview" tab is gone when the flag is on; tabs are Agents (first, owner only), Messages, Contacts, People, Templates, Settings. People tags everyone by role (Broker, Agent, TC) so one brokerage can hold TCs and agents; the invite form asks which role you are inviting (an agent with their own workspace, or a coordinator/staff member who joins the team).
+
+**Templates.** `doc_templates.brokerage_shared` (in `add-brokerage-oversight.sql`). An owner ticks "share with my brokerage" on any template (for example the brokerage's IABS upload); joined agents and team members see it pinned at the top of their Templates screen and on deals' Documents tab, and can use it (render, apply, file download) but not edit it. Access is live: leaving the brokerage or a lapsed plan removes it.
+
+**Agent onboarding.** Agents get their own questions (states they work in, focus, volume) at `/onboarding/agent`, saved through `/api/agent-onboarding`.
+
+**State documents on the deal.** A "documents for this property's state" box in the deal's right column (under Messages on Documents, under Checklist on Overview), driven by the deal's state.
+
+**Private broker↔agent messages.** Table `brokerage_messages` (owner, agent, sender, body, read_at; `add-brokerage-oversight.sql`, run in relay-test). `/api/brokerage-messages` (list with unread, `?with=` thread that marks read, POST). A thread belongs to exactly the owner and that one agent: the team does not see it, and a team member, another brokerage, an unlinked agent or a free login get 404. It works only while the link is active and the owner is on a Team/Brokerage plan; history is kept if the link ends. The owner sees one conversation per agent under Team messages on the Messages tab (unread counts also feed the tab badge); the agent has a thread with their broker on the Brokerage page. A new message rings the other person's bell, once per unread burst. No email is sent for these.
+
+**Team board card on the dashboard.** With the flag on and a team, a small card on the right of the dashboard shows the latest four posts from the team board, the unread count, and a link to Collaborate → Messages. Without a team the page is laid out exactly as before.
+
+**Tests.** 241 unit; integration adds brokerage-messages (10: flag off, login, strangers/teammates/other brokerages refused, only your own partners listed, unread and read, burst notifications, link ended, plan lapsed). Not yet seen in a browser: the new screens need the dev server restarted with the flags and seed.

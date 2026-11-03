@@ -8,6 +8,8 @@ import { formatDisplayDate } from '@/lib/dueDates';
 import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 import CriticalDatesCard from '@/components/CriticalDatesCard';
 import ListingsOverviewCard from '@/components/ListingsOverviewCard';
+import TeamBoardCard from '@/components/TeamBoardCard';
+import { isFeatureOnClient } from '@/lib/features';
 import AttentionPanel, { type AttentionSummary } from '@/components/AttentionPanel';
 import { readPersona, type Persona } from '@/lib/persona';
 
@@ -130,6 +132,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   // Wording only: an agent running their own deals sees agent-focused copy. See lib/accountType.ts.
   const [persona, setPersona] = useState<Persona>({ accountType: 'tc', coordinationMode: null });
+  // The Team board card (Team/Brokerage plans, behind the brokerage flag). It tells us whether this person has a team, so the right column only exists then.
+  const boardOn = isFeatureOnClient('brokerage');
+  const [teamBoard, setTeamBoard] = useState(false);
   useEffect(() => { setPersona(readPersona()); }, []);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -424,7 +429,10 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-4 md:p-10 max-w-6xl mx-auto">
+    <div className={`p-4 md:p-10 mx-auto ${teamBoard ? 'max-w-7xl' : 'max-w-6xl'}`}>
+      {/* With a team, a small Team board card sits in a narrow column on the right; otherwise the page is exactly as before. */}
+      <div className={teamBoard ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-6 lg:items-start' : ''}>
+      <div className="min-w-0">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
@@ -698,6 +706,13 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      </div>
+      {boardOn && (
+        <aside className={teamBoard ? 'mt-6 lg:mt-0 lg:sticky lg:top-6' : 'hidden'}>
+          <TeamBoardCard onAvailable={setTeamBoard} />
+        </aside>
+      )}
+      </div>
     </div>
   );
 }

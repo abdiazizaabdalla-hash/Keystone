@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import Link from 'next/link';
 import TeamMessaging from '@/components/TeamMessaging';
+import BrokerageMessages from '@/components/BrokerageMessages';
 import TeamContacts from '@/components/TeamContacts';
 import BrokerageOversight from '@/components/BrokerageOversight';
 import BrokerageTemplates from '@/components/BrokerageTemplates';
@@ -53,6 +54,8 @@ export default function CollaboratePage() {
   const router = useRouter();
   const [tab, setTabState] = useState<Tab>(isFeatureOnClient('brokerage') ? 'agents' : 'overview');
   const [unread, setUnread] = useState(0);
+  // Unread private messages from agents (brokerage owners only); added to the Messages badge.
+  const [agentUnread, setAgentUnread] = useState(0);
   const [teamContacts, setTeamContacts] = useState<ContactRow[]>([]);
 
   const setTab = (next: Tab) => {
@@ -72,6 +75,10 @@ export default function CollaboratePage() {
       try {
         const [sum, list] = await Promise.all([authFetch('/api/team/messages/summary'), authFetch('/api/contacts')]);
         if (sum.ok) setUnread((await sum.json()).total || 0);
+        if (isFeatureOnClient('brokerage')) {
+          const pm = await authFetch('/api/brokerage-messages');
+          if (pm.ok) setAgentUnread((await pm.json()).unread || 0);
+        }
         if (list.ok) {
           const rows = await list.json();
           setTeamContacts(Array.isArray(rows) ? rows.filter((c: ContactRow) => c.team_id) : []);
@@ -282,7 +289,7 @@ export default function CollaboratePage() {
   const tabs: { id: Tab; label: string; badge?: number }[] = brokerageMode
     ? [
         ...(isOwner ? [{ id: 'agents' as Tab, label: 'Agents' }] : []),
-        { id: 'messages', label: 'Messages', badge: unread },
+        { id: 'messages', label: 'Messages', badge: unread + agentUnread },
         { id: 'contacts', label: 'Contacts', badge: undefined },
         { id: 'people', label: 'People' },
         { id: 'templates', label: 'Templates' },
@@ -431,6 +438,7 @@ export default function CollaboratePage() {
       )}
 
       {activeTab === 'messages' && <TeamMessaging members={data.members} isOwner={isOwner} />}
+      {activeTab === 'messages' && brokerageMode && isOwner && <BrokerageMessages onUnreadChange={setAgentUnread} />}
 
       {activeTab === 'contacts' && <TeamContacts onLoaded={setTeamContacts} />}
 

@@ -124,6 +124,8 @@ export async function cleanup(): Promise<void> {
   }
   await admin.from('team_members').delete().in('user_id', created);
   await admin.from('teams').delete().in('owner_id', created);
+  await admin.from('brokerage_messages').delete().in('owner_user_id', created);
+  await admin.from('brokerage_messages').delete().in('agent_user_id', created);
   await admin.from('brokerage_links').delete().in('owner_user_id', created);
   await admin.from('brokerage_links').delete().in('agent_user_id', created);
   await admin.from('template_pins').delete().in('owner_user_id', created);

@@ -58,6 +58,31 @@ if (broker && member) {
     const { error } = await admin.from('brokerage_links').insert({ owner_user_id: broker.id, agent_user_id: member.id, invited_email: member.email, status: 'active', responded_at: new Date().toISOString() });
     if (error) console.warn('Could not link the agent to the brokerage (is add-brokerage-oversight.sql run?):', error.message);
   }
+  // A few messages so the new screens are not empty: a private thread between the broker and the agent, and two posts on the team board.
+  const { count: threadCount } = await admin.from('brokerage_messages').select('id', { count: 'exact', head: true }).eq('owner_user_id', broker.id).eq('agent_user_id', member.id);
+  if (!threadCount) {
+    const t = Date.now();
+    await admin.from('brokerage_messages').insert([
+      { owner_user_id: broker.id, agent_user_id: member.id, sender_id: broker.id, body: 'Welcome to the brokerage. Can you send me the Live Oak Dr contract when it is fully signed?', created_at: new Date(t - 3 * 3600000).toISOString(), read_at: new Date(t - 2 * 3600000).toISOString() },
+      { owner_user_id: broker.id, agent_user_id: member.id, sender_id: member.id, body: 'Will do. Option period ends Friday, inspection is booked for Thursday morning.', created_at: new Date(t - 2 * 3600000).toISOString() },
+    ]);
+  }
+  let { data: brokerTeam } = await admin.from('teams').select('id').eq('owner_id', broker.id).maybeSingle();
+  if (!brokerTeam) {
+    const created = await admin.from('teams').insert({ owner_id: broker.id }).select('id').single();
+    brokerTeam = created.data;
+    if (brokerTeam) await admin.from('team_members').insert({ team_id: brokerTeam.id, user_id: broker.id, role: 'owner' });
+  }
+  if (brokerTeam) {
+    const { count: posts } = await admin.from('team_messages').select('id', { count: 'exact', head: true }).eq('team_id', brokerTeam.id).is('recipient_id', null);
+    if (!posts) {
+      const t = Date.now();
+      await admin.from('team_messages').insert([
+        { team_id: brokerTeam.id, sender_id: broker.id, recipient_id: null, body: 'Reminder: month-end production numbers are due Friday.', created_at: new Date(t - 26 * 3600000).toISOString() },
+        { team_id: brokerTeam.id, sender_id: broker.id, recipient_id: null, body: 'New IABS is in the Templates tab. Please use it on every new listing and buyer agreement.', created_at: new Date(t - 5 * 3600000).toISOString() },
+      ]);
+    }
+  }
   const { data: deal } = await admin.from('transactions').select('id').eq('tc_user_id', member.id).eq('file_number', 'DEMO-BROKERAGE-1').maybeSingle();
   if (!deal) {
     const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);

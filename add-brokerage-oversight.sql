@@ -30,3 +30,24 @@ where table_schema = 'public' and table_name = 'brokerage_links' order by grante
 -- brokerage. Shared templates show up pinned in their Templates screen and on their deals. Safe to run more than once.
 alter table public.doc_templates add column if not exists brokerage_shared boolean not null default false;
 create index if not exists idx_doc_templates_shared on public.doc_templates (owner_user_id) where brokerage_shared;
+
+-- Private messages between a brokerage owner and one of their agents. Only those two people can read a thread:
+-- it is not shown to the rest of the team. Safe to run more than once.
+create table if not exists public.brokerage_messages (
+  id            uuid primary key default gen_random_uuid(),
+  owner_user_id uuid not null,
+  agent_user_id uuid not null,
+  sender_id     uuid not null,
+  body          text not null check (char_length(body) between 1 and 4000),
+  created_at    timestamptz not null default now(),
+  read_at       timestamptz
+);
+create index if not exists idx_brokerage_messages_pair on public.brokerage_messages (owner_user_id, agent_user_id, created_at);
+create index if not exists idx_brokerage_messages_agent on public.brokerage_messages (agent_user_id, created_at);
+
+alter table public.brokerage_messages enable row level security;
+revoke all on table public.brokerage_messages from anon, authenticated;
+grant select, insert, update, delete on table public.brokerage_messages to service_role;
+
+select table_name, grantee, privilege_type from information_schema.role_table_grants
+where table_schema = 'public' and table_name = 'brokerage_messages' order by grantee, privilege_type;
