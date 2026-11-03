@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 
 // GET /api/calendar/events?from=YYYY-MM-DD&to=YYYY-MM-DD
 //
@@ -27,7 +27,7 @@ interface CalEvent {
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
 
     const from = request.nextUrl.searchParams.get('from') || '';
     const to = request.nextUrl.searchParams.get('to') || '';

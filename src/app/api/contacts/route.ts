@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { cleanContactInput } from '@/lib/contactsCrm';
 import { isAccessibleOrganization, getUserTeamId } from '@/lib/contactGuard';
 
@@ -10,7 +10,7 @@ const MAX_CONTACTS = 5000;
 
 async function requireTc(request: NextRequest) {
   const { user } = await getUserFromRequest(request);
-  if (isAgentUser(user)) throw new AuthError('Not available', 403);
+  if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
   return user;
 }
 

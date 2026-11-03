@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // workspaceGuard pulls in the auth module, which opens a database client on import.
 vi.mock('@/lib/supabase', () => ({ supabase: {}, supabaseServer: {} }));
@@ -7,6 +7,13 @@ import { getEntitlements, hasAgentWorkspace } from '@/lib/entitlements';
 import { assertNotCollaborator } from '@/lib/workspaceGuard';
 
 const u = (app_metadata?: Record<string, unknown> | null) => ({ app_metadata });
+
+beforeEach(() => {
+  vi.stubEnv('RELAY_FEATURES', 'agent_workspace');
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('account kinds', () => {
   it('treats a user with no metadata as a coordinator who can own a workspace', () => {
@@ -45,6 +52,17 @@ describe('account kinds', () => {
     expect(getEntitlements(selfEdited).kind).toBe('coordinator');
     const collab = { app_metadata: { role: 'agent' }, user_metadata: { agent_workspace: true } };
     expect(getEntitlements(collab).canOwnWorkspace).toBe(false);
+  });
+});
+
+describe('the workspace grant counts only while the feature is switched on', () => {
+  it('is ignored in an environment where agent_workspace is off (production)', () => {
+    for (const flags of ['', 'automation', 'agent_workspaces']) {
+      vi.stubEnv('RELAY_FEATURES', flags);
+      const e = getEntitlements(u({ role: 'agent', agent_workspace: true }));
+      expect(e.kind).toBe('collaborator');
+      expect(e.canOwnWorkspace).toBe(false);
+    }
   });
 });
 

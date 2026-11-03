@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { IncomingError, MAX_INCOMING_WAITING, countIncoming, createIncomingUpload } from '@/lib/incomingUploads';
 
@@ -10,7 +10,7 @@ import { IncomingError, MAX_INCOMING_WAITING, countIncoming, createIncomingUploa
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     await assertTrialActive(user);
 
     if (!(await checkRateLimit(`incoming-upload:${user.id}`, 120, 60 * 60))) {

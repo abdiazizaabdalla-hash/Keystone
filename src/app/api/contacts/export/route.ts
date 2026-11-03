@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { toCsv, type ContactRow } from '@/lib/contactsCrm';
 
 // CSV download of this TC's contacts, ready for Mailchimp, Constant Contact, etc.
@@ -10,7 +10,7 @@ import { toCsv, type ContactRow } from '@/lib/contactsCrm';
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
 
     const params = new URL(request.url).searchParams;
     const newsletterOnly = params.get('newsletter') === '1';

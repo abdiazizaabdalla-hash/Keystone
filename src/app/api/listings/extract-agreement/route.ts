@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getAnthropicClient, CONTRACT_EXTRACTION_MODEL } from '@/lib/anthropic';
 import { logAiUsage } from '@/lib/aiUsage';
@@ -62,7 +62,7 @@ const EXTRACTION_TOOL = {
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) throw new AuthError('Not available', 403);
+    if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
     await assertTrialActive(user);
 
     const rateOk = await checkRateLimit(`extract-listing:${user.id}`, 20, 60 * 60);

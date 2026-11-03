@@ -1,6 +1,7 @@
 import { supabaseServer } from './supabase';
 import { AuthError } from './auth';
 import { hasAgentRole } from './privileged';
+import { getEntitlements } from './entitlements';
 
 // Shape getUserFromRequest's `user` already has -- kept minimal here so
 // this file doesn't need to import the full Supabase User type.
@@ -17,6 +18,15 @@ export interface MinimalUser {
 // TC's own commission/contact record for someone, not a login.
 export function isAgentUser(user: MinimalUser): boolean {
   return hasAgentRole(user);
+}
+
+// A free agent portal login with no workspace of their own. Use this on routes that are
+// "coordinator tools" (contacts, QuickBooks, listings, templates): a free collaborator is
+// refused, an agent who has been given a workspace is let through like a coordinator.
+// Use isAgentUser only where the route branches on "is this person acting as an agent on
+// a deal they were added to".
+export function isCollaboratorOnly(user: MinimalUser): boolean {
+  return getEntitlements(user).isCollaborator;
 }
 
 // Confirms `userId` (an agent) has accepted access to `transactionId`.

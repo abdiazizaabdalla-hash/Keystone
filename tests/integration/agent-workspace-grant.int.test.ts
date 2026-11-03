@@ -4,6 +4,11 @@ import { GET as adminList } from '@/app/api/admin/users/route';
 import { GET as listAgents, POST as createAgent } from '@/app/api/agents/route';
 import { POST as createTransaction, GET as listTransactions } from '@/app/api/transactions/route';
 import { GET as listMessages } from '@/app/api/messages/route';
+import { GET as listContacts } from '@/app/api/contacts/route';
+import { GET as listListings } from '@/app/api/listings/route';
+import { GET as stepTemplates } from '@/app/api/step-email-templates/route';
+import { GET as qbStatus } from '@/app/api/quickbooks/status/route';
+import { GET as upcomingKeyDates } from '@/app/api/key-dates/upcoming/route';
 import { addCollaboratorToDeal, admin, call, cleanup, createActor, createCollaborator, seedDeal, type Actor, type Deal } from './helpers';
 
 // Phase 2, step 1: an admin can give an agent login a workspace of their own and take it away.
@@ -116,6 +121,33 @@ describe('granting a workspace', () => {
   it('records who granted it', async () => {
     const { data } = await admin.from('audit_log').select('action').eq('entity_id', grantedAgent.id);
     expect((data ?? []).map((r) => r.action)).toContain('admin.grant_agent_workspace');
+  });
+});
+
+describe('coordinator tools open to a granted agent, closed to a free agent', () => {
+  const TOOLS = [
+    ['contacts', listContacts, '/api/contacts'],
+    ['listings', listListings, '/api/listings'],
+    ['step email templates', stepTemplates, '/api/step-email-templates'],
+    ['QuickBooks status', qbStatus, '/api/quickbooks/status'],
+  ] as const;
+
+  it.each(TOOLS)('free agent is refused: %s', async (_n, handler, path) => {
+    const res = await call(h(handler), freeAgent, { method: 'GET', path });
+    expect(res.status).toBe(403);
+  });
+
+  it('upcoming key dates: a free agent gets an empty list, a granted agent gets their own', async () => {
+    const free = await call(h(upcomingKeyDates), freeAgent, { method: 'GET', path: '/api/key-dates/upcoming' });
+    expect(free.status).toBe(200);
+    expect((free.json as { items: unknown[] }).items).toEqual([]);
+    const granted = await call(h(upcomingKeyDates), grantedAgent, { method: 'GET', path: '/api/key-dates/upcoming' });
+    expect(granted.status).toBe(200);
+  });
+
+  it.each(TOOLS)('granted agent can open: %s', async (_n, handler, path) => {
+    const res = await call(h(handler), grantedAgent, { method: 'GET', path });
+    expect(res.status, JSON.stringify(res.json)).toBeLessThan(400);
   });
 });
 

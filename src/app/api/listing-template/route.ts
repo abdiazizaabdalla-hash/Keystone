@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { DEFAULT_LISTING_STEPS, DEFAULT_TEMPLATE_NAME, MAX_TEMPLATES, MAX_TEMPLATE_STEPS, cleanTemplateName, cleanText, listTemplateNames, loadTemplateSteps } from '@/lib/listings';
 
 // A TC's listing checklists. They can keep several by name (e.g. "Standard", "Luxury", "Short sale"):
@@ -11,7 +11,7 @@ import { DEFAULT_LISTING_STEPS, DEFAULT_TEMPLATE_NAME, MAX_TEMPLATES, MAX_TEMPLA
 // they pick; existing listings are never changed.
 async function requireTc(request: NextRequest) {
   const { user } = await getUserFromRequest(request);
-  if (isAgentUser(user)) throw new AuthError('Not available', 403);
+  if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
   return user;
 }
 

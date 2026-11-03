@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { toCsv } from '@/lib/contactsCrm';
 import { logAudit } from '@/lib/audit';
 import {
@@ -51,7 +51,7 @@ function csvResponse(csv: string, filename: string) {
 export async function GET(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
 
     const p = new URL(request.url).searchParams;
     const type = p.get('type') || 'invoices';

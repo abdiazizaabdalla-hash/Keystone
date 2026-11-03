@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 
 // Shared pieces of the Listings feature (see add-listings.sql).
@@ -12,7 +12,7 @@ import { DEFAULT_LISTING_STEPS, DEFAULT_TEMPLATE_NAME, type TemplateStep } from 
 /** A TC (or their team) is signed in and may see this listing. Agents never reach these routes. */
 export async function requireListingAccess(request: NextRequest, listingId: string) {
   const { user, isAdmin } = await getUserFromRequest(request);
-  if (isAgentUser(user)) throw new AuthError('Not available', 403);
+  if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
   const { data: listing } = await supabaseServer.from('listings').select('*').eq('id', listingId).maybeSingle();
   if (!listing) throw new AuthError('Listing not found', 404);
   if (!isAdmin) {

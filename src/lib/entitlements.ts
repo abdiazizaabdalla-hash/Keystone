@@ -1,4 +1,5 @@
 import { hasAgentRole, isPlatformAdmin, type WithAppMetadata } from './appMetadata';
+import { isFeatureOn } from './features';
 
 // One place that answers "what kind of account is this, and what may it own?"
 //
@@ -32,7 +33,7 @@ export interface Entitlements {
   canJoinSharedDeals: true;
 }
 
-/** app_metadata.agent_workspace === true grants an agent a workspace. Nothing sets it yet. */
+/** app_metadata.agent_workspace === true is the admin's grant of an agent workspace. */
 export function hasAgentWorkspace(user: WithAppMetadata | null | undefined): boolean {
   return user?.app_metadata?.agent_workspace === true;
 }
@@ -40,7 +41,9 @@ export function hasAgentWorkspace(user: WithAppMetadata | null | undefined): boo
 export function getEntitlements(user: WithAppMetadata | null | undefined): Entitlements {
   const isAdmin = isPlatformAdmin(user);
   const agentRole = hasAgentRole(user);
-  const workspace = agentRole && hasAgentWorkspace(user);
+  // The grant only counts while the agent_workspace feature is switched on for this environment
+  // (see features.ts). In production it is off, so a stored grant changes nothing.
+  const workspace = agentRole && hasAgentWorkspace(user) && isFeatureOn('agent_workspace');
   const isCollaborator = agentRole && !workspace;
 
   const kind: AccountKind = isAdmin ? 'admin' : workspace ? 'agent_workspace' : isCollaborator ? 'collaborator' : 'coordinator';

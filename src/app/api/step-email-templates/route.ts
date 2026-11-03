@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { LIMITS, stepKey } from '@/lib/stepEmailTemplates';
 
 // A TC's saved email templates, one per checklist step name.
@@ -13,7 +13,7 @@ import { LIMITS, stepKey } from '@/lib/stepEmailTemplates';
 
 async function requireTc(request: NextRequest) {
   const { user } = await getUserFromRequest(request);
-  if (isAgentUser(user)) throw new AuthError('Not available', 403);
+  if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
   return user;
 }
 

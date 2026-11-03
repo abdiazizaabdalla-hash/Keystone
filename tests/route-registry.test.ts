@@ -100,7 +100,7 @@ describe('API route registry', () => {
   // own work. Every writing route for signed-in users therefore either refuses
   // collaborators (a guard below), or is registered with a written reason.
   const COLLABORATOR_GUARD =
-    /assertTrialActive\(|assertNotCollaborator\(|isAgentUser\(|hasAgentRole\(|requireContactsUser\(|requireListingAccess\(|requireAgentListing\(|loadAgentContext\(|loadStaffContext\(/;
+    /assertTrialActive\(|assertNotCollaborator\(|isAgentUser\(|isCollaboratorOnly\(|hasAgentRole\(|requireContactsUser\(|requireListingAccess\(|requireAgentListing\(|loadAgentContext\(|loadStaffContext\(/;
 
   it('guards every writing session route against free agent portal logins, or explains why not', () => {
     const open = Object.entries(ROUTES)

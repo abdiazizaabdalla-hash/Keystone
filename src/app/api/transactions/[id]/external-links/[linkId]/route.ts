@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 
 // DELETE /api/transactions/[id]/external-links/[linkId] -- revoke a
 // link (sets revoked_at rather than deleting the row, so the TC's list
@@ -15,7 +15,7 @@ export async function DELETE(
     const { user, isAdmin } = await getUserFromRequest(request);
     const { id: transactionId, linkId } = await params;
 
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Not available on the agent portal' }, { status: 403 });
     }
 

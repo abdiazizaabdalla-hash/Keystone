@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getDealCalendarStatus } from '@/lib/dealCalendar';
 import { sendAgentCalendarInviteEmail } from '@/lib/agentPortalEmails';
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id } = await params;
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id, property_address').eq('id', id).maybeSingle();
     if (!tx || tx.tc_user_id !== user.id) {
       return NextResponse.json({ error: 'You do not have permission to manage this deal' }, { status: 403 });

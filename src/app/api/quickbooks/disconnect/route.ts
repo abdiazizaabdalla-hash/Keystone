@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { decryptSecret } from '@/lib/encryption';
 import { revokeQbToken } from '@/lib/quickbooksApi';
 import { clearQuickBooksLinks, getQbConnection } from '@/lib/quickbooksSync';
@@ -12,7 +12,7 @@ import { logAudit } from '@/lib/audit';
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     const conn = await getQbConnection(user.id);
     if (conn) {
       try {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 
 // PATCH /api/transactions/[id]/client-steps -- body { visibleTaskIds: string[] }.
 // Sets which checklist steps the client sees on their progress link.
@@ -14,7 +14,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     await assertTrialActive(user);
     const { id: transactionId } = await params;
 
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Not available on the agent portal' }, { status: 403 });
     }
 

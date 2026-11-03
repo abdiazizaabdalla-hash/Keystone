@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { categoryForRole } from '@/lib/contactCategories';
 import { cleanTags } from '@/lib/contactsCrm';
 import { EMAIL_RE } from '@/lib/stepEmailTemplates';
@@ -15,7 +15,7 @@ import { EMAIL_RE } from '@/lib/stepEmailTemplates';
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     await assertTrialActive(user);
 
     const [{ data: existing }, { data: agents }, { data: txs }] = await Promise.all([

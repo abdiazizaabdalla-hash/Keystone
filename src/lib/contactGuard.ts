@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getTeamIdForUser } from '@/lib/team';
 
 // Shared guard for the Contacts CRM routes: only a TC (never an agent), and writes need
@@ -10,7 +10,7 @@ import { getTeamIdForUser } from '@/lib/team';
 // touch another TC's contacts.
 export async function requireContactsUser(request: NextRequest, opts: { write?: boolean } = {}) {
   const { user } = await getUserFromRequest(request);
-  if (isAgentUser(user)) throw new AuthError('Not available', 403);
+  if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
   if (opts.write) await assertTrialActive(user);
   return user;
 }

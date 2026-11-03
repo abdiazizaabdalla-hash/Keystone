@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
 import { sameProperty } from '@/lib/duplicates';
@@ -26,7 +26,7 @@ function statusFrom(raw: unknown): ListingStatus {
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) throw new AuthError('Not available', 403);
+    if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
     await assertTrialActive(user);
 
     const body = await request.json().catch(() => ({}));

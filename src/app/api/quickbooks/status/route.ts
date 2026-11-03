@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { quickbooksAvailableFor } from '@/lib/quickbooksApi';
 import { countQuickBooksWork, getQbConnection } from '@/lib/quickbooksSync';
 
@@ -9,7 +9,7 @@ import { countQuickBooksWork, getQbConnection } from '@/lib/quickbooksSync';
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     const conn = await getQbConnection(user.id);
     const work = conn ? await countQuickBooksWork(user.id) : { pending: 0, needsAttention: 0 };
     return NextResponse.json({
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     const body = await request.json().catch(() => ({}));
     const patch: Record<string, boolean | string> = {};
     if (typeof body.syncInvoices === 'boolean') patch.sync_invoices = body.syncInvoices;

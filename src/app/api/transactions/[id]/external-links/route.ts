@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { sendClientProgressEmail } from '@/lib/agentPortalEmails';
 import { generateExternalAccessToken, EXTERNAL_LINK_EXPIRY_DAYS, PROGRESS_LINK_EXPIRY_DAYS } from '@/lib/externalAccess';
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { user, isAdmin } = await getUserFromRequest(request);
     const { id: transactionId } = await params;
 
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Not available on the agent portal' }, { status: 403 });
     }
 
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await assertTrialActive(user);
     const { id: transactionId } = await params;
 
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Not available on the agent portal' }, { status: 403 });
     }
 
