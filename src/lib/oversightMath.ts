@@ -148,3 +148,19 @@ export function listingHealth(listing: Pick<OversightListing, 'status' | 'expira
   if (exp && exp <= addDays(today, 14)) flags.push('expiring_soon');
   return { openTasks: open.length, overdueTasks: overdue, nextDue, flags };
 }
+
+// ---- Brokerage owner home ----
+
+/** Open deals closing within `days` days (today included), soonest first. */
+export function closingSoon<T extends { status: string | null; closing_date: string | null }>(deals: T[], today: string, days = 30): T[] {
+  const end = addDays(today, days);
+  return deals
+    .filter((d) => d.status !== CLOSED_STAGE && d.closing_date && d.closing_date.slice(0, 10) >= today && d.closing_date.slice(0, 10) <= end)
+    .sort((a, b) => String(a.closing_date).localeCompare(String(b.closing_date)));
+}
+
+/** Closed deals (closed within `days` days) that have no commission statement yet. */
+export function closedWithoutCommission<T extends { id: string; status: string | null; closing_date: string | null; updated_at: string | null }>(deals: T[], withCommission: Set<string>, today: string, days = 120): T[] {
+  const since = addDays(today, -days);
+  return deals.filter((d) => d.status === CLOSED_STAGE && !withCommission.has(d.id) && (d.closing_date || d.updated_at || '').slice(0, 10) >= since);
+}

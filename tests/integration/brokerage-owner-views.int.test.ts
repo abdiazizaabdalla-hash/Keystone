@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GET as agentProfile } from '@/app/api/oversight/agents/[id]/route';
 import { GET as deals } from '@/app/api/oversight/deals/route';
+import { GET as home } from '@/app/api/oversight/home/route';
 import { GET as listings } from '@/app/api/oversight/listings/route';
 import { GET as listingDetail } from '@/app/api/oversight/listings/[id]/route';
 import { GET as listInvoices, POST as createInvoice } from '@/app/api/workspace-invoices/route';
@@ -137,6 +138,41 @@ describe('agents’ listings', () => {
     const res = await profile(broker, agentA.id);
     const j = res.json as { openListings: Array<{ id: string }> };
     expect(j.openListings.map((l) => l.id)).toEqual([listingA]);
+  });
+});
+
+describe('owner home', () => {
+  it('summarises the owner’s own agents only, with no private details', async () => {
+    await admin.from('brokerage_messages').insert({ owner_user_id: broker.id, agent_user_id: agentA.id, sender_id: agentA.id, body: 'Hello boss' });
+    const res = await call(h(home), broker, { method: 'GET', path: '/api/oversight/home' });
+    expect(res.status, JSON.stringify(res.json)).toBe(200);
+    const j = res.json as { totals: { agents: number; openDeals: number; openListings: number; listPriceVolume: number }; agents: Array<{ id: string; baseCommission: { value: number } | null }>; unreadMessages: number; attentionListings: unknown[] };
+    expect(j.totals.agents).toBe(1);
+    expect(j.totals.openDeals).toBe(1);
+    expect(j.totals.openListings).toBe(1);
+    expect(j.totals.listPriceVolume).toBe(450000);
+    expect(j.agents.map((a) => a.id)).toEqual([agentA.id]);
+    expect(j.agents[0].baseCommission?.value).toBe(75);
+    expect(j.unreadMessages).toBe(1);
+    expect(JSON.stringify(res.json)).not.toMatch(/Secret|secret-seller/);
+  });
+  it('is empty-but-fine for an owner with no agents, and refused for everyone else', async () => {
+    const lonely = await createActor('ov-lonely', { plan: 'team' });
+    const res = await call(h(home), lonely, { method: 'GET', path: '/api/oversight/home' });
+    expect(res.status).toBe(200);
+    expect((res.json as { totals: { agents: number } }).totals.agents).toBe(0);
+    expect((await call(h(home), pro, { method: 'GET', path: '/api/oversight/home' })).status).toBe(403);
+    expect((await call(h(home), agentA, { method: 'GET', path: '/api/oversight/home' })).status).toBe(403);
+    expect((await call(h(home), null, { method: 'GET', path: '/api/oversight/home' })).status).toBe(401);
+  });
+  it('is off (404) when the brokerage feature is off', async () => {
+    const saved = process.env.RELAY_FEATURES;
+    process.env.RELAY_FEATURES = 'agent_workspace,templates';
+    try {
+      expect((await call(h(home), broker, { method: 'GET', path: '/api/oversight/home' })).status).toBe(404);
+    } finally {
+      process.env.RELAY_FEATURES = saved;
+    }
   });
 });
 

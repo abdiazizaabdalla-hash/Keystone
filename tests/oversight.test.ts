@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normaliseEmail, dealHealth, productionFor, nextStepFor, listingHealth, isOpenListing, type OversightDeal } from '@/lib/oversightMath';
+import { normaliseEmail, dealHealth, productionFor, nextStepFor, listingHealth, isOpenListing, closingSoon, closedWithoutCommission, type OversightDeal } from '@/lib/oversightMath';
 import { isFeatureOn } from '@/lib/features';
 
 const today = '2026-11-03';
@@ -80,5 +80,18 @@ describe('listingHealth', () => {
   it('knows which statuses are open', () => {
     expect(['preparing', 'active', 'under_offer'].every(isOpenListing)).toBe(true);
     expect(['converted', 'expired', 'withdrawn', null].some((x) => isOpenListing(x))).toBe(false);
+  });
+});
+
+describe('owner home helpers', () => {
+  it('closingSoon lists open deals closing in the next 30 days, soonest first', () => {
+    const d = (id: string, status: string, closing_date: string | null) => ({ id, status, closing_date });
+    const out = closingSoon([d('a', 'Contract Pending', '2026-11-20'), d('b', 'Contract Pending', '2026-11-05'), d('c', 'Closed', '2026-11-04'), d('d', 'Contract Pending', '2027-02-01'), d('e', 'Contract Pending', '2026-10-01'), d('f', 'Contract Pending', null)], today, 30);
+    expect(out.map((x) => x.id)).toEqual(['b', 'a']);
+  });
+  it('closedWithoutCommission finds recent closings that have no statement', () => {
+    const d = (id: string, status: string, closing_date: string | null) => ({ id, status, closing_date, updated_at: null });
+    const out = closedWithoutCommission([d('a', 'Closed', '2026-10-20'), d('b', 'Closed', '2026-10-21'), d('c', 'Closed', '2025-01-01'), d('d', 'Contract Pending', null)], new Set(['b']), today);
+    expect(out.map((x) => x.id)).toEqual(['a']);
   });
 });

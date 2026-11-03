@@ -9,6 +9,8 @@ import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 import CriticalDatesCard from '@/components/CriticalDatesCard';
 import ListingsOverviewCard from '@/components/ListingsOverviewCard';
 import TeamBoardCard from '@/components/TeamBoardCard';
+import BrokerageHome from '@/components/BrokerageHome';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 import { isFeatureOnClient } from '@/lib/features';
 import AttentionPanel, { type AttentionSummary } from '@/components/AttentionPanel';
 import { readPersona, type Persona } from '@/lib/persona';
@@ -135,6 +137,7 @@ export default function Dashboard() {
   // The Team board card (Team/Brokerage plans, behind the brokerage flag). It tells us whether this person has a team, so the right column only exists then.
   const boardOn = isFeatureOnClient('brokerage');
   const [teamBoard, setTeamBoard] = useState(false);
+  const brokerageOwner = useBrokerageOwner();
   useEffect(() => { setPersona(readPersona()); }, []);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -392,6 +395,35 @@ export default function Dashboard() {
     );
   }
 
+  // A brokerage owner with no deals of their own still gets a dashboard: their brokerage, with the team board beside it.
+  if (transactions.length === 0 && brokerageOwner === null) {
+    return <div className="p-4 md:p-8"><p className="text-slate-400">Loading dashboard...</p></div>;
+  }
+  if (transactions.length === 0 && brokerageOwner) {
+    return (
+      <div className={`p-4 md:p-10 mx-auto ${teamBoard ? 'max-w-7xl' : 'max-w-6xl'}`}>
+        <div className={teamBoard ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-6 lg:items-start' : ''}>
+          <div className="min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <div>
+                <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Your brokerage</h1>
+                <p className="text-slate-400">Your agents, their pipeline and what needs you today.</p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Link href="/dashboard/collaborate#agents" className="px-5 py-3 border border-white/10 hover:bg-white/5 text-slate-200 font-semibold rounded-xl transition text-center">Invite an agent</Link>
+                <Link href="/dashboard/transactions/new" className="px-5 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-500/20 text-center">+ New deal</Link>
+              </div>
+            </div>
+            <BrokerageHome />
+          </div>
+          <aside className={teamBoard ? 'mt-6 lg:mt-0 lg:sticky lg:top-6' : 'hidden'}>
+            <TeamBoardCard onAvailable={setTeamBoard} />
+          </aside>
+        </div>
+      </div>
+    );
+  }
+
   if (transactions.length === 0) {
     const isAgent = persona.accountType === 'agent';
     const agentLine =
@@ -446,6 +478,8 @@ export default function Dashboard() {
           + New deal
         </Link>
       </div>
+
+      {brokerageOwner && <BrokerageHome compact />}
 
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
