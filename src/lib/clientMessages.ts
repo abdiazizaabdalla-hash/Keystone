@@ -3,7 +3,7 @@ import { after } from 'next/server';
 import { supabaseServer } from './supabase';
 import { getUserFromRequest, AuthError } from './auth';
 import { assertAgentOnTransaction } from './agentPortal';
-import { actsAsCollaborator } from './authorize';
+import { isAgentSideOnDeal } from './authorize';
 import { queueDealNotification } from './notifications';
 import { sendClientMessageEmail, sendNewMessageEmail } from './agentPortalEmails';
 
@@ -29,7 +29,7 @@ export interface StaffContext {
 /** Who may read and post on a deal's client messages: an agent who accepted the deal, or the TC who owns it (or an admin). */
 export async function loadStaffContext(request: NextRequest, transactionId: string): Promise<StaffContext> {
   const { user, isAdmin } = await getUserFromRequest(request);
-  const role: StaffRole = (await actsAsCollaborator(user, isAdmin, transactionId)) ? 'agent' : 'tc';
+  const role: StaffRole = (await isAgentSideOnDeal(user, isAdmin, transactionId)) ? 'agent' : 'tc';
   const meta = (user as { user_metadata?: Record<string, unknown> }).user_metadata;
 
   if (role === 'agent') {

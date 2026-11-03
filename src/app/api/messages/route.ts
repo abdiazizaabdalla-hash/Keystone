@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
-import { authorizeDeal, actsAsCollaborator } from '@/lib/authorize';
+import { authorizeDeal, isAgentSideOnDeal } from '@/lib/authorize';
 import { sendNewMessageEmail } from '@/lib/agentPortalEmails';
 import { queueDealNotification } from '@/lib/notifications';
 
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is too long (4000 characters max)' }, { status: 400 });
     }
 
-    const callerIsAgent = await actsAsCollaborator(user, isAdmin, transactionId);
+    const callerIsAgent = await isAgentSideOnDeal(user, isAdmin, transactionId);
     await assertCanMessage(transactionId, user, isAdmin);
 
     // Confirm the attached document is actually already on this same

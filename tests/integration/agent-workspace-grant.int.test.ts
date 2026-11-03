@@ -102,11 +102,13 @@ describe('granting a workspace', () => {
     expect(count).toBe(1);
   });
 
-  it('lists their own deals and still reaches the deal a coordinator added them to', async () => {
+  it('lists their own deals with the shared deal inline and still reaches the deal a coordinator added them to', async () => {
     const own = await call(h(listTransactions), grantedAgent, { method: 'GET', path: '/api/transactions' });
     expect(own.status).toBe(200);
     expect(JSON.stringify(own.json)).toContain('WS-OWN-1');
-    expect(JSON.stringify(own.json)).not.toContain(deal.marker);
+    // The deal a coordinator added them to sits in the same list, marked shared.
+    const sharedRow = (own.json as Array<Record<string, unknown>>).find((t) => t.id === deal.transactionId);
+    expect(sharedRow?.shared).toBe(true);
     const shared = await call(h(listMessages), grantedAgent, { method: 'GET', path: `/api/messages?transactionId=${deal.transactionId}` });
     expect(shared.status).toBe(200);
   });

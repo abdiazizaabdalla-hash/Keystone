@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { isFullParticipant } from '@/lib/authorize';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 
@@ -35,7 +36,7 @@ export async function DELETE(
         .eq('id', transaction.agent_id)
         .eq('tc_user_id', user.id)
         .single();
-      if (!agent) {
+      if (!agent && !(await isFullParticipant(user.id, transactionId))) {
         return NextResponse.json({ error: 'You do not have permission to revoke this link' }, { status: 403 });
       }
     }

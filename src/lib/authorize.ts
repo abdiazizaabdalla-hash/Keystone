@@ -127,14 +127,15 @@ async function fetchDeal(transactionId: string): Promise<DealRef> {
 }
 
 /**
- * Is this person acting as an invited agent (a collaborator) on this particular deal?
+ * Is this person on the deal as the agent side (an agent login who does not own it)?
+ * Decides which side their messages are posted as. Says nothing about what they may edit;
+ * for that see actsAsCollaborator.
  *
  *  - coordinators and admins: never;
  *  - a free agent login: always (they own nothing);
- *  - an agent with a workspace: only on deals they do not own. On their own deals they act as
- *    the owner, like a coordinator.
+ *  - an agent with a workspace: only on deals they do not own.
  */
-export async function actsAsCollaborator(
+export async function isAgentSideOnDeal(
   user: { id: string } & WithAppMetadata,
   isAdmin: boolean,
   transactionId: string
@@ -151,6 +152,24 @@ export async function actsAsCollaborator(
     .eq('tc_user_id', user.id)
     .maybeSingle();
   return !own;
+}
+
+/**
+ * Does this person have only the limited, free-collaborator rights on this deal?
+ *
+ *  - a free agent login: always;
+ *  - an agent with a workspace on a deal someone else owns: only while they are not a paid or
+ *    in-trial account (a full participant edits everything except deleting the deal);
+ *  - on their own deal, a coordinator, or an admin: never.
+ */
+export async function actsAsCollaborator(
+  user: { id: string; created_at: string } & WithAppMetadata,
+  isAdmin: boolean,
+  transactionId: string
+): Promise<boolean> {
+  if (!(await isAgentSideOnDeal(user, isAdmin, transactionId))) return false;
+  if (getEntitlements(user).isCollaborator) return true;
+  return (await participantLevel(user)) === 'limited';
 }
 
 /**

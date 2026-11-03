@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { authorizeDeal } from '@/lib/authorize';
+import { authorizeDeal, participantLevel } from '@/lib/authorize';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getPlanLimits } from '@/lib/plans';
 import { getVisibleTcUserIds } from '@/lib/team';
@@ -15,6 +15,7 @@ import {
 import { computeDueDates, NO_DUE_DATE, DueDateSpec } from '@/lib/dueDates';
 import crypto from 'crypto';
 import { getUserPlan } from '@/lib/privileged';
+import { isFeatureOn } from '@/lib/features';
 import { queueCalendarSync, removeTransactionCalendarEvents } from '@/lib/calendarSync';
 import { logAudit } from '@/lib/audit';
 import { findOpenTransactionDuplicate } from '@/lib/duplicates';
@@ -41,6 +42,11 @@ export async function GET(request: NextRequest) {
       .select('*')
       .order('created_at', { ascending: false });
 
+    // Deals this person was added to by someone else. A paid (or in-trial)
+    // participant sees them inline with their own deals; a free
+    // collaborator uses the limited /agent portal instead, so gets none.
+    let sharedIds: string[] = [];
+
     if (!isAdmin) {
       // transactions.tc_user_id is the explicit, reassignable "who's
       // running this deal" column (see add-brokerage-org.sql) -- filtering
@@ -49,12 +55,41 @@ export async function GET(request: NextRequest) {
       // can be reassigned to a TC other than whoever owns its agent
       // contact.
       const visibleIds = await getVisibleTcUserIds(user.id);
-      query = query.in('tc_user_id', visibleIds);
+      if (isFeatureOn('agent_workspace') && (await participantLevel(user)) === 'full') {
+        const { data: links } = await supabaseServer
+          .from('transaction_agents')
+          .select('transaction_id')
+          .eq('agent_user_id', user.id);
+        sharedIds = (links || []).map((l) => l.transaction_id as string);
+      }
+      if (sharedIds.length > 0) {
+        query = query.or(`tc_user_id.in.(${visibleIds.join(',')}),id.in.(${sharedIds.join(',')})`);
+      } else {
+        query = query.in('tc_user_id', visibleIds);
+      }
     }
 
-    const { data, error } = await query;
+    const { data: rawData, error } = await query;
 
     if (error) throw error;
+    const sharedSet = new Set(sharedIds);
+    // For deals owned by someone else, show who the agent is without the
+    // owner's private fee terms.
+    const sharedAgentIds = Array.from(new Set((rawData || [])
+      .filter((t) => !isAdmin && sharedSet.has(t.id as string) && t.tc_user_id !== user.id)
+      .map((t) => t.agent_id as string)));
+    const sharedAgents = new Map<string, { id: string; name: string | null; brokerage: string | null; email: string | null; phone: string | null }>();
+    if (sharedAgentIds.length > 0) {
+      const { data: agentRows } = await supabaseServer
+        .from('agents')
+        .select('id, name, brokerage, email, phone')
+        .in('id', sharedAgentIds);
+      (agentRows || []).forEach((a) => sharedAgents.set(a.id as string, a as never));
+    }
+    const data = (rawData || []).map((t) => {
+      const shared = !isAdmin && sharedSet.has(t.id as string) && t.tc_user_id !== user.id;
+      return { ...t, shared, ...(shared ? { shared_agent: sharedAgents.get(t.agent_id as string) ?? null } : {}) };
+    });
 
     if (!data || data.length === 0) {
       return NextResponse.json(data);

@@ -33,6 +33,9 @@ interface Transaction {
   acceptance_date?: string | null;
   closing_date?: string | null;
   inbound_token?: string | null;
+  /** Someone else owns this deal and added you to it. */
+  shared?: boolean;
+  shared_agent?: Agent | null;
 }
 
 interface TransactionEmailAttachment {
@@ -911,7 +914,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
       setAllAgents(agentsData);
 
       if (tx) {
-        const matchedAgent = agentsData.find((a: Agent) => a.id === tx.agent_id);
+        const matchedAgent = agentsData.find((a: Agent) => a.id === tx.agent_id) || tx.shared_agent;
         setAgentName(matchedAgent?.name || 'Unknown');
         setAgent(matchedAgent || null);
       }
@@ -3015,6 +3018,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             <div className="lg:order-1 min-w-0">{tab === 'overview' ? documentsCard : null}</div>
           </div>
 
+        {!transaction?.shared && (
         <OverviewSection title="Delete this deal" tone="danger">
           <p className="text-sm text-slate-400 mb-5">
             Permanently delete this transaction, its checklist, uploaded documents, and any invoice generated from it.
@@ -3027,6 +3031,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             {isDeletingTransaction ? 'Deleting...' : 'Delete Transaction'}
           </button>
         </OverviewSection>
+        )}
 
         </div>
 

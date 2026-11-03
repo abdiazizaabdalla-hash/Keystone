@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { isFullParticipant } from '@/lib/authorize';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getVisibleTcUserIds } from '@/lib/team';
@@ -30,7 +31,7 @@ async function getOwnedContact(contactId: string, userId: string, isAdmin: boole
     .in('tc_user_id', visibleIds)
     .single();
 
-  return { contact, allowed: Boolean(agent) };
+  return { contact, allowed: Boolean(agent) || (await isFullParticipant(userId, contact.transaction_id as string)) };
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

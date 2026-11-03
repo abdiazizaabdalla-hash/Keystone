@@ -25,6 +25,8 @@ interface Transaction {
   tasks_done?: number;
   /** 'quickbooks' when the deal was created by a QuickBooks import. */
   source?: string | null;
+  /** True when someone else owns this deal and added you to it. */
+  shared?: boolean;
 }
 
 // Deals saved by the QuickBooks import (also recognised before the source column exists: closed, named after an invoice number).
@@ -293,7 +295,10 @@ export default function TransactionsPage() {
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className={`font-semibold break-words ${closed ? 'text-slate-400' : 'text-slate-100'}`}>{tx.property_address || 'No address'}</p>
+                        <p className={`font-semibold break-words ${closed ? 'text-slate-400' : 'text-slate-100'}`}>
+                          {tx.property_address || 'No address'}
+                          {tx.shared && <span className="ml-2 align-middle text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border border-sky-400/40 bg-sky-500/10 text-sky-300">Shared</span>}
+                        </p>
                         <p className="text-xs text-slate-500">
                           {[agentName && `Agent: ${agentName}`, tx.file_number && `File ${tx.file_number}`, price].filter(Boolean).join(' · ')}
                         </p>
