@@ -4,7 +4,7 @@ import { AuthError } from './auth';
 import { isTeamPlan } from './plans';
 import { getUserPlan, type WithAppMetadata } from './appMetadata';
 import { getEntitlements } from './entitlements';
-import { CLOSED_STAGE, normaliseEmail, dealHealth, nextStepFor, type DealHealth, type NextStep, type OversightDeal, type OversightTask } from './oversightMath';
+import { CLOSED_STAGE, normaliseEmail, dealHealth, nextStepFor, listingHealth, isOpenListing, type DealHealth, type ListingHealth, type NextStep, type OversightDeal, type OversightListing, type OversightTask } from './oversightMath';
 
 export * from './oversightMath';
 
@@ -41,6 +41,7 @@ export const OVERSIGHT_TERMS = {
   sees: [
     'Your name, email, phone, license number, the states you work in and what you focus on.',
     'Every deal in your workspace: address, stage, key dates and the checklist.',
+    'Every listing in your workspace: address, status, price, dates, the checklist and the names of its documents (not the seller’s details or the offers themselves).',
     'Deadlines, overdue steps and which deals need attention.',
     'Production numbers: deals closed and sales volume.',
     'Updates on your deals in their notification bell (not your messages).',
@@ -139,6 +140,15 @@ export async function canOverseeDeal(userId: string, transactionId: string): Pro
   return overseesAgent(userId, dealOwner);
 }
 
+/** True when this listing belongs to an agent the owner oversees. */
+export async function canOverseeListing(userId: string, listingId: string): Promise<boolean> {
+  if (!brokerageOn()) return false;
+  const { data } = await supabaseServer.from('listings').select('tc_user_id').eq('id', listingId).maybeSingle();
+  const listingOwner = data?.tc_user_id as string | null | undefined;
+  if (!listingOwner || listingOwner === userId) return false;
+  return overseesAgent(userId, listingOwner);
+}
+
 /** Brokerage owners who should hear about updates on this deal. Empty unless the feature is on. */
 export async function brokerageOwnersForDeal(transactionId: string): Promise<string[]> {
   if (!brokerageOn()) return [];
@@ -196,5 +206,48 @@ export async function loadOversightDeals(agentIds: string[], today: string) {
   return deals.map((d) => {
     const mine = byDeal.get(d.id) ?? [];
     return { ...d, health: dealHealth(d, mine, today), nextStep: d.status === CLOSED_STAGE ? null : nextStepFor(mine), tasksTotal: mine.length, tasksDone: mine.filter((t) => t.completed).length };
+  });
+}
+
+
+type ListingTask = Omit<OversightTask, 'transaction_id'> & { listing_id: string };
+
+export type OversightListingRow = OversightListing & { health: ListingHealth; nextStep: NextStep | null; tasksTotal: number; tasksDone: number; openOffers: number };
+
+/** Every listing of these agents with its checklist health and how many offers are waiting. Seller details are not read. */
+export async function loadOversightListings(agentIds: string[], today: string): Promise<OversightListingRow[]> {
+  if (agentIds.length === 0) return [];
+  const { data, error } = await supabaseServer
+    .from('listings')
+    .select('id, tc_user_id, property_address, status, list_price, planned_list_date, listed_on, expiration_date, mls_number, updated_at')
+    .in('tc_user_id', agentIds)
+    .order('updated_at', { ascending: false })
+    .limit(2000);
+  if (error) throw error;
+  const listings = (data ?? []) as OversightListing[];
+  const tasks: ListingTask[] = [];
+  const offers: { listing_id: string; status: string }[] = [];
+  for (const ids of chunk(listings.map((l) => l.id), 80)) {
+    const [{ data: t, error: tErr }, { data: o, error: oErr }] = await Promise.all([
+      supabaseServer.from('listing_tasks').select('listing_id, name, sort_order, completed, due_date').in('listing_id', ids),
+      supabaseServer.from('listing_offers').select('listing_id, status').in('listing_id', ids),
+    ]);
+    if (tErr) throw tErr;
+    if (oErr) throw oErr;
+    tasks.push(...((t ?? []) as ListingTask[]));
+    offers.push(...((o ?? []) as { listing_id: string; status: string }[]));
+  }
+  const byListing = new Map<string, ListingTask[]>();
+  for (const t of tasks) byListing.set(t.listing_id, [...(byListing.get(t.listing_id) ?? []), t]);
+  return listings.map((l) => {
+    const mine = byListing.get(l.id) ?? [];
+    return {
+      ...l,
+      health: listingHealth(l, mine, today),
+      nextStep: isOpenListing(l.status) ? nextStepFor(mine) : null,
+      tasksTotal: mine.length,
+      tasksDone: mine.filter((x) => x.completed).length,
+      openOffers: offers.filter((o) => o.listing_id === l.id && (o.status === 'received' || o.status === 'countered')).length,
+    };
   });
 }

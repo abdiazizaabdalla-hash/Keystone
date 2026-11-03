@@ -108,3 +108,43 @@ export function nextStepFor(tasks: Pick<OversightTask, 'name' | 'completed' | 'd
   const first = [...open].sort((a, b) => key(a).localeCompare(key(b)))[0];
   return { name: first.name as string, dueDate: first.due_date ? String(first.due_date).slice(0, 10) : null };
 }
+
+// ---- Listings (the same oversight, for an agent's listings) ----
+
+/** A listing that is still being worked: not under contract, expired or withdrawn. */
+export const OPEN_LISTING_STATUSES = ['preparing', 'active', 'under_offer'] as const;
+export const isOpenListing = (status: string | null | undefined) => (OPEN_LISTING_STATUSES as readonly string[]).includes(String(status));
+
+export interface OversightListing {
+  id: string;
+  tc_user_id: string;
+  property_address: string | null;
+  status: string | null;
+  list_price: number | string | null;
+  planned_list_date: string | null;
+  listed_on: string | null;
+  expiration_date: string | null;
+  mls_number: string | null;
+  updated_at: string | null;
+}
+
+export interface ListingHealth {
+  openTasks: number;
+  overdueTasks: number;
+  nextDue: string | null;
+  /** overdue | expiring_soon (open listing whose agreement ends within 14 days, or already ended) */
+  flags: string[];
+}
+
+export function listingHealth(listing: Pick<OversightListing, 'status' | 'expiration_date'>, tasks: Pick<OversightTask, 'completed' | 'due_date'>[], today: string): ListingHealth {
+  if (!isOpenListing(listing.status)) return { openTasks: 0, overdueTasks: 0, nextDue: null, flags: [] };
+  const open = tasks.filter((t) => !t.completed);
+  const dates = open.map((t) => (t.due_date ? String(t.due_date).slice(0, 10) : null)).filter(Boolean) as string[];
+  const overdue = dates.filter((d) => d < today).length;
+  const nextDue = [...dates].sort()[0] ?? null;
+  const flags: string[] = [];
+  if (overdue > 0) flags.push('overdue');
+  const exp = listing.expiration_date ? String(listing.expiration_date).slice(0, 10) : null;
+  if (exp && exp <= addDays(today, 14)) flags.push('expiring_soon');
+  return { openTasks: open.length, overdueTasks: overdue, nextDue, flags };
+}

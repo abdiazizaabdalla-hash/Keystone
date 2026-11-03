@@ -137,6 +137,7 @@ export async function cleanup(): Promise<void> {
   await admin.from('template_rules').delete().in('owner_user_id', created);
   await admin.from('doc_templates').delete().in('owner_user_id', created);
   await admin.from('contacts').delete().in('tc_user_id', created);
+  await admin.from('listings').delete().in('tc_user_id', created);
   await admin.from('transactions').delete().in('tc_user_id', created);
   await admin.from('agents').delete().in('tc_user_id', created);
   for (const id of created) await admin.auth.admin.deleteUser(id);

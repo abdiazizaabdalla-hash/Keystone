@@ -10,6 +10,8 @@ import { uploadIncoming, type UploadedFile } from '@/lib/incomingUploadClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { LISTING_STATUS_LABEL, daysOnMarket, type ListingStatus } from '@/lib/listingsShared';
 import { useListingsImport } from '@/components/useListingsImport';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import AgentListingsList from '@/components/AgentListingsList';
 
 interface ListingRow {
   id: string;
@@ -57,7 +59,7 @@ const STATUS_STYLE: Record<ListingStatus, string> = {
 
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '—');
 
-export default function ListingsPage() {
+function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
   const router = useRouter();
   const [listings, setListings] = useState<ListingRow[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
@@ -272,10 +274,12 @@ export default function ListingsPage() {
   return (
     <div className="p-4 md:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Listings</h1>
-          <p className="text-slate-400">Everything before the contract: prep, go-live, showings and offers. An accepted offer becomes a deal.</p>
-        </div>
+        {hideTitle ? <div /> : (
+          <div>
+            <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Listings</h1>
+            <p className="text-slate-400">Everything before the contract: prep, go-live, showings and offers. An accepted offer becomes a deal.</p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <Link href="/dashboard/listings/template" className="text-sm text-slate-400 hover:text-slate-200">
             Edit default checklist
@@ -512,6 +516,29 @@ export default function ListingsPage() {
           </form>
         </div>
       )}
+    </div>
+  );
+}
+
+// A brokerage owner opens on their agents' listings (read-only, with the next step on each); their own listings are one tab away.
+export default function ListingsPage() {
+  const owner = useBrokerageOwner();
+  const [tab, setTab] = useState<'agents' | 'mine'>('agents');
+  if (!owner) return <OwnListings />;
+  return (
+    <div>
+      <div className="px-4 md:px-8 pt-4 md:pt-8">
+        <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Listings</h1>
+        <p className="text-slate-400 mb-4">Everything before the contract, with the next step.</p>
+        <div className="flex gap-2 text-sm" role="tablist" aria-label="Whose listings">
+          {([['agents', 'Your agents’ listings'], ['mine', 'Your own listings']] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full border transition ${tab === id ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {tab === 'agents' ? <div className="p-4 md:p-8"><AgentListingsList /></div> : <OwnListings hideTitle />}
     </div>
   );
 }

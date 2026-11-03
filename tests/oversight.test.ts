@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normaliseEmail, dealHealth, productionFor, nextStepFor, type OversightDeal } from '@/lib/oversightMath';
+import { normaliseEmail, dealHealth, productionFor, nextStepFor, listingHealth, isOpenListing, type OversightDeal } from '@/lib/oversightMath';
 import { isFeatureOn } from '@/lib/features';
 
 const today = '2026-11-03';
@@ -65,5 +65,20 @@ describe('nextStepFor', () => {
   it('is null when everything is done', () => {
     expect(nextStepFor([t('A', true, null, 1)])).toBeNull();
     expect(nextStepFor([])).toBeNull();
+  });
+});
+
+describe('listingHealth', () => {
+  const t = (completed: boolean, due_date: string | null) => ({ completed, due_date });
+  it('flags overdue steps and an agreement ending within 14 days', () => {
+    const h = listingHealth({ status: 'active', expiration_date: '2026-11-10' }, [t(false, '2026-10-30'), t(false, '2026-11-20'), t(true, '2026-10-01')], today);
+    expect(h).toEqual({ openTasks: 2, overdueTasks: 1, nextDue: '2026-10-30', flags: ['overdue', 'expiring_soon'] });
+  });
+  it('has no flags once a listing is under contract, expired or withdrawn', () => {
+    for (const status of ['converted', 'expired', 'withdrawn']) expect(listingHealth({ status, expiration_date: '2020-01-01' }, [t(false, '2020-01-01')], today).flags).toEqual([]);
+  });
+  it('knows which statuses are open', () => {
+    expect(['preparing', 'active', 'under_offer'].every(isOpenListing)).toBe(true);
+    expect(['converted', 'expired', 'withdrawn', null].some((x) => isOpenListing(x))).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { AGENT_FOCUS, AGENT_VOLUME } from '@/lib/accountType';
-import { CLOSED_STAGE, assertBrokerageOwner, loadOversightDeals, overseesAgent, productionFor } from '@/lib/oversight';
+import { CLOSED_STAGE, assertBrokerageOwner, isOpenListing, loadOversightDeals, loadOversightListings, overseesAgent, productionFor } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { viewOf, type CommissionRow } from '@/lib/commissions';
 import type { SplitType } from '@/lib/commissionMath';
@@ -17,11 +17,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!(await overseesAgent(user.id, id))) throw new AuthError('Not found', 404);
     const today = todayIso();
 
-    const [{ data: link }, authRes, { data: agentRow }, deals, { data: commissionRows }] = await Promise.all([
+    const [{ data: link }, authRes, { data: agentRow }, deals, listings, { data: commissionRows }] = await Promise.all([
       supabaseServer.from('brokerage_links').select('id, responded_at, default_split_type, default_split_value').eq('owner_user_id', user.id).eq('agent_user_id', id).eq('status', 'active').maybeSingle(),
       supabaseServer.auth.admin.getUserById(id),
       supabaseServer.from('agents').select('name, phone, brokerage').eq('tc_user_id', id).order('created_at', { ascending: true }).limit(1).maybeSingle(),
       loadOversightDeals([id], today),
+      loadOversightListings([id], today),
       supabaseServer.from('deal_commissions').select('*').eq('owner_user_id', user.id).eq('agent_user_id', id).order('proposed_at', { ascending: false }).limit(200),
     ]);
     const u = authRes.data.user;
@@ -60,6 +61,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       production,
       openDeals: open,
       closedDeals: closed,
+      openListings: listings.filter((l) => isOpenListing(l.status)),
+      closedListings: listings.filter((l) => !isOpenListing(l.status)).slice(0, 15),
       commissions,
       commissionTotals: {
         gross: live.reduce((n, c) => n + c.gross, 0),

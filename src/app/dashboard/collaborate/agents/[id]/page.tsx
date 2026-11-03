@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { openStatement } from '@/lib/commissionClient';
 import AgentDealRows, { type AgentDeal } from '@/components/AgentDealRows';
+import AgentListingRows, { type AgentListing } from '@/components/AgentListingRows';
 
 // One agent in your brokerage, in full. Read-only apart from their base commission.
 
@@ -14,6 +15,8 @@ interface Profile {
   production: { closedThisYear: number; volumeThisYear: number; closedLast30Days: number; activeDeals: number; pipelineVolume: number };
   openDeals: AgentDeal[];
   closedDeals: AgentDeal[];
+  openListings: AgentListing[];
+  closedListings: AgentListing[];
   commissions: { id: string; statementNumber: string; property: string | null; splitType: SplitType; splitValue: number; gross: number; agentNet: number; status: string; paidOn: string | null; transactionId: string }[];
   commissionTotals: { gross: number; agentNet: number; brokerageNet: number; unpaidCount: number; paidThisYear: number };
 }
@@ -135,6 +138,11 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
         {data.openDeals.length === 0 ? <p className={`${card} text-sm text-slate-400`}>No open deals.</p> : <AgentDealRows deals={data.openDeals} showAgent={false} />}
       </div>
 
+      <div>
+        <h2 className="text-lg font-semibold text-slate-100 mb-3">Active listings ({data.openListings.length})</h2>
+        {data.openListings.length === 0 ? <p className={`${card} text-sm text-slate-400`}>No open listings.</p> : <AgentListingRows listings={data.openListings} showAgent={false} />}
+      </div>
+
       <div className={card}>
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
           <h2 className="text-lg font-semibold text-slate-100">Commissions</h2>
@@ -154,6 +162,13 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
           </ul>
         )}
       </div>
+
+      {data.closedListings.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold text-slate-100 mb-3">Past listings</h2>
+          <AgentListingRows listings={data.closedListings} showAgent={false} />
+        </div>
+      )}
 
       {data.closedDeals.length > 0 && (
         <div>
