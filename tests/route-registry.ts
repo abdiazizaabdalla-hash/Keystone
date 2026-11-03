@@ -174,5 +174,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/templates': { kind: 'session', methods: ['GET', 'POST'] },
   '/api/templates/[id]': { kind: 'session', methods: ['DELETE', 'GET', 'PATCH'] },
   '/api/templates/[id]/file': { kind: 'session', methods: ['GET', 'POST'] },
+  '/api/templates/[id]/render': { kind: 'session', methods: ['POST'] },
+  '/api/templates/[id]/apply': { kind: 'session', methods: ['POST'] },
   '/api/templates/starters': { kind: 'session', methods: ['GET', 'POST'] },
 };

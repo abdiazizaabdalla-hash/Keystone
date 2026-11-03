@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import ClientMessagesPanel from '@/components/ClientMessagesPanel';
 import ClientShareCard from '@/components/ClientShareCard';
 import AddCoordinatorModal from '@/components/AddCoordinatorModal';
+import UseTemplateModal from '@/components/UseTemplateModal';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import DragHandle from '@/components/DragHandle';
 import MoveMenu from '@/components/MoveMenu';
@@ -367,6 +368,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   // An agent with their own workspace: their deals talk to clients and a coordinator, not to "an agent on the portal".
   const [isAgentAcct, setIsAgentAcct] = useState(false);
   const [showAddCoordinator, setShowAddCoordinator] = useState(false);
+  const [showUseTemplate, setShowUseTemplate] = useState(false);
   const [clientFormSignal, setClientFormSignal] = useState(0);
   // The direct conversation with the other professional on the deal exists once someone else is on it.
   const hasThread = Boolean(transaction?.shared) || acceptedAgentUsers.length > 0;
@@ -2638,6 +2640,15 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           />
         )}
 
+        {showUseTemplate && (
+          <UseTemplateModal
+            transactionId={resolvedParams.id}
+            dealState={transaction.property_state ?? stateFromAddress(transaction.property_address)}
+            onClose={() => setShowUseTemplate(false)}
+            onDocumentAdded={() => void fetchData()}
+          />
+        )}
+
         {/* Main Card */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8 mb-8">
           <div className="mb-8">
@@ -2683,6 +2694,16 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                       </button>
                     );
                   })()}
+                  {isFeatureOnClient('templates') && (
+                    <button
+                      type="button"
+                      onClick={() => setShowUseTemplate(true)}
+                      className="text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition"
+                      title="Fill in one of your templates with this deal's details"
+                    >
+                      Use a template
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleExportCompliance}
