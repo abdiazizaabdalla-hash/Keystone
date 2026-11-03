@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import { US_STATES } from '@/lib/usStates';
+import { FORM_SOURCES_CHECKED, findFormSource, formSourcesFor, STATE_FORM_INFO, TIER_LABEL, type FormSource, type SourceAccess, type SourceType, type StateTier } from '@/lib/stateFormSources';
 
 export interface DocTemplate {
   id: string;
@@ -36,15 +37,42 @@ interface TrecData {
 }
 
 interface Pin {
-  kind: 'folder' | 'template' | 'trec';
+  kind: 'folder' | 'template' | 'trec' | 'source' | 'custom';
   ref: string;
 }
 
-type Folder = null | string; // null = home, 'every' = templates with no state, otherwise a state code
+type ItemKind = 'template' | 'trec' | 'source';
+
+interface CustomFolder {
+  id: string;
+  name: string;
+  items: { kind: ItemKind; ref: string }[];
+}
+
+// null = home, 'every' = General (templates with no state), 'c:<id>' = one of your own folders, otherwise a state code
+type Folder = null | string;
+const customId = (f: string) => (f.startsWith('c:') ? f.slice(2) : null);
+
+const TYPE_LABEL: Record<SourceType, string> = { state: 'State government', association: 'REALTOR association', other: 'Other provider' };
+const TYPE_CLS: Record<SourceType, string> = {
+  state: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  association: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+  other: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+};
+const ACCESS_LABEL: Record<SourceAccess, string> = { public: 'Free', members: 'Members only', paid: 'Paid', mixed: 'Part free' };
+const ACCESS_CLS: Record<SourceAccess, string> = {
+  public: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  members: 'bg-amber-400/15 text-amber-300 border-amber-400/30',
+  paid: 'bg-amber-400/15 text-amber-300 border-amber-400/30',
+  mixed: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+};
+const TIER_DOT: Record<StateTier, string> = { contracts: 'bg-emerald-400', disclosures: 'bg-sky-400', association: 'bg-amber-400', none: 'bg-slate-600' };
+const badge = 'text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border';
 
 const SECTION_LABEL: Record<TrecForm['section'], string> = { contracts: 'Contracts', addenda: 'Addenda', other: 'Other forms' };
 const stateName = (code: string) => US_STATES.find((s) => s.code === code)?.name ?? code;
 const folderName = (f: string) => (f === 'every' ? 'General' : stateName(f));
+const failMsg = async (res: Response, fallback: string) => ((await res.json().catch(() => ({}))) as { error?: string }).error || fallback;
 const shortDate = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '');
 const isRecent = (iso: string | null, days = 90) => !!iso && Date.now() - new Date(iso).getTime() < days * 86400000;
 
@@ -72,15 +100,22 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
   const [showAll, setShowAll] = useState(false);
   const [error, setError] = useState('');
   const [localKey, setLocalKey] = useState(0);
+  const [folders, setFolders] = useState<CustomFolder[]>([]);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [newName, setNewName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [tRes, trRes, pRes] = await Promise.all([
+        const [tRes, trRes, pRes, fRes] = await Promise.all([
           authFetch(`/api/templates?kinds=letter,form${showArchived ? '&archived=1' : ''}`),
           authFetch('/api/templates/trec'),
           authFetch('/api/templates/pins'),
+          authFetch('/api/templates/folders'),
         ]);
         if (cancelled) return;
         if (!tRes.ok) throw new Error('Could not load your documents');
@@ -92,6 +127,7 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
           setTrecError(((await trRes.json().catch(() => ({}))) as { error?: string }).error || 'Could not load the Texas forms');
         }
         if (pRes.ok) setPins((await pRes.json()) as Pin[]);
+        if (fRes.ok) setFolders((await fRes.json()) as CustomFolder[]);
         setError('');
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load your documents');
@@ -115,6 +151,62 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
     }
   };
 
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-folder-menu]')) setMenuFor(null);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [menuFor]);
+
+  const jsonHeaders = { 'Content-Type': 'application/json' };
+  const makeFolder = async (name: string): Promise<CustomFolder | null> => {
+    const res = await authFetch('/api/templates/folders', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name }) });
+    if (!res.ok) {
+      setError(await failMsg(res, 'Could not make the folder'));
+      return null;
+    }
+    const f = (await res.json()) as CustomFolder;
+    setFolders((cur) => [...cur, f]);
+    setError('');
+    return f;
+  };
+  const isIn = (f: CustomFolder, kind: ItemKind, ref: string) => f.items.some((i) => i.kind === kind && i.ref === ref);
+  const toggleItem = async (f: CustomFolder, kind: ItemKind, ref: string) => {
+    const on = isIn(f, kind, ref);
+    setFolders((cur) => cur.map((x) => (x.id === f.id ? { ...x, items: on ? x.items.filter((i) => !(i.kind === kind && i.ref === ref)) : [...x.items, { kind, ref }] } : x)));
+    const res = on
+      ? await authFetch(`/api/templates/folders/${f.id}/items?kind=${kind}&ref=${encodeURIComponent(ref)}`, { method: 'DELETE' })
+      : await authFetch(`/api/templates/folders/${f.id}/items`, { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ kind, ref }) });
+    if (!res.ok) {
+      setError(await failMsg(res, 'Could not change the folder'));
+      setLocalKey((k) => k + 1);
+    }
+  };
+  const renameFolder = async (f: CustomFolder, name: string) => {
+    const res = await authFetch(`/api/templates/folders/${f.id}`, { method: 'PATCH', headers: jsonHeaders, body: JSON.stringify({ name }) });
+    if (!res.ok) {
+      setError(await failMsg(res, 'Could not rename the folder'));
+      return;
+    }
+    const saved = ((await res.json()) as { name: string }).name;
+    setFolders((cur) => cur.map((x) => (x.id === f.id ? { ...x, name: saved } : x)));
+    setRenaming(null);
+    setError('');
+  };
+  const deleteFolder = async (f: CustomFolder) => {
+    const res = await authFetch(`/api/templates/folders/${f.id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      setError(await failMsg(res, 'Could not delete the folder'));
+      return;
+    }
+    setFolders((cur) => cur.filter((x) => x.id !== f.id));
+    setPins((cur) => cur.filter((p) => !(p.kind === 'custom' && p.ref === f.id)));
+    setConfirmDelete(false);
+    setFolder(null);
+  };
+
   const all = templates ?? [];
   const byFolder = useMemo(() => {
     const map = new Map<string, DocTemplate[]>();
@@ -128,7 +220,71 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
   const recent = [...all].filter((t) => t.last_used_at).sort((a, b) => (b.last_used_at! > a.last_used_at! ? 1 : -1)).slice(0, 5);
   const count = (code: string) => (byFolder.get(code)?.length ?? 0) + (code === 'TX' ? trecForms.length : 0);
 
-  const templateCard = (t: DocTemplate) => (
+  const removeBtn = (onClick: () => void) => (
+    <button type="button" onClick={onClick} className="text-[11px] text-slate-500 hover:text-red-300 px-1 leading-none" title="Take it out of this folder (the document itself stays)">
+      Remove
+    </button>
+  );
+
+  // The "add to one of my folders" button and its little menu.
+  const addMenu = (kind: ItemKind, ref: string) => {
+    const key = `${folder ?? 'home'}|${kind}:${ref}`; // tied to the folder on screen, so it closes when you move
+    const open = menuFor === key;
+    const inAny = folders.some((f) => isIn(f, kind, ref));
+    return (
+      <div className="relative shrink-0" data-folder-menu>
+        <button
+          type="button"
+          onClick={() => {
+            setMenuFor(open ? null : key);
+            setNewName('');
+          }}
+          aria-label="Add to one of your folders"
+          aria-expanded={open}
+          title="Add to one of your folders"
+          className={`w-8 h-8 flex items-center justify-center rounded-lg transition ${inAny ? 'text-blue-300 hover:text-blue-200' : 'text-slate-500 hover:text-slate-200'}`}
+        >
+          <svg viewBox="0 0 20 20" className="w-5 h-5" fill={inAny ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5">
+            <path d="M2.5 6a2 2 0 012-2h3.1a1 1 0 01.7.3L10 6h5.5a2 2 0 012 2v6a2 2 0 01-2 2h-11a2 2 0 01-2-2V6z" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {open && (
+          <div className="absolute right-0 top-9 z-30 w-64 bg-slate-900 border border-white/15 rounded-xl shadow-xl p-2">
+            <div className="px-2 pt-1 pb-1 text-[11px] uppercase tracking-wider text-slate-500">Add to a folder</div>
+            {folders.length === 0 && <p className="px-2 pb-2 text-xs text-slate-400">You have no folders yet. Name one below to make it.</p>}
+            <div className="max-h-48 overflow-y-auto">
+              {folders.map((f) => (
+                <button key={f.id} type="button" onClick={() => toggleItem(f, kind, ref)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-left text-slate-200 hover:bg-white/10">
+                  <span className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center text-[10px] ${isIn(f, kind, ref) ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-500'}`}>{isIn(f, kind, ref) ? '✓' : ''}</span>
+                  <span className="truncate">{f.name}</span>
+                </button>
+              ))}
+            </div>
+            <form
+              className="flex gap-1 pt-2 mt-1 border-t border-white/10"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const name = newName.trim();
+                if (!name) return;
+                const f = await makeFolder(name);
+                if (f) {
+                  setNewName('');
+                  await toggleItem(f, kind, ref);
+                }
+              }}
+            >
+              <input className={`${inputCls} !py-1.5`} placeholder="New folder name" value={newName} maxLength={60} onChange={(e) => setNewName(e.target.value)} aria-label="New folder name" />
+              <button type="submit" className="px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm">
+                Make
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const templateCard = (t: DocTemplate, remove?: () => void) => (
     <div key={`t-${t.id}`} className="flex items-stretch bg-white/5 border border-white/10 hover:border-white/25 rounded-2xl transition min-w-0">
       <button type="button" onClick={() => onEdit(t)} className="flex-1 min-w-0 text-left p-4">
         <div className="flex items-start justify-between gap-2">
@@ -142,13 +298,15 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
           {t.archived ? ' · archived' : ''}
         </span>
       </button>
-      <div className="pr-2 pt-2">
+      <div className="pr-2 pt-2 flex flex-col items-center">
         <Star on={isPinned('template', t.id)} onClick={() => togglePin('template', t.id)} label={isPinned('template', t.id) ? 'Unpin' : 'Pin to the top'} />
+        {addMenu('template', t.id)}
+        {remove && removeBtn(remove)}
       </div>
     </div>
   );
 
-  const trecRow = (f: TrecForm) => (
+  const trecRow = (f: TrecForm, remove?: () => void) => (
     <div key={`trec-${f.slug}`} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl pl-4 pr-2 py-2.5 min-w-0">
       <div className="min-w-0 flex-1">
         <div className="text-sm text-slate-100 font-medium break-words">{f.name}</div>
@@ -162,6 +320,57 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
         Open on TREC ↗
       </a>
       <Star on={isPinned('trec', f.slug)} onClick={() => togglePin('trec', f.slug)} label={isPinned('trec', f.slug) ? 'Unpin' : 'Pin to the top'} />
+      {addMenu('trec', f.slug)}
+      {remove && removeBtn(remove)}
+    </div>
+  );
+
+  // One official or association forms source for a state: a link to their own page, never a copy.
+  const sourceRow = (s: FormSource, opts?: { remove?: () => void; showState?: boolean }) => (
+    <div key={`src-${s.id}`} className="flex items-start gap-2 bg-white/5 border border-white/10 rounded-xl pl-4 pr-2 py-2.5 min-w-0">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm text-slate-100 font-medium break-words">
+          {opts?.showState && <span className="text-slate-400">{stateName(s.state)}: </span>}
+          {s.label}
+        </div>
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          <span className={`${badge} ${TYPE_CLS[s.type]}`}>{TYPE_LABEL[s.type]}</span>
+          <span className={`${badge} ${ACCESS_CLS[s.access]}`}>{ACCESS_LABEL[s.access]}</span>
+        </div>
+        <div className="text-xs text-slate-300 mt-1.5">{s.covers}</div>
+        {s.note && <div className="text-xs text-slate-500 mt-0.5">{s.note}</div>}
+      </div>
+      <a href={s.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-200 hover:text-blue-300 rounded-lg transition whitespace-nowrap">
+        Open ↗
+      </a>
+      <Star on={isPinned('source', s.id)} onClick={() => togglePin('source', s.id)} label={isPinned('source', s.id) ? 'Unpin' : 'Pin to the top'} />
+      {addMenu('source', s.id)}
+      {opts?.remove && removeBtn(opts.remove)}
+    </div>
+  );
+
+  const sourcesNote = () => (
+    <p className="text-xs text-slate-500">
+      Each link opens that source’s own page, so you always see their current version. Relay does not keep copies. Sources were last checked {shortDate(FORM_SOURCES_CHECKED)}. Pages can move, so a link may stop working.
+    </p>
+  );
+
+  const customTile = (f: CustomFolder) => (
+    <div key={`c-${f.id}`} className="flex items-stretch rounded-2xl border bg-white/5 border-white/10 hover:border-white/25 transition min-w-0">
+      <button type="button" onClick={() => setFolder(`c:${f.id}`)} className="flex-1 min-w-0 text-left p-4">
+        <span className="flex items-center gap-2 text-slate-100 font-semibold">
+          <svg viewBox="0 0 20 20" className="w-5 h-5 text-amber-300 shrink-0" fill="currentColor">
+            <path d="M2 6a2 2 0 012-2h3.6a1 1 0 01.7.3L10 6h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+          </svg>
+          <span className="truncate">{f.name}</span>
+        </span>
+        <span className="block text-xs text-slate-400 mt-1">
+          {f.items.length} thing{f.items.length === 1 ? '' : 's'}
+        </span>
+      </button>
+      <div className="pr-2 pt-2">
+        <Star on={isPinned('custom', f.id)} onClick={() => togglePin('custom', f.id)} label={isPinned('custom', f.id) ? 'Unpin folder' : 'Pin folder to the top'} />
+      </div>
     </div>
   );
 
@@ -190,7 +399,9 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
             <span className="truncate">{folderName(code)}</span>
           </span>
           <span className="block text-xs text-slate-400 mt-1">
-            {code === 'TX' ? `${trecForms.length} official TREC form${trecForms.length === 1 ? '' : 's'} · ${byFolder.get('TX')?.length ?? 0} of yours` : `${n} template${n === 1 ? '' : 's'}`}
+            {code === 'TX'
+              ? `${trecForms.length} official TREC form${trecForms.length === 1 ? '' : 's'} · ${byFolder.get('TX')?.length ?? 0} of yours`
+              : `${n} template${n === 1 ? '' : 's'}${formSourcesFor(code).length > 0 ? ` · ${formSourcesFor(code).length} forms source${formSourcesFor(code).length === 1 ? '' : 's'}` : ''}`}
           </span>
         </button>
         <div className="pr-2 pt-2">
@@ -207,18 +418,19 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
     ? {
         templates: all.filter((t) => `${t.name} ${t.description ?? ''}`.toLowerCase().includes(query)),
         trec: trecForms.filter((f) => `${f.name} ${f.formId}`.toLowerCase().includes(query)),
+        sources: US_STATES.flatMap((st) => formSourcesFor(st.code)).filter((x) => `${x.label} ${x.covers} ${stateName(x.state)}`.toLowerCase().includes(query)),
       }
     : null;
 
   const header = (
-    <input className={inputCls} placeholder="Search your documents and Texas forms" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search documents" />
+    <input className={inputCls} placeholder="Search your documents, Texas forms and state sources" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search documents" />
   );
 
   let body: React.ReactNode;
   if (searchHits) {
     body = (
       <div className="space-y-5">
-        {searchHits.templates.length === 0 && searchHits.trec.length === 0 && <p className="text-sm text-slate-400">Nothing matches “{q}”.</p>}
+        {searchHits.templates.length === 0 && searchHits.trec.length === 0 && searchHits.sources.length === 0 && <p className="text-sm text-slate-400">Nothing matches “{q}”.</p>}
         {searchHits.templates.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Your documents</h2>
@@ -231,10 +443,91 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
             <div className="grid lg:grid-cols-2 gap-2">{searchHits.trec.map((f) => trecRow(f))}</div>
           </section>
         )}
+        {searchHits.sources.length > 0 && (
+          <section>
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">State forms sources</h2>
+            <div className="grid lg:grid-cols-2 gap-2">{searchHits.sources.map((x) => sourceRow(x, { showState: true }))}</div>
+          </section>
+        )}
+      </div>
+    );
+  } else if (folder && customId(folder)) {
+    const cf = folders.find((x) => x.id === customId(folder));
+    const docs = cf ? cf.items.filter((i) => i.kind === 'template').map((i) => all.find((t) => t.id === i.ref)) : [];
+    const forms = cf ? cf.items.filter((i) => i.kind === 'trec').map((i) => trecForms.find((x) => x.slug === i.ref)) : [];
+    const sources = cf ? cf.items.filter((i) => i.kind === 'source').map((i) => findFormSource(i.ref)) : [];
+    const shown = [...docs, ...forms, ...sources].filter(Boolean).length;
+    const hidden = cf ? cf.items.length - shown : 0;
+    body = !cf ? (
+      <div className="space-y-3">
+        <button type="button" onClick={() => setFolder(null)} className="text-sm text-slate-400 hover:text-slate-200">
+          ← All folders
+        </button>
+        <p className="text-sm text-slate-400">That folder is gone.</p>
+      </div>
+    ) : (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button type="button" onClick={() => { setFolder(null); setRenaming(null); setConfirmDelete(false); }} className="text-sm text-slate-400 hover:text-slate-200">
+            ← All folders
+          </button>
+          <div className="flex items-center gap-1 text-sm text-slate-300">
+            {isPinned('custom', cf.id) ? 'Pinned to the top' : 'Pin this folder'}
+            <Star on={isPinned('custom', cf.id)} onClick={() => togglePin('custom', cf.id)} label={isPinned('custom', cf.id) ? 'Unpin folder' : 'Pin folder to the top'} />
+          </div>
+        </div>
+        {renaming !== null ? (
+          <form className="flex flex-wrap gap-2 max-w-lg" onSubmit={(e) => { e.preventDefault(); if (renaming.trim()) renameFolder(cf, renaming.trim()); }}>
+            <input className={inputCls} value={renaming} maxLength={60} autoFocus onChange={(e) => setRenaming(e.target.value)} aria-label="Folder name" />
+            <button type="submit" className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm">Save</button>
+            <button type="button" onClick={() => setRenaming(null)} className="px-3 py-2 rounded-lg border border-slate-600 text-slate-300 text-sm">Cancel</button>
+          </form>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-2xl font-semibold text-slate-100">{cf.name}</h2>
+            <button type="button" onClick={() => setRenaming(cf.name)} className="text-sm text-blue-300 hover:text-blue-200">Rename</button>
+            {confirmDelete ? (
+              <span className="text-sm text-slate-300 flex items-center gap-2">
+                Delete this folder? Your documents stay where they are.
+                <button type="button" onClick={() => deleteFolder(cf)} className="px-2.5 py-1 rounded-lg bg-red-500/80 hover:bg-red-500 text-white text-sm">Delete</button>
+                <button type="button" onClick={() => setConfirmDelete(false)} className="px-2.5 py-1 rounded-lg border border-slate-600 text-slate-300 text-sm">Keep</button>
+              </span>
+            ) : (
+              <button type="button" onClick={() => setConfirmDelete(true)} className="text-sm text-slate-400 hover:text-red-300">Delete folder</button>
+            )}
+          </div>
+        )}
+        {cf.items.length === 0 && (
+          <p className="text-sm text-slate-400">
+            Nothing here yet. Use the folder button on any document, Texas form or state source to add it. Folders only hold shortcuts, so nothing is copied or moved.
+          </p>
+        )}
+        {docs.some(Boolean) && (
+          <section>
+            <h3 className="text-sm font-semibold text-slate-200 mb-2">Your documents</h3>
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{docs.filter((t): t is DocTemplate => !!t).map((t) => templateCard(t, () => toggleItem(cf, 'template', t.id)))}</div>
+          </section>
+        )}
+        {forms.some(Boolean) && (
+          <section>
+            <h3 className="text-sm font-semibold text-slate-200 mb-2">Official TREC forms</h3>
+            <div className="grid lg:grid-cols-2 gap-2">{forms.filter((f): f is TrecForm => !!f).map((f) => trecRow(f, () => toggleItem(cf, 'trec', f.slug)))}</div>
+          </section>
+        )}
+        {sources.some(Boolean) && (
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold text-slate-200">State forms sources</h3>
+            <div className="grid lg:grid-cols-2 gap-2">{sources.filter((x): x is FormSource => !!x).map((x) => sourceRow(x, { showState: true, remove: () => toggleItem(cf, 'source', x.id) }))}</div>
+            {sourcesNote()}
+          </section>
+        )}
+        {hidden > 0 && <p className="text-xs text-slate-500">{hidden} item{hidden === 1 ? ' is' : 's are'} not shown because the document is archived or the form is no longer listed.</p>}
       </div>
     );
   } else if (folder) {
     const mine = byFolder.get(folder) ?? [];
+    const stateInfo = STATE_FORM_INFO[folder];
+    const stateSources = formSourcesFor(folder);
     const grouped = (['contracts', 'addenda', 'other'] as const).map((s) => ({ s, rows: trecForms.filter((f) => f.section === s) })).filter((g) => g.rows.length > 0);
     body = (
       <div className="space-y-6">
@@ -270,12 +563,30 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
           </section>
         )}
 
+        {folder !== 'TX' && folder !== 'every' && (
+          <section className="space-y-2">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-200 flex flex-wrap items-center gap-2">
+                Official forms sources for {stateName(folder)}
+                {stateInfo && (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-300 bg-white/5 border border-white/10 rounded-full px-2 py-0.5">
+                    <span className={`w-2 h-2 rounded-full ${TIER_DOT[stateInfo.tier]}`} />
+                    {TIER_LABEL[stateInfo.tier]}
+                  </span>
+                )}
+              </h3>
+              <p className="text-sm text-slate-300 mt-1">{stateInfo ? stateInfo.summary : 'We have not checked this one yet.'}</p>
+            </div>
+            {stateSources.length > 0 && <div className="grid lg:grid-cols-2 gap-2">{stateSources.map((x) => sourceRow(x))}</div>}
+            {stateInfo && sourcesNote()}
+          </section>
+        )}
+
         <section>
           <h3 className="text-sm font-semibold text-slate-200 mb-2">{folder === 'TX' ? 'Your Texas templates' : folder === 'every' ? 'General templates (any state)' : `Your ${stateName(folder)} templates`}</h3>
           {mine.length === 0 ? (
             <p className="text-sm text-slate-400">
               {folder === 'every' ? 'Nothing here yet. Letters and forms with no state chosen show up here.' : `Nothing yet. Upload a form or write a letter and tag it with ${stateName(folder)}, and it will appear here.`}
-              {folder !== 'TX' && folder !== 'every' && ' Official form lists for other states are not built in yet.'}
             </p>
           ) : (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{mine.map((t) => templateCard(t))}</div>
@@ -285,9 +596,11 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
     );
   } else {
     const pinnedFolders = pins.filter((p) => p.kind === 'folder').map((p) => p.ref);
+    const pinnedCustom = pins.filter((p) => p.kind === 'custom').map((p) => folders.find((f) => f.id === p.ref)).filter((f): f is CustomFolder => !!f);
+    const pinnedSources = pins.filter((p) => p.kind === 'source').map((p) => findFormSource(p.ref)).filter((x): x is FormSource => !!x);
     const pinnedTemplates = all.filter((t) => isPinned('template', t.id));
     const pinnedTrec = trecForms.filter((f) => isPinned('trec', f.slug));
-    const hasPins = pinnedFolders.length + pinnedTemplates.length + pinnedTrec.length > 0;
+    const hasPins = pinnedFolders.length + pinnedCustom.length + pinnedSources.length + pinnedTemplates.length + pinnedTrec.length > 0;
     const stateFolders = [...byFolder.keys()].filter((k) => k !== 'every' && k !== 'TX' && !pinnedFolders.includes(k)).sort();
     body = (
       <div className="space-y-7">
@@ -296,9 +609,15 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Pinned</h2>
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {pinnedFolders.map((code) => folderTile(code, code === 'TX'))}
+              {pinnedCustom.map((f) => customTile(f))}
               {pinnedTemplates.map((t) => templateCard(t))}
             </div>
-            {pinnedTrec.length > 0 && <div className="grid lg:grid-cols-2 gap-2 mt-3">{pinnedTrec.map((f) => trecRow(f))}</div>}
+            {(pinnedTrec.length > 0 || pinnedSources.length > 0) && (
+              <div className="grid lg:grid-cols-2 gap-2 mt-3">
+                {pinnedTrec.map((f) => trecRow(f))}
+                {pinnedSources.map((x) => sourceRow(x, { showState: true }))}
+              </div>
+            )}
           </section>
         )}
 
@@ -310,19 +629,64 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
         )}
 
         <section>
-          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Folders</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">My folders</h2>
+            {!creating && (
+              <button type="button" onClick={() => { setCreating(true); setNewName(''); }} className="text-sm text-blue-300 hover:text-blue-200">
+                + New folder
+              </button>
+            )}
+          </div>
+          {creating && (
+            <form
+              className="flex flex-wrap gap-2 max-w-lg mb-3"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const name = newName.trim();
+                if (!name) return;
+                const f = await makeFolder(name);
+                if (f) {
+                  setCreating(false);
+                  setNewName('');
+                  setFolder(`c:${f.id}`);
+                }
+              }}
+            >
+              <input className={inputCls} placeholder="Folder name, like “New listing packet”" value={newName} maxLength={60} autoFocus onChange={(e) => setNewName(e.target.value)} aria-label="New folder name" />
+              <button type="submit" className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm">Make folder</button>
+              <button type="button" onClick={() => setCreating(false)} className="px-3 py-2 rounded-lg border border-slate-600 text-slate-300 text-sm">Cancel</button>
+            </form>
+          )}
+          {folders.length === 0 && !creating ? (
+            <p className="text-sm text-slate-400">Make a folder for the documents you use all the time, like everything for a new listing. Then use the folder button on any document, Texas form or state source to add it.</p>
+          ) : (
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{folders.filter((f) => !pins.some((p) => p.kind === 'custom' && p.ref === f.id)).map((f) => customTile(f))}</div>
+          )}
+        </section>
+
+        <section>
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">By state</h2>
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {!pinnedFolders.includes('TX') && folderTile('TX', true)}
             {!pinnedFolders.includes('every') && folderTile('every')}
             {stateFolders.map((code) => folderTile(code))}
           </div>
           <button type="button" onClick={() => setShowAll((v) => !v)} className="text-sm text-blue-300 hover:text-blue-200 mt-3">
-            {showAll ? 'Hide the list of states' : 'Show all states'}
+            {showAll ? 'Hide the list of states' : 'Show all states and their official forms sources'}
           </button>
+          {showAll && (
+            <p className="mt-2 text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+              <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.contracts}`} />State publishes the contracts</span>
+              <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.disclosures}`} />State publishes some forms</span>
+              <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.association}`} />Contracts come from the REALTOR association</span>
+              <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.none}`} />No public source confirmed</span>
+            </p>
+          )}
           {showAll && (
             <div className="mt-2 grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-8 gap-1.5">
               {US_STATES.map((s) => (
-                <button key={s.code} type="button" onClick={() => setFolder(s.code)} title={s.name} className="text-left px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-slate-200 truncate">
+                <button key={s.code} type="button" onClick={() => setFolder(s.code)} title={`${s.name}${STATE_FORM_INFO[s.code] ? `: ${TIER_LABEL[STATE_FORM_INFO[s.code].tier]}` : s.code === 'TX' ? ': official TREC forms' : ''}`} className="flex items-center gap-1.5 text-left px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-slate-200 truncate">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${s.code === 'TX' ? 'bg-emerald-400' : STATE_FORM_INFO[s.code] ? TIER_DOT[STATE_FORM_INFO[s.code].tier] : 'bg-slate-700'}`} />
                   {s.code} <span className="text-xs text-slate-500">{count(s.code) > 0 ? count(s.code) : ''}</span>
                 </button>
               ))}

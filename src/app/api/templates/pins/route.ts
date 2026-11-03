@@ -3,17 +3,23 @@ import { AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { loadOwnTemplate, requireTemplatesUser, templateError } from '@/lib/templatesServer';
 import { isStateCode } from '@/lib/usStates';
+import { findFormSource } from '@/lib/stateFormSources';
+import { loadOwnFolder } from '@/lib/templateFolders';
 
-const KINDS = ['folder', 'template', 'trec'] as const;
+const KINDS = ['folder', 'template', 'trec', 'source', 'custom'] as const;
 type PinKind = (typeof KINDS)[number];
 const MAX_PINS = 60;
 
-/** A pin is a folder (a state code, or "every" for templates with no state), one of your templates, or a TREC form. */
+/** A pin is a state folder (a state code, or "every" for General), one of your own folders, a template, a TREC form or a state forms source. */
 async function checkRef(kind: PinKind, ref: string, ownerId: string) {
   if (kind === 'folder') {
     if (ref !== 'every' && !isStateCode(ref)) throw new AuthError('That is not a folder.', 400);
   } else if (kind === 'template') {
     await loadOwnTemplate(ref, ownerId);
+  } else if (kind === 'custom') {
+    await loadOwnFolder(ref, ownerId);
+  } else if (kind === 'source') {
+    if (!findFormSource(ref)) throw new AuthError('That forms source is not in the list.', 404);
   } else {
     const { data } = await supabaseServer.from('trec_forms').select('slug').eq('slug', ref).maybeSingle();
     if (!data) throw new AuthError('That TREC form is not in the list.', 404);

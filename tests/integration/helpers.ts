@@ -123,6 +123,7 @@ export async function cleanup(): Promise<void> {
     if (files && files.length > 0) await admin.storage.from('transaction-documents').remove(files.map((f) => `templates/${id}/${f.name}`));
   }
   await admin.from('template_pins').delete().in('owner_user_id', created);
+  await admin.from('template_folders').delete().in('owner_user_id', created);
   await admin.from('email_outbox').delete().in('owner_user_id', created);
   await admin.from('template_runs').delete().in('owner_user_id', created);
   await admin.from('template_rules').delete().in('owner_user_id', created);

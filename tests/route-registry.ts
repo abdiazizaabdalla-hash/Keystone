@@ -184,5 +184,8 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/template-runs/[runId]/decide': { kind: 'session', methods: ['POST'] },
   '/api/templates/trec': { kind: 'session', methods: ['GET'] },
   '/api/templates/pins': { kind: 'session', methods: ['DELETE', 'GET', 'POST'] },
+  '/api/templates/folders': { kind: 'session', methods: ['GET', 'POST'] },
+  '/api/templates/folders/[id]': { kind: 'session', methods: ['DELETE', 'PATCH'] },
+  '/api/templates/folders/[id]/items': { kind: 'session', methods: ['DELETE', 'POST'] },
   '/api/templates/starters': { kind: 'session', methods: ['GET', 'POST'] },
 };
