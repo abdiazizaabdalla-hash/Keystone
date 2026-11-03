@@ -58,10 +58,10 @@ describe('pins', () => {
     const tpl = ((await call(h(createTemplate), tc, { method: 'POST', path: '/api/templates', body: { kind: 'letter', name: 'Pinned letter', body: 'x' } })).json as { id: string }).id;
     expect((await pinCall(tc, { kind: 'folder', ref: 'TX' })).status).toBe(201);
     expect((await pinCall(tc, { kind: 'folder', ref: 'TX' })).status).toBe(201); // twice is fine
-    expect((await pinCall(tc, { kind: 'folder', ref: 'every' })).status).toBe(201);
+    expect((await pinCall(tc, { kind: 'folder', ref: 'CA' })).status).toBe(201);
     expect((await pinCall(tc, { kind: 'template', ref: tpl })).status).toBe(201);
     expect((await pinCall(tc, { kind: 'trec', ref: SLUG })).status).toBe(201);
-    expect((await pins(tc)).map((p) => `${p.kind}:${p.ref}`).sort()).toEqual([`folder:TX`, `folder:every`, `template:${tpl}`, `trec:${SLUG}`].sort());
+    expect((await pins(tc)).map((p) => `${p.kind}:${p.ref}`).sort()).toEqual([`folder:CA`, `folder:TX`, `template:${tpl}`, `trec:${SLUG}`].sort());
     expect((await pins(other)).length).toBe(0);
     const trec = (await call(h(getTrec), tc, { method: 'GET', path: '/api/templates/trec' })).json as { forms: Array<{ slug: string; pinned: boolean }> };
     expect(trec.forms.find((f) => f.slug === SLUG)!.pinned).toBe(true);
@@ -71,6 +71,7 @@ describe('pins', () => {
 
   it('refuses nonsense', async () => {
     expect((await pinCall(tc, { kind: 'folder', ref: 'ZZ' })).status).toBe(400);
+    expect((await pinCall(tc, { kind: 'folder', ref: 'every' })).status).toBe(400);
     expect((await pinCall(tc, { kind: 'banana', ref: 'TX' })).status).toBe(400);
     expect((await pinCall(tc, { kind: 'trec', ref: 'no-such-form' })).status).toBe(404);
     expect((await pinCall(free, { kind: 'folder', ref: 'TX' })).status).toBe(403);

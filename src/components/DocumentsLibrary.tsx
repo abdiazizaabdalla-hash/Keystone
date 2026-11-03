@@ -49,7 +49,7 @@ interface CustomFolder {
   items: { kind: ItemKind; ref: string }[];
 }
 
-// null = home, 'every' = General (templates with no state), 'c:<id>' = one of your own folders, otherwise a state code
+// null = home, 'c:<id>' = one of your own folders, otherwise a state code
 type Folder = null | string;
 const customId = (f: string) => (f.startsWith('c:') ? f.slice(2) : null);
 
@@ -71,7 +71,7 @@ const badge = 'text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 r
 
 const SECTION_LABEL: Record<TrecForm['section'], string> = { contracts: 'Contracts', addenda: 'Addenda', other: 'Other forms' };
 const stateName = (code: string) => US_STATES.find((s) => s.code === code)?.name ?? code;
-const folderName = (f: string) => (f === 'every' ? 'General' : stateName(f));
+const folderName = (f: string) => stateName(f);
 const failMsg = async (res: Response, fallback: string) => ((await res.json().catch(() => ({}))) as { error?: string }).error || fallback;
 const shortDate = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '');
 const isRecent = (iso: string | null, days = 90) => !!iso && Date.now() - new Date(iso).getTime() < days * 86400000;
@@ -97,7 +97,7 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
   const [pins, setPins] = useState<Pin[]>([]);
   const [folder, setFolder] = useState<Folder>(null);
   const [q, setQ] = useState('');
-  const [showAll, setShowAll] = useState(false);
+  const [pickStates, setPickStates] = useState(false);
   const [error, setError] = useState('');
   const [localKey, setLocalKey] = useState(0);
   const [folders, setFolders] = useState<CustomFolder[]>([]);
@@ -211,8 +211,7 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
   const byFolder = useMemo(() => {
     const map = new Map<string, DocTemplate[]>();
     for (const t of all) {
-      const keys = t.states.length === 0 ? ['every'] : t.states;
-      for (const k of keys) map.set(k, [...(map.get(k) ?? []), t]);
+      for (const k of t.states) map.set(k, [...(map.get(k) ?? []), t]);
     }
     return map;
   }, [all]);
@@ -293,7 +292,7 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
         </div>
         {t.description && <span className="block text-xs text-slate-400 mt-0.5 line-clamp-1">{t.description}</span>}
         <span className="block text-xs text-slate-500 mt-2 truncate">
-          {t.states.length === 0 ? 'General' : t.states.slice(0, 4).join(', ') + (t.states.length > 4 ? ` +${t.states.length - 4}` : '')}
+          {t.states.length === 0 ? 'All states' : t.states.slice(0, 4).join(', ') + (t.states.length > 4 ? ` +${t.states.length - 4}` : '')}
           {t.kind === 'form' && (t.file_name ? ` · ${t.file_name}` : ' · no file yet')}
           {t.archived ? ' · archived' : ''}
         </span>
@@ -387,27 +386,24 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
     </p>
   );
 
-  const folderTile = (code: string, featured = false) => {
+  // Every state folder is the same size. Which states show on your home screen is chosen with "Choose states".
+  const folderTile = (code: string) => {
     const n = count(code);
+    const src = formSourcesFor(code).length;
     return (
-      <div key={`f-${code}`} className={`flex items-stretch rounded-2xl border transition min-w-0 ${featured ? 'bg-blue-500/10 border-blue-500/40 hover:border-blue-400' : 'bg-white/5 border-white/10 hover:border-white/25'}`}>
-        <button type="button" onClick={() => setFolder(code)} className="flex-1 min-w-0 text-left p-4">
-          <span className="flex items-center gap-2 text-slate-100 font-semibold">
-            <svg viewBox="0 0 20 20" className="w-5 h-5 text-blue-300 shrink-0" fill="currentColor">
-              <path d="M2 6a2 2 0 012-2h3.6a1 1 0 01.7.3L10 6h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-            </svg>
-            <span className="truncate">{folderName(code)}</span>
-          </span>
-          <span className="block text-xs text-slate-400 mt-1">
-            {code === 'TX'
-              ? `${trecForms.length} official TREC form${trecForms.length === 1 ? '' : 's'} · ${byFolder.get('TX')?.length ?? 0} of yours`
-              : `${n} template${n === 1 ? '' : 's'}${formSourcesFor(code).length > 0 ? ` · ${formSourcesFor(code).length} forms source${formSourcesFor(code).length === 1 ? '' : 's'}` : ''}`}
-          </span>
-        </button>
-        <div className="pr-2 pt-2">
-          <Star on={isPinned('folder', code)} onClick={() => togglePin('folder', code)} label={isPinned('folder', code) ? 'Unpin folder' : 'Pin folder to the top'} />
-        </div>
-      </div>
+      <button key={`f-${code}`} type="button" onClick={() => setFolder(code)} className="text-left rounded-2xl border bg-white/5 border-white/10 hover:border-white/25 transition min-w-0 p-4">
+        <span className="flex items-center gap-2 text-slate-100 font-semibold">
+          <svg viewBox="0 0 20 20" className="w-5 h-5 text-blue-300 shrink-0" fill="currentColor">
+            <path d="M2 6a2 2 0 012-2h3.6a1 1 0 01.7.3L10 6h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+          </svg>
+          <span className="truncate">{folderName(code)}</span>
+        </span>
+        <span className="block text-xs text-slate-400 mt-1">
+          {code === 'TX'
+            ? `${trecForms.length} official TREC form${trecForms.length === 1 ? '' : 's'} · ${n - trecForms.length} of yours`
+            : `${n} of yours${src > 0 ? ` · ${src} forms source${src === 1 ? '' : 's'}` : ''}`}
+        </span>
+      </button>
     );
   };
 
@@ -536,8 +532,8 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
             ← All folders
           </button>
           <div className="flex items-center gap-1 text-sm text-slate-300">
-            {isPinned('folder', folder) ? 'Pinned to the top' : 'Pin this folder'}
-            <Star on={isPinned('folder', folder)} onClick={() => togglePin('folder', folder)} label={isPinned('folder', folder) ? 'Unpin folder' : 'Pin folder to the top'} />
+            {isPinned('folder', folder) ? 'One of your states' : 'Add to your states'}
+            <Star on={isPinned('folder', folder)} onClick={() => togglePin('folder', folder)} label={isPinned('folder', folder) ? 'Remove from your states' : 'Add to your states'} />
           </div>
         </div>
         <h2 className="text-2xl font-semibold text-slate-100">{folderName(folder)}</h2>
@@ -563,7 +559,7 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
           </section>
         )}
 
-        {folder !== 'TX' && folder !== 'every' && (
+        {folder !== 'TX' && (
           <section className="space-y-2">
             <div>
               <h3 className="text-sm font-semibold text-slate-200 flex flex-wrap items-center gap-2">
@@ -583,10 +579,10 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
         )}
 
         <section>
-          <h3 className="text-sm font-semibold text-slate-200 mb-2">{folder === 'TX' ? 'Your Texas templates' : folder === 'every' ? 'General templates (any state)' : `Your ${stateName(folder)} templates`}</h3>
+          <h3 className="text-sm font-semibold text-slate-200 mb-2">{`Your ${stateName(folder)} templates`}</h3>
           {mine.length === 0 ? (
             <p className="text-sm text-slate-400">
-              {folder === 'every' ? 'Nothing here yet. Letters and forms with no state chosen show up here.' : `Nothing yet. Upload a form or write a letter and tag it with ${stateName(folder)}, and it will appear here.`}
+              Nothing yet. Upload a form or write a letter and tag it with {stateName(folder)}, and it will appear here.
             </p>
           ) : (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{mine.map((t) => templateCard(t))}</div>
@@ -595,20 +591,21 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
       </div>
     );
   } else {
-    const pinnedFolders = pins.filter((p) => p.kind === 'folder').map((p) => p.ref);
+    const myStates = pins
+      .filter((p) => p.kind === 'folder' && US_STATES.some((st) => st.code === p.ref))
+      .map((p) => p.ref)
+      .sort((a, b) => stateName(a).localeCompare(stateName(b)));
     const pinnedCustom = pins.filter((p) => p.kind === 'custom').map((p) => folders.find((f) => f.id === p.ref)).filter((f): f is CustomFolder => !!f);
     const pinnedSources = pins.filter((p) => p.kind === 'source').map((p) => findFormSource(p.ref)).filter((x): x is FormSource => !!x);
     const pinnedTemplates = all.filter((t) => isPinned('template', t.id));
     const pinnedTrec = trecForms.filter((f) => isPinned('trec', f.slug));
-    const hasPins = pinnedFolders.length + pinnedCustom.length + pinnedSources.length + pinnedTemplates.length + pinnedTrec.length > 0;
-    const stateFolders = [...byFolder.keys()].filter((k) => k !== 'every' && k !== 'TX' && !pinnedFolders.includes(k)).sort();
+    const hasPins = pinnedCustom.length + pinnedSources.length + pinnedTemplates.length + pinnedTrec.length > 0;
     body = (
       <div className="space-y-7">
         {hasPins && (
           <section>
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Pinned</h2>
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {pinnedFolders.map((code) => folderTile(code, code === 'TX'))}
               {pinnedCustom.map((f) => customTile(f))}
               {pinnedTemplates.map((t) => templateCard(t))}
             </div>
@@ -665,34 +662,64 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
         </section>
 
         <section>
-          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">By state</h2>
-          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {!pinnedFolders.includes('TX') && folderTile('TX', true)}
-            {!pinnedFolders.includes('every') && folderTile('every')}
-            {stateFolders.map((code) => folderTile(code))}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">My states</h2>
+            <div className="flex items-center gap-3">
+              <select
+                className="bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+                value=""
+                aria-label="Open any state"
+                onChange={(e) => {
+                  if (e.target.value) setFolder(e.target.value);
+                }}
+              >
+                <option value="">Open any state…</option>
+                {US_STATES.map((st) => (
+                  <option key={st.code} value={st.code}>
+                    {st.name}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={() => setPickStates((v) => !v)} className="text-sm text-blue-300 hover:text-blue-200">
+                {pickStates ? 'Done' : 'Choose states'}
+              </button>
+            </div>
           </div>
-          <button type="button" onClick={() => setShowAll((v) => !v)} className="text-sm text-blue-300 hover:text-blue-200 mt-3">
-            {showAll ? 'Hide the list of states' : 'Show all states and their official forms sources'}
-          </button>
-          {showAll && (
-            <p className="mt-2 text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
-              <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.contracts}`} />State publishes the contracts</span>
-              <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.disclosures}`} />State publishes some forms</span>
-              <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.association}`} />Contracts come from the REALTOR association</span>
-              <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.none}`} />No public source confirmed</span>
-            </p>
-          )}
-          {showAll && (
-            <div className="mt-2 grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-8 gap-1.5">
-              {US_STATES.map((s) => (
-                <button key={s.code} type="button" onClick={() => setFolder(s.code)} title={`${s.name}${STATE_FORM_INFO[s.code] ? `: ${TIER_LABEL[STATE_FORM_INFO[s.code].tier]}` : s.code === 'TX' ? ': official TREC forms' : ''}`} className="flex items-center gap-1.5 text-left px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-slate-200 truncate">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${s.code === 'TX' ? 'bg-emerald-400' : STATE_FORM_INFO[s.code] ? TIER_DOT[STATE_FORM_INFO[s.code].tier] : 'bg-slate-700'}`} />
-                  {s.code} <span className="text-xs text-slate-500">{count(s.code) > 0 ? count(s.code) : ''}</span>
-                </button>
-              ))}
+          {pickStates && (
+            <div className="mb-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+              <p className="text-sm text-slate-300 mb-2">Tick the states you work in. They go to the top of this screen. You can still open any other state from the list above.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
+                {US_STATES.map((st) => {
+                  const on = myStates.includes(st.code);
+                  return (
+                    <button
+                      key={st.code}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => togglePin('folder', st.code)}
+                      className={`flex items-center gap-2 text-left px-2.5 py-1.5 rounded-lg border text-sm transition ${on ? 'bg-blue-500/20 border-blue-500/50 text-blue-100' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}
+                    >
+                      <span className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center text-[10px] ${on ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-500'}`}>{on ? '✓' : ''}</span>
+                      <span className="truncate">{st.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
+          {myStates.length === 0 ? (
+            <p className="text-sm text-slate-400">Choose the states you work in and they will show up here, each with its official forms sources.</p>
+          ) : (
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{myStates.map((code) => folderTile(code))}</div>
+          )}
         </section>
+
+        {all.length > 0 && (
+          <section>
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">All my documents</h2>
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{all.map((t) => templateCard(t))}</div>
+          </section>
+        )}
       </div>
     );
   }

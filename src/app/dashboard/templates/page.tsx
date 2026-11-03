@@ -262,7 +262,7 @@ export default function TemplatesPage() {
             </select>
             <input className={`${inputCls} sm:col-span-2`} placeholder={`Search ${section}`} value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          {state && <p className="text-xs text-slate-500 -mt-2">Showing {US_STATES.find((s) => s.code === state)?.name} templates and the General ones that work in any state.</p>}
+          {state && <p className="text-xs text-slate-500 -mt-2">Showing {US_STATES.find((s) => s.code === state)?.name} templates and the ones for all states.</p>}
 
           {loading ? (
             <div className="text-slate-400">Loading…</div>
@@ -297,7 +297,7 @@ export default function TemplatesPage() {
                     <span className="text-slate-400">{categoryLabel(t.category)}</span>
                     <span className="text-slate-600">·</span>
                     {t.states.length === 0 ? (
-                      <span className="text-slate-400">General</span>
+                      <span className="text-slate-400">All states</span>
                     ) : (
                       t.states.slice(0, 5).map((s) => (
                         <span key={s} className="px-1.5 py-0.5 rounded bg-slate-700/70 text-slate-200">
@@ -542,7 +542,7 @@ function TemplateEditor({ template, startKind, onClose, onSaved }: { template: T
                 </button>
               </div>
               <div className="flex flex-wrap gap-1.5 mb-1">
-                {states.length === 0 ? <span className="text-sm text-slate-300">General</span> : states.map((s) => (
+                {states.length === 0 ? <span className="text-sm text-slate-300">All states</span> : states.map((s) => (
                   <span key={s} className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-200 text-xs">
                     {s}
                   </span>
@@ -562,7 +562,7 @@ function TemplateEditor({ template, startKind, onClose, onSaved }: { template: T
                   <>
                     Shown on deals in {states.join(', ')}.{' '}
                     <button type="button" className="text-slate-400 hover:text-slate-200 underline" onClick={() => setStates([])}>
-                      Use as General (any state)
+                      Use in all states
                     </button>
                   </>
                 )}

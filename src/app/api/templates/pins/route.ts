@@ -10,10 +10,10 @@ const KINDS = ['folder', 'template', 'trec', 'source', 'custom'] as const;
 type PinKind = (typeof KINDS)[number];
 const MAX_PINS = 60;
 
-/** A pin is a state folder (a state code, or "every" for General), one of your own folders, a template, a TREC form or a state forms source. */
+/** A pin is a state folder (a state code), one of your own folders, a template, a TREC form or a state forms source. */
 async function checkRef(kind: PinKind, ref: string, ownerId: string) {
   if (kind === 'folder') {
-    if (ref !== 'every' && !isStateCode(ref)) throw new AuthError('That is not a folder.', 400);
+    if (!isStateCode(ref)) throw new AuthError('That is not a folder.', 400);
   } else if (kind === 'template') {
     await loadOwnTemplate(ref, ownerId);
   } else if (kind === 'custom') {
