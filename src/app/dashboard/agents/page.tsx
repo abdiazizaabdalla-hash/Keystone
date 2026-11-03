@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatPhoneNumber } from '@/lib/formatPhone';
+import { readPersona } from '@/lib/persona';
 
 interface Agent {
   id: string;
@@ -39,6 +40,11 @@ interface DirectoryAgent {
 
 export default function AgentsPage() {
   const router = useRouter();
+  // An agent is the agent: there is no agents list for them to manage.
+  useEffect(() => {
+    const p = readPersona();
+    if (p.workspace || p.accountType === 'agent') router.replace('/dashboard');
+  }, [router]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);

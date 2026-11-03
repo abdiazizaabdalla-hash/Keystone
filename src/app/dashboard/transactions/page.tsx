@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { useWorkspaceAgent } from '@/lib/useWorkspaceAgent';
 import { formatDisplayDate } from '@/lib/dueDates';
 
 interface Transaction {
@@ -44,6 +45,7 @@ export default function TransactionsPage() {
   const [agents, setAgents] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isWorkspaceAgent = useWorkspaceAgent();
   const [query, setQuery] = useState('');
   // Deals an agent has invited this account to coordinate, waiting to be accepted.
   const [invitations, setInvitations] = useState<Array<{ inviteId: string; transactionId: string; propertyAddress: string | null; agentLabel: string }>>([]);
@@ -350,7 +352,7 @@ export default function TransactionsPage() {
                           {tx.shared && <span className="ml-2 align-middle text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border border-sky-400/40 bg-sky-500/10 text-sky-300">Shared</span>}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {[agentName && `Agent: ${agentName}`, tx.file_number && `File ${tx.file_number}`, price].filter(Boolean).join(' · ')}
+                          {[!isWorkspaceAgent && agentName && `Agent: ${agentName}`, tx.file_number && `File ${tx.file_number}`, price].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

@@ -2675,7 +2675,10 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
             <p className="text-slate-400 break-words">{transaction.property_address}</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8 pt-6 border-t border-white/10">
+          <div className={`grid grid-cols-1 ${isAgentAcct ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-4 md:gap-8 pt-6 border-t border-white/10`}>
+            {/* Agent: hidden for an agent working their own deal, who is the agent. */}
+            {!isAgentAcct && (
+            <>
             {/* Agent */}
             <div data-tour="tx-agent-card">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent</p>
@@ -2741,6 +2744,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                 );
               })()}
             </div>
+            </>
+            )}
 
             {/* Purchase Price */}
             <div>
@@ -3679,6 +3684,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
           </div>
 
           <div className="space-y-4">
+            {!isAgentAcct && (
+            <>
             {/* Agent row -- read-only here; edit via the Agents page. */}
             <div className="px-3 py-2 bg-slate-700/30 border border-slate-600 rounded-lg">
               <div className="flex items-center justify-between gap-2">
@@ -3694,6 +3701,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
               <p className="text-xs text-slate-400 mt-0.5">{agent?.email || 'No email on file'}</p>
               <p className="text-xs text-slate-400">{agent?.phone || 'No phone on file'}</p>
             </div>
+            </>
+            )}
 
             {/* Saved parties -- a compact read-only card (matching the
                 Agent row above) until "Edit" is clicked. */}

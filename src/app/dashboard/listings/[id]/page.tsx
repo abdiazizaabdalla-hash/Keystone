@@ -22,6 +22,7 @@ import SellerUpdateModal from '@/components/SellerUpdateModal';
 import ListingReadinessCard from '@/components/ListingReadinessCard';
 import ListingSignModal, { type ListingSigningRequest } from '@/components/ListingSignModal';
 import { computeReadiness } from '@/lib/listingReadiness';
+import { useWorkspaceAgent } from '@/lib/useWorkspaceAgent';
 import { suggestFileNumber } from '@/lib/fileNumber';
 import {
   FINANCING_TYPES,
@@ -143,6 +144,7 @@ const LISTING_TABS: { id: ListingTab; label: string }[] = [
 export default function ListingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const isWorkspaceAgent = useWorkspaceAgent();
   const [tab, setTab] = useState<ListingTab>('overview');
   const selectTab = (next: ListingTab) => {
     setTab(next);
@@ -887,7 +889,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8 pt-6 border-t border-white/10">
+        <div className={`grid grid-cols-1 ${isWorkspaceAgent ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-4 md:gap-8 pt-6 border-t border-white/10`}>
+          {!isWorkspaceAgent && (
+          <>
           {/* Agent */}
           <div data-tour="ls-agent-card">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Agent</p>
@@ -929,6 +933,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               </div>
             )}
           </div>
+          </>
+          )}
 
           {/* List Price */}
           <div>

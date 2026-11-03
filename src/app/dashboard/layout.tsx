@@ -315,6 +315,11 @@ export default function DashboardLayout({
           }
           setPlan(data.plan || 'starter');
           setIsAgentAccount(data.accountType === 'agent');
+          // An agent has no agents list or agent profiles to manage (they are the agent); send them back if they land there.
+          if ((data.accountType === 'agent' || data.agentWorkspace) && window.location.pathname.startsWith('/dashboard/agents')) {
+            router.replace('/dashboard');
+            return;
+          }
           savePersona({ accountType: data.accountType === 'agent' ? 'agent' : 'tc', coordinationMode: data.coordinationMode ?? null, workspace: Boolean(data.agentWorkspace) });
           setHasWorkspace(Boolean(data.agentWorkspace));
           setTrial(data.trial || null);
