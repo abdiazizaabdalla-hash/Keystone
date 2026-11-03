@@ -101,6 +101,22 @@ export async function pendingInvitesFor(agentUserId: string, email: string | nul
   return rows;
 }
 
+/** Brokerage owners whose shared templates this person may use: the brokerage they joined as an agent, or the team they are on. */
+export async function brokerageOwnersFor(userId: string): Promise<string[]> {
+  if (!brokerageOn()) return [];
+  const owners = new Set<string>();
+  const link = await activeLinkForAgent(userId);
+  if (link) owners.add(link.owner_user_id);
+  const { data: member } = await supabaseServer.from('team_members').select('team_id').eq('user_id', userId).maybeSingle();
+  if (member) {
+    const { data: team } = await supabaseServer.from('teams').select('owner_id').eq('id', member.team_id).maybeSingle();
+    if (team && team.owner_id !== userId) owners.add(team.owner_id as string);
+  }
+  const ok: string[] = [];
+  for (const id of owners) if (await ownerStillOnTeamPlan(id)) ok.push(id);
+  return ok;
+}
+
 /** Does this brokerage owner currently oversee this agent? (Active link and the owner is still on a team plan.) */
 export async function overseesAgent(ownerId: string, agentUserId: string): Promise<boolean> {
   const { data } = await supabaseServer.from('brokerage_links').select('id').eq('owner_user_id', ownerId).eq('agent_user_id', agentUserId).eq('status', 'active').maybeSingle();

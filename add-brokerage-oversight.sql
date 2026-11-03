@@ -25,3 +25,8 @@ grant select, insert, update, delete on table public.brokerage_links to service_
 
 select table_name, grantee, privilege_type from information_schema.role_table_grants
 where table_schema = 'public' and table_name = 'brokerage_links' order by grantee, privilege_type;
+
+-- A brokerage owner can share a template (for example the brokerage's IABS) with the agents and team members of the
+-- brokerage. Shared templates show up pinned in their Templates screen and on their deals. Safe to run more than once.
+alter table public.doc_templates add column if not exists brokerage_shared boolean not null default false;
+create index if not exists idx_doc_templates_shared on public.doc_templates (owner_user_id) where brokerage_shared;

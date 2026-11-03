@@ -25,6 +25,9 @@ interface Template {
   file_size: number | null;
   archived: boolean;
   last_used_at?: string | null;
+  brokerage_shared?: boolean;
+  from_brokerage?: boolean;
+  shared_by?: string;
 }
 
 interface Starter {
@@ -295,12 +298,13 @@ export default function TemplatesPage() {
           ) : (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {templates.map((t) => (
-                <button key={t.id} type="button" onClick={() => setEditing(t)} className="text-left bg-white/5 border border-white/10 hover:border-white/25 rounded-2xl p-4 transition min-w-0 flex flex-col">
+                <button key={t.id} type="button" onClick={() => (t.from_brokerage ? setNotice('This one is provided by your brokerage. Use it from a deal; only your brokerage can change it.') : setEditing(t))} className={`text-left bg-white/5 border ${t.from_brokerage ? 'border-amber-400/30 hover:border-amber-400/60' : 'border-white/10 hover:border-white/25'} rounded-2xl p-4 transition min-w-0 flex flex-col`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-slate-100 font-semibold truncate">{t.name}</div>
                       {t.description && <div className="text-xs text-slate-400 mt-0.5 line-clamp-2">{t.description}</div>}
                     </div>
+                    {t.from_brokerage && <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-amber-400/15 text-amber-300 border-amber-400/30 shrink-0">Pinned by brokerage</span>}
                     {t.kind === 'letter' && <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40 shrink-0">Letter</span>}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 mt-auto pt-3 text-xs">
@@ -353,6 +357,25 @@ function TemplateEditor({ template, startKind, startName, onClose, onSaved }: { 
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
   const [lastFocus, setLastFocus] = useState<'subject' | 'body'>('body');
+  // A brokerage owner can share this with their agents and team (for example the brokerage's IABS).
+  const [shared, setShared] = useState<boolean>(template?.brokerage_shared ?? (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('share') === '1'));
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => {
+    if (!isFeatureOnClient('brokerage')) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await authFetch('/api/oversight?check=1');
+        if (!cancelled) setCanShare(res.ok);
+      } catch {
+        /* sharing is simply not offered */
+      }
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, []);
   const fileRef = useRef<HTMLInputElement>(null);
   const section = sectionOf(kind);
 
@@ -385,7 +408,7 @@ function TemplateEditor({ template, startKind, startName, onClose, onSaved }: { 
     setBusy(true);
     setError(null);
     try {
-      const payload = { kind, name, description, category, states, subject: kind === 'email' ? subject : '', body: kind === 'form' ? '' : body };
+      const payload = { kind, name, description, category, states, subject: kind === 'email' ? subject : '', body: kind === 'form' ? '' : body, ...(canShare || template?.brokerage_shared ? { brokerageShared: shared } : {}) };
       const res = await authFetch(saved ? `/api/templates/${saved.id}` : '/api/templates', {
         method: saved ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -586,6 +609,16 @@ function TemplateEditor({ template, startKind, startName, onClose, onSaved }: { 
           )}
         </div>
       </div>
+
+      {(canShare || template?.brokerage_shared) && (
+        <label className="flex items-start gap-2 text-sm text-slate-200 bg-amber-400/10 border border-amber-400/30 rounded-lg px-3 py-2">
+          <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="mt-1 accent-amber-400" />
+          <span>
+            Share with my brokerage
+            <span className="block text-xs text-slate-400">Your agents and team members get it pinned at the top of their Templates and on their deals. They can use it but not change it.</span>
+          </span>
+        </label>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
         <button

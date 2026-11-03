@@ -7,6 +7,7 @@ import Link from 'next/link';
 import TeamMessaging from '@/components/TeamMessaging';
 import TeamContacts from '@/components/TeamContacts';
 import BrokerageOversight from '@/components/BrokerageOversight';
+import BrokerageTemplates from '@/components/BrokerageTemplates';
 import { isFeatureOnClient } from '@/lib/features';
 import type { ContactRow } from '@/lib/contactsCrm';
 
@@ -14,6 +15,8 @@ interface Member {
   userId: string;
   email: string;
   name: string;
+  /** What kind of account: the broker (owner), an agent, or a transaction coordinator. */
+  kind?: 'broker' | 'agent' | 'tc';
   role: 'owner' | 'member';
   isYou: boolean;
 }
@@ -37,13 +40,18 @@ interface TeamResponse {
   seatPriceLabel?: string;
   members: Member[];
   pendingInvites: PendingInvite[];
+  brokerageAgents?: { linkId: string; userId: string | null; name: string; email: string; status: string }[];
 }
 
-type Tab = 'overview' | 'messages' | 'contacts' | 'people' | 'agents' | 'settings';
+type Tab = 'overview' | 'messages' | 'contacts' | 'people' | 'agents' | 'templates' | 'settings';
+
+// Role tags in the roster: a brokerage can have a broker, agents and coordinators.
+const KIND_LABEL = { broker: 'Broker', agent: 'Agent', tc: 'TC' } as const;
+const KIND_CLS = { broker: 'bg-blue-500/20 text-blue-300', agent: 'bg-emerald-500/20 text-emerald-300', tc: 'bg-violet-500/20 text-violet-300' } as const;
 
 export default function CollaboratePage() {
   const router = useRouter();
-  const [tab, setTabState] = useState<Tab>('overview');
+  const [tab, setTabState] = useState<Tab>(isFeatureOnClient('brokerage') ? 'agents' : 'overview');
   const [unread, setUnread] = useState(0);
   const [teamContacts, setTeamContacts] = useState<ContactRow[]>([]);
 
@@ -60,7 +68,7 @@ export default function CollaboratePage() {
   useEffect(() => {
     const t = setTimeout(async () => {
       const wanted = window.location.hash.replace('#', '');
-      if (['overview', 'messages', 'contacts', 'people', 'agents', 'settings'].includes(wanted)) setTabState(wanted as Tab);
+      if (['overview', 'messages', 'contacts', 'people', 'agents', 'templates', 'settings'].includes(wanted)) setTabState(wanted as Tab);
       try {
         const [sum, list] = await Promise.all([authFetch('/api/team/messages/summary'), authFetch('/api/contacts')]);
         if (sum.ok) setUnread((await sum.json()).total || 0);
@@ -79,6 +87,8 @@ export default function CollaboratePage() {
   const [error, setError] = useState('');
 
   const [inviteEmail, setInviteEmail] = useState('');
+  // With brokerage on, the owner says who they are inviting: an agent (own workspace, accepts oversight) or a coordinator/staff member.
+  const [inviteRole, setInviteRole] = useState<'agent' | 'tc'>('tc');
   const [inviting, setInviting] = useState(false);
   const [inviteMessage, setInviteMessage] = useState('');
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -148,6 +158,15 @@ export default function CollaboratePage() {
     setInviting(true);
     setInviteMessage('');
     try {
+      if (isFeatureOnClient('brokerage') && inviteRole === 'agent') {
+        const agentRes = await authFetch('/api/oversight', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: inviteEmail }) });
+        const agentJson = await agentRes.json();
+        if (!agentRes.ok) throw new Error(agentJson.error || 'Failed to invite');
+        setInviteMessage(`Invitation sent to ${inviteEmail}. They see what you can see before they accept.`);
+        setInviteEmail('');
+        await load();
+        return;
+      }
       const res = await authFetch('/api/team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -189,6 +208,20 @@ export default function CollaboratePage() {
       setSettingsMessage(err instanceof Error ? err.message : 'Failed to save settings');
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handleRemoveAgent = async (linkId: string) => {
+    setRemovingId(linkId);
+    try {
+      const res = await authFetch(`/api/oversight/${linkId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to remove that agent');
+      setInviteMessage('Removed. They keep all of their deals.');
+      await load();
+    } catch (err) {
+      setInviteMessage(err instanceof Error ? err.message : 'Failed to remove that agent');
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -244,15 +277,26 @@ export default function CollaboratePage() {
   const seatsUsed = data.members.length + data.pendingInvites.length;
   const teamLabel = data.team.name || (isBrokerage ? 'Your brokerage' : 'Your team');
 
-  const tabs: { id: Tab; label: string; badge?: number }[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'messages', label: 'Messages', badge: unread },
-    { id: 'contacts', label: 'Contacts', badge: undefined },
-    { id: 'people', label: 'People' },
-    ...(isOwner && isFeatureOnClient('brokerage') ? [{ id: 'agents' as Tab, label: 'Agents' }] : []),
-    ...(isOwner ? [{ id: 'settings' as Tab, label: 'Settings' }] : []),
-  ];
-  const activeTab: Tab = (tab === 'settings' && !isOwner) || (tab === 'agents' && !(isOwner && isFeatureOnClient('brokerage'))) ? 'overview' : tab;
+  // With the brokerage feature on, Collaborate is the brokerage's home: Agents first, no coordinator-team overview.
+  const brokerageMode = isFeatureOnClient('brokerage');
+  const tabs: { id: Tab; label: string; badge?: number }[] = brokerageMode
+    ? [
+        ...(isOwner ? [{ id: 'agents' as Tab, label: 'Agents' }] : []),
+        { id: 'messages', label: 'Messages', badge: unread },
+        { id: 'contacts', label: 'Contacts', badge: undefined },
+        { id: 'people', label: 'People' },
+        { id: 'templates', label: 'Templates' },
+        ...(isOwner ? [{ id: 'settings' as Tab, label: 'Settings' }] : []),
+      ]
+    : [
+        { id: 'overview', label: 'Overview' },
+        { id: 'messages', label: 'Messages', badge: unread },
+        { id: 'contacts', label: 'Contacts', badge: undefined },
+        { id: 'people', label: 'People' },
+        ...(isOwner ? [{ id: 'settings' as Tab, label: 'Settings' }] : []),
+      ];
+  const fallbackTab: Tab = brokerageMode ? (isOwner ? 'agents' : 'messages') : 'overview';
+  const activeTab: Tab = tabs.some((t) => t.id === tab) ? tab : fallbackTab;
   const cardCls = 'bg-white/5 border border-white/10 rounded-2xl p-5';
   const initial = (m: Member) => ((m.name || m.email || '?')[0] || '?').toUpperCase();
   const recentShared = [...teamContacts].sort((a, b) => (b.shared_at || b.created_at).localeCompare(a.shared_at || a.created_at)).slice(0, 5);
@@ -264,7 +308,9 @@ export default function CollaboratePage() {
         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 capitalize">{data.role}</span>
       </div>
       <p className="text-slate-400 mb-6 max-w-3xl">
-        Your team&rsquo;s home base. Each coordinator&rsquo;s deals, agents and contacts stay private to their own login; only contacts someone chooses to share appear here.
+        {brokerageMode
+          ? 'Your brokerage’s home base: its agents, the people who work with you, and the templates you share. Agents and coordinators keep their own contacts and messages private; only what they choose to share appears here.'
+          : 'Your team’s home base. Each coordinator’s deals, agents and contacts stay private to their own login; only contacts someone chooses to share appear here.'}
       </p>
 
       <div className="flex gap-1 border-b border-white/10 mb-6 overflow-x-auto" role="tablist" aria-label="Team sections">
@@ -407,7 +453,11 @@ export default function CollaboratePage() {
                     <div className="flex items-center gap-2">
                       <span className="text-slate-100 font-medium truncate">{member.name || member.email}</span>
                       {member.isYou && <span className="text-xs text-slate-500">(you)</span>}
-                      <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${member.role === 'owner' ? 'bg-blue-500/20 text-blue-300' : 'bg-slate-600 text-slate-300'}`}>{member.role}</span>
+                      {brokerageMode && member.kind ? (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${KIND_CLS[member.kind]}`}>{KIND_LABEL[member.kind]}</span>
+                      ) : (
+                        <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${member.role === 'owner' ? 'bg-blue-500/20 text-blue-300' : 'bg-slate-600 text-slate-300'}`}>{member.role}</span>
+                      )}
                     </div>
                     {member.name && <div className="text-xs text-slate-500 truncate">{member.email}</div>}
                   </div>
@@ -429,10 +479,29 @@ export default function CollaboratePage() {
               ))}
 
               {isOwner &&
+                brokerageMode &&
+                (data.brokerageAgents ?? []).map((a) => (
+                  <div key={a.linkId} className="px-6 py-4 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-100 font-medium truncate">{a.name}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${KIND_CLS.agent}`}>{KIND_LABEL.agent}</span>
+                        {a.status === 'pending' && <span className="text-xs px-2 py-0.5 rounded-full bg-slate-600 text-slate-400">Invite pending</span>}
+                      </div>
+                      <div className="text-xs text-slate-500 truncate">{a.email}</div>
+                    </div>
+                    <button onClick={() => handleRemoveAgent(a.linkId)} disabled={removingId === a.linkId} className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
+                      {removingId === a.linkId ? 'Removing…' : a.status === 'pending' ? 'Cancel' : 'Remove'}
+                    </button>
+                  </div>
+                ))}
+
+              {isOwner &&
                 data.pendingInvites.map((invite) => (
                   <div key={invite.id} className="px-6 py-4 flex items-center justify-between gap-4">
                     <div>
                       <span className="text-slate-300">{invite.email}</span>
+                      {brokerageMode && <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${KIND_CLS.tc}`}>{KIND_LABEL.tc}</span>}
                       <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-slate-600 text-slate-400">Invite pending</span>
                     </div>
                   </div>
@@ -442,7 +511,7 @@ export default function CollaboratePage() {
 
           {isOwner && (
             <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6">
-              <h2 className="font-display font-semibold text-slate-100 mb-1">Invite a teammate</h2>
+              <h2 className="font-display font-semibold text-slate-100 mb-1">{brokerageMode ? 'Invite someone to your brokerage' : 'Invite a teammate'}</h2>
               {/* The backend (see POST /api/team) never hard-caps the team -- inviting past the currently-paid
                   seat count just adds one more prorated seat to the subscription automatically. The form always
                   stays available so that path is reachable; only the messaging changes. */}
@@ -451,6 +520,23 @@ export default function CollaboratePage() {
                   ? "They'll get the same plan access right away — no separate payment needed, it's covered by your subscription."
                   : `You're at your current seat count (${seatsUsed}/${data.seatLimit}). Inviting one more adds a prorated seat to your subscription (~${data.seatPriceLabel || '$30/mo'}) right away.`}
               </p>
+              {brokerageMode && (
+                <div className="flex gap-2 mb-3" role="radiogroup" aria-label="Who are you inviting">
+                  {([['tc', 'Coordinator or staff', 'Joins your team plan and works in your shared space.'], ['agent', 'Agent', 'Has their own workspace and chooses whether to share their deals with you.']] as const).map(([value, label, hint]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={inviteRole === value}
+                      onClick={() => setInviteRole(value)}
+                      className={`flex-1 text-left rounded-xl border px-4 py-2.5 transition ${inviteRole === value ? 'border-blue-400 bg-blue-500/10' : 'border-white/10 bg-slate-800/50 hover:border-white/25'}`}
+                    >
+                      <span className="block text-sm font-semibold text-slate-100">{label}</span>
+                      <span className="block text-xs text-slate-400 mt-0.5">{hint}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               <form onSubmit={handleInvite} className="flex gap-3">
                 <input
                   type="email"
@@ -470,7 +556,9 @@ export default function CollaboratePage() {
         </div>
       )}
 
-      {activeTab === 'agents' && isOwner && isFeatureOnClient('brokerage') && <BrokerageOversight />}
+      {activeTab === 'agents' && isOwner && brokerageMode && <BrokerageOversight />}
+
+      {activeTab === 'templates' && brokerageMode && <BrokerageTemplates isOwner={isOwner} />}
 
       {activeTab === 'settings' && isOwner && (
         <div className="max-w-4xl">

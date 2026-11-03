@@ -5,6 +5,7 @@ import { isFeatureOn } from './features';
 import { assertNotCollaborator } from './workspaceGuard';
 import { isStateCode } from './usStates';
 import { CONTACT_CATEGORIES } from './contactCategories';
+import { brokerageOwnersFor } from './oversight';
 
 export const TEMPLATE_BUCKET = 'transaction-documents';
 export const TEMPLATE_KINDS = ['email', 'letter', 'form'] as const;
@@ -58,6 +59,7 @@ export function cleanTemplateInput(body: Record<string, unknown>, forCreate: boo
   if (body.subject !== undefined) out.subject = clip(body.subject, 200) || null;
   if (body.body !== undefined) out.body = typeof body.body === 'string' ? body.body.slice(0, 20000) : null;
   if (body.archived !== undefined) out.archived = body.archived === true;
+  if (body.brokerageShared !== undefined) out.brokerage_shared = body.brokerageShared === true;
   return out;
 }
 
@@ -65,6 +67,15 @@ export async function loadOwnTemplate(templateId: string, ownerId: string) {
   const { data } = await supabaseServer.from('doc_templates').select('*').eq('id', templateId).maybeSingle();
   if (!data || data.owner_user_id !== ownerId) throw new AuthError('Template not found', 404);
   return data;
+}
+
+/** Your own template, or one a brokerage owner shared with the brokerage you belong to (read and use, never change). */
+export async function loadUsableTemplate(templateId: string, userId: string) {
+  const { data } = await supabaseServer.from('doc_templates').select('*').eq('id', templateId).maybeSingle();
+  if (!data) throw new AuthError('Template not found', 404);
+  if (data.owner_user_id === userId) return { ...data, from_brokerage: false };
+  if (data.brokerage_shared === true && !data.archived && (await brokerageOwnersFor(userId)).includes(data.owner_user_id as string)) return { ...data, from_brokerage: true };
+  throw new AuthError('Template not found', 404);
 }
 
 export const RULE_TRIGGERS = ['deal_closed', 'closing_date', 'acceptance_date'] as const;

@@ -3,7 +3,7 @@ import { authorizeDeal } from '@/lib/authorize';
 import { buildMergeContext, displayNameOf, loadDealForTemplates, recipientsOf } from '@/lib/templateContext';
 import { renderTemplate } from '@/lib/templateMerge';
 import { templateFitsState } from '@/lib/usStates';
-import { loadOwnTemplate, requireTemplatesUser, templateError } from '@/lib/templatesServer';
+import { loadUsableTemplate, requireTemplatesUser, templateError } from '@/lib/templatesServer';
 
 // POST { transactionId, recipientEmail? }: the template with this deal's details filled in, plus who it could go to.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const body = (await request.json().catch(() => ({}))) as { transactionId?: string; recipientEmail?: string };
     if (!body.transactionId) return NextResponse.json({ error: 'Choose a deal' }, { status: 400 });
-    const template = await loadOwnTemplate(id, user.id);
+    const template = await loadUsableTemplate(id, user.id);
     await authorizeDeal(user, isAdmin, body.transactionId, { scope: 'owner', participants: 'full', deniedMessage: 'You do not have permission to use templates on this transaction' });
     const deal = await loadDealForTemplates(body.transactionId);
     if (!deal) return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });

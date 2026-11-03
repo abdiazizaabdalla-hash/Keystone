@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
     assertBrokerageOwner(user);
+    if (request.nextUrl.searchParams.get('check') === '1') return NextResponse.json({ owner: true });
     const today = todayIso();
     const links = await listOwnerLinks(user.id);
     const activeIds = links.filter((l) => l.status === 'active' && l.agent_user_id).map((l) => l.agent_user_id as string);

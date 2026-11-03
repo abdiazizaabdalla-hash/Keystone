@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
-import { loadOwnTemplate, requireTemplatesUser, templateError, TEMPLATE_BUCKET } from '@/lib/templatesServer';
+import { loadOwnTemplate, loadUsableTemplate, requireTemplatesUser, templateError, TEMPLATE_BUCKET } from '@/lib/templatesServer';
 
 const MAX_BYTES = 15 * 1024 * 1024;
 const ALLOWED: Record<string, string> = {
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { user } = await requireTemplatesUser(request);
     const { id } = await params;
-    const template = await loadOwnTemplate(id, user.id);
+    const template = await loadUsableTemplate(id, user.id);
     if (!template.storage_path) throw new AuthError('This template has no file yet.', 404);
     const { data } = await supabaseServer.storage.from(TEMPLATE_BUCKET).createSignedUrl(template.storage_path as string, 3600);
     return NextResponse.json({ url: data?.signedUrl ?? null, fileName: template.file_name });

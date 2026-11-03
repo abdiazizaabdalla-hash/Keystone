@@ -43,3 +43,34 @@ export function getCoordinationMode(metadata: Record<string, unknown> | null | u
 export function isCoordinationMode(value: unknown): value is CoordinationMode {
   return value === 'own_tc' || value === 'self' || value === 'automate';
 }
+
+// What an agent tells us in setup, beyond how they like to work. Presentation and planning only: nothing here grants access.
+export const AGENT_FOCUS: { id: string; label: string }[] = [
+  { id: 'listings', label: 'Listings' },
+  { id: 'buyers', label: 'Buyers' },
+  { id: 'new_construction', label: 'New construction' },
+  { id: 'investors', label: 'Investors' },
+  { id: 'land', label: 'Land and rural' },
+];
+export const AGENT_VOLUME: { id: string; label: string }[] = [
+  { id: 'under_10', label: 'Under 10' },
+  { id: '10_25', label: '10 to 25' },
+  { id: '26_50', label: '26 to 50' },
+  { id: 'over_50', label: 'More than 50' },
+];
+
+export interface AgentProfile {
+  focus: string[];
+  dealsPerYear: string | null;
+  license: string | null;
+}
+
+/** Only known choices are kept; the license number is trimmed and limited to plain license-number characters. */
+export function cleanAgentProfile(input: { focus?: unknown; dealsPerYear?: unknown; license?: unknown } | null | undefined): AgentProfile {
+  const focus = Array.isArray(input?.focus)
+    ? [...new Set(input.focus.filter((f): f is string => typeof f === 'string' && AGENT_FOCUS.some((o) => o.id === f)))]
+    : [];
+  const dealsPerYear = typeof input?.dealsPerYear === 'string' && AGENT_VOLUME.some((o) => o.id === input.dealsPerYear) ? input.dealsPerYear : null;
+  const licenseRaw = typeof input?.license === 'string' ? input.license.trim().replace(/[^A-Za-z0-9 \-./#]/g, '').slice(0, 40) : '';
+  return { focus, dealsPerYear, license: licenseRaw || null };
+}

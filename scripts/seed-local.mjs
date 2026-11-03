@@ -72,6 +72,16 @@ if (broker && member) {
       await admin.from('tasks').insert(steps.map(([name, due, done], i) => ({ transaction_id: tx.id, name, due_date: due, completed: done, sort_order: i })));
     }
   }
+  // The broker's IABS, shared with the brokerage (a one-page placeholder PDF, so there is a real file to open).
+  const iabsName = 'Brokerage IABS (Information About Brokerage Services)';
+  const { data: haveIabs } = await admin.from('doc_templates').select('id').eq('owner_user_id', broker.id).eq('name', iabsName).maybeSingle();
+  if (!haveIabs) {
+    const pdf = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 78>>stream\nBT /F1 18 Tf 72 700 Td (Demo brokerage IABS - replace with your own form) Tj ET\nendstream endobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n');
+    const path = `templates/${broker.id}/demo-brokerage-iabs.pdf`;
+    await admin.storage.from('transaction-documents').upload(path, pdf, { contentType: 'application/pdf', upsert: true });
+    const { error } = await admin.from('doc_templates').insert({ owner_user_id: broker.id, kind: 'form', name: iabsName, description: 'Our brokerage’s IABS. Give it to every client at first contact.', category: 'disclosure', states: [], file_name: 'demo-brokerage-iabs.pdf', storage_path: path, content_type: 'application/pdf', file_size: pdf.length, brokerage_shared: true });
+    if (error) console.warn('Could not add the demo IABS (is add-brokerage-oversight.sql run?):', error.message);
+  }
   console.log('Brokerage demo ready: broker@local.relay oversees agent-workspace@local.relay.');
 }
 console.log(`Wrote ${ACCOUNTS.length} accounts to .local-accounts.txt`);

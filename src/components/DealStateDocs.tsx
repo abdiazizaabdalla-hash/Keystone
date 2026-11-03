@@ -16,6 +16,7 @@ export interface DealTemplate {
   name: string;
   description: string | null;
   states: string[];
+  from_brokerage?: boolean;
 }
 
 interface TrecForm {
@@ -94,6 +95,7 @@ export default function DealStateDocs({ dealState, onUse }: { dealState: string 
     >
       <span className="truncate">{t.name}</span>
       <span className="text-[10px] uppercase tracking-wide text-blue-300 shrink-0">{t.kind === 'form' ? 'Form' : 'Letter'}</span>
+      {t.from_brokerage && <span className="text-[10px] uppercase tracking-wide text-amber-300 shrink-0">Brokerage</span>}
     </button>
   );
 

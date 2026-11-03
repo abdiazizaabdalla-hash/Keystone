@@ -122,6 +122,8 @@ export async function cleanup(): Promise<void> {
     const { data: files } = await admin.storage.from('transaction-documents').list(`templates/${id}`);
     if (files && files.length > 0) await admin.storage.from('transaction-documents').remove(files.map((f) => `templates/${id}/${f.name}`));
   }
+  await admin.from('team_members').delete().in('user_id', created);
+  await admin.from('teams').delete().in('owner_id', created);
   await admin.from('brokerage_links').delete().in('owner_user_id', created);
   await admin.from('brokerage_links').delete().in('agent_user_id', created);
   await admin.from('template_pins').delete().in('owner_user_id', created);

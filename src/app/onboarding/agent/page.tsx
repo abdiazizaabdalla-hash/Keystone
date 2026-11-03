@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
-import { COORDINATION_MODES, type CoordinationMode } from '@/lib/accountType';
+import { AGENT_FOCUS, AGENT_VOLUME, COORDINATION_MODES, type CoordinationMode } from '@/lib/accountType';
 import { isFeatureOnClient } from '@/lib/features';
 import { US_STATES } from '@/lib/usStates';
 
@@ -22,6 +22,10 @@ export default function AgentOnboardingPage() {
   const [brokerage, setBrokerage] = useState('');
   const [phone, setPhone] = useState('');
   const [states, setStates] = useState<string[]>([]);
+  const [focus, setFocus] = useState<string[]>([]);
+  const [dealsPerYear, setDealsPerYear] = useState<string | null>(null);
+  const [license, setLicense] = useState('');
+  const [invitedBy, setInvitedBy] = useState<string | null>(null);
   const askStates = isFeatureOnClient('templates');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +45,21 @@ export default function AgentOnboardingPage() {
           return;
         }
         setName(data.fullName || '');
+        // A brokerage that already invited this agent: say so, and start the brokerage field from it.
+        if (isFeatureOnClient('brokerage')) {
+          try {
+            const inv = await authFetch('/api/brokerage');
+            if (inv.ok) {
+              const first = ((await inv.json()) as { invites?: { owner: { name: string } }[] }).invites?.[0];
+              if (first) {
+                setInvitedBy(first.owner.name);
+                setBrokerage((cur) => cur || first.owner.name);
+              }
+            }
+          } catch {
+            /* the invitation simply is not mentioned */
+          }
+        }
         setReady(true);
       } catch (e) {
         if (e instanceof AuthRequiredError) {
@@ -68,7 +87,7 @@ export default function AgentOnboardingPage() {
       const res = await authFetch('/api/agent-onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, name, brokerage, phone, ...(askStates ? { states } : {}) }),
+        body: JSON.stringify({ mode, name, brokerage, phone, focus, dealsPerYear, license, ...(askStates ? { states } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not finish setup');
@@ -113,28 +132,8 @@ export default function AgentOnboardingPage() {
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Welcome to Relay</p>
-        <h1 className="font-display text-3xl sm:text-4xl font-semibold mb-2">How do you want to work?</h1>
-        <p className="text-slate-400 mb-8">
-          Pick the closest one. It only sets up your first screens, and you can use everything in Relay either way.
-        </p>
-
-        <div className="grid gap-3 mb-10" role="radiogroup" aria-label="How you work">
-          {COORDINATION_MODES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              role="radio"
-              aria-checked={mode === m.id}
-              onClick={() => setMode(m.id)}
-              className={`text-left rounded-xl border px-5 py-4 transition ${
-                mode === m.id ? 'border-blue-400 bg-blue-500/10' : 'border-white/10 bg-slate-800/50 hover:border-white/25'
-              }`}
-            >
-              <span className="block font-semibold text-slate-100">{m.title}</span>
-              <span className="block text-sm text-slate-400 mt-1">{m.body}</span>
-            </button>
-          ))}
-        </div>
+        <h1 className="font-display text-3xl sm:text-4xl font-semibold mb-2">Set up your agent workspace</h1>
+        <p className="text-slate-400 mb-8">A few quick questions so your deals, forms and templates start out fitted to how you work. Everything is optional except your name, and you can change any of it later.</p>
 
         <h2 className="font-display text-xl font-semibold mb-4">About you</h2>
         <div className="grid sm:grid-cols-2 gap-4 mb-8">
@@ -143,14 +142,25 @@ export default function AgentOnboardingPage() {
             <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Smith" autoComplete="name" />
           </label>
           <label className="block">
-            <span className="text-sm text-slate-400 block mb-1.5">Brokerage (optional)</span>
-            <input className={inputClass} value={brokerage} onChange={(e) => setBrokerage(e.target.value)} placeholder="Your brokerage" />
-          </label>
-          <label className="block sm:col-span-2">
             <span className="text-sm text-slate-400 block mb-1.5">Phone (optional)</span>
             <input className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 555-5555" autoComplete="tel" inputMode="tel" />
           </label>
+          <label className="block sm:col-span-2">
+            <span className="text-sm text-slate-400 block mb-1.5">License number (optional)</span>
+            <input className={inputClass} value={license} onChange={(e) => setLicense(e.target.value)} placeholder="Your real estate license number" />
+          </label>
         </div>
+
+        <h2 className="font-display text-xl font-semibold mb-1">Your brokerage</h2>
+        {invitedBy && (
+          <p className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 mb-3">
+            {invitedBy} has invited you to join their brokerage. You can review exactly what they would see, and accept or decline, from the Brokerage page once you are set up. Nothing is shared until you accept.
+          </p>
+        )}
+        <label className="block mb-8">
+          <span className="text-sm text-slate-400 block mb-1.5">Brokerage (optional)</span>
+          <input className={inputClass} value={brokerage} onChange={(e) => setBrokerage(e.target.value)} placeholder="Your brokerage" />
+        </label>
 
         {askStates && (
           <section className="mb-8">
@@ -178,6 +188,62 @@ export default function AgentOnboardingPage() {
             {states.length > 0 && <p className="text-xs text-slate-500 mt-2">{states.length} chosen</p>}
           </section>
         )}
+
+        <section className="mb-8">
+          <h2 className="font-display text-xl font-semibold mb-1">What do you mostly work on?</h2>
+          <p className="text-sm text-slate-400 mb-3">Pick any that apply.</p>
+          <div className="flex flex-wrap gap-2 mb-5">
+            {AGENT_FOCUS.map((f) => {
+              const on = focus.includes(f.id);
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setFocus((cur) => (cur.includes(f.id) ? cur.filter((x) => x !== f.id) : [...cur, f.id]))}
+                  className={`px-3.5 py-2 rounded-xl border text-sm transition ${on ? 'bg-blue-500/20 border-blue-500/50 text-blue-100' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-sm text-slate-400 mb-2">About how many deals do you close in a year?</p>
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Deals per year">
+            {AGENT_VOLUME.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                role="radio"
+                aria-checked={dealsPerYear === v.id}
+                onClick={() => setDealsPerYear(dealsPerYear === v.id ? null : v.id)}
+                className={`px-3.5 py-2 rounded-xl border text-sm transition ${dealsPerYear === v.id ? 'bg-blue-500/20 border-blue-500/50 text-blue-100' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <h2 className="font-display text-xl font-semibold mb-1">How do you want to work?</h2>
+        <p className="text-sm text-slate-400 mb-3">Pick the closest one. It only sets up your first screens, and you can use everything in Relay either way.</p>
+        <div className="grid gap-3 mb-10" role="radiogroup" aria-label="How you work">
+          {COORDINATION_MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              role="radio"
+              aria-checked={mode === m.id}
+              onClick={() => setMode(m.id)}
+              className={`text-left rounded-xl border px-5 py-4 transition ${
+                mode === m.id ? 'border-blue-400 bg-blue-500/10' : 'border-white/10 bg-slate-800/50 hover:border-white/25'
+              }`}
+            >
+              <span className="block font-semibold text-slate-100">{m.title}</span>
+              <span className="block text-sm text-slate-400 mt-1">{m.body}</span>
+            </button>
+          ))}
+        </div>
 
         {error && <div className="mb-5 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>}
 

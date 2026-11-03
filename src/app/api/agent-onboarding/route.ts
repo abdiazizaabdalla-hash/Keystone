@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { mergeUserMetadata } from '@/lib/userMetadata';
 import { mergeAppMetadata } from '@/lib/privileged';
-import { isCoordinationMode } from '@/lib/accountType';
+import { cleanAgentProfile, isCoordinationMode } from '@/lib/accountType';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getEntitlements } from '@/lib/entitlements';
 import { logAudit } from '@/lib/audit';
@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
     await mergeAppMetadata(user.id, { account_type: 'agent' });
     await mergeUserMetadata(user.id, {
       coordination_mode: mode,
+      agent_profile: cleanAgentProfile(body),
       full_name: name,
       onboarding_completed: true,
     });

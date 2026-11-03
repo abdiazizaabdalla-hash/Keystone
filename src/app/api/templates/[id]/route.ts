@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
-import { cleanTemplateInput, loadOwnTemplate, requireTemplatesUser, templateError, TEMPLATE_BUCKET } from '@/lib/templatesServer';
+import { assertBrokerageOwner } from '@/lib/oversight';
+import { cleanTemplateInput, loadOwnTemplate, loadUsableTemplate, requireTemplatesUser, templateError, TEMPLATE_BUCKET } from '@/lib/templatesServer';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await requireTemplatesUser(request);
     const { id } = await params;
-    return NextResponse.json(await loadOwnTemplate(id, user.id));
+    return NextResponse.json(await loadUsableTemplate(id, user.id));
   } catch (error) {
     return templateError(error, 'load');
   }
@@ -18,6 +19,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params;
     await loadOwnTemplate(id, user.id);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    if (body.brokerageShared === true) assertBrokerageOwner(user);
     const fields = cleanTemplateInput(body, false);
     const { data, error } = await supabaseServer
       .from('doc_templates')

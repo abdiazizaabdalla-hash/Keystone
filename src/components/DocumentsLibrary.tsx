@@ -15,6 +15,9 @@ export interface DocTemplate {
   file_name: string | null;
   archived: boolean;
   last_used_at?: string | null;
+  /** Shared with you by the brokerage you belong to: pinned for you, usable, never editable here. */
+  from_brokerage?: boolean;
+  shared_by?: string;
 }
 
 interface TrecForm {
@@ -207,7 +210,9 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
     setFolder(null);
   };
 
-  const all = templates ?? [];
+  const everything = templates ?? [];
+  const all = everything.filter((t) => !t.from_brokerage);
+  const brokerageDocs = everything.filter((t) => t.from_brokerage);
   const byFolder = useMemo(() => {
     const map = new Map<string, DocTemplate[]>();
     for (const t of all) {
@@ -281,6 +286,17 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
         )}
       </div>
     );
+  };
+
+  const openBrokerageFile = async (t: DocTemplate) => {
+    if (!t.file_name) return;
+    try {
+      const res = await authFetch(`/api/templates/${t.id}/file`);
+      const data = (await res.json().catch(() => ({}))) as { url?: string | null };
+      if (res.ok && data.url) window.open(data.url, '_blank', 'noopener');
+    } catch {
+      /* the file simply does not open */
+    }
   };
 
   const templateCard = (t: DocTemplate, remove?: () => void) => (
@@ -599,10 +615,39 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
     const pinnedSources = pins.filter((p) => p.kind === 'source').map((p) => findFormSource(p.ref)).filter((x): x is FormSource => !!x);
     const pinnedTemplates = all.filter((t) => isPinned('template', t.id));
     const pinnedTrec = trecForms.filter((f) => isPinned('trec', f.slug));
-    const hasDisclosure = all.some((t) => /iabs|brokerage services|agency disclosure|consumer notice/i.test(t.name));
+    const hasDisclosure = everything.some((t) => /iabs|brokerage services|agency disclosure|consumer notice/i.test(t.name));
     const hasPins = pinnedCustom.length + pinnedSources.length + pinnedTemplates.length + pinnedTrec.length > 0;
     body = (
       <div className="space-y-7">
+        {brokerageDocs.length > 0 && (
+          <section>
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">From your brokerage</h2>
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {brokerageDocs.map((t) => (
+                <button
+                  key={`b-${t.id}`}
+                  type="button"
+                  onClick={() => void openBrokerageFile(t)}
+                  className="text-left bg-white/5 border border-amber-400/30 hover:border-amber-400/60 rounded-2xl p-4 transition min-w-0"
+                  title={t.file_name ? 'Open the file' : 'Provided by your brokerage'}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-slate-100 font-semibold truncate">{t.name}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-amber-400/15 text-amber-300 border-amber-400/30 shrink-0">Pinned by brokerage</span>
+                  </div>
+                  {t.description && <span className="block text-xs text-slate-400 mt-0.5 line-clamp-1">{t.description}</span>}
+                  <span className="block text-xs text-slate-500 mt-2 truncate">
+                    {t.states.length === 0 ? 'All states' : t.states.join(', ')}
+                    {t.file_name ? ` · ${t.file_name}` : ''}
+                    {t.shared_by ? ` · from ${t.shared_by}` : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500 mt-2">Use these from any deal. Only your brokerage can change them.</p>
+          </section>
+        )}
+
         {hasPins && (
           <section>
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Pinned</h2>
