@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
 import { COORDINATION_MODES, type CoordinationMode } from '@/lib/accountType';
+import { isFeatureOnClient } from '@/lib/features';
+import { US_STATES } from '@/lib/usStates';
 
 // A short setup for an agent running their own deals: how do you want to
 // work, who are you, then straight to uploading the first contract. Nothing
@@ -19,6 +21,8 @@ export default function AgentOnboardingPage() {
   const [name, setName] = useState('');
   const [brokerage, setBrokerage] = useState('');
   const [phone, setPhone] = useState('');
+  const [states, setStates] = useState<string[]>([]);
+  const askStates = isFeatureOnClient('templates');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -64,7 +68,7 @@ export default function AgentOnboardingPage() {
       const res = await authFetch('/api/agent-onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, name, brokerage, phone }),
+        body: JSON.stringify({ mode, name, brokerage, phone, ...(askStates ? { states } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not finish setup');
@@ -147,6 +151,33 @@ export default function AgentOnboardingPage() {
             <input className={inputClass} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 555-5555" autoComplete="tel" inputMode="tel" />
           </label>
         </div>
+
+        {askStates && (
+          <section className="mb-8">
+            <h2 className="font-display text-xl font-semibold mb-1">Which states do you work in?</h2>
+            <p className="text-sm text-slate-400 mb-3">
+              Optional. Tick any that apply and your Templates screen opens to those states, with links to each state’s official forms. You can change this any time.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-slate-800/40 p-2">
+              {US_STATES.map((st) => {
+                const on = states.includes(st.code);
+                return (
+                  <button
+                    key={st.code}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setStates((cur) => (cur.includes(st.code) ? cur.filter((c) => c !== st.code) : [...cur, st.code]))}
+                    className={`flex items-center gap-2 text-left px-2.5 py-1.5 rounded-lg border text-sm transition ${on ? 'bg-blue-500/20 border-blue-500/50 text-blue-100' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}
+                  >
+                    <span className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center text-[10px] ${on ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-500'}`}>{on ? '✓' : ''}</span>
+                    <span className="truncate">{st.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {states.length > 0 && <p className="text-xs text-slate-500 mt-2">{states.length} chosen</p>}
+          </section>
+        )}
 
         {error && <div className="mb-5 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>}
 

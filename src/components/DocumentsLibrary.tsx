@@ -90,7 +90,7 @@ function Star({ on, onClick, label }: { on: boolean; onClick: () => void; label:
 
 // Documents: pinned things and recently used on top, then folders by state. Texas holds TREC's official forms (as links
 // to TREC's own pages, so they are always the current version) next to your own Texas templates.
-export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { reloadKey: number; showArchived: boolean; onEdit: (t: DocTemplate) => void }) {
+export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUpload }: { reloadKey: number; showArchived: boolean; onEdit: (t: DocTemplate) => void; onUpload: (presetName?: string) => void }) {
   const [templates, setTemplates] = useState<DocTemplate[] | null>(null);
   const [trec, setTrec] = useState<TrecData | null>(null);
   const [trecError, setTrecError] = useState('');
@@ -112,7 +112,7 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
     (async () => {
       try {
         const [tRes, trRes, pRes, fRes] = await Promise.all([
-          authFetch(`/api/templates?kinds=letter,form${showArchived ? '&archived=1' : ''}`),
+          authFetch(`/api/templates?kinds=form${showArchived ? '&archived=1' : ''}`),
           authFetch('/api/templates/trec'),
           authFetch('/api/templates/pins'),
           authFetch('/api/templates/folders'),
@@ -599,6 +599,7 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
     const pinnedSources = pins.filter((p) => p.kind === 'source').map((p) => findFormSource(p.ref)).filter((x): x is FormSource => !!x);
     const pinnedTemplates = all.filter((t) => isPinned('template', t.id));
     const pinnedTrec = trecForms.filter((f) => isPinned('trec', f.slug));
+    const hasDisclosure = all.some((t) => /iabs|brokerage services|agency disclosure|consumer notice/i.test(t.name));
     const hasPins = pinnedCustom.length + pinnedSources.length + pinnedTemplates.length + pinnedTrec.length > 0;
     body = (
       <div className="space-y-7">
@@ -665,21 +666,6 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">My states</h2>
             <div className="flex items-center gap-3">
-              <select
-                className="bg-slate-800/70 border border-white/10 rounded-lg px-2 py-1 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
-                value=""
-                aria-label="Open any state"
-                onChange={(e) => {
-                  if (e.target.value) setFolder(e.target.value);
-                }}
-              >
-                <option value="">Open any state…</option>
-                {US_STATES.map((st) => (
-                  <option key={st.code} value={st.code}>
-                    {st.name}
-                  </option>
-                ))}
-              </select>
               <button type="button" onClick={() => setPickStates((v) => !v)} className="text-sm text-blue-300 hover:text-blue-200">
                 {pickStates ? 'Done' : 'Choose states'}
               </button>
@@ -687,7 +673,7 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
           </div>
           {pickStates && (
             <div className="mb-3 rounded-2xl border border-white/10 bg-white/5 p-3">
-              <p className="text-sm text-slate-300 mb-2">Tick the states you work in. They go to the top of this screen. You can still open any other state from the list above.</p>
+              <p className="text-sm text-slate-300 mb-2">Tick the states you work in. They go to the top of this screen. Every other state stays in the list below.</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
                 {US_STATES.map((st) => {
                   const on = myStates.includes(st.code);
@@ -714,12 +700,49 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit }: { 
           )}
         </section>
 
-        {all.length > 0 && (
-          <section>
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">All my documents</h2>
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{all.map((t) => templateCard(t))}</div>
-          </section>
-        )}
+        <section>
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">My documents</h2>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {all.map((t) => templateCard(t))}
+            {!hasDisclosure && (
+              <button type="button" onClick={() => onUpload('Our brokerage’s IABS')} className="text-left rounded-2xl border border-dashed border-white/25 hover:border-blue-400 bg-white/[0.02] p-4 transition min-w-0">
+                <span className="block text-slate-100 font-semibold">+ Add your brokerage’s IABS</span>
+                <span className="block text-xs text-slate-400 mt-1">Upload the disclosure your brokerage gives clients (like an Information About Brokerage Services form) once, then add it to any deal.</span>
+              </button>
+            )}
+            {all.length === 0 && (
+              <button type="button" onClick={() => onUpload()} className="text-left rounded-2xl border border-dashed border-white/25 hover:border-blue-400 bg-white/[0.02] p-4 transition min-w-0">
+                <span className="block text-slate-100 font-semibold">+ Upload a form</span>
+                <span className="block text-xs text-slate-400 mt-1">Your own PDF or Word forms, kept here and tagged with the states they are for.</span>
+              </button>
+            )}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">All states</h2>
+          <p className="text-sm text-slate-400 mb-2">Open any state to see where its official forms are. The dot shows what each state itself publishes.</p>
+          <p className="mb-2 text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.contracts}`} />State publishes the contracts</span>
+            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.disclosures}`} />State publishes some forms</span>
+            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.association}`} />Contracts come from the REALTOR association</span>
+            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.none}`} />No public source confirmed</span>
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-1.5">
+            {US_STATES.map((st) => (
+              <button
+                key={st.code}
+                type="button"
+                onClick={() => setFolder(st.code)}
+                title={`${st.name}${st.code === 'TX' ? ': official TREC forms' : STATE_FORM_INFO[st.code] ? `: ${TIER_LABEL[STATE_FORM_INFO[st.code].tier]}` : ''}`}
+                className="flex items-center gap-2 text-left px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-slate-200 min-w-0"
+              >
+                <span className={`w-2 h-2 rounded-full shrink-0 ${st.code === 'TX' ? 'bg-emerald-400' : STATE_FORM_INFO[st.code] ? TIER_DOT[STATE_FORM_INFO[st.code].tier] : 'bg-slate-700'}`} />
+                <span className="truncate">{st.name}</span>
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     );
   }

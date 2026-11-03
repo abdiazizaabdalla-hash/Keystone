@@ -45,7 +45,8 @@ const CATEGORIES: { value: string; label: string }[] = [
 ];
 const categoryLabel = (v: string) => CATEGORIES.find((c) => c.value === v)?.label ?? v;
 const KIND_LABEL: Record<Kind, string> = { email: 'Email', letter: 'Letter', form: 'Form' };
-const sectionOf = (k: Kind): Section => (k === 'email' ? 'emails' : 'documents');
+// Documents are the person's own forms. Emails and letters (written here, saved as a PDF on the deal) live together under Emails.
+const sectionOf = (k: Kind): Section => (k === 'form' ? 'documents' : 'emails');
 
 const inputCls = 'w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none';
 const btnPrimary = 'px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition whitespace-nowrap disabled:opacity-50';
@@ -68,11 +69,10 @@ export default function TemplatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [state, setState] = useState('');
-  const [docType, setDocType] = useState<'' | 'letter' | 'form'>('');
   const [category, setCategory] = useState('');
   const [q, setQ] = useState('');
   const [showArchived, setShowArchived] = useState(false);
-  const [editing, setEditing] = useState<Template | { new: Kind } | null>(null);
+  const [editing, setEditing] = useState<Template | { new: Kind; name?: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [installing, setInstalling] = useState(false);
 
@@ -84,7 +84,7 @@ export default function TemplatesPage() {
     (async () => {
       try {
         const params = new URLSearchParams();
-        params.set('kinds', section === 'emails' ? 'email' : docType || 'letter,form');
+        params.set('kinds', section === 'emails' ? 'email,letter' : 'form');
         if (state) params.set('state', state);
         if (category) params.set('category', category);
         if (q.trim()) params.set('q', q.trim());
@@ -104,7 +104,7 @@ export default function TemplatesPage() {
           setTemplates(t);
           setStarters(s);
           setPending(pendingCount);
-          setCounts({ documents: all.filter((x) => x.kind !== 'email').length, emails: all.filter((x) => x.kind === 'email').length });
+          setCounts({ documents: all.filter((x) => x.kind === 'form').length, emails: all.filter((x) => x.kind !== 'form').length });
           setError(null);
         }
       } catch (e) {
@@ -116,10 +116,10 @@ export default function TemplatesPage() {
     return () => {
       cancelled = true;
     };
-  }, [enabled, section, state, docType, category, q, showArchived, reloadKey]);
+  }, [enabled, section, state, category, q, showArchived, reloadKey]);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
-  const missingStarters = starters.filter((s) => !s.installed && (section === 'emails' ? s.kind === 'email' : s.kind !== 'email'));
+  const missingStarters = section === 'emails' ? starters.filter((s) => !s.installed) : [];
 
   const installStarters = async () => {
     setInstalling(true);
@@ -132,7 +132,7 @@ export default function TemplatesPage() {
       });
       if (!res.ok) throw new Error(await readError(res, 'Could not add the starter templates'));
       const { added } = (await res.json()) as { added: number };
-      setNotice(added > 0 ? `Added ${added} starter ${section === 'emails' ? 'email' : 'document'}${added === 1 ? '' : 's'}. Edit any of them freely.` : 'You already have all the starters.');
+      setNotice(added > 0 ? `Added ${added} starter email${added === 1 ? '' : 's'} and letter${added === 1 ? '' : 's'}. Edit any of them freely.` : 'You already have all the starters.');
       reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not add the starter templates');
@@ -154,6 +154,7 @@ export default function TemplatesPage() {
       <TemplateEditor
         template={'id' in editing ? editing : null}
         startKind={'new' in editing ? editing.new : 'letter'}
+        startName={'new' in editing ? editing.name : undefined}
         onClose={() => setEditing(null)}
         onSaved={(message) => {
           setEditing(null);
@@ -165,8 +166,8 @@ export default function TemplatesPage() {
   }
 
   const tabs: { id: Section | 'approvals'; label: string; sub: string; count: number | null; alert?: boolean }[] = [
-    { id: 'documents', label: 'Documents', sub: 'Letters and your own forms', count: counts.documents },
-    { id: 'emails', label: 'Emails', sub: 'Messages you send from a deal', count: counts.emails },
+    { id: 'documents', label: 'Documents', sub: 'Your own forms, like your brokerage’s IABS', count: counts.documents },
+    { id: 'emails', label: 'Emails', sub: 'Emails and letters you send from a deal', count: counts.emails },
     { id: 'approvals', label: 'Approvals', sub: 'Drafts waiting for your OK', count: pending, alert: pending > 0 },
   ];
 
@@ -174,7 +175,7 @@ export default function TemplatesPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Templates</h1>
-        <p className="text-sm text-slate-400 max-w-2xl">Save the documents and emails you use again and again. They fill in the client, address and dates for you.</p>
+        <p className="text-sm text-slate-400 max-w-2xl">Save the forms, emails and letters you use again and again. They fill in the client, address and dates for you.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 p-1 bg-white/5 border border-white/10 rounded-2xl" role="tablist" aria-label="Templates">
@@ -213,34 +214,34 @@ export default function TemplatesPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <p className="text-sm text-slate-400 max-w-2xl">
               {section === 'documents'
-                ? 'Letters you write once and save as a PDF, plus your own state forms (PDF or Word) that you keep here. Add either to a deal’s Documents with one click, and tag each one with the states it is for.'
-                : 'Emails you send again and again, like “congratulations on closing”. Pick one on a deal, check it, and send. You can also set it to draft itself automatically (see the Approvals tab).'}
+                ? 'Your own forms (PDF or Word), like your brokerage’s required disclosure. Upload each one once, add it to a deal’s Documents with one click, and tag it with the states it is for.'
+                : 'Emails and letters you use again and again, like “congratulations on closing”. Pick one on a deal, check it, and send. A letter is saved as a PDF on the deal. You can also set one to draft itself automatically (see the Approvals tab).'}
             </p>
             <div className="flex gap-2 shrink-0">
               {missingStarters.length > 0 && (
                 <button type="button" className={btnGhost} onClick={installStarters} disabled={installing}>
-                  {installing ? 'Adding…' : `Add starter ${section === 'emails' ? 'emails' : 'letters'} (${missingStarters.length})`}
+                  {installing ? 'Adding…' : `Add starter emails and letters (${missingStarters.length})`}
                 </button>
               )}
               {section === 'documents' ? (
+                <button type="button" className={btnPrimary} onClick={() => setEditing({ new: 'form' })}>
+                  Upload a form
+                </button>
+              ) : (
                 <>
-                  <button type="button" className={btnGhost} onClick={() => setEditing({ new: 'form' })}>
-                    Upload a form
-                  </button>
-                  <button type="button" className={btnPrimary} onClick={() => setEditing({ new: 'letter' })}>
+                  <button type="button" className={btnGhost} onClick={() => setEditing({ new: 'letter' })}>
                     New letter
                   </button>
+                  <button type="button" className={btnPrimary} onClick={() => setEditing({ new: 'email' })}>
+                    New email
+                  </button>
                 </>
-              ) : (
-                <button type="button" className={btnPrimary} onClick={() => setEditing({ new: 'email' })}>
-                  New email
-                </button>
               )}
             </div>
           </div>
 
           {section === 'documents' ? (
-            <DocumentsLibrary reloadKey={reloadKey} showArchived={showArchived} onEdit={(t) => setEditing(t as Template)} />
+            <DocumentsLibrary reloadKey={reloadKey} showArchived={showArchived} onEdit={(t) => setEditing(t as Template)} onUpload={(presetName) => setEditing({ new: 'form', name: presetName })} />
           ) : (
             <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -268,14 +269,14 @@ export default function TemplatesPage() {
             <div className="text-slate-400">Loading…</div>
           ) : templates.length === 0 ? (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-              <p className="text-slate-200 font-semibold mb-1">{q || state || category ? 'Nothing matches those filters.' : 'No email templates yet.'}</p>
+              <p className="text-slate-200 font-semibold mb-1">{q || state || category ? 'Nothing matches those filters.' : 'No emails or letters yet.'}</p>
               <p className="text-sm text-slate-400 mb-4 max-w-md mx-auto">
-                {missingStarters.length > 0 ? 'Start with the starter emails: friendly after-closing messages you can rewrite.' : 'Write your first email template.'}
+                {missingStarters.length > 0 ? 'Start with the starters: friendly after-closing emails and letters you can rewrite.' : 'Write your first email template.'}
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 {missingStarters.length > 0 && (
                   <button type="button" className={btnPrimary} onClick={installStarters} disabled={installing}>
-                    Add the starter emails
+                    Add the starters
                   </button>
                 )}
                 <button type="button" className={btnGhost} onClick={() => setEditing({ new: 'email' })}>
@@ -292,6 +293,7 @@ export default function TemplatesPage() {
                       <div className="text-slate-100 font-semibold truncate">{t.name}</div>
                       {t.description && <div className="text-xs text-slate-400 mt-0.5 line-clamp-2">{t.description}</div>}
                     </div>
+                    {t.kind === 'letter' && <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40 shrink-0">Letter</span>}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 mt-auto pt-3 text-xs">
                     <span className="text-slate-400">{categoryLabel(t.category)}</span>
@@ -327,10 +329,10 @@ export default function TemplatesPage() {
   );
 }
 
-function TemplateEditor({ template, startKind, onClose, onSaved }: { template: Template | null; startKind: Kind; onClose: () => void; onSaved: (message: string) => void }) {
+function TemplateEditor({ template, startKind, startName, onClose, onSaved }: { template: Template | null; startKind: Kind; startName?: string; onClose: () => void; onSaved: (message: string) => void }) {
   const [saved, setSaved] = useState<Template | null>(template);
   const [kind, setKind] = useState<Kind>(template?.kind ?? startKind);
-  const [name, setName] = useState(template?.name ?? '');
+  const [name, setName] = useState(template?.name ?? startName ?? '');
   const [description, setDescription] = useState(template?.description ?? '');
   const [category, setCategory] = useState(template?.category ?? 'general');
   const [states, setStates] = useState<string[]>(template?.states ?? []);
@@ -456,14 +458,14 @@ function TemplateEditor({ template, startKind, onClose, onSaved }: { template: T
         <div className="space-y-4 min-w-0">
           <div>
             <label className={labelCls}>Name</label>
-            <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} maxLength={140} placeholder={kind === 'email' ? 'e.g. Thank you after closing' : kind === 'form' ? 'e.g. Texas residential contract' : 'e.g. Closing summary letter'} />
+            <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} maxLength={140} placeholder={kind === 'email' ? 'e.g. Thank you after closing' : kind === 'form' ? 'e.g. Our brokerage’s IABS' : 'e.g. Closing summary letter'} />
           </div>
 
-          {section === 'documents' && (
-            <div className="inline-flex p-1 bg-white/5 border border-white/10 rounded-xl text-sm" role="tablist" aria-label="Kind of document">
-              {(['letter', 'form'] as const).map((k) => (
+          {section === 'emails' && (
+            <div className="inline-flex p-1 bg-white/5 border border-white/10 rounded-xl text-sm" role="tablist" aria-label="Email or letter">
+              {(['email', 'letter'] as const).map((k) => (
                 <button key={k} type="button" disabled={!!saved} onClick={() => setKind(k)} className={`px-4 py-1.5 rounded-lg transition disabled:cursor-default ${kind === k ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-white/10 disabled:hover:bg-transparent'}`}>
-                  {k === 'letter' ? 'A letter I write here' : 'My own form file'}
+                  {k === 'letter' ? 'A letter saved as a PDF' : 'An email I send'}
                 </button>
               ))}
             </div>

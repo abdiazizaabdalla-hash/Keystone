@@ -8,6 +8,8 @@ import { isCoordinationMode } from '@/lib/accountType';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getEntitlements } from '@/lib/entitlements';
 import { logAudit } from '@/lib/audit';
+import { isFeatureOn } from '@/lib/features';
+import { isStateCode } from '@/lib/usStates';
 import { agentSelfServeEnabled, AGENT_SELF_SERVE_OFF_MESSAGE } from '@/lib/agentSelfServe';
 
 // Finishes the short setup an agent who signed up for Relay goes through:
@@ -81,6 +83,18 @@ export async function POST(request: NextRequest) {
       full_name: name,
       onboarding_completed: true,
     });
+
+    // The states they work in become their "My states" on the Templates screen. Nothing is assumed: only what they tick.
+    // This never fails the setup, and does nothing until the templates feature is released.
+    if (isFeatureOn('templates') && Array.isArray(body.states)) {
+      const codes = [...new Set((body.states as unknown[]).filter((c): c is string => typeof c === 'string' && isStateCode(c)))].slice(0, 51);
+      if (codes.length > 0) {
+        const { error: pinError } = await supabaseServer
+          .from('template_pins')
+          .upsert(codes.map((ref) => ({ owner_user_id: user.id, kind: 'folder', ref })), { onConflict: 'owner_user_id,kind,ref', ignoreDuplicates: true });
+        if (pinError) console.error('Could not save onboarding states:', pinError);
+      }
+    }
 
     await logAudit(request, user, 'agent.onboarding_completed', { entityType: 'user', entityId: user.id, metadata: { mode } });
 
