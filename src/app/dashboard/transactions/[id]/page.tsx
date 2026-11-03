@@ -10,6 +10,7 @@ import ClientShareCard from '@/components/ClientShareCard';
 import AddCoordinatorModal from '@/components/AddCoordinatorModal';
 import UseTemplateModal from '@/components/UseTemplateModal';
 import DealStateDocs from '@/components/DealStateDocs';
+import CommissionBox from '@/components/CommissionBox';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import DragHandle from '@/components/DragHandle';
 import MoveMenu from '@/components/MoveMenu';
@@ -3187,6 +3188,8 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
                   })}
                 </div>
               </section>
+
+              {tab === 'overview' && isFeatureOnClient('brokerage') && transaction?.id && <CommissionBox transactionId={transaction.id} />}
 
               {tab === 'overview' && templatesOn && (
               <DealStateDocs

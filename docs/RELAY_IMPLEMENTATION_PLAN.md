@@ -722,7 +722,7 @@ Status words: **Works** = built and covered by automated tests; **Works, not see
 | Team board, direct messages with teammates, **private messages with each agent** (new). | Works, not seen. Gap: no email when a private message arrives (bell only) |
 | Share templates (the brokerage's IABS, letters, forms) pinned for agents and team members; state forms on each deal. | Works, not seen |
 | Push a brokerage-wide checklist to agents' new deals. | Gap (later) |
-| Commission splits and payments. | Gap, designed in section 18 |
+| Commission splits: default per agent, proposed per deal as % or fixed $, agent agrees, PDF statement, owner marks paid, ledger and CSV. Payments through Stripe are not built. | Works (C0), not seen |
 | Leave and lapse: agent leaves, owner removes, plan lapses: access ends at once, nothing deleted. | Works |
 | Delete the account: **removed links, private messages and template data (fixed today; before, these were left behind).** | Works |
 
@@ -738,7 +738,7 @@ Status words: **Works** = built and covered by automated tests; **Works, not see
 | Join a brokerage: read the terms, accept or decline; one brokerage at a time; leave any time. | Works |
 | See what the brokerage changed (bell now fires on stage and date edits) and message your broker privately. | Works, not seen |
 | If the brokerage's plan lapses: the page now says **sharing is paused** (fixed today; before, it still showed as active). | Works |
-| Commission statement and payment for a closed deal. | Gap, section 18 |
+| Commission statement for a closed deal: see the proposed split, agree or ask for a change, say whether to be paid through Relay or outside, open the statement PDF. | Works (C0), not seen. Paying through Relay is not built |
 | Delete account or leave: your deals stay yours; deletion clears links and messages. | Works |
 
 ### 17.3 What stands between this and a first real brokerage
@@ -750,7 +750,7 @@ Status words: **Works** = built and covered by automated tests; **Works, not see
 3. **Email sending:** invitations go through Resend in production (domain and sender must be verified). Never tested live.
 4. **Deploying the database update** `add-brokerage-oversight.sql` to production, and switching the `brokerage` flag on, are yours to approve; nothing here has been pushed.
 
-**Buildable now, small:** open documents as the owner (with a download log); resend invitation; production CSV export; owner email digest; email on private message. **Buildable now, bigger:** brokerage-wide checklist push; commission splits.
+**Buildable now, small:** open documents as the owner (with a download log); resend invitation; production CSV export; owner email digest; email on private message. **Buildable now, bigger:** brokerage-wide checklist push.
 
 **Not yet verified, needs your eyes:** none of the new screens has been seen in a browser (dev server was not running in my environment). Click-through script, using the logins in `.local-accounts.txt` (all use the same demo password):
 
@@ -780,7 +780,7 @@ When a deal closes, the agent can get a commission statement showing the split b
 
 ### 18.3 Build order (each step useful on its own)
 
-- **C0, no Stripe:** default and per-deal agreements, percent or flat, agent acceptance, statements, "paid outside Relay" marking, owner ledger. This alone makes the unautomated version complete for commissions. Tables: `commission_defaults`, `deal_commissions` (with an event trail).
+- **C0, no Stripe: BUILT (local-ai, same `brokerage` flag), see 18.5.**
 - **C1, Stripe:** agent connects; "pay through Relay" for the net amount; webhook; refund and failure handling.
 - **C2, both directions, reports, tax exports.**
 
@@ -789,9 +789,19 @@ When a deal closes, the agent can get a commission statement showing the split b
 1. Which direction is the default: the brokerage pays the agent (the usual way, since title pays the brokerage), or the agent pays the brokerage, or both?
 2. Who pays Stripe's processing fees (card is about 2.9% + 30 cents; bank transfer is about 0.8%, capped at $5): the payer, the agent out of their net, or the brokerage? Bank transfer is recommended for commission-size amounts.
 3. Does Relay take a fee on commission payments? My suggestion: none to start.
-4. Build C0 now (no money moves, safe to ship locally) and hold C1 until you approve the Stripe flows?
+4. Build C0 now (no money moves, safe to ship locally) and hold C1 until you approve the Stripe flows? **Answered 2026-11-03: brokerage pays agent is the default direction; build C0 now; hold Stripe (C1) until approved; pilot agents are granted workspaces by hand in Admin.**
 
 Cautions to take to your accountant and lawyer, not legal or tax advice from me: most brokerages pay agents as independent contractors and must issue a 1099-NEC; Stripe's own tax forms cover the payee's receipts but not the brokerage's obligation. Several states restrict who may pay an agent a commission, and brokerages have trust-account rules. Relay does not hold or route client money, so that line stays where it is today.
+
+### 18.5 What C0 does (built)
+
+- **Tables** (`add-brokerage-oversight.sql`, run in relay-test): `deal_commissions` (one per deal: gross, split type and value, fees, net amounts, status proposed / change_requested / accepted / paid / void, the agent's payment preference, paid date and note) and two default-split columns on `brokerage_links`.
+- **Math** (`src/lib/commissionMath.ts`, pure, whole cents): agent keeps X%, agent gets a fixed $, or brokerage takes a fixed $ fee; agent fees (transaction fee, E&O) are charged to the agent and paid to the brokerage. Every total adds up to the cent, and nonsense (over 100%, fees above the agent's share, negatives) is refused.
+- **Screens.** Deal page, right column: a Commission box for the owner (propose, revise, mark paid, void) and for the agent (agree, ask for a change with a note, choose "through Relay" or "outside Relay", open the PDF). Collaborate gets a Commissions tab (owner only): each agent's default split, the ledger with totals, and a CSV download. The agent's Brokerage page lists their own statements.
+- **Rules.** Only the owner and that deal's agent can see a commission (teammates, other brokerages and free logins get nothing). Nothing counts until the agent agrees; revising an agreed split starts the agreement over; a paid commission is final; the agent cannot agree after leaving the brokerage but the owner can still record payment. Every action is in the audit log and rings the other side's bell. Statements are numbered per brokerage (COMM-0001...).
+- **At closing** the agent is asked how they want to be paid. "Through Relay" is recorded as their preference, and the box says plainly that Relay payments are not switched on yet, so the brokerage pays the usual way and records it.
+- **Not built:** Stripe payments (C1), the reverse direction, tax forms, per-deal "commission plans" with caps and tiers, and an email when a statement is proposed (bell only).
+- **Tests.** 251 unit (10 new for the math); integration brokerage-commissions (17: flag off, plan and ownership, validation, defaults, numbering, privacy from teammates and other brokerages, change requests, agreement, preference, PDF, CSV, payment, void, agent leaves).
 
 ## 19. Custom workflows: the automated version, mapped (not built)
 

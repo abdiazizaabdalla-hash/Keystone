@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import { isFeatureOnClient } from '@/lib/features';
 import BrokerageMessages from '@/components/BrokerageMessages';
+import BrokerageCommissions from '@/components/BrokerageCommissions';
 
 // The agent's side: see exactly what a brokerage can see, then accept, decline, or leave later.
 
@@ -89,6 +90,8 @@ export default function BrokeragePage() {
           </button>
         </div>
       )}
+
+      {data.current && <BrokerageCommissions mode="agent" />}
 
       {data.current && <BrokerageMessages title={`Private messages with ${data.current.owner.name}`} />}
 

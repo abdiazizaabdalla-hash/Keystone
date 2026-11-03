@@ -58,6 +58,19 @@ if (broker && member) {
     const { error } = await admin.from('brokerage_links').insert({ owner_user_id: broker.id, agent_user_id: member.id, invited_email: member.email, status: 'active', responded_at: new Date().toISOString() });
     if (error) console.warn('Could not link the agent to the brokerage (is add-brokerage-oversight.sql run?):', error.message);
   }
+  // A proposed commission on the demo deal, with a default split for the agent, so the Commission box and ledger have something to show.
+  await admin.from('brokerage_links').update({ default_split_type: 'percent', default_split_value: 80 }).eq('owner_user_id', broker.id).eq('agent_user_id', member.id).eq('status', 'active').is('default_split_type', null);
+  {
+    const { data: demoDeal } = await admin.from('transactions').select('id').eq('tc_user_id', member.id).eq('file_number', 'DEMO-BROKERAGE-1').maybeSingle();
+    if (demoDeal) {
+      const { data: haveCommission } = await admin.from('deal_commissions').select('id').eq('transaction_id', demoDeal.id).maybeSingle();
+      if (!haveCommission) {
+        // $385,000 at 3% = $11,550 gross; agent keeps 80%, less a $395 transaction fee: agent $8,845, brokerage $2,705.
+        const { error } = await admin.from('deal_commissions').insert({ transaction_id: demoDeal.id, owner_user_id: broker.id, agent_user_id: member.id, statement_number: 'COMM-0001', gross_cents: 1155000, split_type: 'percent', split_value: 80, deductions: [{ label: 'Transaction fee', amount: 395 }], agent_net_cents: 884500, brokerage_net_cents: 270500, status: 'proposed' });
+        if (error) console.warn('Could not add the demo commission (is add-brokerage-oversight.sql run?):', error.message);
+      }
+    }
+  }
   // A few messages so the new screens are not empty: a private thread between the broker and the agent, and two posts on the team board.
   const { count: threadCount } = await admin.from('brokerage_messages').select('id', { count: 'exact', head: true }).eq('owner_user_id', broker.id).eq('agent_user_id', member.id);
   if (!threadCount) {

@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import CommissionBox from '@/components/CommissionBox';
 import { authFetch } from '@/lib/authClient';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 
@@ -119,6 +120,8 @@ export default function OversightDealPage({ params }: { params: Promise<{ id: st
         </label>
         <p className="sm:col-span-3 text-xs text-slate-500">You can change the stage and these two dates. Changing them updates the checklist due dates and tells the agent.</p>
       </div>
+
+      <CommissionBox transactionId={deal.id} />
 
       <div className={card}>
         <h2 className="text-lg font-semibold text-slate-100 mb-1">Checklist</h2>

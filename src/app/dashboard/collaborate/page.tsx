@@ -6,6 +6,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import Link from 'next/link';
 import TeamMessaging from '@/components/TeamMessaging';
 import BrokerageMessages from '@/components/BrokerageMessages';
+import BrokerageCommissions from '@/components/BrokerageCommissions';
 import TeamContacts from '@/components/TeamContacts';
 import BrokerageOversight from '@/components/BrokerageOversight';
 import BrokerageTemplates from '@/components/BrokerageTemplates';
@@ -44,7 +45,7 @@ interface TeamResponse {
   brokerageAgents?: { linkId: string; userId: string | null; name: string; email: string; status: string }[];
 }
 
-type Tab = 'overview' | 'messages' | 'contacts' | 'people' | 'agents' | 'templates' | 'settings';
+type Tab = 'overview' | 'messages' | 'contacts' | 'people' | 'agents' | 'commissions' | 'templates' | 'settings';
 
 // Role tags in the roster: a brokerage can have a broker, agents and coordinators.
 const KIND_LABEL = { broker: 'Broker', agent: 'Agent', tc: 'TC' } as const;
@@ -71,7 +72,7 @@ export default function CollaboratePage() {
   useEffect(() => {
     const t = setTimeout(async () => {
       const wanted = window.location.hash.replace('#', '');
-      if (['overview', 'messages', 'contacts', 'people', 'agents', 'templates', 'settings'].includes(wanted)) setTabState(wanted as Tab);
+      if (['overview', 'messages', 'contacts', 'people', 'agents', 'commissions', 'templates', 'settings'].includes(wanted)) setTabState(wanted as Tab);
       try {
         const [sum, list] = await Promise.all([authFetch('/api/team/messages/summary'), authFetch('/api/contacts')]);
         if (sum.ok) setUnread((await sum.json()).total || 0);
@@ -292,6 +293,7 @@ export default function CollaboratePage() {
         { id: 'messages', label: 'Messages', badge: unread + agentUnread },
         { id: 'contacts', label: 'Contacts', badge: undefined },
         { id: 'people', label: 'People' },
+        ...(isOwner ? [{ id: 'commissions' as Tab, label: 'Commissions' }] : []),
         { id: 'templates', label: 'Templates' },
         ...(isOwner ? [{ id: 'settings' as Tab, label: 'Settings' }] : []),
       ]
@@ -565,6 +567,8 @@ export default function CollaboratePage() {
       )}
 
       {activeTab === 'agents' && isOwner && brokerageMode && <BrokerageOversight />}
+
+      {activeTab === 'commissions' && isOwner && brokerageMode && <BrokerageCommissions mode="owner" />}
 
       {activeTab === 'templates' && brokerageMode && <BrokerageTemplates isOwner={isOwner} />}
 

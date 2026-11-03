@@ -166,6 +166,8 @@ export async function deleteUserCompletely(userId: string): Promise<{ transactio
     await deleteWhere('teams', 'id', [teamIdToRemove]);
   }
   // Brokerage links and private broker-agent messages (either side), and template data, where those features exist.
+  await deleteIfPresent('deal_commissions', 'owner_user_id', [userId]);
+  await deleteIfPresent('deal_commissions', 'agent_user_id', [userId]);
   await deleteIfPresent('brokerage_messages', 'owner_user_id', [userId]);
   await deleteIfPresent('brokerage_messages', 'agent_user_id', [userId]);
   await deleteIfPresent('brokerage_links', 'owner_user_id', [userId]);
