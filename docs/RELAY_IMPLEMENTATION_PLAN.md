@@ -363,6 +363,8 @@ There are no tests today, so the first deliverable is the harness and a safety n
 
 ## 10. Phased plan, dependencies and effort
 
+> **Superseded in part on 2026-11-03.** Phases 5 to 7 (automation, brokerage, integrations) are replaced by section 16 (Roadmap v3), which also fixes the order of everything after Phase 3. Phases 0 to 4 and the template phases are unchanged.
+
 Effort is in engineering days, estimated, not committed. Because a paying agent now gets the same system as a TC, the agent workspace reuses the existing dashboard instead of a cut-down copy, which makes Phase 2 smaller than in revision 1.
 
 | Phase | Scope | Days | Depends on | Ships to users? |
@@ -480,3 +482,139 @@ Phase 1 is complete apart from the remaining routes that still hold their own de
 **Step 1, 2026-11-03: admin grant switch.** `PATCH /api/admin/users/[id]` action `set_agent_workspace` (`enabled` true/false, optional `trialDays`, default 30) sets `app_metadata.agent_workspace` on an agent login and starts the trial (`trial_ends_at`) unless a longer one is running. Audited as `admin.grant_agent_workspace` / `admin.revoke_agent_workspace`. Admin page: each agent login row has "Give workspace" / "Remove workspace" and an "Agent workspace" badge. Only platform admins can call it; only agent logins can be targets. 10 integration tests (`agent-workspace-grant.int.test.ts`) prove: grant lets the agent create their own agents and transactions; revoke puts them back to a free collaborator who keeps the deals they were added to; free agents stay blocked; nobody else sees the agent's own deals. No billing, nothing public. Self-serve paid agent accounts remain Phase 4.
 
 **Step 2 (next): make the workspace usable.** 71 files reference `isAgentUser` / `hasAgentRole` (152 uses). Each is either "act as a collaborator on this deal" (keep) or "agents are not allowed here" (must now allow workspace agents). Plan: add `isCollaboratorOnly`, review each use, route workspace agents to the coordinator dashboard at login, and show the trial banner.
+
+
+---
+
+## 16. Roadmap v3 (2026-11-03): the manual workflow first, then an AI transaction coordinator inside the workspaces
+
+### 16.1 The product, in one paragraph
+
+An agent (or a TC) should be able to run their files as if they had a transaction coordinator, without a chatbot and without a workflow builder. The AI works inside the existing transaction and listing workspaces. Each deal and listing has an **Assistant** setting (Off, Draft, Auto). The work shows up as ordinary steps, notes, documents and emails on the deal, with every action recorded on the deal timeline. It sends reminders and follow-ups, reads replies and notes them, files incoming documents, reads contracts and amendments, guards deadlines, drafts client updates, prepares closings, and gives a daily briefing. The natural-language workflow builder in the earlier proposal is dropped; it would only be added later, if ever, as a way to write the same settings.
+
+It is positioned as taking admin work off the agent. It is not a replacement for a licensed TC and never makes legal, contractual or financial decisions.
+
+### 16.2 Order of work and the validation gate
+
+You decided: finish the manual workflow for agents (matching the TC side), validate it, then add AI for TCs and agents. That order is kept.
+
+| # | Block | What it delivers | Conservative days | Likely days | Gate |
+|---|---|---|---|---|---|
+| 1 | Phase 2 step 2 | Granted agents use the full workspace; the 152 agent checks reviewed; login routing; trial banner | 6 to 8 | 3 to 5 | Test 2 |
+| 2 | Phase 2b | Agent custom invoices | 6 to 9 | 3 to 5 | Test 3 |
+| 3 | Phase 3 | Shared deals both directions (participants, invites, equal visibility) | 12 to 16 | 6 to 9 | Test 4 |
+| 4 | **Gate G1** | You run the whole manual workflow as a TC and as an agent and sign off; fixes | 3 to 5 | 3 to 5 | **You sign off** |
+| 5 | Phase 4 | Agent billing (needs the price and your explicit approval) | 5 to 8 | 3 to 5 | Test 5 |
+| 6 | Auto-0 | Automation foundation (16.4) | 8 to 10 | 4 to 6 | Internal |
+| 7 | Stage A | Rules only, no AI: follow-up timers, deadline guard, daily briefing, missing documents | 12 to 15 | 6 to 8 | Test 6 |
+| 8 | Stage B | AI reads, a person confirms: inbox to file, reply reading, contract auto-fill, intro drafts | 15 to 18 | 8 to 10 | Test 7 |
+| 9 | Stage C | Drafts with approval: free-form emails, amendments, client updates, closing prep, scheduling, listings, invoices, compliance check | 18 to 22 | 10 to 12 | Test 8 |
+| 10 | Stage D | Opt-in auto-send, learning from your edits, reporting | 8 to 10 | 4 to 6 | Test 9 |
+| 11 | T1 and T2 | State form templates, then auto-fill | 8 to 12 and 15 to 25 | 5 to 8 and 8 to 14 | Later |
+| 12 | Brokerage (Phase 6), integrations (Phase 7) | Per blueprint | | | After customer validation |
+
+"Conservative" is the original engineering estimate. "Likely" reflects the actual pace so far (Phase 1 was estimated at 10 to 14 days and took about two working sessions), but it excludes time waiting on your decisions, your testing, and third parties (Stripe, Resend, Google). Treat Likely as the plan and Conservative as the ceiling. Blocks 1 to 5 land roughly mid-January at the likely pace; blocks 6 to 10 roughly mid-April.
+
+**Option to move faster (recommended, your call):** Auto-0 and Stage A work on TC accounts and need nothing from the agent work, so they can start right after block 1 and run before blocks 2 to 3. TCs are the paying base today. This costs nothing in scope and gets the first visible automation to users weeks sooner. Default if you say nothing: keep the order above.
+
+### 16.3 Feature catalog, mapped to the five jobs of a TC
+
+What exists today is marked (exists). Everything else is new.
+
+**Set up the file**
+- Contract intake: read the contract, fill dates, parties, price and contingencies, build the checklist, flag missing pages, unsigned blocks and conflicting dates. Contract reading (exists: `contractExtraction.ts`); the flagging and auto-fill are new.
+- Introductions: intro emails to title, lender, the other agent and the client.
+- Listing intake from the listing agreement (extraction exists).
+
+**Chase the other parties**
+- Follow-up timers on "waiting on" steps (the `waiting_on` and `waiting_on_since` fields exist; step email templates exist).
+- Reply reading: replies return to the deal's own address (per-transaction inbound address exists), are read, noted on the step, clear "waiting on", and suggest the tick. The chase stops once someone replies.
+- Scheduling proposals for inspection, appraisal and walkthrough, confirmed by email.
+- Listing side: showing-feedback chasers, offer summaries and comparison (offer extraction exists), seller updates (`sellerUpdate.ts` exists).
+
+**Read incoming paperwork**
+- Inbox to file: match emails and attachments to the right deal, classify (document taxonomy exists), file, and link to the step they satisfy.
+- Missing-document and condition tracking against the contract and checklist.
+- Amendments: compare an addendum to the contract and propose changed dates, price and terms for approval.
+
+**Track dates**
+- Deadline guard: reminders to the agent, client and whoever a step waits on; early warning when a date is at risk (due-date reminders and the 13:00 cron exist; extend them).
+- Calendar sync (exists).
+
+**Keep everyone informed**
+- Daily briefing per user: due, late, changed, needs a decision (`attentionSummary.ts` exists; add email and in-app delivery).
+- Weekly client update and "what happens next" before each milestone (client messages and portal exist).
+- Closing prep: closing checklist, walkthrough and utilities reminders, figures-match check, post-close follow-up.
+- Invoice nudges for overdue invoices (invoices exist) and a compliance-file check before closing.
+
+**Later and optional**
+- Learn the user's tone from edits to drafts.
+- "Ask about this deal": a short question box scoped to one deal. Off unless you ask for it.
+- Time-saved reporting.
+
+**Never done alone:** signing, waiving contingencies, changing contract terms, legal or tax advice, moving money, choosing between conflicting dates. The assistant flags these and asks.
+
+### 16.4 Auto-0: the foundation every stage uses
+
+Built once, before any automation ships.
+
+1. **Event log** (`transaction_events`): one row for each thing that happens on a deal (contract uploaded, document added, email received, step ticked, date changed). Automations react to events and cron ticks; nothing reads the browser.
+2. **Settings** (`automation_settings`): per deal or listing, mode Off / Draft / Auto, plus per-feature switches, N-day follow-up timing, quiet hours, daily send cap.
+3. **Action log** (`automation_actions`): every action proposed or taken, with status, who approved, the inputs, and an idempotency key so a retry never duplicates an email.
+4. **Approval queue** (`automation_approvals`): drafts waiting for a person, shown on the deal and in one list. Approve, edit, or discard.
+5. **Guards in one place** (`src/lib/automation/guard.ts`): recipient must already be on the deal (allowlist), send caps, quiet hours, per-account kill switch, restricted-action list, and the workspace owner's entitlement. Everything that sends or writes passes through it.
+6. **Runner**: an hourly cron (`/api/cron/automation-tick`) plus event handlers. Needs a Vercel plan that allows frequent crons (your two current crons are daily); Supabase scheduled functions are the fallback. Decision in 16.7.
+7. **Sending**: through the existing Resend setup, with Reply-To set to the deal's own address so replies come back and can be read.
+8. **Action functions**: the manual buttons and the assistant call the same server functions (create task, set date, send step email, file document). The assistant therefore inherits `authorize.ts` and `entitlements.ts` and can do nothing a person could not.
+9. **AI wrapper** (`src/lib/automation/ai.ts`): one place that calls Claude, with strict output schemas, the existing usage log extended to new features, per-account monthly caps, and a fake for tests.
+10. **Timeline UI**: an Activity and Approvals panel on every deal and listing.
+
+**Security rule for inbound mail:** the text of emails and attachments is untrusted data. It can never instruct the assistant. The model only returns structured proposals from a fixed catalog (note, suggest tick, classify, propose date). Relay validates and executes them; no email content can cause a send, a delete or a permission change.
+
+### 16.5 Stage definitions and what you can test
+
+**Stage A (no AI).** Follow-up timers and reminders using your saved templates; deadline guard; daily briefing; missing-document tracking by rules; Activity and Approvals UI; settings panel.
+Test 6: set a step "waiting on title", wait N days (or use the admin time-travel switch), see the reminder drafted or sent per mode, reply to it, and see the chase stop. Check the daily briefing email. Turn the kill switch on and see everything stop.
+
+**Stage B (AI reads, a person confirms).** Inbox to file; reply reading; contract auto-fill with conflict flags; intro drafts; confidence display and a review screen.
+Test 7: forward a real contract and an inspection report to a deal address; confirm the right files, types and steps; reply from a second email account and see the note appear; upload a contract with two conflicting dates and see it flagged, not guessed.
+
+**Stage C (drafts with approval).** Free-form drafts; amendment comparison; weekly client update; closing prep and post-close follow-up; scheduling proposals; listing-side tasks; invoice nudges; compliance check.
+Test 8: upload an addendum that moves closing and approve or reject the proposed changes; approve a client update; run a deal from contract to closing in Draft mode using only approvals.
+
+**Stage D (auto-send, opt-in).** Auto mode for approved templates and routine follow-ups, with caps; tone learning; time-saved report.
+Test 9: switch one low-risk deal to Auto, confirm it sends only template-based reminders to people on the deal within the caps, and the kill switch stops it.
+
+### 16.6 Automated tests added per stage (before it ships)
+
+- Cross-account tests extended to events, actions, approvals and settings: no user sees or triggers another account's automation.
+- A fake clock and a fake Claude, so timing and AI behavior are tested without waiting or cost.
+- Prompt-injection tests: inbound email and attachment text that says "send this to X" or "delete the deal" must produce no action.
+- Idempotency: replaying the same event or cron tick sends nothing twice.
+- Guard tests: wrong recipient, over the cap, quiet hours, kill switch, a free collaborator, an expired trial, and a restricted action are all refused.
+- Route registry: new routes registered with their kind and guard, so the existing registry test covers them.
+
+### 16.7 Decisions needed from you
+
+| # | Decision | Needed by |
+|---|---|---|
+| D1 | Keep the order above, or start Auto-0 and Stage A for TCs right after block 1 (recommended)? | After block 1 |
+| D2 | Agent subscription price (proposed $29) and approval to touch Stripe | Before Phase 4 |
+| D3 | Vercel plan: does it allow an hourly cron? If not, I use Supabase scheduled functions | Before Auto-0 |
+| D4 | Sending identity: send from Relay with the user's display name and Reply-To the deal address (assumed). Connecting the user's own Gmail or Outlook is a later integration | Before Stage A |
+| D5 | Terms and privacy updates covering AI reading of emails and documents, and automatic emails sent on a user's behalf; reviewed by a lawyer | Before Stage B ships |
+| D6 | AI allowance or pricing: decided later using real cost data from the usage log. Nothing priced now | Before Stage B ships |
+| D7 | Whether to offer "ask about this deal" at all | Stage D |
+
+### 16.8 Additional risks
+
+| Risk | Mitigation |
+|---|---|
+| An email goes to the wrong person | Recipient allowlist from the deal's own contacts; Draft is the default mode; Auto only for approved templates |
+| AI misreads a date or term | Confidence shown; conflicts flagged, never chosen; a person confirms until Stage D |
+| Prompt injection through inbound email | Inbound text is data only; structured proposals from a fixed catalog; tested |
+| Runaway AI cost | Per-account caps, cached extractions, cheaper models for classification, alerts before the cap |
+| Duplicate or flooding sends | Idempotency keys, daily caps, quiet hours, stop on reply |
+| Deliverability (spam folders) | Authenticated sending domain, low volume per deal, plain templates |
+| Cron or webhook outage hides a missed deadline | Daily briefing includes an "automation last ran" line; failures notify the owner |
+| Legal exposure from automatic communication | Terms update (D5), Draft default, no legal or financial content, per-deal opt-in for Auto |
