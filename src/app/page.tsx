@@ -94,8 +94,7 @@ export default function Home() {
             <span className="italic text-blue-400">without the coordination headache.</span>
           </h1>
           <p className="text-lg text-slate-400 mb-8 max-w-lg">
-            Manage every transaction from contract to closing. Work with your TC, or let Relay
-            handle the coordination for you.
+            Manage every transaction from contract to closing.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <Link
