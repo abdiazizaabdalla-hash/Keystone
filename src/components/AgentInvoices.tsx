@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { invoiceTotals } from '@/lib/workspaceInvoiceMath';
+import { openStatement } from '@/lib/commissionClient';
 import { INVOICE_TEMPLATES } from '@/lib/workspaceInvoiceTemplates';
 
 interface Line {
@@ -41,6 +42,26 @@ interface ContactRow {
   company: string | null;
 }
 
+// A commission invoice the agent sends to their brokerage (made on the deal). It lives here with the rest of their invoices.
+interface CommissionInvoiceRow {
+  id: string;
+  statementNumber: string;
+  status: 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
+  submitted?: boolean;
+  agentNet: number;
+  paidOn: string | null;
+  property: string | null;
+  transactionId: string;
+  brokerage: { name: string };
+}
+
+function commissionState(c: CommissionInvoiceRow): { label: string; bucket: 'draft' | 'sent' | 'paid'; cls: string } {
+  if (c.status === 'paid') return { label: 'Paid', bucket: 'paid', cls: 'bg-green-500/10 text-green-300 border-green-500/40' };
+  if (c.status === 'accepted') return { label: 'Approved · waiting to be paid', bucket: 'sent', cls: 'bg-blue-500/10 text-blue-300 border-blue-500/40' };
+  if (c.status === 'proposed') return { label: 'Brokerage changed it · review', bucket: 'draft', cls: 'bg-amber-500/10 text-amber-300 border-amber-500/40' };
+  return { label: c.submitted ? 'Sent · waiting for approval' : 'Change requested', bucket: 'draft', cls: 'bg-slate-500/10 text-slate-300 border-slate-500/40' };
+}
+
 const money = (n: number) => `$${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const STATUS_STYLE: Record<InvoiceRow['status'], string> = {
@@ -56,6 +77,7 @@ const inputCls = 'w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 
 // optional link to a deal when a coordinator is on it. Separate from the coordinator's commission invoices.
 export default function AgentInvoices({ initialTransactionId, startNew }: { initialTransactionId?: string; startNew?: boolean }) {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  const [commissions, setCommissions] = useState<CommissionInvoiceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | 'draft' | 'sent' | 'paid' | 'void'>('all');
@@ -84,6 +106,21 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  // Commission invoices to the agent's brokerage, if they are in one (an empty list otherwise, or when the feature is off).
+  useEffect(() => {
+    let cancelled = false;
+    authFetch('/api/commissions')
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { asAgent?: CommissionInvoiceRow[] };
+        if (!cancelled) setCommissions((data.asAgent ?? []).filter((c) => c.status !== 'void'));
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -118,16 +155,19 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
   };
 
   const summary = useMemo(() => {
-    const outstanding = invoices.filter((i) => i.status === 'sent').reduce((s, i) => s + i.total, 0);
+    const outstanding = invoices.filter((i) => i.status === 'sent').reduce((s, i) => s + i.total, 0) + commissions.filter((c) => c.status === 'accepted').reduce((s, c) => s + c.agentNet, 0);
     const draft = invoices.filter((i) => i.status === 'draft').reduce((s, i) => s + i.total, 0);
     const now = new Date();
     const paidThisMonth = invoices
       .filter((i) => i.status === 'paid' && i.paid_at && new Date(i.paid_at).getMonth() === now.getMonth() && new Date(i.paid_at).getFullYear() === now.getFullYear())
-      .reduce((s, i) => s + i.total, 0);
+      .reduce((s, i) => s + i.total, 0) + commissions
+      .filter((c) => c.status === 'paid' && c.paidOn && new Date(`${c.paidOn.slice(0, 10)}T00:00:00`).getMonth() === now.getMonth() && new Date(`${c.paidOn.slice(0, 10)}T00:00:00`).getFullYear() === now.getFullYear())
+      .reduce((s, c) => s + c.agentNet, 0);
     return { outstanding, draft, paidThisMonth };
-  }, [invoices]);
+  }, [invoices, commissions]);
 
   const shown = invoices.filter((i) => filter === 'all' || i.status === filter);
+  const shownCommissions = commissions.filter((c) => filter === 'all' || commissionState(c).bucket === filter);
 
   if (editing) {
     return (
@@ -147,7 +187,7 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Invoices</h1>
-          <p className="text-slate-400">Bill referral fees, splits, expenses and services from a template.</p>
+          <p className="text-slate-400">Your commission invoices to your brokerage, plus referral fees, splits, expenses and services billed from a template.</p>
         </div>
         <button
           type="button"
@@ -217,13 +257,35 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
 
       {loading ? (
         <p className="text-slate-400">Loading…</p>
-      ) : shown.length === 0 ? (
+      ) : shown.length === 0 && shownCommissions.length === 0 ? (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-          <p className="text-slate-300 mb-1">{invoices.length === 0 ? 'No invoices yet.' : 'Nothing matches that filter.'}</p>
-          {invoices.length === 0 && <p className="text-sm text-slate-500">Choose New invoice, pick a template, then pick who to bill from your contacts.</p>}
+          <p className="text-slate-300 mb-1">{invoices.length === 0 && commissions.length === 0 ? 'No invoices yet.' : 'Nothing matches that filter.'}</p>
+          {invoices.length === 0 && commissions.length === 0 && <p className="text-sm text-slate-500">Choose New invoice, pick a template, then pick who to bill from your contacts.</p>}
         </div>
       ) : (
         <div className="space-y-2">
+          {shownCommissions.map((c) => {
+            const state = commissionState(c);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => openStatement(c.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the invoice'))}
+                className="w-full text-left bg-white/5 border border-white/10 hover:border-white/25 rounded-2xl p-4 transition flex flex-wrap items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-100 truncate">
+                    {c.statementNumber} · {c.brokerage?.name ?? 'Your brokerage'}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">Commission invoice{c.property ? ` · ${c.property}` : ''}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs px-2 py-0.5 rounded-full border ${state.cls}`}>{state.label}</span>
+                  <span className="font-semibold text-slate-100">{money(c.agentNet)}</span>
+                </div>
+              </button>
+            );
+          })}
           {shown.map((inv) => (
             <button
               key={inv.id}

@@ -68,7 +68,7 @@ export default function AgentCommissionInvoice({ transactionId, purchasePrice, h
 
   const other = (
     <p className="text-xs text-slate-500 mt-4">
-      Billing someone else for this deal?{' '}
+      This invoice is also listed in <Link href="/dashboard/invoices" className="text-blue-400 hover:text-blue-300">Invoices</Link>. Billing someone else for this deal?{' '}
       <Link href={hasCoordinator ? `/dashboard/invoices?transactionId=${transactionId}` : '/dashboard/invoices?new=1'} className="text-blue-400 hover:text-blue-300">Create another invoice</Link>
     </p>
   );

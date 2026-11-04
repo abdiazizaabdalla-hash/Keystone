@@ -835,6 +835,8 @@ Cautions to take to your accountant and lawyer, not legal or tax advice from me:
 - Server note: the earlier owner edit routes (stage, dates, checklist ticks) still exist behind `oversight: true`; the owner page no longer offers them.
 - `useBrokerageOwner` now keys its cached answer to the signed-in user, so an agent who signs in after an owner in the same tab no longer sees the owner's "Your agents' deals" tab.
 
+- The agent's Invoices page lists their commission invoices to the brokerage (from `GET /api/commissions` `asAgent`) above their other invoices, with status (sent, approved, paid), amount, and a link to the PDF; approved and paid amounts count in the summary tiles.
+
 ## 19. Custom workflows: the automated version, mapped (not built)
 
 ### 19.1 What you described
