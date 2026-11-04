@@ -56,9 +56,7 @@ export default function Home() {
           <nav className="hidden sm:flex items-center gap-8 text-sm text-slate-300">
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
-            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
-            <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
@@ -107,7 +105,7 @@ export default function Home() {
               Get started
             </Link>
             <a
-              href="#who"
+              href="#demo"
               className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition"
             >
               Explore Relay
@@ -176,30 +174,6 @@ export default function Home() {
       </section>
 
       {/* Product video: click to play, nothing loads until then */}
-      {/* Who Relay is for */}
-      <section id="who" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">
-          Have a TC? Work together in Relay. <span className="text-blue-400">No TC? Let Relay handle the coordination.</span>
-        </h2>
-        <p className="text-slate-400 mb-10 max-w-3xl">
-          One platform for the work between contract and closing: every transaction, document and deadline in one place.
-        </p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {[
-            { href: '/for-agents', kicker: 'Agents', title: 'Stay in the loop', body: 'A free login for every deal your TC adds you to: the checklist, documents, messages, and a live page for your clients.' },
-            { href: '/for-tcs', kicker: 'Transaction coordinators', title: 'Take on more files', body: 'Contract intake, checklists, deadlines, agent portals, listings and invoicing in one workspace.' },
-            { href: '/for-teams', kicker: 'Teams', title: 'Coordinate together', body: 'A shared board and contacts for your coordinators, while every deal stays private to its owner.' },
-          ].map((c) => (
-            <Link key={c.href} href={c.href} className="group bg-slate-800/60 border border-slate-700 hover:border-slate-500 rounded-xl p-6 transition">
-              <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">{c.kicker}</p>
-              <h3 className="text-lg font-semibold text-slate-100 mb-2">{c.title}</h3>
-              <p className="text-sm text-slate-400 mb-4">{c.body}</p>
-              <span className="text-sm text-blue-400 group-hover:text-blue-300">Learn more →</span>
-            </Link>
-          ))}
-        </div>
-      </section>
-
       <section id="demo" className="max-w-4xl mx-auto px-6 pb-16 scroll-mt-4">
         <div className="text-center mb-8">
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">See it in a minute</p>
@@ -548,9 +522,7 @@ export default function Home() {
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
-            <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
-            <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>
