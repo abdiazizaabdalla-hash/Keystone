@@ -1,15 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { authFetch } from './authClient';
+import { authFetch, storedUserId } from './authClient';
 import { isFeatureOnClient } from './features';
 import { isTeamPlan } from './plans';
 
 // Presentation only: is this person the owner of a Team or Brokerage plan, with the brokerage feature on?
 // null while we are still finding out (pages show their normal view meanwhile); the server decides what they may do.
+// The answer belongs to whoever is signed in: signing out and in as someone else must never reuse it.
 let cached: Promise<boolean> | null = null;
+let cachedFor: string | null = null;
 
 function lookup(): Promise<boolean> {
+  const me = storedUserId();
+  if (cachedFor !== me) {
+    cached = null;
+    cachedFor = me;
+  }
   if (!cached) {
     cached = authFetch('/api/team')
       .then(async (res) => {

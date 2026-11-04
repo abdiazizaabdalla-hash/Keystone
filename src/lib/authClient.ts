@@ -72,6 +72,15 @@ export function saveSession(accessToken: string, refreshToken: string, userId: s
   localStorage.setItem(USER_ID_KEY, userId);
 }
 
+/** The signed-in person's id, as stored at sign-in (presentation caches key on it so one person's answers never show for the next). */
+export function storedUserId(): string | null {
+  try {
+    return localStorage.getItem(USER_ID_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export function clearSession() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);

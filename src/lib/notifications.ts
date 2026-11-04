@@ -84,8 +84,10 @@ export async function notifyDeal(event: DealNotification): Promise<void> {
 
     // The owner of a brokerage the deal's agent has joined hears about every update except private messages
     // (the agent agreed to share their deals, not their conversations).
-    const brokerIds = event.type === 'message' ? [] : (await brokerageOwnersForDeal(event.transactionId)).filter((id) => id !== event.actorUserId && !recipients.includes(id));
-    const brokerSet = new Set(brokerIds);
+    const allBrokers = event.type === 'message' ? [] : await brokerageOwnersForDeal(event.transactionId);
+    const brokerIds = allBrokers.filter((id) => id !== event.actorUserId && !recipients.includes(id));
+    // Anyone who is the deal's brokerage owner opens it on the owner page, even if they were already on the list as a person on the deal.
+    const brokerSet = new Set(allBrokers);
     recipients.push(...brokerIds);
     if (recipients.length === 0) return;
 

@@ -80,11 +80,12 @@ async function assertTransactionAccess(
   transactionId: string,
   user: { id: string; app_metadata?: Record<string, unknown> | null },
   isAdmin: boolean,
-  { readOnly = false, allowAgent = false }: { readOnly?: boolean; allowAgent?: boolean } = {}
+  { readOnly = false, allowAgent = false, oversight = false }: { readOnly?: boolean; allowAgent?: boolean; oversight?: boolean } = {}
 ) {
   return authorizeDeal(user, isAdmin, transactionId, {
     scope: readOnly ? 'team' : 'owner',
     collaborators: allowAgent,
+    oversight,
     deniedMessage: 'You do not have permission to access documents for this transaction',
   });
 }
@@ -205,8 +206,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (callerIsAgent) await assertTrialForOwnWork(user, isAdmin, transactionId);
+    // The owner of the agent's brokerage may add documents to the agent's deal (but not remove or change them).
     await assertTransactionAccess(transactionId, user, isAdmin, {
       allowAgent: true,
+      oversight: true,
     });
     await ensureBucket();
 

@@ -826,6 +826,15 @@ Cautions to take to your accountant and lawyer, not legal or tax advice from me:
 
 - **Closing and getting paid, notifications and nudges:** when a deal in a brokerage moves to Closed (once; saving the same stage again is silent, and the generic "stage moved" line is not sent on top), the owner gets a bell notification saying where the commission stands (none yet, waiting for approval, approved and ready to mark paid), and the agent is asked to generate their invoice when someone else closed it. A daily job (`/api/cron/commission-nudges`, 14:15 UTC in `vercel.json`) adds reminders: an agent's invoice waiting two days for approval (owner, every 3 days), a deal closing within a week with no invoice (agent, once), a deal closed two days with no invoice (agent and owner, weekly), and an approved commission unpaid a week after the deal closed (owner, weekly). Both new bell types can be muted in the bell's settings. Owner-bound notification links now go to the Collaborate deal page (owners cannot open the agent's Transactions page). The owner's deal rows show where each deal's commission invoice stands (a red "No commission invoice" on closed deals), and the agent's home brokerage card is now a short to-do list in deal order: agree the split, invoice closed or closing deals, then wait for approval and payment.
 
+### Owner view of an agent's deal (shared page, read-only)
+
+- The agent's transaction page is one shared component (`src/components/TransactionDetail.tsx`). `/dashboard/transactions/[id]` shows it for your own deals; `/dashboard/collaborate/deals/[id]` shows it with `ownerView` for a brokerage owner.
+- Owner view loads through `GET /api/oversight/deals/[id]/view` (404 unless the caller oversees the deal's owner; no inbound-email token, fee terms or messages). Same layout; status, dates, checklist, contacts and key dates are read-only; messages, coordinator, client sharing, invoice, templates, delete and compliance export are hidden.
+- Kept for the owner: the Commission box (approve, edit, void, mark paid) and document upload (`POST /api/documents` now accepts `oversight: true`; delete, move and signing still refuse the owner).
+- Old links: an owner opening `/dashboard/transactions/{agent deal}` is redirected to the owner page. Every owner-bound deal notification now links to the owner page, even when the owner also appears as a person on the deal.
+- Server note: the earlier owner edit routes (stage, dates, checklist ticks) still exist behind `oversight: true`; the owner page no longer offers them.
+- `useBrokerageOwner` now keys its cached answer to the signed-in user, so an agent who signs in after an owner in the same tab no longer sees the owner's "Your agents' deals" tab.
+
 ## 19. Custom workflows: the automated version, mapped (not built)
 
 ### 19.1 What you described
