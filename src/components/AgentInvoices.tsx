@@ -46,9 +46,9 @@ interface ContactRow {
 interface CommissionInvoiceRow {
   id: string;
   statementNumber: string;
-  status: 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
+  status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
   submitted?: boolean;
-  agentNet: number;
+  agentNet: number | null;
   paidOn: string | null;
   property: string | null;
   transactionId: string;
@@ -56,9 +56,9 @@ interface CommissionInvoiceRow {
 }
 
 function commissionState(c: CommissionInvoiceRow): { label: string; bucket: 'draft' | 'sent' | 'paid'; cls: string } {
-  if (c.status === 'paid') return { label: 'Paid', bucket: 'paid', cls: 'bg-green-500/10 text-green-300 border-green-500/40' };
+  if (c.status === 'estimate') return { label: 'Estimate · not confirmed', bucket: 'draft', cls: 'bg-amber-500/10 text-amber-300 border-amber-500/40 border-dashed' };  if (c.status === 'paid') return { label: 'Paid', bucket: 'paid', cls: 'bg-green-500/10 text-green-300 border-green-500/40' };
   if (c.status === 'accepted') return { label: 'Approved · waiting to be paid', bucket: 'sent', cls: 'bg-blue-500/10 text-blue-300 border-blue-500/40' };
-  if (c.status === 'proposed') return { label: 'Brokerage changed it · review', bucket: 'draft', cls: 'bg-amber-500/10 text-amber-300 border-amber-500/40' };
+  if (c.status === 'proposed') return { label: 'Confirmed · review it', bucket: 'draft', cls: 'bg-amber-500/10 text-amber-300 border-amber-500/40' };
   return { label: c.submitted ? 'Sent · waiting for approval' : 'Change requested', bucket: 'draft', cls: 'bg-slate-500/10 text-slate-300 border-slate-500/40' };
 }
 
@@ -155,14 +155,14 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
   };
 
   const summary = useMemo(() => {
-    const outstanding = invoices.filter((i) => i.status === 'sent').reduce((s, i) => s + i.total, 0) + commissions.filter((c) => c.status === 'accepted').reduce((s, c) => s + c.agentNet, 0);
+    const outstanding = invoices.filter((i) => i.status === 'sent').reduce((s, i) => s + i.total, 0) + commissions.filter((c) => c.status === 'accepted').reduce((s, c) => s + (c.agentNet ?? 0), 0);
     const draft = invoices.filter((i) => i.status === 'draft').reduce((s, i) => s + i.total, 0);
     const now = new Date();
     const paidThisMonth = invoices
       .filter((i) => i.status === 'paid' && i.paid_at && new Date(i.paid_at).getMonth() === now.getMonth() && new Date(i.paid_at).getFullYear() === now.getFullYear())
       .reduce((s, i) => s + i.total, 0) + commissions
       .filter((c) => c.status === 'paid' && c.paidOn && new Date(`${c.paidOn.slice(0, 10)}T00:00:00`).getMonth() === now.getMonth() && new Date(`${c.paidOn.slice(0, 10)}T00:00:00`).getFullYear() === now.getFullYear())
-      .reduce((s, c) => s + c.agentNet, 0);
+      .reduce((s, c) => s + (c.agentNet ?? 0), 0);
     return { outstanding, draft, paidThisMonth };
   }, [invoices, commissions]);
 
@@ -187,7 +187,7 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Invoices</h1>
-          <p className="text-slate-400">Your commission invoices to your brokerage, plus referral fees, splits, expenses and services billed from a template.</p>
+          <p className="text-slate-400">Your brokerage commission statements, plus referral fees, splits, expenses and services billed from a template.</p>
         </div>
         <button
           type="button"
@@ -277,11 +277,11 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
                   <p className="font-semibold text-slate-100 truncate">
                     {c.statementNumber} · {c.brokerage?.name ?? 'Your brokerage'}
                   </p>
-                  <p className="text-xs text-slate-500 truncate">Commission invoice{c.property ? ` · ${c.property}` : ''}</p>
+                  <p className="text-xs text-slate-500 truncate">Commission statement from your brokerage{c.property ? ` · ${c.property}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full border ${state.cls}`}>{state.label}</span>
-                  <span className="font-semibold text-slate-100">{money(c.agentNet)}</span>
+                  <span className="font-semibold text-slate-100">{c.agentNet === null ? '—' : money(c.agentNet)}</span>
                 </div>
               </button>
             );

@@ -32,6 +32,10 @@ export interface BrokerageLink {
   ended_at: string | null;
   default_split_type?: 'percent' | 'flat_agent' | 'flat_brokerage' | null;
   default_split_value?: number | string | null;
+  default_fees?: unknown;
+  cap_cents?: number | string | null;
+  cap_reset?: string | null;
+  cap_start?: string | null;
 }
 
 export const brokerageOn = () => isFeatureOn('brokerage');

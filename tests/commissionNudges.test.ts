@@ -30,27 +30,43 @@ describe('pending approval', () => {
   });
 });
 
-describe('closing and closed deals with no invoice', () => {
-  it('reminds the agent in the last week before closing, once', () => {
-    const n = run([deal({ id: 'd1', closingDate: '2026-11-13' })], []);
+describe('closing and closed deals before the actual commission is confirmed', () => {
+  const estimate = (transactionId: string, o: Partial<NudgeCommission> = {}) => comm({ id: `c-${transactionId}`, transactionId, status: 'estimate', ...o });
+  it('tells the owner, not the agent, to be ready in the last week before closing, once', () => {
+    const n = run([deal({ id: 'd1', closingDate: '2026-11-13' })], [estimate('d1')]);
     expect(n).toHaveLength(1);
-    expect(n[0]).toMatchObject({ recipientId: 'agent', repeatDays: 30 });
+    expect(n[0]).toMatchObject({ recipientId: 'owner', repeatDays: 30 });
     expect(n[0].title).toMatch(/Closing in 3 days/);
-    expect(run([deal({ id: 'd1', closingDate: '2026-11-20' })], [])).toEqual([]);
-    expect(run([deal({ id: 'd1', closingDate: '2026-11-13' })], [comm({ id: 'c1', transactionId: 'd1', proposedAt: '2026-11-10T00:00:00Z' })])).toEqual([]);
+    expect(n[0].title).toMatch(/confirm the actual commission/);
+    expect(run([deal({ id: 'd1', closingDate: '2026-11-20' })], [estimate('d1')])).toEqual([]);
+  });
+  it('never nudges an agent to invoice anyone', () => {
+    expect(run([deal({ id: 'd1', closingDate: '2026-11-13' })], []).filter((x) => x.recipientId === 'agent')).toEqual([]);
+    expect(run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-11-07' })], [estimate('d1')]).filter((x) => x.recipientId === 'agent')).toEqual([]);
+    expect(run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-11-07' })], []).filter((x) => x.recipientId === 'agent')).toEqual([]);
   });
   it('says closing today, and nothing for deals outside a brokerage', () => {
-    expect(run([deal({ id: 'd1', closingDate: TODAY })], [])[0].title).toMatch(/Closing today/);
-    expect(run([deal({ id: 'd1', closingDate: TODAY })], [], () => null)).toEqual([]);
+    expect(run([deal({ id: 'd1', closingDate: TODAY })], [estimate('d1')])[0].title).toMatch(/Closing today/);
+    expect(run([deal({ id: 'd1', closingDate: TODAY })], [estimate('d1')], () => null)).toEqual([]);
   });
-  it('chases both sides two days after a deal closed with no invoice', () => {
+  it('chases the owner two days after a closed deal is still an estimate', () => {
+    const n = run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-11-07' })], [estimate('d1')]);
+    expect(n).toHaveLength(1);
+    expect(n[0]).toMatchObject({ recipientId: 'owner', repeatDays: 7 });
+    expect(n[0].title).toMatch(/Confirm the actual commission/);
+    expect(run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-11-09' })], [estimate('d1')])).toEqual([]);
+  });
+  it('asks the owner to set terms when a closed deal has no statement at all', () => {
     const n = run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-11-07' })], []);
-    expect(n.map((x) => x.recipientId).sort()).toEqual(['agent', 'owner']);
-    expect(n.every((x) => x.repeatDays === 7)).toBe(true);
-    expect(run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-11-09' })], [])).toEqual([]);
+    expect(n).toHaveLength(1);
+    expect(n[0].recipientId).toBe('owner');
+    expect(n[0].title).toMatch(/Set the agent.s commission terms/);
+  });
+  it('is quiet once the owner has confirmed the commission', () => {
+    expect(run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-11-07' })], [comm({ id: 'c1', transactionId: 'd1', status: 'proposed' })])).toEqual([]);
   });
   it('falls back to when the deal was last updated if the closing date is in the future', () => {
-    expect(run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-12-01', updatedAt: '2026-11-01T00:00:00Z' })], [])).toHaveLength(2);
+    expect(run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-12-01', updatedAt: '2026-11-01T00:00:00Z' })], [estimate('d1')])).toHaveLength(1);
   });
 });
 

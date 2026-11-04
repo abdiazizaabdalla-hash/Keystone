@@ -4,9 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch } from '@/lib/authClient';
 import { openStatement } from '@/lib/commissionClient';
+import { computeSplit } from '@/lib/commissionMath';
+import CapNotice, { type CapView } from '@/components/CapNotice';
 
-// The commission on one deal. The brokerage owner proposes the split; the agent agrees or asks for a change; the owner
-// records when it was paid. Nothing here moves money. Renders nothing for anyone who is not a party to the deal's commission.
+// The commission on one deal, between the brokerage and its agent (never Relay's own coordination fees). It starts as an ESTIMATE
+// built from the agent's base terms, with no amounts. After closing the brokerage owner confirms the actual gross commission the
+// brokerage received; the agent then reviews it and agrees or asks for a change; the owner records when the agent was paid.
+// Only the owner can confirm amounts or payment. Nothing here moves money. Renders nothing for anyone who is not a party to it.
 
 type SplitType = 'percent' | 'flat_agent' | 'flat_brokerage';
 interface Fee { label: string; amount: number }
@@ -16,26 +20,31 @@ interface View {
   splitType: SplitType;
   splitValue: number;
   deductions: Fee[];
-  status: 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
+  status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
+  grossStatus: 'estimate' | 'confirmed';
+  confirmedAt: string | null;
   changeNote: string | null;
   submitted?: boolean;
   paymentPreference: 'relay' | 'outside' | null;
   paidOn: string | null;
   paidNote: string | null;
-  gross: number;
-  agentShare: number;
-  brokerageShare: number;
-  deductionsTotal: number;
-  agentNet: number;
-  brokerageNet: number;
-  agentPercentOfGross: number;
+  gross: number | null;
+  agentShare: number | null;
+  brokerageShare: number | null;
+  deductionsTotal: number | null;
+  agentNet: number | null;
+  brokerageNet: number | null;
+  agentPercentOfGross: number | null;
 }
-interface Data { role: 'owner' | 'agent' | null; canPropose?: boolean; defaultSplit?: { type: SplitType; value: number } | null; dealClosed?: boolean; commission: View | null }
+interface Terms { split: { type: SplitType; value: number } | null; fees: Fee[] }
+interface Data { role: 'owner' | 'agent' | null; canPropose?: boolean; defaultSplit?: { type: SplitType; value: number } | null; terms?: Terms | null; cap?: CapView | null; dealClosed?: boolean; commission: View | null }
 
-const money = (n: number) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const splitText = (t: SplitType, v: number) => (t === 'percent' ? `Agent keeps ${v}%` : t === 'flat_agent' ? `Agent gets ${money(v)}` : `Brokerage fee ${money(v)}`);
+const money = (n: number | null) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const splitText = (t: SplitType, v: number, you = false) =>
+  t === 'percent' ? `${you ? 'You keep' : 'Agent keeps'} ${v}% of the gross commission` : t === 'flat_agent' ? `${you ? 'You get' : 'Agent gets'} ${money(v)}` : `Brokerage fee ${money(v)}${you ? ', you keep the rest' : ''}`;
 const STATUS: Record<View['status'], { label: string; cls: string }> = {
-  proposed: { label: 'Waiting for the agent', cls: 'bg-amber-500/20 text-amber-300' },
+  estimate: { label: 'Estimate · not confirmed', cls: 'bg-amber-500/20 text-amber-300' },
+  proposed: { label: 'Confirmed · agent reviewing', cls: 'bg-sky-500/20 text-sky-300' },
   change_requested: { label: 'Agent asked for a change', cls: 'bg-orange-500/20 text-orange-300' },
   accepted: { label: 'Agreed', cls: 'bg-emerald-500/20 text-emerald-300' },
   paid: { label: 'Paid', cls: 'bg-blue-500/20 text-blue-300' },
@@ -52,6 +61,7 @@ export default function CommissionBox({ transactionId }: { transactionId: string
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [gross, setGross] = useState('');
+  const [tryAmount, setTryAmount] = useState<string | null>(null);
   const [splitType, setSplitType] = useState<SplitType>('percent');
   const [splitValue, setSplitValue] = useState('');
   const [fees, setFees] = useState<{ label: string; amount: string }[]>([]);
@@ -77,10 +87,10 @@ export default function CommissionBox({ transactionId }: { transactionId: string
   }, [load]);
 
   const startForm = (c: View | null, d: Data) => {
-    setGross(c ? String(c.gross) : '');
-    setSplitType(c ? c.splitType : d.defaultSplit?.type ?? 'percent');
-    setSplitValue(c ? String(c.splitValue) : d.defaultSplit ? String(d.defaultSplit.value) : '');
-    setFees(c ? c.deductions.map((f) => ({ label: f.label, amount: String(f.amount) })) : []);
+    setGross(c && c.gross !== null ? String(c.gross) : '');
+    setSplitType(c ? c.splitType : d.terms?.split?.type ?? d.defaultSplit?.type ?? 'percent');
+    setSplitValue(c ? String(c.splitValue) : d.terms?.split ? String(d.terms.split.value) : d.defaultSplit ? String(d.defaultSplit.value) : '');
+    setFees(c ? c.deductions.map((f) => ({ label: f.label, amount: String(f.amount) })) : (d.terms?.fees ?? []).map((f) => ({ label: f.label, amount: String(f.amount) })));
     setEditing(true);
   };
 
@@ -106,13 +116,28 @@ export default function CommissionBox({ transactionId }: { transactionId: string
   if (data.role === 'agent' && !c) return null;
 
   const action = (a: string, extra: Record<string, unknown> = {}, after?: () => void) => call(`/api/commissions/${c!.id}`, 'PATCH', { action: a, ...extra }, after);
+  const isEstimate = c?.status === 'estimate';
+  const you = !isOwner;
+
+  // What the commission would be at an amount typed in. A preview only: it is not saved and it is not a statement.
+  const preview = (() => {
+    if (!c || tryAmount === null) return null;
+    const g = Number(tryAmount);
+    if (!(g > 0)) return null;
+    try {
+      const r = computeSplit({ gross: g, splitType: c.splitType, splitValue: c.splitValue, deductions: c.deductions });
+      return { gross: g, agentNet: r.agentNetCents / 100, brokerageNet: r.brokerageNetCents / 100 };
+    } catch {
+      return null;
+    }
+  })();
 
   return (
     <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div>
           <h2 className="text-lg font-bold text-slate-100">Commission</h2>
-          <p className="text-xs text-slate-400">{isOwner ? 'Between you and this agent only.' : 'Between you and your brokerage only.'}</p>
+          <p className="text-xs text-slate-400">{isOwner ? 'Between your brokerage and this agent only. Separate from any Relay coordination fees.' : 'Between you and your brokerage only. Separate from any fees for a coordinator on Relay.'}</p>
         </div>
         {c && (() => {
           const st = c.submitted ? (isOwner ? { label: 'Needs your approval', cls: 'bg-amber-500/20 text-amber-300' } : { label: 'Sent to your brokerage', cls: 'bg-blue-500/20 text-blue-300' }) : STATUS[c.status];
@@ -121,23 +146,86 @@ export default function CommissionBox({ transactionId }: { transactionId: string
       </div>
       {error && <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1.5 mb-3">{error}</p>}
 
-      {c && c.status !== 'void' && !editing && (
+      {c && isEstimate && !editing && (
         <>
+          <div className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 p-3">
+            <p className="text-sm text-amber-200 font-medium">Estimate. No amount is confirmed yet.</p>
+            <p className="text-xs text-slate-300 mt-1">
+              {isOwner
+                ? data.dealClosed
+                  ? 'This deal has closed. Confirm the gross commission your brokerage actually received, from the closing documents, so the agent can review it.'
+                  : 'Built from this agent’s base terms. After closing, confirm the gross commission your brokerage actually received, from the closing documents.'
+                : data.dealClosed
+                  ? 'This deal has closed. Your brokerage will confirm the commission it received from the closing documents, and then you can review it here.'
+                  : 'Built from the terms your brokerage set for you. Your brokerage confirms the actual commission from the closing documents after closing. Until then, no amount counts as real.'}
+            </p>
+          </div>
+          <dl className="text-sm space-y-1 mt-3">
+            <div className="flex justify-between gap-3"><dt className="text-slate-400">{you ? 'Your split' : 'Split'}</dt><dd className="text-slate-200 text-right">{splitText(c.splitType, c.splitValue, you)}</dd></div>
+            {c.deductions.map((f, i) => (
+              <div key={i} className="flex justify-between gap-3"><dt className="text-slate-400">{f.label} <span className="text-slate-500">({you ? 'from your share' : 'from the agent’s share'})</span></dt><dd className="text-slate-200">− {money(f.amount)}</dd></div>
+            ))}
+            {c.deductions.length === 0 && <div className="flex justify-between gap-3"><dt className="text-slate-400">Fees</dt><dd className="text-slate-500">None set</dd></div>}
+          </dl>
+          {tryAmount === null ? (
+            <button type="button" onClick={() => setTryAmount('')} className="mt-3 text-xs text-blue-400 hover:text-blue-300 font-medium">Try an amount →</button>
+          ) : (
+            <div className="mt-3 rounded-lg bg-slate-900/40 border border-white/10 p-3 text-sm">
+              <label className="text-xs text-slate-400 block">If the brokerage receives this gross commission ($)
+                <input type="number" min="0" step="0.01" value={tryAmount} onChange={(e) => setTryAmount(e.target.value)} className={`${field} mt-1 max-w-[12rem]`} aria-label="Try a gross commission" />
+              </label>
+              {preview && (
+                <div className="mt-2 space-y-0.5">
+                  <p className="text-slate-300">Your brokerage receives <span className="text-slate-100 font-medium">{money(preview.gross)}</span></p>
+                  <p className="text-slate-300">{you ? 'You would take home' : 'The agent would take home'} <span className="text-emerald-300 font-semibold">{money(preview.agentNet)}</span>; the brokerage keeps {money(preview.brokerageNet)}</p>
+                </div>
+              )}
+              <p className="text-[11px] text-slate-500 mt-2">Preview only. It is not saved and not a statement.</p>
+              <button type="button" onClick={() => setTryAmount(null)} className="mt-1 text-xs text-slate-400 hover:text-slate-200">Close</button>
+            </div>
+          )}
+          {c.changeNote && <p className="text-xs text-orange-200 bg-orange-500/10 border border-orange-500/30 rounded-lg px-2 py-1.5 mt-3">{isOwner ? 'Agent flagged: ' : 'You flagged: '}{c.changeNote}</p>}
+          <p className="text-[11px] text-slate-500 mt-2">{c.statementNumber}</p>
+
+          {isOwner && (
+            <div className="flex gap-2 flex-wrap mt-3">
+              {data.canPropose && <button type="button" onClick={() => startForm(c, data)} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Confirm actual commission</button>}
+              {data.canPropose && <button type="button" onClick={() => { startForm(c, data); setGross(''); }} className={`${btn} border border-slate-600 text-slate-200 hover:border-slate-500`}>Edit terms for this deal</button>}
+              <button type="button" disabled={busy} onClick={() => window.confirm('Void this commission statement? The agent will be told.') && action('void')} className={`${btn} text-slate-400 hover:text-red-300`}>Void</button>
+            </div>
+          )}
+          {!isOwner && !asking && <button type="button" onClick={() => setAsking(true)} className={`${btn} mt-3 border border-slate-600 text-slate-200 hover:border-slate-500`}>Something looks wrong</button>}
+          {!isOwner && asking && (
+            <div className="mt-3 space-y-2">
+              <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 1000))} rows={3} placeholder="What should your brokerage fix before confirming?" className={field} />
+              <div className="flex gap-2">
+                <button type="button" disabled={busy || !note.trim()} onClick={() => action('request_change', { note }, () => { setAsking(false); setNote(''); })} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Send to my brokerage</button>
+                <button type="button" onClick={() => setAsking(false)} className={`${btn} text-slate-300`}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {c && !isEstimate && c.status !== 'void' && !editing && (
+        <>
+          <p className="text-[11px] text-slate-500 mb-2">Confirmed amounts{c.confirmedAt ? `, ${c.confirmedAt.slice(0, 10)}` : ''}{isOwner ? ' (confirmed by your brokerage)' : ' by your brokerage'}</p>
           <dl className="text-sm space-y-1">
-            <div className="flex justify-between gap-3"><dt className="text-slate-400">Gross commission</dt><dd className="text-slate-100 font-medium">{money(c.gross)}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-slate-400">Split</dt><dd className="text-slate-200 text-right">{splitText(c.splitType, c.splitValue)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-slate-400">{you ? 'Commission your brokerage received (gross)' : 'Gross commission received by the brokerage'}</dt><dd className="text-slate-100 font-medium">{money(c.gross)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-slate-400">{you ? 'Your split' : 'Split'}</dt><dd className="text-slate-200 text-right">{splitText(c.splitType, c.splitValue, you)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-slate-400">{you ? 'Your share' : 'Agent’s share'}</dt><dd className="text-slate-200">{money(c.agentShare)}</dd></div>
             {c.deductions.map((f, i) => (
               <div key={i} className="flex justify-between gap-3"><dt className="text-slate-400">{f.label}</dt><dd className="text-slate-200">− {money(f.amount)}</dd></div>
             ))}
-            <div className="flex justify-between gap-3 pt-1 border-t border-white/10"><dt className="text-slate-300 font-medium">Net to agent</dt><dd className="text-emerald-300 font-semibold">{money(c.agentNet)}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-slate-300 font-medium">Net to brokerage</dt><dd className="text-slate-100 font-semibold">{money(c.brokerageNet)}</dd></div>
+            <div className="flex justify-between gap-3 pt-1 border-t border-white/10"><dt className="text-slate-300 font-medium">{you ? 'You take home' : 'Net to agent'}</dt><dd className="text-emerald-300 font-semibold">{money(c.agentNet)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-slate-300 font-medium">{you ? 'Your brokerage keeps' : 'Net to brokerage'}</dt><dd className="text-slate-100 font-semibold">{money(c.brokerageNet)}</dd></div>
           </dl>
           <p className="text-[11px] text-slate-500 mt-2">{c.statementNumber}{c.paidOn ? ` · paid ${c.paidOn}${c.paidNote ? ` (${c.paidNote})` : ''}` : ''}</p>
           {c.status === 'change_requested' && c.changeNote && <p className="text-xs text-orange-200 bg-orange-500/10 border border-orange-500/30 rounded-lg px-2 py-1.5 mt-2">Agent’s note: {c.changeNote}</p>}
 
           {!isOwner && c.status === 'proposed' && !asking && (
             <div className="flex gap-2 mt-3">
-              <button type="button" disabled={busy} onClick={() => action('accept')} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Agree to this split</button>
+              <button type="button" disabled={busy} onClick={() => action('accept')} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Agree to this statement</button>
               <button type="button" disabled={busy} onClick={() => setAsking(true)} className={`${btn} border border-slate-600 text-slate-200 hover:border-slate-500`}>Ask for a change</button>
             </div>
           )}
@@ -166,6 +254,7 @@ export default function CommissionBox({ transactionId }: { transactionId: string
                   <button type="button" onClick={() => setConfirmStripe(true)} className="mt-1.5 text-blue-400 hover:text-blue-300 font-semibold">Set up payouts with Stripe →</button>
                 </div>
               )}
+              <p className="text-[11px] text-slate-500 mt-2">Only your brokerage can record that you were paid.</p>
             </div>
           )}
           {isOwner && c.paymentPreference && c.status !== 'paid' && <p className="text-xs text-slate-400 mt-2">The agent chose to be paid {c.paymentPreference === 'relay' ? 'through Relay (not switched on yet, so pay and record it here)' : 'outside Relay'}.</p>}
@@ -175,13 +264,13 @@ export default function CommissionBox({ transactionId }: { transactionId: string
               {c.submitted && <button type="button" disabled={busy} onClick={() => action('approve')} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Approve</button>}
               {data.canPropose && c.status !== 'paid' && <button type="button" onClick={() => startForm(c, data)} className={`${btn} border border-slate-600 text-slate-200 hover:border-slate-500`}>{c.status === 'accepted' ? 'Revise (agent must agree again)' : c.submitted ? 'Edit before approving (agent agrees again)' : 'Edit'}</button>}
               {c.status === 'accepted' && !paying && <button type="button" disabled title="Payments through Relay are not switched on yet" className={`${btn} border border-slate-700 text-slate-500 cursor-not-allowed`}>Pay through Relay (soon)</button>}
-              {c.status === 'accepted' && !paying && <button type="button" onClick={() => { setPaidOn(new Date().toISOString().slice(0, 10)); setPaying(true); }} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Mark paid</button>}
+              {c.status === 'accepted' && !paying && <button type="button" onClick={() => { setPaidOn(new Date().toISOString().slice(0, 10)); setPaying(true); }} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Mark agent paid</button>}
               {c.status !== 'paid' && <button type="button" disabled={busy} onClick={() => window.confirm('Void this commission statement? The agent will be told.') && action('void')} className={`${btn} text-slate-400 hover:text-red-300`}>Void</button>}
             </div>
           )}
           {isOwner && paying && (
             <div className="mt-3 space-y-2">
-              <label className="text-xs text-slate-400 block">Paid on<input type="date" value={paidOn} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setPaidOn(e.target.value)} className={`${field} mt-1`} /></label>
+              <label className="text-xs text-slate-400 block">Agent paid on<input type="date" value={paidOn} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setPaidOn(e.target.value)} className={`${field} mt-1`} /></label>
               <input value={paidNote} onChange={(e) => setPaidNote(e.target.value.slice(0, 500))} placeholder="Note (check number, ACH...)" className={field} />
               <div className="flex gap-2">
                 <button type="button" disabled={busy} onClick={() => action('mark_paid', { paidOn, note: paidNote }, () => setPaying(false))} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Save</button>
@@ -195,28 +284,38 @@ export default function CommissionBox({ transactionId }: { transactionId: string
 
       {c && c.status === 'void' && !editing && (
         <p className="text-sm text-slate-400">This statement ({c.statementNumber}) was voided.{isOwner && data.canPropose ? ' ' : ''}
-          {isOwner && data.canPropose && <button type="button" onClick={() => startForm(null, data)} className="text-blue-400 hover:text-blue-300 font-medium">Propose a new split</button>}
+          {isOwner && data.canPropose && <button type="button" onClick={() => startForm(null, data)} className="text-blue-400 hover:text-blue-300 font-medium">Start a new commission</button>}
         </p>
       )}
 
       {isOwner && !c && !editing && (
         data.canPropose ? (
           <div>
-            <p className="text-sm text-slate-300 mb-2">No commission split on this deal yet.{data.defaultSplit ? ` This agent’s default: ${splitText(data.defaultSplit.type, data.defaultSplit.value)}.` : ''}</p>
-            <button type="button" onClick={() => startForm(null, data)} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Propose a split</button>
+            <p className="text-sm text-slate-300 mb-2">
+              {data.terms?.split
+                ? `No commission statement on this deal yet. This agent’s base split: ${splitText(data.terms.split.type, data.terms.split.value)}.`
+                : 'No commission terms are set for this agent, so Relay has not made an estimate. Set the terms for this deal (or the agent’s base terms on their page).'}
+            </p>
+            <button type="button" onClick={() => startForm(null, data)} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Set commission terms</button>
           </div>
-        ) : <p className="text-sm text-slate-400">Commission splits need an active brokerage link with this agent.</p>
+        ) : <p className="text-sm text-slate-400">Commission statements need an active brokerage link with this agent.</p>
       )}
+
+      {data.cap && !editing && <CapNotice cap={data.cap} who={isOwner ? 'owner' : 'agent'} />}
 
       {isOwner && editing && (
         <form
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
-            call('/api/commissions', 'POST', { transactionId, gross: Number(gross), splitType, splitValue: Number(splitValue), deductions: fees.map((f) => ({ label: f.label, amount: f.amount })) }, () => setEditing(false));
+            const body: Record<string, unknown> = { transactionId, splitType, splitValue: Number(splitValue), deductions: fees.map((f) => ({ label: f.label, amount: f.amount })) };
+            if (gross.trim() !== '') body.gross = Number(gross);
+            call('/api/commissions', 'POST', body, () => setEditing(false));
           }}
         >
-          <label className="text-xs text-slate-400 block">Gross commission ($)<input type="number" step="0.01" min="0" required value={gross} onChange={(e) => setGross(e.target.value)} className={`${field} mt-1`} /></label>
+          <label className="text-xs text-slate-400 block">Gross commission your brokerage received ($), from the closing documents
+            <input type="number" step="0.01" min="0" value={gross} onChange={(e) => setGross(e.target.value)} className={`${field} mt-1`} placeholder="Leave blank to keep this an estimate" />
+          </label>
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs text-slate-400">Split
               <select value={splitType} onChange={(e) => setSplitType(e.target.value as SplitType)} className={`${field} mt-1`}>
@@ -230,7 +329,7 @@ export default function CommissionBox({ transactionId }: { transactionId: string
             </label>
           </div>
           <div>
-            <p className="text-xs text-slate-400 mb-1">Fees charged to the agent (optional)</p>
+            <p className="text-xs text-slate-400 mb-1">Fees taken from the agent’s share (optional)</p>
             {fees.map((f, i) => (
               <div key={i} className="flex gap-2 mb-1">
                 <input value={f.label} placeholder="Transaction fee" onChange={(e) => setFees(fees.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} className={field} />
@@ -240,9 +339,9 @@ export default function CommissionBox({ transactionId }: { transactionId: string
             ))}
             {fees.length < 10 && <button type="button" onClick={() => setFees([...fees, { label: '', amount: '' }])} className="text-xs text-blue-400 hover:text-blue-300">+ Add a fee</button>}
           </div>
-          <p className="text-[11px] text-slate-500">The agent sees this and has to agree before it counts. Nothing is paid through Relay.</p>
+          <p className="text-[11px] text-slate-500">{gross.trim() !== '' ? 'Confirming sends the statement to the agent, who has to agree before it counts.' : 'Without a gross commission this stays an estimate and the agent is not asked to agree to anything.'} Nothing is paid through Relay.</p>
           <div className="flex gap-2">
-            <button type="submit" disabled={busy} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>{c ? 'Send revised split' : 'Send to agent'}</button>
+            <button type="submit" disabled={busy} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>{gross.trim() !== '' ? (c && !isEstimate ? 'Send revised statement' : 'Confirm and send to agent') : 'Save terms'}</button>
             <button type="button" onClick={() => setEditing(false)} className={`${btn} text-slate-300`}>Cancel</button>
           </div>
         </form>

@@ -4,7 +4,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { AGENT_FOCUS, AGENT_VOLUME } from '@/lib/accountType';
 import { CLOSED_STAGE, assertBrokerageOwner, isOpenListing, loadOversightDeals, loadOversightListings, overseesAgent, productionFor } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
-import { viewOf, type CommissionRow } from '@/lib/commissions';
+import { capInfoFor, termsFromLink, viewOf, type CommissionRow } from '@/lib/commissions';
 import type { SplitType } from '@/lib/commissionMath';
 
 // One agent in the brokerage, in full: who they are, their base commission, production, open and closed deals with the next
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const today = todayIso();
 
     const [{ data: link }, authRes, { data: agentRow }, deals, listings, { data: commissionRows }] = await Promise.all([
-      supabaseServer.from('brokerage_links').select('id, responded_at, default_split_type, default_split_value').eq('owner_user_id', user.id).eq('agent_user_id', id).eq('status', 'active').maybeSingle(),
+      supabaseServer.from('brokerage_links').select('*').eq('owner_user_id', user.id).eq('agent_user_id', id).eq('status', 'active').maybeSingle(),
       supabaseServer.auth.admin.getUserById(id),
       supabaseServer.from('agents').select('name, phone, brokerage').eq('tc_user_id', id).order('created_at', { ascending: true }).limit(1).maybeSingle(),
       loadOversightDeals([id], today),
@@ -38,9 +38,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const closed = deals.filter((d) => d.status === CLOSED_STAGE).slice(0, 15);
     const production = productionFor(deals, today);
 
+    const terms = termsFromLink(link);
+    const cap = terms.cap ? await capInfoFor(user.id, id, terms, today) : null;
     const rows = (commissionRows ?? []) as CommissionRow[];
     const commissions = rows.map((r) => ({ ...viewOf(r), property: deals.find((d) => d.id === r.transaction_id)?.property_address ?? null }));
-    const live = commissions.filter((c) => c.status !== 'void');
+    const live = commissions.filter((c) => c.status !== 'void' && c.status !== 'estimate');
     const year = today.slice(0, 4);
     const ytd = live.filter((c) => c.status === 'paid' && (c.paidOn ?? '').startsWith(year));
 
@@ -56,6 +58,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         dealsPerYear: AGENT_VOLUME.find((o) => o.id === prof.dealsPerYear)?.label ?? null,
         states,
         joinedAt: link?.responded_at ?? null,
+        baseFees: terms.fees.map((f) => ({ label: f.label, amount: f.amount })),
+        baseCap: terms.cap ? { amount: terms.cap.capCents / 100, reset: terms.cap.reset, start: (link?.cap_start as string | null) ?? null } : null,
+        cap,
         baseCommission: link?.default_split_type && link.default_split_value !== null ? { type: link.default_split_type as SplitType, value: Number(link.default_split_value) } : null,
       },
       production,
@@ -65,11 +70,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       closedListings: listings.filter((l) => !isOpenListing(l.status)).slice(0, 15),
       commissions,
       commissionTotals: {
-        gross: live.reduce((n, c) => n + c.gross, 0),
-        agentNet: live.reduce((n, c) => n + c.agentNet, 0),
-        brokerageNet: live.reduce((n, c) => n + c.brokerageNet, 0),
+        gross: live.reduce((n, c) => n + (c.gross ?? 0), 0),
+        agentNet: live.reduce((n, c) => n + (c.agentNet ?? 0), 0),
+        brokerageNet: live.reduce((n, c) => n + (c.brokerageNet ?? 0), 0),
         unpaidCount: live.filter((c) => c.status !== 'paid').length,
-        paidThisYear: ytd.reduce((n, c) => n + c.agentNet, 0),
+        paidThisYear: ytd.reduce((n, c) => n + (c.agentNet ?? 0), 0),
       },
     });
   } catch (error) {

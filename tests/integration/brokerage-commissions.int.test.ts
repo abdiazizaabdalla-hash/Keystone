@@ -163,7 +163,7 @@ describe('the agent’s answer', () => {
     expect(asked.status).toBe(200);
     expect(body(asked).status).toBe('change_requested');
     expect((await act(agentA, id, { action: 'accept' })).status).toBe(409);
-    const revised = await propose(broker, { transactionId: dealA.transactionId, gross: 10000, splitType: 'percent', splitValue: 80 });
+    const revised = await propose(broker, { transactionId: dealA.transactionId, gross: 10000, splitType: 'percent', splitValue: 80, deductions: [] });
     expect(revised.status).toBe(200);
     expect(body(revised).status).toBe('proposed');
     expect(body(revised).changeNote).toBeNull();

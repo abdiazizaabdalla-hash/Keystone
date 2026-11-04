@@ -94,3 +94,16 @@ export function cleanDeductions(value: unknown): Deduction[] {
 
 export const splitLabel = (type: SplitType, value: number): string =>
   type === 'percent' ? `Agent keeps ${value}%` : type === 'flat_agent' ? `Agent gets $${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `Brokerage fee $${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * A fee in an agent's base terms, copied onto each new statement. `when` says where it comes out; today every fee comes out of
+ * the agent's share (the only kind the split math supports). It is stored so a fee taken off the top (a franchise royalty) can
+ * be added later without changing what is already saved.
+ */
+export interface BaseFee extends Deduction {
+  when: 'agent_share';
+}
+
+export function cleanBaseFees(value: unknown): BaseFee[] {
+  return cleanDeductions(value).map((d) => ({ ...d, when: 'agent_share' as const }));
+}

@@ -15,20 +15,20 @@ interface Row {
   statementNumber: string;
   splitType: SplitType;
   splitValue: number;
-  status: 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
+  status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
   submitted?: boolean;
-  gross: number;
-  agentNet: number;
-  brokerageNet: number;
+  gross: number | null;
+  agentNet: number | null;
+  brokerageNet: number | null;
   paidOn: string | null;
   property: string | null;
   agent: { id: string; name: string };
 }
 interface AgentDefault { id: string; name: string; defaultSplit: { type: SplitType; value: number } | null }
 
-const money = (n: number) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (n: number | null) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const splitText = (t: SplitType, v: number) => (t === 'percent' ? `Agent keeps ${v}%` : t === 'flat_agent' ? `Agent gets ${money(v)}` : `Brokerage fee ${money(v)}`);
-const STATUS = { proposed: 'Waiting for the agent', change_requested: 'Change requested', accepted: 'Agreed', paid: 'Paid', void: 'Void' } as const;
+const STATUS = { estimate: 'Estimate · confirm after closing', proposed: 'Confirmed · agent reviewing', change_requested: 'Change requested', accepted: 'Agreed', paid: 'Paid', void: 'Void' } as const;
 const card = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 
 export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice: () => void }) {
@@ -69,9 +69,11 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
 
   if (!loaded) return <p className="text-sm text-slate-400">{error || 'Loading…'}</p>;
 
-  const live = rows.filter((r) => r.status !== 'void');
+  // Estimates have no amounts yet, so the totals count confirmed statements only.
+  const live = rows.filter((r) => r.status !== 'void' && r.status !== 'estimate');
+  const estimates = rows.filter((r) => r.status === 'estimate').length;
   const open = live.filter((r) => r.status !== 'paid');
-  const sum = (list: Row[], key: 'gross' | 'agentNet' | 'brokerageNet') => list.reduce((n, r) => n + r[key], 0);
+  const sum = (list: Row[], key: 'gross' | 'agentNet' | 'brokerageNet') => list.reduce((n, r) => n + (r[key] ?? 0), 0);
 
   const downloadCsv = async () => {
     try {
@@ -92,7 +94,7 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
     <div className="space-y-5">
       {error && <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</p>}
       <div className="grid sm:grid-cols-3 gap-3">
-        <div className={card}><p className="text-xs text-slate-400">Gross commission</p><p className="text-xl font-semibold text-slate-100">{money(sum(live, 'gross'))}</p></div>
+        <div className={card}><p className="text-xs text-slate-400">Gross commission received (confirmed)</p><p className="text-xl font-semibold text-slate-100">{money(sum(live, 'gross'))}</p>{estimates > 0 && <p className="text-[11px] text-slate-500">{estimates} estimate{estimates === 1 ? '' : 's'} not counted until confirmed</p>}</div>
         <div className={card}><p className="text-xs text-slate-400">Net to agents</p><p className="text-xl font-semibold text-emerald-300">{money(sum(live, 'agentNet'))}</p></div>
         <div className={card}><p className="text-xs text-slate-400">Not paid yet ({open.length})</p><p className="text-xl font-semibold text-slate-100">{money(sum(open, 'agentNet'))}</p><p className="text-[11px] text-slate-500">owed to agents on open splits</p></div>
       </div>
@@ -109,7 +111,7 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
         <div className={`${card} text-sm text-slate-300`}>Agents show up here once they join your brokerage.</div>
       ) : (
         groups.map((g) => {
-          const gl = g.rows.filter((r) => r.status !== 'void');
+          const gl = g.rows.filter((r) => r.status !== 'void' && r.status !== 'estimate');
           const go = gl.filter((r) => r.status !== 'paid');
           return (
             <section key={g.id} className={card} aria-label={`${g.name} commissions`}>
@@ -132,8 +134,8 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
                       <tr className="text-left text-xs text-slate-400">
                         <th className="py-2 pr-3 font-medium">Deal</th>
                         <th className="py-2 pr-3 font-medium">Split</th>
-                        <th className="py-2 pr-3 font-medium text-right">Gross</th>
-                        <th className="py-2 pr-3 font-medium text-right">To agent</th>
+                        <th className="py-2 pr-3 font-medium text-right">Gross received</th>
+                        <th className="py-2 pr-3 font-medium text-right">Agent take-home</th>
                         <th className="py-2 pr-3 font-medium">Status</th>
                         <th className="py-2 font-medium" />
                       </tr>
@@ -146,9 +148,9 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
                             <div className="text-[11px] text-slate-500">{r.statementNumber}</div>
                           </td>
                           <td className="py-2 pr-3 text-slate-300">{splitText(r.splitType, r.splitValue)}</td>
-                          <td className="py-2 pr-3 text-right text-slate-200">{money(r.gross)}</td>
-                          <td className="py-2 pr-3 text-right text-emerald-300">{money(r.agentNet)}</td>
-                          <td className="py-2 pr-3 text-slate-300">{r.submitted ? <span className="text-amber-300">Needs your approval</span> : STATUS[r.status]}{r.paidOn ? ` ${r.paidOn}` : ''}</td>
+                          <td className="py-2 pr-3 text-right text-slate-200">{r.gross === null ? <span className="text-slate-500" title="Estimate, not confirmed">—</span> : money(r.gross)}</td>
+                          <td className="py-2 pr-3 text-right text-emerald-300">{r.agentNet === null ? <span className="text-slate-500">—</span> : money(r.agentNet)}</td>
+                          <td className="py-2 pr-3 text-slate-300">{r.submitted ? <span className="text-amber-300">Needs your approval</span> : r.status === 'estimate' ? <span className="text-amber-300">{STATUS.estimate}</span> : STATUS[r.status]}{r.paidOn ? ` ${r.paidOn}` : ''}</td>
                           <td className="py-2 text-right"><button type="button" onClick={() => openStatement(r.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="text-xs text-blue-400 hover:text-blue-300">Statement</button></td>
                         </tr>
                       ))}

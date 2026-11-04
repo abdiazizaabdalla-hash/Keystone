@@ -1,14 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PATCH as patchTransaction } from '@/app/api/transactions/[id]/route';
-import { POST as generate } from '@/app/api/commissions/generate/route';
 import { PATCH as patchCommission } from '@/app/api/commissions/[id]/route';
 import { GET as cron } from '@/app/api/cron/commission-nudges/route';
 import { NextRequest } from 'next/server';
 import { runCommissionNudges } from '@/lib/commissionNudges';
 import { admin, call, cleanup, createActor, seedDeal, type Actor, type Deal } from './helpers';
 
-// A deal closing in a brokerage tells the owner (with where the commission stands) and nudges the agent to invoice; the daily
-// nudges follow up on stale approvals; nobody outside the brokerage hears anything.
+// A deal closing in a brokerage tells the owner where the commission stands (an estimate to confirm, or a statement already moving);
+// the agent is never asked to invoice; the daily nudges follow up on stale approvals; nobody outside the brokerage hears anything.
 
 type Handler = Parameters<typeof call>[0];
 const h = (fn: unknown) => fn as Handler;
@@ -34,12 +33,12 @@ beforeAll(async () => {
 afterAll(cleanup);
 
 describe('when a deal closes', () => {
-  it('tells the owner there is no invoice yet, once, and does not nudge the agent who closed it', async () => {
+  it('tells the owner there is no statement yet, once, and does not nudge the agent who closed it', async () => {
     expect((await close(agent, d1)).status).toBe(200);
     const ownerRows = await bell(broker, 'deal_closed');
     expect(ownerRows).toHaveLength(1);
     expect(ownerRows[0].title).toMatch(/^Deal closed/);
-    expect(ownerRows[0].body).toMatch(/No commission invoice yet/);
+    expect(ownerRows[0].body).toMatch(/no commission statement yet/);
     expect(ownerRows[0].link).toBe(`/dashboard/collaborate/deals/${d1.transactionId}`);
     expect(await bell(agent, 'deal_closed')).toHaveLength(0);
     // saving it as Closed again is not a new close, and the generic "stage moved" line is not added on top
@@ -48,18 +47,25 @@ describe('when a deal closes', () => {
     expect((await bell(broker, 'stage_changed')).filter((r) => /Closed/.test(String(r.title)))).toHaveLength(0);
   });
 
-  it('says where the invoice stands when there already is one', async () => {
-    const made = await call(h(generate), agent, { method: 'POST', path: '/x', body: { transactionId: d2.transactionId, gross: 8000 } });
-    expect(made.status, JSON.stringify(made.json)).toBe(201);
+  it('tells the owner to confirm the actual commission when the deal is still on an estimate', async () => {
+    await admin.from('deal_commissions').insert({ transaction_id: d2.transactionId, owner_user_id: broker.id, agent_user_id: agent.id, statement_number: 'COMM-0900', split_type: 'percent', split_value: 80, deductions: [], status: 'estimate' });
     await close(agent, d2);
     const rows = (await bell(broker, 'deal_closed')).filter((r) => String(r.link).includes(d2.transactionId));
-    expect(rows[0].body).toMatch(/COMM-\d+ is waiting for your approval/);
+    expect(rows[0].body).toMatch(/COMM-0900 is still an estimate\. Confirm the actual commission/);
   });
 
-  it('when the owner closes it, the agent is asked to invoice', async () => {
-    expect((await close(broker, d3)).status).toBe(200);
-    const rows = await bell(agent, 'deal_closed');
-    expect(rows.some((r) => /Generate your commission invoice/.test(String(r.title)))).toBe(true);
+  it('says where an older agent-generated invoice stands, and never asks the agent to invoice', async () => {
+    await admin.from('deal_commissions').insert({ transaction_id: d3.transactionId, owner_user_id: broker.id, agent_user_id: agent.id, statement_number: 'COMM-0901', split_type: 'percent', split_value: 80, deductions: [], gross_cents: 800000, agent_net_cents: 640000, brokerage_net_cents: 160000, status: 'change_requested' });
+    expect((await close(agent, d3)).status).toBe(200);
+    const ownerRows = (await bell(broker, 'deal_closed')).filter((r) => String(r.link).includes(d3.transactionId));
+    expect(ownerRows[0].body).toMatch(/COMM-0901 is waiting for your approval/);
+    expect((await bell(agent, 'deal_closed')).length).toBe(0);
+  });
+
+  it('when the owner closes a deal, the agent is told nothing about invoicing', async () => {
+    const extra = await seedDeal(agent, 'DC4');
+    expect((await close(broker, extra)).status).toBe(200);
+    expect((await bell(agent, 'deal_closed')).filter((r) => /invoice/i.test(String(r.title)))).toHaveLength(0);
   });
 
   it('nobody outside a brokerage is told anything', async () => {
@@ -81,22 +87,25 @@ describe('the daily nudges', () => {
     }
   });
 
-  it('chase a stale approval and unpaid deals, and do not repeat themselves', async () => {
+  it('chase a stale approval and unconfirmed closed deals, and do not repeat themselves', async () => {
     const inThreeDays = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
     const longAgo = new Date(Date.now() - 5 * 86_400_000).toISOString();
-    await admin.from('deal_commissions').update({ proposed_at: longAgo }).eq('transaction_id', d2.transactionId);
+    await admin.from('deal_commissions').update({ proposed_at: longAgo }).eq('transaction_id', d3.transactionId);
     const week = new Date(Date.now() + 8 * 86_400_000).toISOString().slice(0, 10);
     const first = await runCommissionNudges(new Date().toISOString().slice(0, 10));
     expect(first.created).toBeGreaterThan(0);
     const approvals = (await bell(broker, 'commission')).filter((r) => /waited \d+ days? for your approval/.test(String(r.title)));
     expect(approvals).toHaveLength(1);
+    // d1 closed with no statement and d2 is a closed estimate: the owner is asked to act on both, the agent on neither
+    expect((await bell(broker, 'commission')).some((r) => /Confirm the actual commission/.test(String(r.title)) || /no commission statement/.test(String(r.title)))).toBe(false); // closed today: not yet two days
+    expect((await bell(agent, 'commission')).filter((r) => /invoice/i.test(String(r.title)))).toHaveLength(0);
     const again = await runCommissionNudges(new Date().toISOString().slice(0, 10));
     expect(again.created).toBe(0);
     expect(inThreeDays && week).toBeTruthy();
   });
 
   it('the owner can approve, and the nudges stop', async () => {
-    const id = ((await admin.from('deal_commissions').select('id').eq('transaction_id', d2.transactionId).single()).data as { id: string }).id;
+    const id = ((await admin.from('deal_commissions').select('id').eq('transaction_id', d3.transactionId).single()).data as { id: string }).id;
     expect((await call(h(patchCommission), broker, { method: 'PATCH', path: '/x', params: { id }, body: { action: 'approve' } })).status).toBe(200);
     await admin.from('notifications').delete().eq('recipient_user_id', broker.id).eq('event_type', 'commission');
     await runCommissionNudges(new Date().toISOString().slice(0, 10));

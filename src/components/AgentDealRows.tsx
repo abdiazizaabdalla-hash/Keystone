@@ -23,11 +23,12 @@ const FLAG: Record<string, string> = { overdue: 'Overdue steps', closing_soon: '
 // Where the commission invoice stands, as a chip; a closed deal with none is the one the brokerage should chase.
 function commissionChip(d: AgentDeal): { text: string; cls: string } | null {
   const c = d.commission;
-  if (!c) return d.status === 'Closed' ? { text: 'No commission invoice', cls: 'bg-red-500/15 text-red-300' } : null;
+  if (!c) return d.status === 'Closed' ? { text: 'No commission statement', cls: 'bg-red-500/15 text-red-300' } : null;
+  if (c.status === 'estimate') return d.status === 'Closed' ? { text: 'Closed · confirm commission', cls: 'bg-red-500/15 text-red-300' } : { text: 'Commission estimate', cls: 'bg-slate-500/15 text-slate-300' };
   if (c.submitted) return { text: 'Invoice needs approval', cls: 'bg-amber-500/15 text-amber-300' };
-  if (c.status === 'proposed') return { text: 'Split waiting for agent', cls: 'bg-slate-500/15 text-slate-300' };
+  if (c.status === 'proposed') return { text: 'Confirmed · agent reviewing', cls: 'bg-slate-500/15 text-slate-300' };
   if (c.status === 'change_requested') return { text: 'Agent asked for a change', cls: 'bg-orange-500/15 text-orange-300' };
-  if (c.status === 'accepted') return { text: d.status === 'Closed' ? 'Approved, mark paid' : 'Invoice approved', cls: 'bg-emerald-500/15 text-emerald-300' };
+  if (c.status === 'accepted') return { text: d.status === 'Closed' ? 'Agreed, mark agent paid' : 'Agent agreed', cls: 'bg-emerald-500/15 text-emerald-300' };
   if (c.status === 'paid') return { text: 'Paid', cls: 'bg-blue-500/15 text-blue-300' };
   return null;
 }

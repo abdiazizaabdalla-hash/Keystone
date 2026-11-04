@@ -30,9 +30,12 @@ export async function GET(request: NextRequest) {
     const rows = commissionRows ?? [];
     const live = rows.filter((r) => r.status !== 'void');
     const withCommission = new Set(live.map((r) => r.transaction_id as string));
-    const unpaid = live.filter((r) => r.status !== 'paid');
+    const closedIds = new Set(deals.filter((d) => d.status === CLOSED_STAGE).map((d) => d.id));
+    // An estimate has no amount to pay yet, so it is not 'owed'; it is something the owner still has to confirm.
+    const unpaid = live.filter((r) => r.status !== 'paid' && r.status !== 'estimate');
     const commissions = {
       changeRequested: live.filter((r) => r.status === 'change_requested' && r.change_note).length,
+      needsConfirm: live.filter((r) => r.status === 'estimate' && closedIds.has(r.transaction_id as string)).length,
       needsApproval: live.filter((r) => r.status === 'change_requested' && !r.change_note).length,
       awaitingAgent: live.filter((r) => r.status === 'proposed').length,
       readyToPay: live.filter((r) => r.status === 'accepted').length,

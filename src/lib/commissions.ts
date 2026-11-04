@@ -1,12 +1,15 @@
 import { supabaseServer } from './supabase';
 import { AuthError } from './auth';
 import { getMutedTypes } from './notifications';
-import { computeSplit, fromCents, type Deduction, type SplitType } from './commissionMath';
+import { computeSplit, fromCents, cleanBaseFees, isSplitType, toCents, type BaseFee, type Deduction, type SplitType } from './commissionMath';
+import { capProgress, isCapReset, type CapProgress, type CapReset, type CapTerms } from './commissionCap';
+import { activeLinkForAgent, agentLabels, overseesAgent, type BrokerageLink } from './oversight';
 
 // Commission agreements and statements between a brokerage owner and one of their agents, deal by deal.
 // Only the owner and that agent can see or touch a commission; coordinators and the rest of the team never do.
 
-export type CommissionStatus = 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
+// 'estimate': built from the agent's base terms, no confirmed gross yet (nothing to agree to and nothing to pay).
+export type CommissionStatus = 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
 
 export interface CommissionRow {
   id: string;
@@ -14,12 +17,12 @@ export interface CommissionRow {
   owner_user_id: string;
   agent_user_id: string;
   statement_number: string;
-  gross_cents: number;
+  gross_cents: number | null;
   split_type: SplitType;
   split_value: number | string;
   deductions: Deduction[];
-  agent_net_cents: number;
-  brokerage_net_cents: number;
+  agent_net_cents: number | null;
+  brokerage_net_cents: number | null;
   status: CommissionStatus;
   change_note: string | null;
   payment_preference: 'relay' | 'outside' | null;
@@ -28,10 +31,25 @@ export interface CommissionRow {
   paid_on: string | null;
   paid_note: string | null;
   updated_at: string;
+  confirmed_at?: string | null;
+  confirmed_by?: string | null;
+  cap_snapshot?: { capCents: number; reset: CapReset; anchor: string | null } | null;
 }
 
 /** The numbers on a commission, recomputed from what was agreed (never trusted from the client). */
-export function breakdown(row: Pick<CommissionRow, 'gross_cents' | 'split_type' | 'split_value' | 'deductions'>) {
+export interface Breakdown {
+  gross: number | null;
+  agentShare: number | null;
+  brokerageShare: number | null;
+  deductionsTotal: number | null;
+  agentNet: number | null;
+  brokerageNet: number | null;
+  agentPercentOfGross: number | null;
+}
+
+export function breakdown(row: Pick<CommissionRow, 'gross_cents' | 'split_type' | 'split_value' | 'deductions'>): Breakdown {
+  // An estimate with no figure yet has nothing to compute.
+  if (row.gross_cents === null || row.gross_cents === undefined) return { gross: null, agentShare: null, brokerageShare: null, deductionsTotal: null, agentNet: null, brokerageNet: null, agentPercentOfGross: null };
   const s = computeSplit({ gross: fromCents(Number(row.gross_cents)), splitType: row.split_type, splitValue: Number(row.split_value), deductions: row.deductions ?? [] });
   return {
     gross: fromCents(s.grossCents),
@@ -53,6 +71,9 @@ export function viewOf(row: CommissionRow) {
     splitValue: Number(row.split_value),
     deductions: row.deductions ?? [],
     status: row.status,
+    // 'estimate' until the brokerage owner confirms the actual gross commission from the closing documents; 'confirmed' after.
+    grossStatus: row.status === 'estimate' ? ('estimate' as const) : ('confirmed' as const),
+    confirmedAt: row.confirmed_at ?? null,
     changeNote: row.change_note,
     // The agent generated this invoice themselves and it is waiting for the brokerage to approve or edit it.
     // (Stored as a change request with no note; a real change request always carries one.)
@@ -107,3 +128,111 @@ export const isMissingTable = (error: unknown) => {
   const code = (error as { code?: string } | null)?.code;
   return code === 'PGRST205' || code === '42P01';
 };
+
+// --- The brokerage's base terms for an agent, and the estimate statement built from them ---
+
+export interface BaseTerms {
+  split: { type: SplitType; value: number } | null;
+  fees: BaseFee[];
+  cap: CapTerms | null;
+}
+
+type LinkTerms = Partial<Pick<BrokerageLink, 'default_split_type' | 'default_split_value' | 'responded_at'>> & {
+  default_fees?: unknown;
+  cap_cents?: number | string | null;
+  cap_reset?: string | null;
+  cap_start?: string | null;
+};
+
+/** What a brokerage has set for an agent. Nothing is assumed: an unset split is null, no fees is an empty list, no cap is null. */
+export function termsFromLink(link: LinkTerms | null | undefined): BaseTerms {
+  if (!link) return { split: null, fees: [], cap: null };
+  const type = link.default_split_type;
+  const value = link.default_split_value;
+  const split = isSplitType(type) && value !== null && value !== undefined ? { type, value: Number(value) } : null;
+  let fees: BaseFee[] = [];
+  try {
+    fees = cleanBaseFees(link.default_fees);
+  } catch {
+    fees = [];
+  }
+  const capCents = link.cap_cents === null || link.cap_cents === undefined ? 0 : Number(link.cap_cents);
+  const cap = capCents > 0 && isCapReset(link.cap_reset) ? { capCents, reset: link.cap_reset, anchor: link.cap_start ?? (link.responded_at ? String(link.responded_at).slice(0, 10) : null) } : null;
+  return { split, fees, cap };
+}
+
+/**
+ * Make the estimate statement for a deal if there is none and the agent's brokerage has set their terms. It carries the base
+ * split, the default fees and the cap rule as they are right now, and no figures: the brokerage owner confirms those from the
+ * closing documents. Returns the statement (new or existing) or null when there is nothing to base one on. Never throws.
+ */
+export async function ensureEstimateStatement(transactionId: string): Promise<CommissionRow | null> {
+  try {
+    const existing = await commissionForTransaction(transactionId);
+    if (existing) return existing;
+    const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id').eq('id', transactionId).maybeSingle();
+    const agentId = tx?.tc_user_id as string | undefined;
+    if (!agentId) return null;
+    const link = await activeLinkForAgent(agentId);
+    if (!link || !(await overseesAgent(link.owner_user_id, agentId))) return null;
+    const terms = termsFromLink(link);
+    if (!terms.split) return null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { data, error } = await supabaseServer
+        .from('deal_commissions')
+        .insert({
+          transaction_id: transactionId,
+          owner_user_id: link.owner_user_id,
+          agent_user_id: agentId,
+          statement_number: await nextStatementNumber(link.owner_user_id),
+          gross_cents: null,
+          split_type: terms.split.type,
+          split_value: terms.split.value,
+          deductions: terms.fees.map((f) => ({ label: f.label, amount: f.amount })),
+          agent_net_cents: null,
+          brokerage_net_cents: null,
+          status: 'estimate',
+          cap_snapshot: terms.cap,
+        })
+        .select('*')
+        .single();
+      if (!error) return data as CommissionRow;
+      if (error.code !== '23505') throw error;
+      const again = await commissionForTransaction(transactionId);
+      if (again) return again;
+    }
+    return null;
+  } catch (error) {
+    if (!isMissingTable(error)) console.error('Could not create the commission estimate:', error);
+    return null;
+  }
+}
+
+export interface CapInfo extends CapProgress {
+  capCents: number;
+  reset: CapReset;
+}
+
+/** Where an agent stands against their cap, from the confirmed statements Relay holds for them. Null when they have no cap. */
+export async function capInfoFor(ownerId: string, agentId: string, terms: BaseTerms, today: string): Promise<CapInfo | null> {
+  if (!terms.cap) return null;
+  const { data } = await supabaseServer
+    .from('deal_commissions')
+    .select('transaction_id, gross_cents, split_type, split_value, deductions, confirmed_at, status')
+    .eq('owner_user_id', ownerId)
+    .eq('agent_user_id', agentId)
+    .not('status', 'in', '(estimate,void)')
+    .limit(2000);
+  const rows = (data ?? []) as Pick<CommissionRow, 'transaction_id' | 'gross_cents' | 'split_type' | 'split_value' | 'deductions' | 'confirmed_at' | 'status'>[];
+  const closing = new Map<string, string | null>();
+  for (let i = 0; i < rows.length; i += 80) {
+    const { data: tx } = await supabaseServer.from('transactions').select('id, closing_date').in('id', rows.slice(i, i + 80).map((r) => r.transaction_id));
+    for (const t of tx ?? []) closing.set(t.id as string, (t.closing_date as string | null) ?? null);
+  }
+  const contributions = rows
+    .filter((r) => r.gross_cents !== null)
+    .map((r) => ({ onDate: closing.get(r.transaction_id) ?? r.confirmed_at ?? today, cents: toCents(breakdown(r).brokerageShare ?? 0) }));
+  return { capCents: terms.cap.capCents, reset: terms.cap.reset, ...capProgress(terms.cap, contributions, today) };
+}
+
+export const ownerLabelFor = async (ownerId: string) => (await agentLabels([ownerId])).get(ownerId) ?? null;

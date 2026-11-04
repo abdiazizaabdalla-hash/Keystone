@@ -45,9 +45,8 @@ export function commissionNudges(input: { deals: NudgeDeal[]; commissions: Nudge
   const dealById = new Map(deals.map((d) => [d.id, d]));
   const out: Nudge[] = [];
   const at = (id: string) => ` · ${dealById.get(id)?.address ?? 'a deal'}`;
-  // Owners oversee a deal from Collaborate; agents work in it from Transactions. The tag keeps each nudge's link distinct.
+  // Owners oversee a deal from Collaborate. The tag keeps each nudge's link distinct.
   const ownerLink = (id: string, tag: string) => `/dashboard/collaborate/deals/${id}#n-${tag}`;
-  const agentLink = (id: string, tag: string) => `/dashboard/transactions/${id}#n-${tag}`;
 
   // An invoice the agent generated that the brokerage has not answered.
   for (const c of byDeal.values()) {
@@ -63,19 +62,25 @@ export function commissionNudges(input: { deals: NudgeDeal[]; commissions: Nudge
     }
   }
 
+  // Closing: the brokerage owner is the one who confirms the real commission, from the closing documents. The agent is not asked to
+  // invoice anyone; they only see the estimate and, later, the confirmed statement.
   for (const d of deals) {
     const owner = ownerOf(d.agentId);
-    if (!owner || byDeal.has(d.id)) continue;
+    if (!owner) continue;
+    const c = byDeal.get(d.id);
+    const estimateOnly = c?.status === 'estimate';
+    if (c && !estimateOnly) continue;
     if (d.status === 'Closed') {
       const closedOn = d.closingDate && d.closingDate <= today ? d.closingDate : d.updatedAt ? day(d.updatedAt) : null;
       if (closedOn && daysBetween(closedOn, today) >= CLOSED_NO_INVOICE_DAYS) {
-        out.push({ recipientId: d.agentId, transactionId: d.id, title: `This deal closed without a commission invoice. Generate it so you can get paid${at(d.id)}`, link: agentLink(d.id, 'closed-no-invoice-agent'), repeatDays: 7 });
-        out.push({ recipientId: owner, transactionId: d.id, title: `A closed deal still has no commission invoice from the agent${at(d.id)}`, link: ownerLink(d.id, 'closed-no-invoice-owner'), repeatDays: 7 });
+        out.push(estimateOnly
+          ? { recipientId: owner, transactionId: d.id, title: `This deal closed. Confirm the actual commission from the closing documents${at(d.id)}`, link: ownerLink(d.id, 'confirm-commission'), repeatDays: 7 }
+          : { recipientId: owner, transactionId: d.id, title: `This deal closed and has no commission statement. Set the agent’s commission terms to create one${at(d.id)}`, link: ownerLink(d.id, 'closed-no-statement'), repeatDays: 7 });
       }
-    } else if (d.closingDate) {
+    } else if (d.closingDate && estimateOnly) {
       const left = daysBetween(today, d.closingDate);
       if (left >= 0 && left <= CLOSING_SOON_DAYS) {
-        out.push({ recipientId: d.agentId, transactionId: d.id, title: `Closing ${left === 0 ? 'today' : `in ${plural(left, 'day')}`}. Generate your commission invoice so your brokerage can approve it first${at(d.id)}`, link: agentLink(d.id, 'closing-soon'), repeatDays: 30 });
+        out.push({ recipientId: owner, transactionId: d.id, title: `Closing ${left === 0 ? 'today' : `in ${plural(left, 'day')}`}. Have the closing documents ready to confirm the actual commission${at(d.id)}`, link: ownerLink(d.id, 'closing-soon'), repeatDays: 30 });
       }
     }
   }

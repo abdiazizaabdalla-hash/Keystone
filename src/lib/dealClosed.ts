@@ -1,6 +1,6 @@
 import { supabaseServer } from './supabase';
 import { getMutedTypes } from './notifications';
-import { activeLinkForAgent, brokerageOwnersForDeal, overseesAgent } from './oversight';
+import { brokerageOwnersForDeal, overseesAgent } from './oversight';
 import { commissionForTransaction } from './commissions';
 
 // When a deal in a brokerage closes: the brokerage owner is told, with where the commission invoice stands, and the agent is
@@ -24,20 +24,18 @@ export async function notifyDealClosed(transactionId: string, actorId: string): 
     const live = c && c.status !== 'void' ? c : null;
     const submitted = live?.status === 'change_requested' && !live.change_note;
 
-    const ownerBody = !live ? 'No commission invoice yet. Your agent has been asked to send one.'
+    const ownerBody = !live ? 'There is no commission statement yet. Set the agent’s commission terms and one is created.'
+      : live.status === 'estimate' ? `${live.statement_number} is still an estimate. Confirm the actual commission from the closing documents.`
       : submitted ? `${live.statement_number} is waiting for your approval.`
       : live.status === 'accepted' ? `${live.statement_number} is approved. Mark it paid once the funds arrive.`
       : live.status === 'paid' ? `${live.statement_number} is already paid.`
       : `${live.statement_number} is still being agreed with the agent.`;
     const ownerLink = `/dashboard/collaborate/deals/${transactionId}`; // owners oversee a deal from Collaborate
-    const agentLink = `/dashboard/transactions/${transactionId}`;
     for (const ownerId of owners) {
       if (ownerId === actorId || !(await overseesAgent(ownerId, agentId))) continue;
       await put(ownerId, actorId, transactionId, 'deal_closed', `Deal closed${where}`, ownerBody, ownerLink);
     }
-    if (!live && agentId !== actorId && (await activeLinkForAgent(agentId))) {
-      await put(agentId, actorId, transactionId, 'deal_closed', `Your deal closed. Generate your commission invoice${where}`, 'Your brokerage will review it, then pay you or mark it paid.', agentLink);
-    }
+    // The agent is not asked to invoice anyone: the brokerage owner confirms the actual commission, and the agent is told then.
   } catch (error) {
     console.error('Deal-closed notification failed:', error);
   }

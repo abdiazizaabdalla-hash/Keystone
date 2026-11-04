@@ -447,7 +447,7 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
 
               <div>
                 <label className="text-sm text-slate-400 block mb-2">
-                  Flat Fee per Deal ($)
+                  Coordination fee per deal ($)
                 </label>
                 <MoneyInput
                   name="flatFee"
@@ -620,13 +620,13 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-xs uppercase tracking-wider text-slate-500">Flat fee per deal</dt>
+                            <dt className="text-xs uppercase tracking-wider text-slate-500">Coordination fee per deal (flat)</dt>
                             <dd className="mt-0.5 font-semibold text-blue-400">
                               ${Number(agent.flat_fee ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-xs uppercase tracking-wider text-slate-500">Percentage fee</dt>
+                            <dt className="text-xs uppercase tracking-wider text-slate-500">Coordination fee (% of price)</dt>
                             <dd className="mt-0.5 font-semibold text-blue-400">{agent.commission_percent ?? 0}%</dd>
                           </div>
                         </dl>

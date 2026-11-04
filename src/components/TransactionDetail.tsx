@@ -3030,7 +3030,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           </div>
 
           {isAgentAcct && !ownerView && (
-          <OverviewSection defaultOpen title="Invoice" summary={isFeatureOnClient('brokerage') ? 'Commission invoice to your brokerage, or bill someone else' : 'Bill a coordinator, client or anyone else'}>
+          <OverviewSection defaultOpen title={isFeatureOnClient('brokerage') ? 'Commission & invoices' : 'Invoice'} summary={isFeatureOnClient('brokerage') ? 'Your brokerage’s commission statement, and invoices you send to others' : 'Bill a coordinator, client or anyone else'}>
             <AgentCommissionInvoice transactionId={transaction.id} purchasePrice={Number(transaction.purchase_price) || null} hasCoordinator={Boolean(transaction.shared) || acceptedAgentUsers.length > 0} />
           </OverviewSection>
           )}

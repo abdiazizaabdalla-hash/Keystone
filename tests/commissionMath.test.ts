@@ -58,3 +58,13 @@ describe('splitLabel', () => {
     expect(splitLabel('flat_brokerage', 500)).toBe('Brokerage fee $500.00');
   });
 });
+
+describe('base fees', () => {
+  it('are cleaned like fees on a deal, and always come out of the agent’s share', async () => {
+    const { cleanBaseFees, SplitError } = await import('@/lib/commissionMath');
+    expect(cleanBaseFees([{ label: ' Transaction fee ', amount: '395' }, { label: '', amount: 0 }])).toEqual([{ label: 'Transaction fee', amount: 395, when: 'agent_share' }]);
+    expect(cleanBaseFees(undefined)).toEqual([]);
+    expect(() => cleanBaseFees([{ label: '', amount: 5 }])).toThrow(SplitError);
+    expect(() => cleanBaseFees([{ label: 'x', amount: -5 }])).toThrow(SplitError);
+  });
+});

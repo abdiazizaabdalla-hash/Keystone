@@ -18,7 +18,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       supabaseServer.from('transactions').select('property_address, file_number').eq('id', row.transaction_id).maybeSingle(),
       agentLabels([row.owner_user_id, row.agent_user_id]),
     ]);
+    // An estimate is not a statement: the brokerage owner has not confirmed the gross commission yet.
+    if (row.status === 'estimate' || row.gross_cents === null) throw new AuthError('This commission is still an estimate. Confirm the actual commission first, then the statement can be downloaded.', 409);
     const b = breakdown(row);
+    const num = (n: number | null) => n ?? 0;
     const pdf = await generateCommissionStatementPdf({
       statementNumber: row.statement_number,
       status: row.status,
@@ -27,12 +30,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       brokerage: labels.get(row.owner_user_id)?.name ?? 'Brokerage',
       agent: labels.get(row.agent_user_id)?.name ?? 'Agent',
       splitText: splitLabel(row.split_type, Number(row.split_value)),
-      gross: b.gross,
-      agentShare: b.agentShare,
-      brokerageShare: b.brokerageShare,
+      gross: num(b.gross),
+      agentShare: num(b.agentShare),
+      brokerageShare: num(b.brokerageShare),
       deductions: row.deductions ?? [],
-      agentNet: b.agentNet,
-      brokerageNet: b.brokerageNet,
+      agentNet: num(b.agentNet),
+      brokerageNet: num(b.brokerageNet),
       paidOn: row.paid_on,
       paidNote: row.paid_note,
     });

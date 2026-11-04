@@ -6,14 +6,17 @@ import { activeLinkForAgent, agentLabels, assertBrokerageOwner, brokerageOn, can
 import { CLOSED_STAGE } from '@/lib/oversightMath';
 import { oversightError } from '@/lib/oversightServer';
 import { cleanDeductions, computeSplit, isSplitType, SplitError, splitLabel, toCents, type SplitType } from '@/lib/commissionMath';
-import { commissionForTransaction, isMissingTable, nextStatementNumber, notifyCommission, viewOf, breakdown, type CommissionRow } from '@/lib/commissions';
+import { capInfoFor, commissionForTransaction, ensureEstimateStatement, isMissingTable, nextStatementNumber, notifyCommission, termsFromLink, viewOf, breakdown, type BaseTerms, type CommissionRow } from '@/lib/commissions';
 
 // Commission splits between a brokerage owner and their agents, one per deal. Off (404) unless the brokerage feature is on.
 //
-//   GET ?transaction=<id>   -> { role, canPropose, defaultSplit, dealClosed, commission }   for the deal's box (role is null for anyone else)
+//   GET ?transaction=<id>   -> { role, canPropose, terms, cap, dealClosed, commission }   for the deal's box (role is null for anyone else).
+//                              A deal with a brokerage that has set the agent's terms gets an ESTIMATE statement the first time it is looked at.
 //   GET                     -> { asOwner, asAgent, agents }   the ledger; the owner's also lists agents with their default split
 //   GET ?format=csv         -> the owner's ledger as a CSV
-//   POST                    -> the owner proposes (or revises) the split on one deal: { transactionId, gross, splitType?, splitValue?, deductions? }
+//   POST                    -> the owner, on one deal: { transactionId, gross?, splitType?, splitValue?, deductions? }
+//                              with gross: confirms the actual gross commission (from the closing documents) and sends the statement to the agent
+//                              without gross: saves the terms on the estimate (creating it if the agent had no terms when the deal started)
 //
 // Only the owner and that deal's agent can ever see a commission. Nothing here moves money.
 
@@ -42,27 +45,47 @@ export async function GET(request: NextRequest) {
     if (transactionId) {
       const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id, status, purchase_price').eq('id', transactionId).maybeSingle();
       if (!tx) return NextResponse.json({ role: null });
-      const row = await commissionForTransaction(transactionId);
       const dealClosed = tx.status === CLOSED_STAGE;
+      const today = new Date().toISOString().slice(0, 10);
       if (tx.tc_user_id === user.id) {
-        // The agent who owns the deal sees it only if there is a commission on it (or a brokerage that could propose one).
-        if (row) return NextResponse.json({ role: 'agent', canPropose: false, dealClosed, commission: viewOf(row) });
-        // No statement yet: an agent in a brokerage can generate one, pre-filled with the split their brokerage set for them.
+        // The agent who owns the deal. An estimate is made for them the first time they look, if their brokerage has set their terms.
+        const row = (await commissionForTransaction(transactionId)) ?? (await ensureEstimateStatement(transactionId));
         const link = await activeLinkForAgent(user.id);
-        if (!link || !(await overseesAgent(link.owner_user_id, user.id))) return NextResponse.json({ role: null, canPropose: false, dealClosed, commission: null });
-        const owner = (await agentLabels([link.owner_user_id])).get(link.owner_user_id);
-        const split = link.default_split_type && link.default_split_value !== null && link.default_split_value !== undefined ? { type: link.default_split_type as SplitType, value: Number(link.default_split_value) } : null;
-        return NextResponse.json({ role: null, canPropose: false, canGenerate: true, brokerage: { name: owner?.name ?? 'Your brokerage', email: owner?.email ?? null }, defaultSplit: split, purchasePrice: Number(tx.purchase_price) || null, dealClosed, commission: null });
+        const inBrokerage = !!link && (await overseesAgent(link.owner_user_id, user.id));
+        const owner = link ? (await agentLabels([link.owner_user_id])).get(link.owner_user_id) : undefined;
+        const brokerage = { name: owner?.name ?? 'Your brokerage', email: owner?.email ?? null };
+        if (row) {
+          const sameOwner = !!link && inBrokerage && link.owner_user_id === row.owner_user_id;
+          const terms = sameOwner ? termsFromLink(link) : null;
+          const cap = terms && terms.cap ? await capInfoFor(row.owner_user_id, user.id, terms, today) : null;
+          return NextResponse.json({ role: 'agent', canPropose: false, dealClosed, brokerage: sameOwner ? brokerage : undefined, terms, cap, commission: viewOf(row) });
+        }
+        if (!inBrokerage) return NextResponse.json({ role: null, canPropose: false, dealClosed, commission: null });
+        // In a brokerage that has not set their terms yet: nothing is invented, the card just says so.
+        return NextResponse.json({ role: null, canPropose: false, awaitingTerms: true, brokerage, purchasePrice: Number(tx.purchase_price) || null, dealClosed, commission: null });
       }
-      const owns = row ? row.owner_user_id === user.id : false;
+      const existing = await commissionForTransaction(transactionId);
+      const owns = existing ? existing.owner_user_id === user.id : false;
       const oversees = await canOverseeDeal(user.id, transactionId);
       if (!owns && !oversees) return NextResponse.json({ role: null });
-      let defaultSplit: { type: SplitType; value: number } | null = null;
+      const row = oversees ? (existing ?? (await ensureEstimateStatement(transactionId))) : existing;
+      let terms: BaseTerms | null = null;
+      let cap = null;
       if (oversees) {
-        const { data: link } = await supabaseServer.from('brokerage_links').select('default_split_type, default_split_value').eq('owner_user_id', user.id).eq('agent_user_id', tx.tc_user_id).eq('status', 'active').maybeSingle();
-        if (link?.default_split_type && link.default_split_value !== null) defaultSplit = { type: link.default_split_type as SplitType, value: Number(link.default_split_value) };
+        const { data: link } = await supabaseServer.from('brokerage_links').select('*').eq('owner_user_id', user.id).eq('agent_user_id', tx.tc_user_id).eq('status', 'active').maybeSingle();
+        terms = termsFromLink(link);
+        if (terms.cap) cap = await capInfoFor(user.id, tx.tc_user_id as string, terms, today);
       }
-      return NextResponse.json({ role: 'owner', canPropose: oversees && (!row || (row.status !== 'paid')), defaultSplit, dealClosed, commission: row ? viewOf(row) : null });
+      return NextResponse.json({
+        role: 'owner',
+        canPropose: oversees && (!row || row.status !== 'paid'),
+        defaultSplit: terms?.split ?? null,
+        terms,
+        cap,
+        dealClosed,
+        purchasePrice: Number(tx.purchase_price) || null,
+        commission: row ? viewOf(row) : null,
+      });
     }
 
     const [mine, theirs] = await Promise.all([
@@ -87,20 +110,21 @@ export async function GET(request: NextRequest) {
     const asAgent = agentRows.map((r) => ({ ...viewOf(r), property: dealOf(r.transaction_id).address, fileNumber: dealOf(r.transaction_id).fileNumber, dealStatus: dealOf(r.transaction_id).status, brokerage: labels.get(r.owner_user_id) ?? { id: r.owner_user_id, name: 'Brokerage', email: null } }));
 
     if (params.get('format') === 'csv') {
+      const money = (n: number | null) => (n === null ? '' : n.toFixed(2));
       if (ownerRows.length === 0 && !(await listOwnerLinks(user.id)).length) throw new AuthError('Not found', 404);
       const header = ['Statement', 'Agent', 'Agent email', 'Property', 'File number', 'Stage', 'Gross commission', 'Split', 'Fees', 'Net to agent', 'Net to brokerage', 'Status', 'Paid on'];
       const lines = [header.map(csvCell).join(',')];
-      for (const c of asOwner) lines.push([c.statementNumber, c.agent.name, c.agent.email, c.property, c.fileNumber, c.dealStatus, c.gross.toFixed(2), splitLabel(c.splitType, c.splitValue), c.deductionsTotal.toFixed(2), c.agentNet.toFixed(2), c.brokerageNet.toFixed(2), c.status, c.paidOn].map(csvCell).join(','));
+      for (const c of asOwner) lines.push([c.statementNumber, c.agent.name, c.agent.email, c.property, c.fileNumber, c.dealStatus, money(c.gross), splitLabel(c.splitType, c.splitValue), money(c.deductionsTotal), money(c.agentNet), money(c.brokerageNet), c.grossStatus === 'estimate' ? 'estimate' : c.status, c.paidOn].map(csvCell).join(','));
       await logAudit(request, user, 'commission.export', { entityType: 'commission', metadata: { rows: asOwner.length } });
       return new NextResponse(`﻿${lines.join('\r\n')}\r\n`, { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="commissions-${new Date().toISOString().slice(0, 10)}.csv"`, 'Cache-Control': 'no-store' } });
     }
 
     // The owner also gets the roster of agents with their default split, so it can be edited on the same screen.
-    let agents: { linkId: string; id: string; name: string; email: string | null; defaultSplit: { type: SplitType; value: number } | null }[] = [];
+    let agents: { linkId: string; id: string; name: string; email: string | null; defaultSplit: { type: SplitType; value: number } | null; terms: BaseTerms }[] = [];
     if (ownerRows.length > 0 || (await listOwnerLinks(user.id)).length > 0) {
-      const { data: links } = await supabaseServer.from('brokerage_links').select('id, agent_user_id, invited_email, default_split_type, default_split_value').eq('owner_user_id', user.id).eq('status', 'active');
+      const { data: links } = await supabaseServer.from('brokerage_links').select('*').eq('owner_user_id', user.id).eq('status', 'active');
       const names = await agentLabels((links ?? []).map((l) => l.agent_user_id as string));
-      agents = (links ?? []).map((l) => ({ linkId: l.id as string, id: l.agent_user_id as string, name: names.get(l.agent_user_id as string)?.name ?? (l.invited_email as string), email: names.get(l.agent_user_id as string)?.email ?? (l.invited_email as string), defaultSplit: l.default_split_type && l.default_split_value !== null ? { type: l.default_split_type as SplitType, value: Number(l.default_split_value) } : null }));
+      agents = (links ?? []).map((l) => ({ linkId: l.id as string, id: l.agent_user_id as string, name: names.get(l.agent_user_id as string)?.name ?? (l.invited_email as string), email: names.get(l.agent_user_id as string)?.email ?? (l.invited_email as string), defaultSplit: l.default_split_type && l.default_split_value !== null ? { type: l.default_split_type as SplitType, value: Number(l.default_split_value) } : null, terms: termsFromLink(l) }));
     }
     return NextResponse.json({ asOwner, asAgent, agents });
   } catch (error) {
@@ -121,39 +145,76 @@ export async function POST(request: NextRequest) {
     const agentId = tx!.tc_user_id as string;
     if (!(await overseesAgent(user.id, agentId))) throw new AuthError('Not found', 404);
 
+    const hasGross = input.gross !== undefined && input.gross !== null && input.gross !== '';
     const gross = typeof input.gross === 'number' ? input.gross : Number(input.gross);
 
-    // Use the agent's default split unless this deal says otherwise.
-    let splitType = input.splitType;
-    let splitValue = input.splitValue === undefined || input.splitValue === '' ? undefined : Number(input.splitValue);
-    if (splitType === undefined || splitValue === undefined) {
-      const { data: link } = await supabaseServer.from('brokerage_links').select('default_split_type, default_split_value').eq('owner_user_id', user.id).eq('agent_user_id', agentId).eq('status', 'active').maybeSingle();
-      if (splitType === undefined) splitType = link?.default_split_type ?? undefined;
-      if (splitValue === undefined && link?.default_split_value !== null && link?.default_split_value !== undefined) splitValue = Number(link.default_split_value);
-    }
-    if (!isSplitType(splitType) || splitValue === undefined) throw new SplitError('Choose how the commission is split, or set this agent’s default split first.');
-    const deductions = cleanDeductions(input.deductions);
-    const result = computeSplit({ gross, splitType, splitValue, deductions });
-
+    // The agent's base terms are the starting point; anything sent for this deal wins.
+    const { data: link } = await supabaseServer.from('brokerage_links').select('*').eq('owner_user_id', user.id).eq('agent_user_id', agentId).eq('status', 'active').maybeSingle();
+    const terms = termsFromLink(link);
     const existing = await commissionForTransaction(transactionId);
     if (existing && existing.owner_user_id !== user.id) throw new AuthError('Not found', 404);
     if (existing && existing.status === 'paid') return NextResponse.json({ error: 'This commission was already paid. Void it first if it needs to change.' }, { status: 409 });
 
-    const fields = {
-      owner_user_id: user.id,
-      agent_user_id: agentId,
-      gross_cents: toCents(gross),
-      split_type: splitType,
-      split_value: splitValue,
-      deductions,
-      agent_net_cents: result.agentNetCents,
-      brokerage_net_cents: result.brokerageNetCents,
-      status: 'proposed',
-      change_note: null,
-      accepted_at: null,
-      proposed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    let splitType = input.splitType;
+    let splitValue = input.splitValue === undefined || input.splitValue === '' ? undefined : Number(input.splitValue);
+    if (splitType === undefined || splitValue === undefined) {
+      if (existing) {
+        if (splitType === undefined) splitType = existing.split_type;
+        if (splitValue === undefined) splitValue = Number(existing.split_value);
+      } else {
+        if (splitType === undefined) splitType = terms.split?.type;
+        if (splitValue === undefined) splitValue = terms.split?.value;
+      }
+    }
+    if (!isSplitType(splitType) || splitValue === undefined) throw new SplitError('Choose how the commission is split, or set this agent’s base split first.');
+    // With no gross yet nothing is computed, so the split is checked here (a confirmed statement is checked again by the math).
+    if (!Number.isFinite(splitValue) || splitValue < 0 || (splitType === 'percent' && splitValue > 100) || splitValue > 100_000_000) throw new SplitError(splitType === 'percent' ? 'A percentage must be between 0 and 100.' : 'Enter an amount of zero or more.');
+    const deductions = input.deductions !== undefined ? cleanDeductions(input.deductions) : existing ? existing.deductions ?? [] : terms.fees.map((f) => ({ label: f.label, amount: f.amount }));
+    const now = new Date().toISOString();
+    const capSnapshot = existing?.cap_snapshot ?? terms.cap;
+
+    let fields: Record<string, unknown>;
+    let confirming = false;
+    if (hasGross) {
+      // The owner confirms the actual gross commission. From here it is a statement the agent can review.
+      const result = computeSplit({ gross, splitType, splitValue, deductions });
+      confirming = true;
+      fields = {
+        owner_user_id: user.id,
+        agent_user_id: agentId,
+        gross_cents: toCents(gross),
+        split_type: splitType,
+        split_value: splitValue,
+        deductions,
+        agent_net_cents: result.agentNetCents,
+        brokerage_net_cents: result.brokerageNetCents,
+        status: 'proposed',
+        change_note: null,
+        accepted_at: null,
+        proposed_at: now,
+        confirmed_at: now,
+        confirmed_by: user.id,
+        cap_snapshot: capSnapshot,
+        updated_at: now,
+      };
+    } else {
+      // No figures yet: just the terms. A statement the owner already confirmed keeps its figures and needs a gross to change.
+      if (existing && existing.status !== 'estimate' && existing.status !== 'void') throw new SplitError('Enter the gross commission to change a confirmed statement.');
+      fields = {
+        owner_user_id: user.id,
+        agent_user_id: agentId,
+        gross_cents: null,
+        split_type: splitType,
+        split_value: splitValue,
+        deductions,
+        agent_net_cents: null,
+        brokerage_net_cents: null,
+        status: 'estimate',
+        change_note: null,
+        cap_snapshot: capSnapshot,
+        updated_at: now,
+      };
+    }
     let row: CommissionRow;
     if (existing) {
       const { data, error } = await supabaseServer.from('deal_commissions').update(fields).eq('id', existing.id).select('*').single();
@@ -170,15 +231,18 @@ export async function POST(request: NextRequest) {
         }
         if (error.code === '23505' && attempt++ < 2) {
           const again = await commissionForTransaction(transactionId);
-          if (again) return NextResponse.json({ error: 'A split was just proposed on this deal. Reload and edit it instead.' }, { status: 409 });
+          if (again) return NextResponse.json({ error: 'A commission was just started on this deal. Reload and edit it instead.' }, { status: 409 });
           continue;
         }
         throw error;
       }
     }
 
-    await logAudit(request, user, existing ? 'commission.revise' : 'commission.propose', { entityType: 'commission', entityId: row.id, metadata: { transactionId, splitType, splitValue, grossCents: row.gross_cents } });
-    await notifyCommission({ recipientId: agentId, actorId: user.id, transactionId, title: `Your brokerage proposed a commission split · ${tx!.property_address ?? 'a deal'}`, link: `/dashboard/transactions/${transactionId}` });
+    await logAudit(request, user, confirming ? (existing && existing.status !== 'estimate' ? 'commission.revise' : 'commission.confirm') : 'commission.terms', { entityType: 'commission', entityId: row.id, metadata: { transactionId, splitType, splitValue, grossCents: row.gross_cents } });
+    if (confirming) {
+      const revised = !!existing && existing.status !== 'estimate' && existing.status !== 'void';
+      await notifyCommission({ recipientId: agentId, actorId: user.id, transactionId, title: `${revised ? 'Your brokerage revised' : 'Your brokerage confirmed'} the commission statement · ${tx!.property_address ?? 'a deal'}`, link: `/dashboard/transactions/${transactionId}` });
+    }
     return NextResponse.json({ ...viewOf(row), summary: breakdown(row) }, { status: existing ? 200 : 201 });
   } catch (error) {
     return fail(error, 'save the commission');
