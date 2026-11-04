@@ -4,7 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { agentLabels, brokerageOn } from '@/lib/oversight';
 import { oversightError } from '@/lib/oversightServer';
 import { loadCommissionFor, breakdown } from '@/lib/commissions';
-import { splitLabel } from '@/lib/commissionMath';
+import { grossPercentOfPrice, splitBothSides } from '@/lib/commissionMath';
 import { generateCommissionStatementPdf } from '@/lib/commissionStatementPdf';
 
 // The commission statement as a PDF, for the owner or the agent on that commission and nobody else.
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
     const { row } = await loadCommissionFor(id, user.id);
     const [{ data: tx }, labels] = await Promise.all([
-      supabaseServer.from('transactions').select('property_address, file_number').eq('id', row.transaction_id).maybeSingle(),
+      supabaseServer.from('transactions').select('property_address, file_number, purchase_price').eq('id', row.transaction_id).maybeSingle(),
       agentLabels([row.owner_user_id, row.agent_user_id]),
     ]);
     // An estimate is not a statement: the brokerage owner has not confirmed the gross commission yet.
@@ -29,7 +29,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       fileNumber: (tx?.file_number as string) || null,
       brokerage: labels.get(row.owner_user_id)?.name ?? 'Brokerage',
       agent: labels.get(row.agent_user_id)?.name ?? 'Agent',
-      splitText: splitLabel(row.split_type, Number(row.split_value)),
+      splitText: splitBothSides(row.split_type, Number(row.split_value)),
+      salePrice: tx?.purchase_price ? Number(tx.purchase_price) : null,
+      grossPercent: grossPercentOfPrice(tx?.purchase_price ? Number(tx.purchase_price) : null, row.gross_cents === null ? null : Number(row.gross_cents)),
+      agentPercent: row.split_type === 'percent' ? Number(row.split_value) : null,
+      brokeragePercent: row.split_type === 'percent' ? Math.round((100 - Number(row.split_value)) * 1000) / 1000 : null,
       gross: num(b.gross),
       agentShare: num(b.agentShare),
       brokerageShare: num(b.brokerageShare),

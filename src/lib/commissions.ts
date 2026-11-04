@@ -1,9 +1,10 @@
 import { supabaseServer } from './supabase';
 import { AuthError } from './auth';
 import { getMutedTypes } from './notifications';
-import { computeSplit, fromCents, cleanBaseFees, isSplitType, toCents, type BaseFee, type Deduction, type SplitType } from './commissionMath';
+import { computeSplit, expectedGrossCents, fromCents, cleanBaseFees, isRateType, isSplitType, toCents, type BaseFee, type CommissionRate, type Deduction, type SplitType } from './commissionMath';
 import { capProgress, isCapReset, type CapProgress, type CapReset, type CapTerms } from './commissionCap';
 import { activeLinkForAgent, agentLabels, overseesAgent, type BrokerageLink } from './oversight';
+import { CLOSED_STAGE } from './oversightMath';
 
 // Commission agreements and statements between a brokerage owner and one of their agents, deal by deal.
 // Only the owner and that agent can see or touch a commission; coordinators and the rest of the team never do.
@@ -33,6 +34,9 @@ export interface CommissionRow {
   updated_at: string;
   confirmed_at?: string | null;
   confirmed_by?: string | null;
+  commission_type?: 'percent' | 'flat' | null;
+  commission_value?: number | string | null;
+  estimated_gross_cents?: number | null;
   cap_snapshot?: { capCents: number; reset: CapReset; anchor: string | null } | null;
 }
 
@@ -62,6 +66,20 @@ export function breakdown(row: Pick<CommissionRow, 'gross_cents' | 'split_type' 
   };
 }
 
+function rateOf(row: CommissionRow): CommissionRate | null {
+  return isRateType(row.commission_type) && row.commission_value !== null && row.commission_value !== undefined ? { type: row.commission_type, value: Number(row.commission_value) } : null;
+}
+
+/** What an unconfirmed statement would come to at the expected gross (sale price x rate). Null when there is nothing to expect yet. */
+function estimateOf(row: CommissionRow) {
+  if (row.status !== 'estimate' || !row.estimated_gross_cents) return null;
+  try {
+    return breakdown({ gross_cents: row.estimated_gross_cents, split_type: row.split_type, split_value: row.split_value, deductions: row.deductions });
+  } catch {
+    return null;
+  }
+}
+
 export function viewOf(row: CommissionRow) {
   return {
     id: row.id,
@@ -74,6 +92,9 @@ export function viewOf(row: CommissionRow) {
     // 'estimate' until the brokerage owner confirms the actual gross commission from the closing documents; 'confirmed' after.
     grossStatus: row.status === 'estimate' ? ('estimate' as const) : ('confirmed' as const),
     confirmedAt: row.confirmed_at ?? null,
+    // The commission rate this statement expects (percent of the sale price, or flat) and, while it is only an estimate, what that works out to.
+    rate: rateOf(row),
+    estimate: estimateOf(row),
     changeNote: row.change_note,
     // The agent generated this invoice themselves and it is waiting for the brokerage to approve or edit it.
     // (Stored as a change request with no note; a real change request always carries one.)
@@ -132,12 +153,15 @@ export const isMissingTable = (error: unknown) => {
 // --- The brokerage's base terms for an agent, and the estimate statement built from them ---
 
 export interface BaseTerms {
+  commission: CommissionRate | null;
   split: { type: SplitType; value: number } | null;
   fees: BaseFee[];
   cap: CapTerms | null;
 }
 
 type LinkTerms = Partial<Pick<BrokerageLink, 'default_split_type' | 'default_split_value' | 'responded_at'>> & {
+  default_commission_type?: string | null;
+  default_commission_value?: number | string | null;
   default_fees?: unknown;
   cap_cents?: number | string | null;
   cap_reset?: string | null;
@@ -146,7 +170,7 @@ type LinkTerms = Partial<Pick<BrokerageLink, 'default_split_type' | 'default_spl
 
 /** What a brokerage has set for an agent. Nothing is assumed: an unset split is null, no fees is an empty list, no cap is null. */
 export function termsFromLink(link: LinkTerms | null | undefined): BaseTerms {
-  if (!link) return { split: null, fees: [], cap: null };
+  if (!link) return { commission: null, split: null, fees: [], cap: null };
   const type = link.default_split_type;
   const value = link.default_split_value;
   const split = isSplitType(type) && value !== null && value !== undefined ? { type, value: Number(value) } : null;
@@ -158,25 +182,43 @@ export function termsFromLink(link: LinkTerms | null | undefined): BaseTerms {
   }
   const capCents = link.cap_cents === null || link.cap_cents === undefined ? 0 : Number(link.cap_cents);
   const cap = capCents > 0 && isCapReset(link.cap_reset) ? { capCents, reset: link.cap_reset, anchor: link.cap_start ?? (link.responded_at ? String(link.responded_at).slice(0, 10) : null) } : null;
-  return { split, fees, cap };
+  const commission = isRateType(link.default_commission_type) && link.default_commission_value !== null && link.default_commission_value !== undefined ? { type: link.default_commission_type, value: Number(link.default_commission_value) } : null;
+  return { commission, split, fees, cap };
 }
 
 /**
- * Make the estimate statement for a deal if there is none and the agent's brokerage has set their terms. It carries the base
+ * Make the estimate statement for a CLOSED deal if there is none and the agent's brokerage has set their terms. It carries the base
  * split, the default fees and the cap rule as they are right now, and no figures: the brokerage owner confirms those from the
  * closing documents. Returns the statement (new or existing) or null when there is nothing to base one on. Never throws.
  */
 export async function ensureEstimateStatement(transactionId: string): Promise<CommissionRow | null> {
   try {
+    const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id, status, purchase_price').eq('id', transactionId).maybeSingle();
+    if (!tx) return null;
     const existing = await commissionForTransaction(transactionId);
-    if (existing) return existing;
-    const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id').eq('id', transactionId).maybeSingle();
-    const agentId = tx?.tc_user_id as string | undefined;
+    if (existing) {
+      // An estimate made before the brokerage set the agent's commission rate picks the rate up once it is set (until the owner confirms).
+      if (existing.status === 'estimate' && tx.status === CLOSED_STAGE && !existing.commission_type) {
+        const link = await activeLinkForAgent(existing.agent_user_id);
+        const rate = link && link.owner_user_id === existing.owner_user_id ? termsFromLink(link).commission : null;
+        if (rate) {
+          const price = tx.purchase_price === null || tx.purchase_price === undefined ? null : Number(tx.purchase_price);
+          const { data } = await supabaseServer.from('deal_commissions').update({ commission_type: rate.type, commission_value: rate.value, estimated_gross_cents: expectedGrossCents(price, rate) }).eq('id', existing.id).select('*').single();
+          if (data) return data as CommissionRow;
+        }
+      }
+      return existing;
+    }
+    // Commission only exists once a deal has closed. Before that there is nothing to make or show.
+    if (tx.status !== CLOSED_STAGE) return null;
+    const agentId = tx.tc_user_id as string | undefined;
     if (!agentId) return null;
     const link = await activeLinkForAgent(agentId);
     if (!link || !(await overseesAgent(link.owner_user_id, agentId))) return null;
     const terms = termsFromLink(link);
     if (!terms.split) return null;
+    const price = tx.purchase_price === null || tx.purchase_price === undefined ? null : Number(tx.purchase_price);
+    const expected = expectedGrossCents(price, terms.commission);
     for (let attempt = 0; attempt < 3; attempt++) {
       const { data, error } = await supabaseServer
         .from('deal_commissions')
@@ -193,6 +235,9 @@ export async function ensureEstimateStatement(transactionId: string): Promise<Co
           brokerage_net_cents: null,
           status: 'estimate',
           cap_snapshot: terms.cap,
+          commission_type: terms.commission?.type ?? null,
+          commission_value: terms.commission?.value ?? null,
+          estimated_gross_cents: expected,
         })
         .select('*')
         .single();

@@ -41,6 +41,8 @@ beforeAll(async () => {
   dealA = await seedDeal(agentA, 'CMA');
   dealA2 = await seedDeal(agentA, 'CMA2');
   dealB = await seedDeal(agentB, 'CMB');
+  // Commission only exists once a deal has closed.
+  await admin.from('transactions').update({ status: 'Closed' }).in('id', [dealA.transactionId, dealA2.transactionId, dealB.transactionId]);
   const { data: team } = await admin.from('teams').insert({ owner_id: broker.id }).select('id').single();
   await admin.from('team_members').insert([{ team_id: team!.id, user_id: broker.id, role: 'owner' }, { team_id: team!.id, user_id: teammate.id, role: 'member' }]);
   const { data: link } = await admin.from('brokerage_links').insert({ owner_user_id: broker.id, agent_user_id: agentA.id, invited_email: agentA.email, status: 'active' }).select('id').single();

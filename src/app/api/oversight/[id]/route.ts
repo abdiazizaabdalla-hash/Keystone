@@ -4,7 +4,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { assertBrokerageOwner } from '@/lib/oversight';
 import { oversightError } from '@/lib/oversightServer';
-import { SplitError, cleanBaseFees, isSplitType, toCents } from '@/lib/commissionMath';
+import { SplitError, cleanBaseFees, cleanRate, isSplitType, toCents } from '@/lib/commissionMath';
 import { isCapReset } from '@/lib/commissionCap';
 
 // DELETE: cancel an invitation, or remove an agent from the brokerage. The agent keeps all of their deals.
@@ -26,6 +26,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 }
 
 // PATCH: the agent's base commission terms. Every key is optional; only the ones sent are changed.
+//   { commissionType: 'percent' | 'flat', commissionValue }  the agent's commission rate: a percent of the sale price, or a flat fee ({ commissionType: null } clears it)
 //   { splitType, splitValue }  the base split ({ splitType: null } clears it)
 //   { fees: [{ label, amount }] }  fees charged to the agent's share on every deal (an empty list clears them)
 //   { cap: { amount, reset: 'calendar_year' | 'anniversary', start? } }  the brokerage's yearly cap on this agent ({ cap: null } clears it)
@@ -41,6 +42,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!link) throw new AuthError('Not found', 404);
 
     const update: Record<string, unknown> = {};
+    if ('commissionType' in body) {
+      if (body.commissionType === null) {
+        update.default_commission_type = null;
+        update.default_commission_value = null;
+      } else {
+        const rate = cleanRate(body.commissionType, body.commissionValue);
+        update.default_commission_type = rate.type;
+        update.default_commission_value = rate.value;
+      }
+    }
     if ('splitType' in body) {
       if (body.splitType === null) {
         update.default_split_type = null;

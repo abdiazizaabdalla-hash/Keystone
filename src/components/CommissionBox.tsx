@@ -7,14 +7,18 @@ import { openStatement } from '@/lib/commissionClient';
 import { computeSplit } from '@/lib/commissionMath';
 import CapNotice, { type CapView } from '@/components/CapNotice';
 
-// The commission on one deal, between the brokerage and its agent (never Relay's own coordination fees). It starts as an ESTIMATE
-// built from the agent's base terms, with no amounts. After closing the brokerage owner confirms the actual gross commission the
+// The commission on one deal, between the brokerage and its agent (never Relay's own coordination fees). Nothing shows until the deal
+// closes. Then it is an ESTIMATE built from the agent's commission rate (a percent of the sale price, or a flat fee) and split, and the brokerage owner confirms the actual gross commission the
 // brokerage received; the agent then reviews it and agrees or asks for a change; the owner records when the agent was paid.
 // Only the owner can confirm amounts or payment. Nothing here moves money. Renders nothing for anyone who is not a party to it.
 
 type SplitType = 'percent' | 'flat_agent' | 'flat_brokerage';
 interface Fee { label: string; amount: number }
+interface Rate { type: 'percent' | 'flat'; value: number }
+interface Estimate { gross: number | null; agentShare: number | null; brokerageShare: number | null; deductionsTotal: number | null; agentNet: number | null; brokerageNet: number | null }
 interface View {
+  rate?: Rate | null;
+  estimate?: Estimate | null;
   id: string;
   statementNumber: string;
   splitType: SplitType;
@@ -36,12 +40,13 @@ interface View {
   brokerageNet: number | null;
   agentPercentOfGross: number | null;
 }
-interface Terms { split: { type: SplitType; value: number } | null; fees: Fee[] }
-interface Data { role: 'owner' | 'agent' | null; canPropose?: boolean; defaultSplit?: { type: SplitType; value: number } | null; terms?: Terms | null; cap?: CapView | null; dealClosed?: boolean; commission: View | null }
+interface Terms { commission?: Rate | null; split: { type: SplitType; value: number } | null; fees: Fee[] }
+interface Data { purchasePrice?: number | null; role: 'owner' | 'agent' | null; canPropose?: boolean; defaultSplit?: { type: SplitType; value: number } | null; terms?: Terms | null; cap?: CapView | null; dealClosed?: boolean; commission: View | null }
 
 const money = (n: number | null) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const splitText = (t: SplitType, v: number, you = false) =>
-  t === 'percent' ? `${you ? 'You keep' : 'Agent keeps'} ${v}% of the gross commission` : t === 'flat_agent' ? `${you ? 'You get' : 'Agent gets'} ${money(v)}` : `Brokerage fee ${money(v)}${you ? ', you keep the rest' : ''}`;
+  t === 'percent' ? `${you ? 'You keep' : 'Agent keeps'} ${v}% · brokerage keeps ${Math.round((100 - v) * 1000) / 1000}%` : t === 'flat_agent' ? `${you ? 'You get' : 'Agent gets'} ${money(v)}` : `Brokerage fee ${money(v)}${you ? ', you keep the rest' : ''}`;
+const rateText = (r: Rate) => (r.type === 'percent' ? `${r.value}% of the sale price` : `${money(r.value)} flat fee`);
 const STATUS: Record<View['status'], { label: string; cls: string }> = {
   estimate: { label: 'Estimate · not confirmed', cls: 'bg-amber-500/20 text-amber-300' },
   proposed: { label: 'Confirmed · agent reviewing', cls: 'bg-sky-500/20 text-sky-300' },
@@ -61,6 +66,8 @@ export default function CommissionBox({ transactionId }: { transactionId: string
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [gross, setGross] = useState('');
+  const [rateType, setRateType] = useState<'percent' | 'flat'>('percent');
+  const [rateValue, setRateValue] = useState('');
   const [tryAmount, setTryAmount] = useState<string | null>(null);
   const [splitType, setSplitType] = useState<SplitType>('percent');
   const [splitValue, setSplitValue] = useState('');
@@ -88,6 +95,9 @@ export default function CommissionBox({ transactionId }: { transactionId: string
 
   const startForm = (c: View | null, d: Data) => {
     setGross(c && c.gross !== null ? String(c.gross) : '');
+    const rate = c?.rate ?? d.terms?.commission ?? null;
+    setRateType(rate?.type ?? 'percent');
+    setRateValue(rate ? String(rate.value) : '');
     setSplitType(c ? c.splitType : d.terms?.split?.type ?? d.defaultSplit?.type ?? 'percent');
     setSplitValue(c ? String(c.splitValue) : d.terms?.split ? String(d.terms.split.value) : d.defaultSplit ? String(d.defaultSplit.value) : '');
     setFees(c ? c.deductions.map((f) => ({ label: f.label, amount: String(f.amount) })) : (d.terms?.fees ?? []).map((f) => ({ label: f.label, amount: String(f.amount) })));
@@ -114,6 +124,8 @@ export default function CommissionBox({ transactionId }: { transactionId: string
   const c = data.commission;
   const isOwner = data.role === 'owner';
   if (data.role === 'agent' && !c) return null;
+  // Commission does not exist until the deal closes.
+  if (!c && !data.dealClosed) return null;
 
   const action = (a: string, extra: Record<string, unknown> = {}, after?: () => void) => call(`/api/commissions/${c!.id}`, 'PATCH', { action: a, ...extra }, after);
   const isEstimate = c?.status === 'estimate';
@@ -152,21 +164,21 @@ export default function CommissionBox({ transactionId }: { transactionId: string
             <p className="text-sm text-amber-200 font-medium">Estimate. No amount is confirmed yet.</p>
             <p className="text-xs text-slate-300 mt-1">
               {isOwner
-                ? data.dealClosed
-                  ? 'This deal has closed. Confirm the gross commission your brokerage actually received, from the closing documents, so the agent can review it.'
-                  : 'Built from this agent’s base terms. After closing, confirm the gross commission your brokerage actually received, from the closing documents.'
-                : data.dealClosed
-                  ? 'This deal has closed. Your brokerage will confirm the commission it received from the closing documents, and then you can review it here.'
-                  : 'Built from the terms your brokerage set for you. Your brokerage confirms the actual commission from the closing documents after closing. Until then, no amount counts as real.'}
+                ? 'This deal has closed. Confirm the gross commission your brokerage actually received, from the closing documents, so the agent can review it.'
+                : 'This deal has closed. Your brokerage will confirm the commission it received from the closing documents, and then you can review it here. Until then, no amount counts as real.'}
             </p>
           </div>
           <dl className="text-sm space-y-1 mt-3">
+            <div className="flex justify-between gap-3"><dt className="text-slate-400">Commission rate</dt><dd className="text-slate-200 text-right">{c.rate ? rateText(c.rate) : 'Not set'}</dd></div>
+            {c.estimate && c.estimate.gross !== null && <div className="flex justify-between gap-3"><dt className="text-slate-400">Expected gross commission</dt><dd className="text-slate-200">about {money(c.estimate.gross)}</dd></div>}
             <div className="flex justify-between gap-3"><dt className="text-slate-400">{you ? 'Your split' : 'Split'}</dt><dd className="text-slate-200 text-right">{splitText(c.splitType, c.splitValue, you)}</dd></div>
             {c.deductions.map((f, i) => (
               <div key={i} className="flex justify-between gap-3"><dt className="text-slate-400">{f.label} <span className="text-slate-500">({you ? 'from your share' : 'from the agent’s share'})</span></dt><dd className="text-slate-200">− {money(f.amount)}</dd></div>
             ))}
             {c.deductions.length === 0 && <div className="flex justify-between gap-3"><dt className="text-slate-400">Fees</dt><dd className="text-slate-500">None set</dd></div>}
+            {c.estimate && c.estimate.agentNet !== null && <div className="flex justify-between gap-3 pt-1 border-t border-white/10"><dt className="text-slate-300 font-medium">{you ? 'Expected take-home' : 'Expected to the agent'}</dt><dd className="text-amber-200 font-medium">about {money(c.estimate.agentNet)}</dd></div>}
           </dl>
+          {c.estimate && <p className="text-[11px] text-slate-500 mt-1">An estimate from the sale price and the commission rate. The closing documents decide the real amount.</p>}
           {tryAmount === null ? (
             <button type="button" onClick={() => setTryAmount('')} className="mt-3 text-xs text-blue-400 hover:text-blue-300 font-medium">Try an amount →</button>
           ) : (
@@ -211,9 +223,11 @@ export default function CommissionBox({ transactionId }: { transactionId: string
         <>
           <p className="text-[11px] text-slate-500 mb-2">Confirmed amounts{c.confirmedAt ? `, ${c.confirmedAt.slice(0, 10)}` : ''}{isOwner ? ' (confirmed by your brokerage)' : ' by your brokerage'}</p>
           <dl className="text-sm space-y-1">
-            <div className="flex justify-between gap-3"><dt className="text-slate-400">{you ? 'Commission your brokerage received (gross)' : 'Gross commission received by the brokerage'}</dt><dd className="text-slate-100 font-medium">{money(c.gross)}</dd></div>
+            {data.purchasePrice ? <div className="flex justify-between gap-3"><dt className="text-slate-400">Sale price</dt><dd className="text-slate-200">{money(data.purchasePrice)}</dd></div> : null}
+            <div className="flex justify-between gap-3"><dt className="text-slate-400">{you ? 'Commission your brokerage received (gross)' : 'Gross commission received by the brokerage'}</dt><dd className="text-slate-100 font-medium">{money(c.gross)}{data.purchasePrice && c.gross ? <span className="block text-[11px] text-slate-500 font-normal text-right">{Math.round((c.gross / data.purchasePrice) * 100 * 1000) / 1000}% of the sale price</span> : null}</dd></div>
             <div className="flex justify-between gap-3"><dt className="text-slate-400">{you ? 'Your split' : 'Split'}</dt><dd className="text-slate-200 text-right">{splitText(c.splitType, c.splitValue, you)}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-slate-400">{you ? 'Your share' : 'Agent’s share'}</dt><dd className="text-slate-200">{money(c.agentShare)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-slate-400">{you ? 'Your share' : 'Agent’s share'}{c.splitType === 'percent' ? ` (${c.splitValue}%)` : ''}</dt><dd className="text-slate-200">{money(c.agentShare)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-slate-400">Brokerage’s share{c.splitType === 'percent' ? ` (${Math.round((100 - c.splitValue) * 1000) / 1000}%)` : ''}</dt><dd className="text-slate-200">{money(c.brokerageShare)}</dd></div>
             {c.deductions.map((f, i) => (
               <div key={i} className="flex justify-between gap-3"><dt className="text-slate-400">{f.label}</dt><dd className="text-slate-200">− {money(f.amount)}</dd></div>
             ))}
@@ -310,12 +324,27 @@ export default function CommissionBox({ transactionId }: { transactionId: string
             e.preventDefault();
             const body: Record<string, unknown> = { transactionId, splitType, splitValue: Number(splitValue), deductions: fees.map((f) => ({ label: f.label, amount: f.amount })) };
             if (gross.trim() !== '') body.gross = Number(gross);
+            if (rateValue.trim() !== '') {
+              body.commissionType = rateType;
+              body.commissionValue = Number(rateValue);
+            }
             call('/api/commissions', 'POST', body, () => setEditing(false));
           }}
         >
           <label className="text-xs text-slate-400 block">Gross commission your brokerage received ($), from the closing documents
-            <input type="number" step="0.01" min="0" value={gross} onChange={(e) => setGross(e.target.value)} className={`${field} mt-1`} placeholder="Leave blank to keep this an estimate" />
+            <input type="number" step="0.01" min="0" value={gross} onChange={(e) => setGross(e.target.value)} className={`${field} mt-1`} placeholder={c?.estimate?.gross ? `Expected about ${money(c.estimate.gross)}. Leave blank to keep this an estimate` : 'Leave blank to keep this an estimate'} />
           </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs text-slate-400">Commission rate
+              <select value={rateType} onChange={(e) => setRateType(e.target.value as 'percent' | 'flat')} className={`${field} mt-1`}>
+                <option value="percent">% of the sale price</option>
+                <option value="flat">Flat fee $</option>
+              </select>
+            </label>
+            <label className="text-xs text-slate-400">{rateType === 'percent' ? 'Percent' : 'Amount ($)'}
+              <input type="number" step="0.001" min="0" max={rateType === 'percent' ? 100 : undefined} value={rateValue} onChange={(e) => setRateValue(e.target.value)} className={`${field} mt-1`} placeholder="Optional" />
+            </label>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs text-slate-400">Split
               <select value={splitType} onChange={(e) => setSplitType(e.target.value as SplitType)} className={`${field} mt-1`}>

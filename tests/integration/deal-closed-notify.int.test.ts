@@ -33,12 +33,15 @@ beforeAll(async () => {
 afterAll(cleanup);
 
 describe('when a deal closes', () => {
-  it('tells the owner there is no statement yet, once, and does not nudge the agent who closed it', async () => {
+  it('tells the owner it closed and the statement is ready to confirm, once, and does not nudge the agent who closed it', async () => {
     expect((await close(agent, d1)).status).toBe(200);
     const ownerRows = await bell(broker, 'deal_closed');
     expect(ownerRows).toHaveLength(1);
     expect(ownerRows[0].title).toMatch(/^Deal closed/);
-    expect(ownerRows[0].body).toMatch(/no commission statement yet/);
+    expect(ownerRows[0].body).toMatch(/It has closed\. COMM-\d+ is ready for you to confirm the actual commission/);
+    // the statement is born at closing, as an estimate
+    const made = (await admin.from('deal_commissions').select('status').eq('transaction_id', d1.transactionId)).data ?? [];
+    expect(made).toEqual([{ status: 'estimate' }]);
     expect(ownerRows[0].link).toBe(`/dashboard/collaborate/deals/${d1.transactionId}`);
     expect(await bell(agent, 'deal_closed')).toHaveLength(0);
     // saving it as Closed again is not a new close, and the generic "stage moved" line is not added on top
@@ -47,11 +50,11 @@ describe('when a deal closes', () => {
     expect((await bell(broker, 'stage_changed')).filter((r) => /Closed/.test(String(r.title)))).toHaveLength(0);
   });
 
-  it('tells the owner to confirm the actual commission when the deal is still on an estimate', async () => {
+  it('tells the owner to confirm the actual commission when the deal closes with an estimate already there', async () => {
     await admin.from('deal_commissions').insert({ transaction_id: d2.transactionId, owner_user_id: broker.id, agent_user_id: agent.id, statement_number: 'COMM-0900', split_type: 'percent', split_value: 80, deductions: [], status: 'estimate' });
     await close(agent, d2);
     const rows = (await bell(broker, 'deal_closed')).filter((r) => String(r.link).includes(d2.transactionId));
-    expect(rows[0].body).toMatch(/COMM-0900 is still an estimate\. Confirm the actual commission/);
+    expect(rows[0].body).toMatch(/COMM-0900 is ready for you to confirm the actual commission/);
   });
 
   it('says where an older agent-generated invoice stands, and never asks the agent to invoice', async () => {

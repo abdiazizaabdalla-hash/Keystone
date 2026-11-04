@@ -8,6 +8,11 @@ export interface StatementInput {
   brokerage: string;
   agent: string;
   splitText: string;
+  salePrice: number | null;
+  /** The gross as a percent of the sale price, when there is a price. */
+  grossPercent: number | null;
+  agentPercent: number | null;
+  brokeragePercent: number | null;
   gross: number;
   agentShare: number;
   brokerageShare: number;
@@ -56,10 +61,12 @@ export function generateCommissionStatementPdf(s: StatementInput): Promise<Buffe
         doc.text(value, 396, y, { width: 160, align: 'right' });
         y += bold ? 22 : 18;
       };
-      row('Gross commission', money(s.gross), true);
+      if (s.salePrice) row('Sale price', money(s.salePrice));
+      row('Gross commission received by the brokerage', money(s.gross), true);
+      if (s.salePrice && s.grossPercent !== null) row(`That is ${s.grossPercent}% of the sale price`, '', false, '#555555');
       row(`Split: ${s.splitText}`, '', false, '#555555');
-      row('Agent share', money(s.agentShare));
-      row('Brokerage share', money(s.brokerageShare));
+      row(s.agentPercent !== null ? `Agent share (${s.agentPercent}% of the gross)` : 'Agent share', money(s.agentShare));
+      row(s.brokeragePercent !== null ? `Brokerage share (${s.brokeragePercent}% of the gross)` : 'Brokerage share', money(s.brokerageShare));
       if (s.deductions.length > 0) {
         y += 6;
         doc.fontSize(9).font('Helvetica-Bold').fillColor('#888888').text('FEES CHARGED TO THE AGENT', 56, y);

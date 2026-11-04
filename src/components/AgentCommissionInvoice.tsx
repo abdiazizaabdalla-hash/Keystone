@@ -13,7 +13,7 @@ import type { SplitType } from '@/lib/commissionMath';
 
 const money = (n: number | null) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-interface View { id: string; statementNumber: string; status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void'; submitted?: boolean; gross: number | null; agentNet: number | null; brokerageNet: number | null; paidOn: string | null; splitType: SplitType; splitValue: number }
+interface View { id: string; statementNumber: string; status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void'; submitted?: boolean; gross: number | null; agentNet: number | null; brokerageNet: number | null; paidOn: string | null; splitType: SplitType; splitValue: number; estimate?: { gross: number | null; agentNet: number | null } | null }
 interface Data { role: 'agent' | 'owner' | null; awaitingTerms?: boolean; brokerage?: { name: string; email: string | null }; dealClosed?: boolean; commission: View | null }
 
 export default function AgentCommissionInvoice({ transactionId, hasCoordinator }: { transactionId: string; purchasePrice?: number | null; hasCoordinator: boolean }) {
@@ -47,7 +47,7 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator }
   if (c && c.status !== 'void') {
     const estimate = c.status === 'estimate';
     const state =
-      estimate ? { text: data.dealClosed ? 'Estimate. This deal closed, and your brokerage will confirm the actual commission from the closing documents.' : 'Estimate. Your brokerage confirms the actual commission from the closing documents after closing. No amount counts until then.', cls: 'text-amber-300' }
+      estimate ? { text: 'Estimate. This deal closed, and your brokerage will confirm the actual commission from the closing documents. No amount counts until then.', cls: 'text-amber-300' }
       : c.status === 'paid' ? { text: `Your brokerage paid you${c.paidOn ? ` on ${c.paidOn}` : ''}.`, cls: 'text-emerald-300' }
       : c.status === 'accepted' ? { text: 'You agreed. Your brokerage pays you, then records it as paid here.', cls: 'text-emerald-300' }
       : c.status === 'proposed' ? { text: 'Your brokerage confirmed the commission. Review it in the Commission box and agree or ask for a change.', cls: 'text-amber-300' }
@@ -58,7 +58,7 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator }
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-slate-100 font-semibold">
-              {c.statementNumber} · {estimate ? 'Estimate, no amount yet' : `You take home ${money(c.agentNet)}`}
+              {c.statementNumber} · {estimate ? (c.estimate?.agentNet ? `Estimate, about ${money(c.estimate.agentNet)} to you` : 'Estimate, no amount yet') : `You take home ${money(c.agentNet)}`}
             </p>
             {!estimate && <p className="text-xs text-slate-400 mt-0.5">Your brokerage received {money(c.gross)} in commission on this deal. The rest is its share and any fees.</p>}
             <p className={`text-sm mt-0.5 ${state.cls}`}>{state.text}</p>
@@ -74,7 +74,7 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator }
   if (data.awaitingTerms && data.brokerage) {
     return (
       <div>
-        <p className="text-sm text-slate-300">{data.brokerage.name} has not set your commission terms yet, so there is no commission estimate on this deal. When they set your split, it appears here.</p>
+        <p className="text-sm text-slate-300">{data.brokerage.name} has not set your commission terms yet, so there is no commission estimate on this deal. When they set your split and commission rate, it appears here.</p>
         {other}
       </div>
     );

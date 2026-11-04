@@ -43,3 +43,22 @@ alter table public.brokerage_links add constraint brokerage_links_cap_check
 select column_name, is_nullable from information_schema.columns
  where table_schema = 'public' and table_name = 'deal_commissions' and column_name in ('gross_cents', 'agent_net_cents', 'brokerage_net_cents', 'confirmed_at', 'confirmed_by', 'cap_snapshot')
  order by column_name;
+
+-- ---------------------------------------------------------------------------------------------------------------------------------
+-- Commission rate (added to Step 1): the commission is a percentage of the sale price (or a flat fee), set per agent by the brokerage
+-- and changeable on each deal. A statement is made when the deal closes, and its ESTIMATE is sale price x rate; the owner confirms the
+-- actual gross from the closing documents. Additive and safe to run more than once.
+alter table public.brokerage_links add column if not exists default_commission_type text;
+alter table public.brokerage_links add column if not exists default_commission_value numeric(14, 4);
+alter table public.brokerage_links drop constraint if exists brokerage_links_commission_check;
+alter table public.brokerage_links add constraint brokerage_links_commission_check
+  check ((default_commission_type is null and default_commission_value is null)
+      or (default_commission_type in ('percent', 'flat') and default_commission_value is not null and default_commission_value >= 0));
+
+alter table public.deal_commissions add column if not exists commission_type text;
+alter table public.deal_commissions add column if not exists commission_value numeric(14, 4);
+alter table public.deal_commissions add column if not exists estimated_gross_cents bigint;
+alter table public.deal_commissions drop constraint if exists deal_commissions_commission_check;
+alter table public.deal_commissions add constraint deal_commissions_commission_check
+  check ((commission_type is null and commission_value is null)
+      or (commission_type in ('percent', 'flat') and commission_value is not null and commission_value >= 0));

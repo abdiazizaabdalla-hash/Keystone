@@ -22,7 +22,7 @@ let agent: Actor;
 let loner: Actor; // an agent in no brokerage
 let noSplit: Actor; // in a brokerage that has not set a split
 let other: Actor; // a second agent in the first brokerage
-let d1: Deal, d2: Deal, d3: Deal, dLoner: Deal, dNoSplit: Deal, dOther: Deal;
+let d1: Deal, d2: Deal, d3: Deal, dLoner: Deal, dNoSplit: Deal, dOther: Deal, dOpen: Deal;
 
 /** A statement the way an agent generated one before estimates: a gross, waiting for the owner's approval. */
 async function legacyInvoice(deal: Deal, gross: number) {
@@ -46,6 +46,9 @@ beforeAll(async () => {
   dLoner = await seedDeal(loner, 'CIL');
   dNoSplit = await seedDeal(noSplit, 'CIN');
   dOther = await seedDeal(other, 'CIO');
+  dOpen = await seedDeal(agent, 'CIOPEN');
+  // Commission only exists once a deal has closed; dOpen stays open on purpose.
+  await admin.from('transactions').update({ status: 'Closed' }).in('id', [d1, d2, d3, dLoner, dNoSplit, dOther].map((x) => x.transactionId));
   for (const o of [broker, broker2]) {
     const { data: team } = await admin.from('teams').insert({ owner_id: o.id }).select('id').single();
     await admin.from('team_members').insert({ team_id: team!.id, user_id: o.id, role: 'owner' });
@@ -59,6 +62,11 @@ beforeAll(async () => {
 afterAll(cleanup);
 
 describe('asking for the statement', () => {
+  it('is refused while the deal is still open', async () => {
+    expect((await gen(agent, { transactionId: dOpen.transactionId })).status).toBe(409);
+    const { data } = await admin.from('deal_commissions').select('id').eq('transaction_id', dOpen.transactionId);
+    expect(data).toEqual([]);
+  });
   it('needs a login, an agent workspace, their own deal, a brokerage and a base split', async () => {
     expect((await gen(null, { transactionId: d1.transactionId })).status).toBe(401);
     expect((await gen(broker, { transactionId: d1.transactionId })).status).toBe(403);

@@ -18,6 +18,8 @@ interface Row {
   status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
   submitted?: boolean;
   gross: number | null;
+  salePrice?: number | null;
+  grossPercent?: number | null;
   agentNet: number | null;
   brokerageNet: number | null;
   paidOn: string | null;
@@ -27,7 +29,7 @@ interface Row {
 interface AgentDefault { id: string; name: string; defaultSplit: { type: SplitType; value: number } | null }
 
 const money = (n: number | null) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const splitText = (t: SplitType, v: number) => (t === 'percent' ? `Agent keeps ${v}%` : t === 'flat_agent' ? `Agent gets ${money(v)}` : `Brokerage fee ${money(v)}`);
+const splitText = (t: SplitType, v: number) => (t === 'percent' ? `Agent ${v}% · Brokerage ${Math.round((100 - v) * 1000) / 1000}%` : t === 'flat_agent' ? `Agent gets ${money(v)}` : `Brokerage fee ${money(v)}`);
 const STATUS = { estimate: 'Estimate · confirm after closing', proposed: 'Confirmed · agent reviewing', change_requested: 'Change requested', accepted: 'Agreed', paid: 'Paid', void: 'Void' } as const;
 const card = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 
@@ -148,7 +150,7 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
                             <div className="text-[11px] text-slate-500">{r.statementNumber}</div>
                           </td>
                           <td className="py-2 pr-3 text-slate-300">{splitText(r.splitType, r.splitValue)}</td>
-                          <td className="py-2 pr-3 text-right text-slate-200">{r.gross === null ? <span className="text-slate-500" title="Estimate, not confirmed">—</span> : money(r.gross)}</td>
+                          <td className="py-2 pr-3 text-right text-slate-200">{r.gross === null ? <span className="text-slate-500" title="Estimate, not confirmed">—</span> : money(r.gross)}{r.gross !== null && r.grossPercent != null && <div className="text-[11px] text-slate-500">{r.grossPercent}% of {money(r.salePrice ?? 0)} sale</div>}</td>
                           <td className="py-2 pr-3 text-right text-emerald-300">{r.agentNet === null ? <span className="text-slate-500">—</span> : money(r.agentNet)}</td>
                           <td className="py-2 pr-3 text-slate-300">{r.submitted ? <span className="text-amber-300">Needs your approval</span> : r.status === 'estimate' ? <span className="text-amber-300">{STATUS.estimate}</span> : STATUS[r.status]}{r.paidOn ? ` ${r.paidOn}` : ''}</td>
                           <td className="py-2 text-right"><button type="button" onClick={() => openStatement(r.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="text-xs text-blue-400 hover:text-blue-300">Statement</button></td>

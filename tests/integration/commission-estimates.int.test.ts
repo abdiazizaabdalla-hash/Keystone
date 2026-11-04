@@ -25,7 +25,7 @@ const d = (r: { json: unknown }) => r.json as Deal1;
 const v = (r: { json: unknown }) => r.json as View;
 
 let broker: Actor, agent: Actor, bare: Actor, outsider: Actor, otherBroker: Actor;
-let dealA: Deal, dealB: Deal, dealC: Deal, dealD: Deal, dealBare: Deal, dealOut: Deal;
+let dealA: Deal, dealB: Deal, dealC: Deal, dealD: Deal, dealBare: Deal, dealOut: Deal, dealOpen: Deal;
 let linkId = '';
 const year = new Date().getUTCFullYear();
 
@@ -38,6 +38,7 @@ beforeAll(async () => {
   [dealA, dealB, dealC, dealD] = [await seedDeal(agent, 'CEA'), await seedDeal(agent, 'CEB'), await seedDeal(agent, 'CEC'), await seedDeal(agent, 'CED')];
   dealBare = await seedDeal(bare, 'CEBARE');
   dealOut = await seedDeal(outsider, 'CEOUT');
+  dealOpen = await seedDeal(agent, 'CEOPEN');
   for (const o of [broker, otherBroker]) {
     const { data: team } = await admin.from('teams').insert({ owner_id: o.id }).select('id').single();
     await admin.from('team_members').insert({ team_id: team!.id, user_id: o.id, role: 'owner' });
@@ -45,6 +46,10 @@ beforeAll(async () => {
   const { data: link } = await admin.from('brokerage_links').insert({ owner_user_id: broker.id, agent_user_id: agent.id, invited_email: agent.email, status: 'active' }).select('id').single();
   linkId = link!.id as string;
   await admin.from('brokerage_links').insert({ owner_user_id: broker.id, agent_user_id: bare.id, invited_email: bare.email, status: 'active' });
+  // Commission only exists once a deal has closed; dealOpen stays open on purpose. dealA sold for 500,000.
+  await admin.from('transactions').update({ status: 'Closed' }).in('id', [dealA, dealB, dealC, dealD, dealBare, dealOut].map((x) => x.transactionId));
+  await admin.from('transactions').update({ purchase_price: 500000 }).eq('id', dealA.transactionId);
+  await admin.from('transactions').update({ purchase_price: 500000 }).eq('id', dealOpen.transactionId);
   for (const [deal, date] of [[dealA, `${year}-03-01`], [dealB, `${year}-04-01`], [dealC, `${year}-05-01`]] as const) await admin.from('transactions').update({ closing_date: date }).eq('id', deal.transactionId);
 }, 90_000);
 afterAll(cleanup);
@@ -60,11 +65,16 @@ describe('base terms: split, fees and cap', () => {
     expect((await terms(agent, linkId, { fees: [] })).status).toBe(403);
     expect((await terms(otherBroker, linkId, { fees: [] })).status).toBe(404);
 
+    for (const bad of [{ commissionType: 'percent', commissionValue: 101 }, { commissionType: 'percent', commissionValue: -1 }, { commissionType: 'flat', commissionValue: -5 }, { commissionType: 'weird', commissionValue: 3 }, { commissionType: 'percent', commissionValue: 'abc' }]) {
+      expect((await terms(broker, linkId, bad)).status).toBe(400);
+    }
+    expect((await terms(agent, linkId, { commissionType: 'percent', commissionValue: 3 })).status).toBe(403);
+    expect((await terms(broker, linkId, { commissionType: 'percent', commissionValue: 3 })).status).toBe(200);
     expect((await terms(broker, linkId, { splitType: 'percent', splitValue: 70 })).status).toBe(200);
     expect((await terms(broker, linkId, { fees: [{ label: 'Transaction fee', amount: 395 }, { label: 'E&O', amount: 100 }] })).status).toBe(200);
     expect((await terms(broker, linkId, { cap: { amount: 10000, reset: 'calendar_year' } })).status).toBe(200);
-    const { data } = await admin.from('brokerage_links').select('default_split_type, default_split_value, default_fees, cap_cents, cap_reset').eq('id', linkId).single();
-    expect(data).toMatchObject({ default_split_type: 'percent', default_split_value: 70, cap_cents: 1_000_000, cap_reset: 'calendar_year' });
+    const { data } = await admin.from('brokerage_links').select('default_commission_type, default_commission_value, default_split_type, default_split_value, default_fees, cap_cents, cap_reset').eq('id', linkId).single();
+    expect(data).toMatchObject({ default_commission_type: 'percent', default_commission_value: 3, default_split_type: 'percent', default_split_value: 70, cap_cents: 1_000_000, cap_reset: 'calendar_year' });
     expect(data!.default_fees).toEqual([{ label: 'Transaction fee', amount: 395, when: 'agent_share' }, { label: 'E&O', amount: 100, when: 'agent_share' }]);
   });
 });
@@ -75,6 +85,8 @@ describe('the estimate', () => {
     expect(made).toMatchObject({ status: 'estimate', gross_cents: null, agent_net_cents: null, brokerage_net_cents: null, split_type: 'percent', split_value: 70, owner_user_id: broker.id, agent_user_id: agent.id });
     expect(made!.deductions).toEqual([{ label: 'Transaction fee', amount: 395 }, { label: 'E&O', amount: 100 }]);
     expect(made!.cap_snapshot).toMatchObject({ capCents: 1_000_000, reset: 'calendar_year' });
+    // 3% of the 500,000 sale price is the expected gross, kept as an expectation and never as a confirmed amount
+    expect(made).toMatchObject({ commission_type: 'percent', estimated_gross_cents: 1_500_000 });
     const again = await ensureEstimateStatement(dealA.transactionId);
     expect(again!.id).toBe(made!.id);
     const { data } = await admin.from('deal_commissions').select('id').eq('transaction_id', dealA.transactionId);
@@ -124,6 +136,46 @@ describe('the estimate', () => {
     expect(v(flagged)).toMatchObject({ status: 'estimate', changeNote: 'My split is 75%, not 70%.' });
     const bell = (await admin.from('notifications').select('title').eq('recipient_user_id', broker.id).eq('event_type', 'commission')).data ?? [];
     expect(bell.some((b) => /flagged something on the estimate/.test(String(b.title)))).toBe(true);
+  });
+});
+
+describe('commission only exists once the deal has closed', () => {
+  it('shows nothing and makes nothing on a deal that is still open', async () => {
+    expect(await ensureEstimateStatement(dealOpen.transactionId)).toBeNull();
+    expect(d(await forDeal(agent, dealOpen.transactionId)).commission).toBeNull();
+    const asOwner = d(await forDeal(broker, dealOpen.transactionId));
+    expect(asOwner.commission).toBeNull();
+    expect((await post(broker, { transactionId: dealOpen.transactionId, splitType: 'percent', splitValue: 70 })).status).toBe(409);
+    expect((await post(broker, { transactionId: dealOpen.transactionId, gross: 10000 })).status).toBe(409);
+    const { data } = await admin.from('deal_commissions').select('id').eq('transaction_id', dealOpen.transactionId);
+    expect(data).toEqual([]);
+  });
+  it('an estimate left on an open deal is hidden everywhere until it closes', async () => {
+    await admin.from('deal_commissions').insert({ transaction_id: dealOpen.transactionId, owner_user_id: broker.id, agent_user_id: agent.id, statement_number: 'COMM-0991', gross_cents: null, split_type: 'percent', split_value: 70, deductions: [], status: 'estimate' });
+    expect(d(await forDeal(agent, dealOpen.transactionId)).commission).toBeNull();
+    expect(d(await forDeal(broker, dealOpen.transactionId)).commission).toBeNull();
+    const ledger = (await call(h(GET), broker, { method: 'GET', path: '/api/commissions' })).json as { asOwner: { transactionId: string }[] };
+    expect(ledger.asOwner.some((r) => r.transactionId === dealOpen.transactionId)).toBe(false);
+    await admin.from('deal_commissions').delete().eq('transaction_id', dealOpen.transactionId);
+  });
+  it('closing makes the statement with the expected gross from the sale price and the agent’s rate', async () => {
+    await admin.from('transactions').update({ status: 'Closed' }).eq('id', dealOpen.transactionId);
+    const made = await ensureEstimateStatement(dealOpen.transactionId);
+    expect(made).toMatchObject({ status: 'estimate', commission_type: 'percent', estimated_gross_cents: 1_500_000 });
+    const view = d(await forDeal(broker, dealOpen.transactionId)).commission as unknown as { rate: { type: string; value: number }; estimate: { gross: number; agentNet: number } };
+    expect(view.rate).toEqual({ type: 'percent', value: 3 });
+    // 3% of 500,000 = 15,000; at the 70% split = 10,500, less 495 in fees = 10,005 to the agent
+    expect(view.estimate).toMatchObject({ gross: 15000, agentNet: 10005 });
+  });
+  it('the rate can be a flat fee and can be changed for one deal', async () => {
+    const res = await post(broker, { transactionId: dealOpen.transactionId, commissionType: 'flat', commissionValue: 4500, splitType: 'percent', splitValue: 70 });
+    expect(res.status, JSON.stringify(res.json)).toBe(200);
+    const row = (await admin.from('deal_commissions').select('commission_type, commission_value, estimated_gross_cents').eq('transaction_id', dealOpen.transactionId).single()).data;
+    expect(row).toMatchObject({ commission_type: 'flat', commission_value: 4500, estimated_gross_cents: 450_000 });
+    expect((await post(broker, { transactionId: dealOpen.transactionId, commissionType: 'percent', commissionValue: 120, splitType: 'percent', splitValue: 70 })).status).toBe(400);
+    // the agent's base rate is untouched by a change on one deal
+    const base = (await admin.from('brokerage_links').select('default_commission_type, default_commission_value').eq('id', linkId).single()).data;
+    expect(base).toMatchObject({ default_commission_type: 'percent', default_commission_value: 3 });
   });
 });
 

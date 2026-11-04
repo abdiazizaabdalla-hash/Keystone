@@ -107,3 +107,41 @@ export interface BaseFee extends Deduction {
 export function cleanBaseFees(value: unknown): BaseFee[] {
   return cleanDeductions(value).map((d) => ({ ...d, when: 'agent_share' as const }));
 }
+
+/**
+ * The brokerage's commission on a deal: a percentage of the sale price, or a flat fee. Commission is negotiable and is not
+ * always a percentage, so both are supported. Nothing is assumed: with no rate set there is no expected amount.
+ */
+export type CommissionRateType = 'percent' | 'flat';
+export interface CommissionRate { type: CommissionRateType; value: number }
+export const isRateType = (v: unknown): v is CommissionRateType => v === 'percent' || v === 'flat';
+
+/** Checks a rate from user input (percent 0 to 100 with up to 3 decimals, or a flat amount of zero or more). */
+export function cleanRate(type: unknown, value: unknown): CommissionRate {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+  if (!isRateType(type)) throw new SplitError('Choose whether the commission is a percentage of the price or a flat fee.');
+  if (!Number.isFinite(n) || n < 0) throw new SplitError('Enter the commission as zero or more.');
+  if (type === 'percent' && n > 100) throw new SplitError('A commission percentage must be between 0 and 100.');
+  if (n > 100_000_000) throw new SplitError('That commission is too large.');
+  return { type, value: type === 'percent' ? Math.round(n * 1000) / 1000 : Math.round(n * 100) / 100 };
+}
+
+/** Gross commission in cents expected from a sale price and a rate, or null when either is missing. */
+export function expectedGrossCents(price: number | null | undefined, rate: CommissionRate | null | undefined): number | null {
+  if (!rate) return null;
+  if (rate.type === 'flat') return rate.value > 0 ? toCents(rate.value) : null;
+  const p = Number(price);
+  if (!Number.isFinite(p) || p <= 0 || rate.value <= 0) return null;
+  return Math.round((toCents(p) * rate.value) / 100);
+}
+
+/** Both sides of a split, so no one has to work out the other half: "Agent keeps 80% · Brokerage keeps 20%". */
+export const splitBothSides = (type: SplitType, value: number): string =>
+  type === 'percent' ? `Agent keeps ${value}% · Brokerage keeps ${Math.round((100 - value) * 1000) / 1000}%` : splitLabel(type, value);
+
+/** What the gross commission is as a share of the sale price, e.g. 3 for 3%. Null with no price or no gross. */
+export const grossPercentOfPrice = (price: number | null | undefined, grossCents: number | null | undefined): number | null =>
+  price && price > 0 && grossCents ? Math.round((grossCents / 100 / price) * 100 * 1000) / 1000 : null;
+
+export const rateLabel = (rate: CommissionRate): string =>
+  rate.type === 'percent' ? `${rate.value}% of the sale price` : `$${rate.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} flat`;

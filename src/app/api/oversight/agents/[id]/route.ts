@@ -40,7 +40,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const terms = termsFromLink(link);
     const cap = terms.cap ? await capInfoFor(user.id, id, terms, today) : null;
-    const rows = (commissionRows ?? []) as CommissionRow[];
+    // A commission estimate only exists to be seen once its deal has closed.
+    const rows = ((commissionRows ?? []) as CommissionRow[]).filter((r) => r.status !== 'estimate' || deals.find((d) => d.id === r.transaction_id)?.status === CLOSED_STAGE);
     const commissions = rows.map((r) => ({ ...viewOf(r), property: deals.find((d) => d.id === r.transaction_id)?.property_address ?? null }));
     const live = commissions.filter((c) => c.status !== 'void' && c.status !== 'estimate');
     const year = today.slice(0, 4);
@@ -61,6 +62,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         baseFees: terms.fees.map((f) => ({ label: f.label, amount: f.amount })),
         baseCap: terms.cap ? { amount: terms.cap.capCents / 100, reset: terms.cap.reset, start: (link?.cap_start as string | null) ?? null } : null,
         cap,
+        baseRate: terms.commission,
         baseCommission: link?.default_split_type && link.default_split_value !== null ? { type: link.default_split_type as SplitType, value: Number(link.default_split_value) } : null,
       },
       production,

@@ -31,7 +31,6 @@ export interface Nudge {
 }
 
 export const APPROVAL_WAIT_DAYS = 2;
-export const CLOSING_SOON_DAYS = 7;
 export const CLOSED_NO_INVOICE_DAYS = 2;
 export const UNPAID_AFTER_APPROVAL_DAYS = 7;
 
@@ -76,11 +75,6 @@ export function commissionNudges(input: { deals: NudgeDeal[]; commissions: Nudge
         out.push(estimateOnly
           ? { recipientId: owner, transactionId: d.id, title: `This deal closed. Confirm the actual commission from the closing documents${at(d.id)}`, link: ownerLink(d.id, 'confirm-commission'), repeatDays: 7 }
           : { recipientId: owner, transactionId: d.id, title: `This deal closed and has no commission statement. Set the agent’s commission terms to create one${at(d.id)}`, link: ownerLink(d.id, 'closed-no-statement'), repeatDays: 7 });
-      }
-    } else if (d.closingDate && estimateOnly) {
-      const left = daysBetween(today, d.closingDate);
-      if (left >= 0 && left <= CLOSING_SOON_DAYS) {
-        out.push({ recipientId: owner, transactionId: d.id, title: `Closing ${left === 0 ? 'today' : `in ${plural(left, 'day')}`}. Have the closing documents ready to confirm the actual commission${at(d.id)}`, link: ownerLink(d.id, 'closing-soon'), repeatDays: 30 });
       }
     }
   }

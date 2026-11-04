@@ -32,22 +32,17 @@ describe('pending approval', () => {
 
 describe('closing and closed deals before the actual commission is confirmed', () => {
   const estimate = (transactionId: string, o: Partial<NudgeCommission> = {}) => comm({ id: `c-${transactionId}`, transactionId, status: 'estimate', ...o });
-  it('tells the owner, not the agent, to be ready in the last week before closing, once', () => {
-    const n = run([deal({ id: 'd1', closingDate: '2026-11-13' })], [estimate('d1')]);
-    expect(n).toHaveLength(1);
-    expect(n[0]).toMatchObject({ recipientId: 'owner', repeatDays: 30 });
-    expect(n[0].title).toMatch(/Closing in 3 days/);
-    expect(n[0].title).toMatch(/confirm the actual commission/);
-    expect(run([deal({ id: 'd1', closingDate: '2026-11-20' })], [estimate('d1')])).toEqual([]);
+  it('says nothing about commission before the deal has closed, even in the last week', () => {
+    expect(run([deal({ id: 'd1', closingDate: '2026-11-13' })], [estimate('d1')])).toEqual([]);
+    expect(run([deal({ id: 'd1', closingDate: TODAY })], [estimate('d1')])).toEqual([]);
   });
   it('never nudges an agent to invoice anyone', () => {
     expect(run([deal({ id: 'd1', closingDate: '2026-11-13' })], []).filter((x) => x.recipientId === 'agent')).toEqual([]);
     expect(run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-11-07' })], [estimate('d1')]).filter((x) => x.recipientId === 'agent')).toEqual([]);
     expect(run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-11-07' })], []).filter((x) => x.recipientId === 'agent')).toEqual([]);
   });
-  it('says closing today, and nothing for deals outside a brokerage', () => {
-    expect(run([deal({ id: 'd1', closingDate: TODAY })], [estimate('d1')])[0].title).toMatch(/Closing today/);
-    expect(run([deal({ id: 'd1', closingDate: TODAY })], [estimate('d1')], () => null)).toEqual([]);
+  it('says nothing for closed deals outside a brokerage', () => {
+    expect(run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-11-07' })], [estimate('d1')], () => null)).toEqual([]);
   });
   it('chases the owner two days after a closed deal is still an estimate', () => {
     const n = run([deal({ id: 'd1', status: 'Closed', closingDate: '2026-11-07' })], [estimate('d1')]);

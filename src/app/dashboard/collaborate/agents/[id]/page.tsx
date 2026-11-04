@@ -12,7 +12,7 @@ import CapNotice, { type CapView } from '@/components/CapNotice';
 
 type SplitType = 'percent' | 'flat_agent' | 'flat_brokerage';
 interface Profile {
-  agent: { id: string; linkId: string | null; name: string; email: string | null; phone: string | null; license: string | null; focus: string[]; dealsPerYear: string | null; states: string[]; joinedAt: string | null; baseCommission: { type: SplitType; value: number } | null; baseFees: { label: string; amount: number }[]; baseCap: { amount: number; reset: 'calendar_year' | 'anniversary'; start: string | null } | null; cap: CapView | null };
+  agent: { id: string; linkId: string | null; name: string; email: string | null; phone: string | null; license: string | null; focus: string[]; dealsPerYear: string | null; states: string[]; joinedAt: string | null; baseRate: { type: 'percent' | 'flat'; value: number } | null; baseCommission: { type: SplitType; value: number } | null; baseFees: { label: string; amount: number }[]; baseCap: { amount: number; reset: 'calendar_year' | 'anniversary'; start: string | null } | null; cap: CapView | null };
   production: { closedThisYear: number; volumeThisYear: number; closedLast30Days: number; activeDeals: number; pipelineVolume: number };
   openDeals: AgentDeal[];
   closedDeals: AgentDeal[];
@@ -32,6 +32,8 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
   const [data, setData] = useState<Profile | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
+  const [rateType, setRateType] = useState<'percent' | 'flat'>('percent');
+  const [rateValue, setRateValue] = useState('');
   const [type, setType] = useState<SplitType>('percent');
   const [value, setValue] = useState('');
   const [fees, setFees] = useState<{ label: string; amount: string }[]>([]);
@@ -58,6 +60,8 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
   const startEdit = () => {
     if (!data) return;
     const a = data.agent;
+    setRateType(a.baseRate?.type ?? 'percent');
+    setRateValue(a.baseRate ? String(a.baseRate.value) : '');
     setType(a.baseCommission?.type ?? 'percent');
     setValue(a.baseCommission ? String(a.baseCommission.value) : '');
     setFees(a.baseFees.map((f) => ({ label: f.label, amount: String(f.amount) })));
@@ -74,8 +78,8 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
     setError('');
     try {
       const body = clear
-        ? { splitType: null, fees: [], cap: null }
-        : { splitType: type, splitValue: Number(value), fees: fees.map((f) => ({ label: f.label, amount: f.amount })), cap: capOn ? { amount: Number(capAmount), reset: capReset, start: capStart || null } : null };
+        ? { commissionType: null, splitType: null, fees: [], cap: null }
+        : { ...(rateValue === '' ? { commissionType: null } : { commissionType: rateType, commissionValue: Number(rateValue) }), splitType: type, splitValue: Number(value), fees: fees.map((f) => ({ label: f.label, amount: f.amount })), cap: capOn ? { amount: Number(capAmount), reset: capReset, start: capStart || null } : null };
       const res = await authFetch(`/api/oversight/${data.agent.linkId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not save that');
       setEditing(false);
@@ -127,16 +131,29 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-slate-100">Base commission terms</h2>
+            <p className="text-sm text-slate-300">{agent.baseRate ? (agent.baseRate.type === 'percent' ? `Commission rate: ${agent.baseRate.value}% of the sale price` : `Commission: ${money(agent.baseRate.value)} flat fee per deal`) : 'No commission rate set'}</p>
             <p className="text-sm text-slate-300">{agent.baseCommission ? splitText(agent.baseCommission.type, agent.baseCommission.value) : 'Not set yet'}</p>
             {agent.baseFees.length > 0 && <p className="text-xs text-slate-400">Fees from the agent’s share: {agent.baseFees.map((f) => `${f.label} ${money(f.amount)}`).join(', ')}</p>}
             {agent.baseCap && <p className="text-xs text-slate-400">Cap: {money(agent.baseCap.amount)} {agent.baseCap.reset === 'calendar_year' ? 'per calendar year' : `per year from ${agent.baseCap.start ?? 'their start date'}`}</p>}
-            <p className="text-[11px] text-slate-500 mt-1">When this agent’s deal goes under contract, Relay makes a commission estimate from these terms. You can still change them on any deal. Nothing is assumed: with no split set, no estimate is made.</p>
+            <p className="text-[11px] text-slate-500 mt-1">Nothing about commission shows until a deal closes. Then you are told, and Relay makes a statement from these terms: the sale price times the commission rate gives the expected gross, which you confirm from the closing documents. You can change the rate, split and fees on any deal. Nothing is assumed: with no split set, no statement is made.</p>
           </div>
           {!editing && <button type="button" onClick={startEdit} className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-slate-600 text-slate-200 hover:border-slate-500">{agent.baseCommission ? 'Change' : 'Set base commission'}</button>}
         </div>
         {agent.cap && !editing && <CapNotice cap={agent.cap} who="owner" />}
         {editing && (
           <div className="mt-3 space-y-3">
+            <div>
+              <p className="text-xs text-slate-400 mb-1">Commission rate (what the sale earns before the split)</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select value={rateType} onChange={(e) => setRateType(e.target.value as 'percent' | 'flat')} className={field} aria-label="Commission rate type">
+                  <option value="percent">% of the sale price</option>
+                  <option value="flat">Flat fee $</option>
+                </select>
+                <input type="number" step="0.001" min="0" max={rateType === 'percent' ? 100 : undefined} value={rateValue} onChange={(e) => setRateValue(e.target.value)} className={`${field} w-28`} aria-label="Commission rate value" placeholder={rateType === 'percent' ? 'e.g. 3' : '0.00'} />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Optional. It gives each deal an expected gross commission; you still enter the actual amount from the closing documents.</p>
+            </div>
+            <p className="text-xs text-slate-400 -mb-1">Split between the brokerage and the agent</p>
             <div className="flex flex-wrap items-center gap-2">
               <select value={type} onChange={(e) => setType(e.target.value as SplitType)} className={field} aria-label="Split type">
                 <option value="percent">Agent keeps %</option>

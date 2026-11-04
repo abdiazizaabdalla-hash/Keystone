@@ -49,6 +49,11 @@ interface CommissionInvoiceRow {
   status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
   submitted?: boolean;
   agentNet: number | null;
+  gross?: number | null;
+  salePrice?: number | null;
+  grossPercent?: number | null;
+  splitType?: 'percent' | 'flat_agent' | 'flat_brokerage';
+  splitValue?: number;
   paidOn: string | null;
   property: string | null;
   transactionId: string;
@@ -278,6 +283,12 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
                     {c.statementNumber} · {c.brokerage?.name ?? 'Your brokerage'}
                   </p>
                   <p className="text-xs text-slate-500 truncate">Commission statement from your brokerage{c.property ? ` · ${c.property}` : ''}</p>
+                  {c.gross != null && c.status !== 'estimate' && (
+                    <p className="text-xs text-slate-400 truncate">
+                      Brokerage received {money(c.gross)}{c.grossPercent != null && c.salePrice ? ` (${c.grossPercent}% of the ${money(c.salePrice)} sale price)` : ''}
+                      {c.splitType === 'percent' && c.splitValue != null ? ` · you keep ${c.splitValue}%, brokerage keeps ${Math.round((100 - c.splitValue) * 1000) / 1000}%` : ''}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full border ${state.cls}`}>{state.label}</span>

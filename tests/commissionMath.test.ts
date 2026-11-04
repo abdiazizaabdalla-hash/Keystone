@@ -68,3 +68,40 @@ describe('base fees', () => {
     expect(() => cleanBaseFees([{ label: 'x', amount: -5 }])).toThrow(SplitError);
   });
 });
+
+describe('commission rate', () => {
+  it('is a percent of the sale price or a flat fee, and the expected gross follows', async () => {
+    const { cleanRate, expectedGrossCents, rateLabel, SplitError } = await import('@/lib/commissionMath');
+    expect(expectedGrossCents(500000, cleanRate('percent', 3))).toBe(1_500_000);
+    expect(expectedGrossCents(500000, cleanRate('percent', '2.5'))).toBe(1_250_000);
+    expect(expectedGrossCents(123456, cleanRate('percent', 2.75))).toBe(339_504);
+    expect(expectedGrossCents(null, cleanRate('percent', 3))).toBeNull();
+    expect(expectedGrossCents(500000, null)).toBeNull();
+    // A flat fee does not depend on the price.
+    expect(expectedGrossCents(null, cleanRate('flat', 4500))).toBe(450_000);
+    expect(expectedGrossCents(900000, cleanRate('flat', 4500))).toBe(450_000);
+    expect(rateLabel(cleanRate('percent', 3))).toMatch(/3%/);
+    expect(rateLabel(cleanRate('flat', 4500))).toMatch(/4,500/);
+  });
+  it('rejects nonsense', async () => {
+    const { cleanRate, SplitError } = await import('@/lib/commissionMath');
+    expect(() => cleanRate('percent', 101)).toThrow(SplitError);
+    expect(() => cleanRate('percent', -1)).toThrow(SplitError);
+    expect(() => cleanRate('flat', -5)).toThrow(SplitError);
+    expect(() => cleanRate('weird', 3)).toThrow(SplitError);
+    expect(() => cleanRate('percent', 'abc')).toThrow(SplitError);
+  });
+});
+
+describe('how a statement explains itself', () => {
+  it('shows both sides of a split and the gross as a percent of the sale price', async () => {
+    const { splitBothSides, grossPercentOfPrice } = await import('@/lib/commissionMath');
+    expect(splitBothSides('percent', 80)).toBe('Agent keeps 80% · Brokerage keeps 20%');
+    expect(splitBothSides('percent', 72.5)).toBe('Agent keeps 72.5% · Brokerage keeps 27.5%');
+    expect(splitBothSides('flat_brokerage', 500)).toBe('Brokerage fee $500.00');
+    expect(grossPercentOfPrice(500000, 1_500_000)).toBe(3);
+    expect(grossPercentOfPrice(500000, 1_200_000)).toBe(2.4);
+    expect(grossPercentOfPrice(null, 1_500_000)).toBeNull();
+    expect(grossPercentOfPrice(500000, null)).toBeNull();
+  });
+});

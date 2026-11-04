@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { brokerageOn } from '@/lib/oversight';
-import { ensureEstimateStatement } from '@/lib/commissions';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
@@ -372,10 +370,6 @@ export async function POST(request: NextRequest) {
     // Put the new checklist's due dates on a connected calendar (after the
     // response; a no-op if the TC hasn't connected one).
     queueCalendarSync(transaction.id);
-
-    // A deal under contract for an agent in a brokerage gets its commission ESTIMATE right away, built from the brokerage's base
-    // terms for that agent. No terms set means no statement; nothing is invented. Never throws.
-    if (brokerageOn()) await ensureEstimateStatement(transaction.id);
 
     await logAudit(request, user, 'transaction.create', { entityType: 'transaction', entityId: transaction.id });
 
