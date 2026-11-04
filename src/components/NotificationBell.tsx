@@ -24,6 +24,8 @@ const SETTINGS: { type: string; label: string }[] = [
   { type: 'date_changed', label: 'Deadline changes' },
   { type: 'document_added', label: 'New documents' },
   { type: 'client_viewed', label: 'Client opened their progress link' },
+  { type: 'deal_closed', label: 'Deals that close in your brokerage' },
+  { type: 'commission', label: 'Commission invoices and reminders' },
 ];
 
 const POLL_MS = 30_000;

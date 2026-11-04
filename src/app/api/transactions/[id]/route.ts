@@ -1,3 +1,4 @@
+import { notifyDealClosed } from '@/lib/dealClosed';
 import { NextRequest, NextResponse } from 'next/server';
 import { isFullParticipant } from '@/lib/authorize';
 import { supabaseServer } from '@/lib/supabase';
@@ -69,6 +70,16 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: 'That is not a US state code' }, { status: 400 });
       }
       updateFields.property_state = propertyState || null;
+    }
+
+    // Whether this request actually changes the stage (and is the one that closes the deal), so the brokerage is told once and
+    // saving the same stage again is silent.
+    let stageChanged = status !== undefined;
+    let closingNow = false;
+    if (status !== undefined && brokerageOn()) {
+      const { data: before } = await supabaseServer.from('transactions').select('status').eq('id', transactionId).maybeSingle();
+      stageChanged = !before || before.status !== status;
+      closingNow = status === 'Closed' && stageChanged;
     }
 
     const { data: transaction, error: updateError } = await supabaseServer
@@ -151,10 +162,13 @@ export async function PATCH(request: NextRequest) {
     // the stage or dates of a deal their brokerage oversees, the owner hears. Deals outside a brokerage are unchanged.
     if (brokerageOn() && (status !== undefined || acceptanceDate !== undefined || closingDate !== undefined)) {
       if (overseerEdit || (await brokerageOwnersForDeal(transactionId)).length > 0) {
-        if (status !== undefined) await notifyDeal({ transactionId, actorUserId: user.id, type: 'stage_changed', title: overseerEdit ? `Your brokerage moved the stage to ${status}` : `Stage moved to ${status}` });
+        // (A close gets its own, more useful notification below.)
+        if (status !== undefined && stageChanged && !closingNow) await notifyDeal({ transactionId, actorUserId: user.id, type: 'stage_changed', title: overseerEdit ? `Your brokerage moved the stage to ${status}` : `Stage moved to ${status}` });
         if (acceptanceDate !== undefined || closingDate !== undefined) await notifyDeal({ transactionId, actorUserId: user.id, type: 'date_changed', title: overseerEdit ? 'Your brokerage changed the key dates' : 'Key dates changed' });
       }
     }
+
+    if (closingNow) await notifyDealClosed(transactionId, user.id);
 
     // Status or date changes can add, move, or remove calendar events
     // (no-op if nobody on the deal has connected a calendar).

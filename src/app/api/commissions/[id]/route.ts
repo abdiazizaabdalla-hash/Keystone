@@ -26,7 +26,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const update: Record<string, unknown> = { updated_at: now };
     const bad = (message: string, status = 400) => NextResponse.json({ error: message }, { status });
     let notify: { recipientId: string; title: string; link: string } | null = null;
-    const link = side === 'agent' ? '/dashboard/collaborate#commissions' : `/dashboard/transactions/${row.transaction_id}`;
+    // Each person has their own page for a deal: the owner oversees it from Collaborate, the agent works in it from Transactions.
+    const link = side === 'agent' ? `/dashboard/collaborate/deals/${row.transaction_id}` : `/dashboard/transactions/${row.transaction_id}`;
 
     if (row.status === 'void') return bad('This commission was voided.', 409);
 

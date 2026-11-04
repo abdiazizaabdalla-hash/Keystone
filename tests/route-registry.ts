@@ -91,6 +91,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/contacts/tidy-tags': { kind: 'session', methods: ['POST'] },
   '/api/cron/cleanup': { kind: 'cron', methods: ['GET'], why: "Scheduled job; requires CRON_SECRET." },
   '/api/cron/template-rules': { kind: 'cron', methods: ['GET'], why: "Scheduled job; requires CRON_SECRET." },
+  '/api/cron/commission-nudges': { kind: 'cron', methods: ['GET'], why: "Scheduled job; requires CRON_SECRET." },
   '/api/cron/due-date-reminders': { kind: 'cron', methods: ['GET'], why: "Scheduled job; requires CRON_SECRET." },
   '/api/dashboard/attention': { kind: 'session', methods: ['GET'] },
   '/api/dashboard/attention/dismiss': { kind: 'session', methods: ['DELETE', 'POST'] },

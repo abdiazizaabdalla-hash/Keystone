@@ -16,7 +16,9 @@ export type NotificationType =
   | 'date_changed'
   | 'document_added'
   | 'stage_changed'
-  | 'client_viewed';
+  | 'client_viewed'
+  | 'deal_closed'
+  | 'commission';
 
 export const NOTIFICATION_TYPES: { type: NotificationType; label: string }[] = [
   { type: 'message', label: 'New messages' },
@@ -25,6 +27,8 @@ export const NOTIFICATION_TYPES: { type: NotificationType; label: string }[] = [
   { type: 'date_changed', label: 'Deadline changes' },
   { type: 'document_added', label: 'New documents' },
   { type: 'client_viewed', label: 'Client opened their progress link' },
+  { type: 'deal_closed', label: 'Deals that close in your brokerage' },
+  { type: 'commission', label: 'Commission invoices and reminders' },
 ];
 
 const VALID_TYPES = new Set<string>(NOTIFICATION_TYPES.map((t) => t.type));

@@ -1,5 +1,6 @@
 import { supabaseServer } from './supabase';
 import { AuthError } from './auth';
+import { getMutedTypes } from './notifications';
 import { computeSplit, fromCents, type Deduction, type SplitType } from './commissionMath';
 
 // Commission agreements and statements between a brokerage owner and one of their agents, deal by deal.
@@ -95,6 +96,7 @@ export async function loadCommissionFor(id: string, userId: string): Promise<{ r
 /** A line in someone's notification bell about a commission. Never throws. */
 export async function notifyCommission(params: { recipientId: string; actorId: string; transactionId: string; title: string; link: string }): Promise<void> {
   try {
+    if ((await getMutedTypes(params.recipientId)).includes('commission')) return;
     await supabaseServer.from('notifications').insert({ recipient_user_id: params.recipientId, actor_user_id: params.actorId, transaction_id: params.transactionId, event_type: 'commission', title: params.title.slice(0, 200), link: params.link });
   } catch (error) {
     console.error('Commission notification failed:', error);

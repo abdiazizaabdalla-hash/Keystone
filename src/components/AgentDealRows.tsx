@@ -16,9 +16,21 @@ export interface AgentDeal {
   nextStep?: { name: string; dueDate: string | null } | null;
   tasksTotal?: number;
   tasksDone?: number;
+  commission?: { status: string; submitted: boolean; statementNumber: string } | null;
 }
 
 const FLAG: Record<string, string> = { overdue: 'Overdue steps', closing_soon: 'Closing soon', no_closing_date: 'No closing date' };
+// Where the commission invoice stands, as a chip; a closed deal with none is the one the brokerage should chase.
+function commissionChip(d: AgentDeal): { text: string; cls: string } | null {
+  const c = d.commission;
+  if (!c) return d.status === 'Closed' ? { text: 'No commission invoice', cls: 'bg-red-500/15 text-red-300' } : null;
+  if (c.submitted) return { text: 'Invoice needs approval', cls: 'bg-amber-500/15 text-amber-300' };
+  if (c.status === 'proposed') return { text: 'Split waiting for agent', cls: 'bg-slate-500/15 text-slate-300' };
+  if (c.status === 'change_requested') return { text: 'Agent asked for a change', cls: 'bg-orange-500/15 text-orange-300' };
+  if (c.status === 'accepted') return { text: d.status === 'Closed' ? 'Approved, mark paid' : 'Invoice approved', cls: 'bg-emerald-500/15 text-emerald-300' };
+  if (c.status === 'paid') return { text: 'Paid', cls: 'bg-blue-500/15 text-blue-300' };
+  return null;
+}
 const fmt = (d: string | null | undefined) => (d ? new Date(`${d.slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
 const price = (v: number | string | null) => {
   const n = typeof v === 'string' ? parseFloat(v) : v;
@@ -47,6 +59,7 @@ export default function AgentDealRows({ deals, showAgent = true }: { deals: Agen
                   {d.health.flags.map((f) => (
                     <span key={f} className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300">{FLAG[f] ?? f}</span>
                   ))}
+                  {(() => { const chip = commissionChip(d); return chip ? <span className={`text-[11px] px-2 py-0.5 rounded-full ${chip.cls}`}>{chip.text}</span> : null; })()}
                   <span className="text-xs px-2.5 py-0.5 rounded-full border border-slate-500/40 bg-slate-500/10 text-slate-300">{d.status}</span>
                 </div>
               </div>

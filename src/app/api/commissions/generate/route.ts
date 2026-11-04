@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     if (!row) throw new Error('Could not number the statement');
 
     await logAudit(request, user, 'commission.generate', { entityType: 'commission', entityId: row.id, metadata: { transactionId, grossCents: row.gross_cents } });
-    await notifyCommission({ recipientId: link.owner_user_id, actorId: user.id, transactionId, title: `${row.statement_number}: a commission invoice needs your approval · ${tx.property_address ?? 'a deal'}`, link: `/dashboard/transactions/${transactionId}` });
+    await notifyCommission({ recipientId: link.owner_user_id, actorId: user.id, transactionId, title: `${row.statement_number}: a commission invoice needs your approval · ${tx.property_address ?? 'a deal'}`, link: `/dashboard/collaborate/deals/${transactionId}` });
     return NextResponse.json({ ...viewOf(row), summary: breakdown(row) }, { status: 201 });
   } catch (error) {
     if (error instanceof SplitError) return NextResponse.json({ error: error.message }, { status: 400 });

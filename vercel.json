@@ -8,6 +8,10 @@
       "schedule": "0 13 * * *"
     },
     {
+      "path": "/api/cron/commission-nudges",
+      "schedule": "15 14 * * *"
+    },
+    {
       "path": "/api/cron/cleanup",
       "schedule": "30 4 * * *"
     }

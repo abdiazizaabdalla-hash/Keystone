@@ -488,7 +488,7 @@ export default function Dashboard() {
       </div>
 
       {brokerageOwner && <BrokerageHome compact />}
-      {persona.workspace === true && <AgentBrokerageStrip />}
+      {persona.workspace === true && <AgentBrokerageStrip deals={transactions.map((t) => ({ id: t.id, address: t.property_address, status: t.status, closingDate: t.closing_date }))} />}
 
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
