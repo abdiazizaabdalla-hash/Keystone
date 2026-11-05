@@ -192,18 +192,18 @@ export function termsFromLink(link: LinkTerms | null | undefined): BaseTerms {
 }
 
 /**
- * Make the estimate statement for a CLOSED deal if there is none and the agent's brokerage has set their terms. It carries the base
+ * Make the estimate statement for a deal if there is none (a closed deal, or an open one when the agent sends their invoice) and the agent's brokerage has set their terms. It carries the base
  * split, the default fees and the cap rule as they are right now, and no figures: the brokerage owner confirms those from the
  * closing documents. Returns the statement (new or existing) or null when there is nothing to base one on. Never throws.
  */
-export async function ensureEstimateStatement(transactionId: string): Promise<CommissionRow | null> {
+export async function ensureEstimateStatement(transactionId: string, options: { allowOpen?: boolean } = {}): Promise<CommissionRow | null> {
   try {
     const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id, status, purchase_price').eq('id', transactionId).maybeSingle();
     if (!tx) return null;
     const existing = await commissionForTransaction(transactionId);
     if (existing) {
       // An estimate made before the brokerage set the agent's commission rate picks the rate up once it is set (until the owner confirms).
-      if (existing.status === 'estimate' && tx.status === CLOSED_STAGE && !existing.commission_type) {
+      if (existing.status === 'estimate' && (tx.status === CLOSED_STAGE || options.allowOpen) && !existing.commission_type) {
         const link = await activeLinkForAgent(existing.agent_user_id);
         const rate = link && link.owner_user_id === existing.owner_user_id ? termsFromLink(link).commission : null;
         if (rate) {
@@ -214,8 +214,8 @@ export async function ensureEstimateStatement(transactionId: string): Promise<Co
       }
       return existing;
     }
-    // Commission only exists once a deal has closed. Before that there is nothing to make or show.
-    if (tx.status !== CLOSED_STAGE) return null;
+    // A statement is made when a deal closes, or earlier when the agent sends their commission invoice (allowOpen).
+    if (tx.status !== CLOSED_STAGE && !options.allowOpen) return null;
     const agentId = tx.tc_user_id as string | undefined;
     if (!agentId) return null;
     const link = await activeLinkForAgent(agentId);
@@ -256,6 +256,30 @@ export async function ensureEstimateStatement(transactionId: string): Promise<Co
     if (!isMissingTable(error)) console.error('Could not create the commission estimate:', error);
     return null;
   }
+}
+
+/**
+ * What a commission invoice for a deal would come to, from the brokerage's terms for the agent and the deal's sale price.
+ * Everything is an estimate until the brokerage confirms the actual commission from the closing documents. Null figures mean the
+ * terms are not enough to work them out (no commission rate, or no sale price yet).
+ */
+export function invoicePreview(price: number | null, terms: BaseTerms) {
+  const rate = terms.commission;
+  const grossCents = terms.split ? expectedGrossCents(price, rate) : null;
+  const split = terms.split;
+  const b = grossCents && split ? breakdown({ gross_cents: grossCents, split_type: split.type, split_value: split.value, deductions: terms.fees.map((f) => ({ label: f.label, amount: f.amount })) }) : null;
+  return {
+    salePrice: price,
+    rate,
+    split,
+    fees: terms.fees.map((f) => ({ label: f.label, amount: f.amount })),
+    gross: b?.gross ?? null,
+    agentShare: b?.agentShare ?? null,
+    brokerageShare: b?.brokerageShare ?? null,
+    deductionsTotal: b?.deductionsTotal ?? null,
+    agentNet: b?.agentNet ?? null,
+    brokerageNet: b?.brokerageNet ?? null,
+  };
 }
 
 export interface CapInfo extends CapProgress {

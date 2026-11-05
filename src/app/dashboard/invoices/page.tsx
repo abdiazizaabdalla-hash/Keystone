@@ -502,6 +502,7 @@ export default function InvoicesPage() {
   const [mode, setMode] = useState<'unknown' | 'agent' | 'coordinator'>('unknown');
   const [dealId, setDealId] = useState<string | undefined>(undefined);
   const [startNew, setStartNew] = useState(false);
+  const [commissionDeal, setCommissionDeal] = useState<string | undefined>(undefined);
   const owner = useBrokerageOwner();
   const [tab, setTab] = useState<'commissions' | 'fees' | 'custom'>('commissions');
   useEffect(() => {
@@ -509,9 +510,10 @@ export default function InvoicesPage() {
     const qs = new URLSearchParams(window.location.search);
     setDealId(qs.get('transactionId') || undefined);
     setStartNew(qs.get('new') === '1');
+    setCommissionDeal(qs.get('commissionFor') || undefined);
   }, []);
   if (mode === 'unknown') return null;
-  if (mode === 'agent') return <AgentInvoices initialTransactionId={dealId} startNew={startNew} />;
+  if (mode === 'agent') return <AgentInvoices initialTransactionId={dealId} startNew={startNew} commissionTransactionId={commissionDeal} />;
   if (!owner) return <CoordinatorInvoicesPage />;
   return (
     <div>

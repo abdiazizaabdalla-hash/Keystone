@@ -124,7 +124,7 @@ export default function CommissionBox({ transactionId }: { transactionId: string
   const c = data.commission;
   const isOwner = data.role === 'owner';
   if (data.role === 'agent' && !c) return null;
-  // Commission does not exist until the deal closes.
+  // With no statement there is nothing to show before the deal closes. An agent can send their invoice early, which makes one.
   if (!c && !data.dealClosed) return null;
 
   const action = (a: string, extra: Record<string, unknown> = {}, after?: () => void) => call(`/api/commissions/${c!.id}`, 'PATCH', { action: a, ...extra }, after);
@@ -163,7 +163,11 @@ export default function CommissionBox({ transactionId }: { transactionId: string
           <div className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 p-3">
             <p className="text-sm text-amber-200 font-medium">Estimate. No amount is confirmed yet.</p>
             <p className="text-xs text-slate-300 mt-1">
-              {isOwner
+              {!data.dealClosed
+                ? isOwner
+                  ? 'The agent sent this commission invoice before closing. The figures below are estimated from the terms you set. When the deal closes, confirm the commission your brokerage actually received, from the closing documents.'
+                  : 'You sent this commission invoice before closing. Your brokerage confirms the actual commission from the closing documents when the deal closes. Until then, no amount counts as real.'
+                : isOwner
                 ? 'This deal has closed. Confirm the gross commission your brokerage actually received, from the closing documents, so the agent can review it.'
                 : 'This deal has closed. Your brokerage will confirm the commission it received from the closing documents, and then you can review it here. Until then, no amount counts as real.'}
             </p>

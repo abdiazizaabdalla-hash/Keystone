@@ -150,12 +150,13 @@ describe('commission only exists once the deal has closed', () => {
     const { data } = await admin.from('deal_commissions').select('id').eq('transaction_id', dealOpen.transactionId);
     expect(data).toEqual([]);
   });
-  it('an estimate left on an open deal is hidden everywhere until it closes', async () => {
+  it('an estimate on an open deal is the agent’s early invoice: both sides see it, and the owner still cannot confirm it', async () => {
     await admin.from('deal_commissions').insert({ transaction_id: dealOpen.transactionId, owner_user_id: broker.id, agent_user_id: agent.id, statement_number: 'COMM-0991', gross_cents: null, split_type: 'percent', split_value: 70, deductions: [], status: 'estimate' });
-    expect(d(await forDeal(agent, dealOpen.transactionId)).commission).toBeNull();
-    expect(d(await forDeal(broker, dealOpen.transactionId)).commission).toBeNull();
+    expect(d(await forDeal(agent, dealOpen.transactionId)).commission).not.toBeNull();
+    expect(d(await forDeal(broker, dealOpen.transactionId)).commission).not.toBeNull();
     const ledger = (await call(h(GET), broker, { method: 'GET', path: '/api/commissions' })).json as { asOwner: { transactionId: string }[] };
-    expect(ledger.asOwner.some((r) => r.transactionId === dealOpen.transactionId)).toBe(false);
+    expect(ledger.asOwner.some((r) => r.transactionId === dealOpen.transactionId)).toBe(true);
+    expect((await post(broker, { transactionId: dealOpen.transactionId, gross: 10000 })).status).toBe(409);
     await admin.from('deal_commissions').delete().eq('transaction_id', dealOpen.transactionId);
   });
   it('closing makes the statement with the expected gross from the sale price and the agent’s rate', async () => {

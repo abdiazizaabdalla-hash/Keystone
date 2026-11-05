@@ -27,9 +27,8 @@ export async function GET(request: NextRequest) {
     const phoneOf = new Map<string, string | null>();
     for (const r of agentRows ?? []) if (!phoneOf.has(r.tc_user_id as string)) phoneOf.set(r.tc_user_id as string, (r.phone as string | null) ?? null);
     const addressOf = new Map(deals.map((d) => [d.id, d.property_address]));
-    const closedDeals = new Set(deals.filter((d) => d.status === CLOSED_STAGE).map((d) => d.id));
     // A commission estimate only exists to be seen once its deal has closed.
-    const commissions = ((commissionRows ?? []) as CommissionRow[]).filter((r) => r.status !== 'estimate' || closedDeals.has(r.transaction_id)).map((r) => ({ ...viewOf(r), agentId: r.agent_user_id, property: addressOf.get(r.transaction_id) ?? null, agentNetCents: r.agent_net_cents }));
+    const commissions = ((commissionRows ?? []) as CommissionRow[]).map((r) => ({ ...viewOf(r), agentId: r.agent_user_id, property: addressOf.get(r.transaction_id) ?? null, agentNetCents: r.agent_net_cents }));
 
     const agents = active
       .map((l) => {

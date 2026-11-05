@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
       if (tx.tc_user_id === user.id) {
         // The agent who owns the deal. An estimate is made for them the first time they look, if their brokerage has set their terms.
         const found = await ensureEstimateStatement(transactionId);
-        // An estimate only exists to be seen once the deal has closed.
-        const row = found && found.status === 'estimate' && !dealClosed ? null : found;
+        // A statement exists for a closed deal, or for an open one once the agent has sent their commission invoice.
+        const row = found;
         const link = await activeLinkForAgent(user.id);
         const inBrokerage = !!link && (await overseesAgent(link.owner_user_id, user.id));
         const owner = link ? (await agentLabels([link.owner_user_id])).get(link.owner_user_id) : undefined;
@@ -65,8 +65,8 @@ export async function GET(request: NextRequest) {
         }
         if (!inBrokerage) return NextResponse.json({ role: null, canPropose: false, dealClosed, commission: null });
         // In a brokerage that has not set their terms yet: nothing is invented, the card just says so.
-        // Before closing there is no commission to show; after it, the agent waits for the brokerage to set their terms.
-        if (!dealClosed) return NextResponse.json({ role: null, canPropose: false, dealClosed, commission: null });
+        // Before closing nothing exists until the agent sends the invoice, which needs the brokerage's terms for them.
+        if (!dealClosed) return NextResponse.json({ role: null, canPropose: false, dealClosed, canInvoice: !!termsFromLink(link).split, awaitingTerms: !termsFromLink(link).split, brokerage, commission: null });
         return NextResponse.json({ role: null, canPropose: false, awaitingTerms: true, brokerage, purchasePrice: Number(tx.purchase_price) || null, dealClosed, commission: null });
       }
       const existing = await commissionForTransaction(transactionId);
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
       const oversees = await canOverseeDeal(user.id, transactionId);
       if (!owns && !oversees) return NextResponse.json({ role: null });
       const found = oversees ? await ensureEstimateStatement(transactionId) : existing;
-      const row = found && found.status === 'estimate' && !dealClosed ? null : found;
+      const row = found;
       let terms: BaseTerms | null = null;
       let cap = null;
       if (oversees) {
@@ -109,8 +109,7 @@ export async function GET(request: NextRequest) {
       const { data } = await supabaseServer.from('transactions').select('id, property_address, file_number, status, purchase_price').in('id', txIds.slice(i, i + 80));
       for (const t of data ?? []) deals.set(t.id as string, { address: t.property_address as string | null, fileNumber: t.file_number as string | null, status: t.status as string | null, price: t.purchase_price ? Number(t.purchase_price) : null });
     }
-    // An estimate belongs to a deal that has closed; one left on a deal that is still open is not shown.
-    const visible = (r: CommissionRow) => r.status !== 'estimate' || deals.get(r.transaction_id)?.status === CLOSED_STAGE;
+    const visible = (_r: CommissionRow) => true;
     const ownerRows = allOwnerRows.filter(visible);
     const agentRows = allAgentRows.filter(visible);
     const labels = await agentLabels([...ownerRows.map((r) => r.agent_user_id), ...agentRows.map((r) => r.owner_user_id)]);

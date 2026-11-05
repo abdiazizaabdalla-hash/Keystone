@@ -16,12 +16,13 @@ interface Row {
   statementNumber: string;
   splitType: SplitType;
   splitValue: number;
-  status: 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
+  status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
   submitted?: boolean;
   gross: number;
   agentNet: number;
   brokerageNet: number;
   paidOn: string | null;
+  dealStatus?: string | null;
   property: string | null;
   agent?: { name: string };
   brokerage?: { name: string };
@@ -29,7 +30,7 @@ interface Row {
 
 const money = (n: number) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const splitText = (t: SplitType, v: number) => (t === 'percent' ? `Agent keeps ${v}%` : t === 'flat_agent' ? `Agent gets ${money(v)}` : `Brokerage fee ${money(v)}`);
-const STATUS = { proposed: 'Waiting for the agent', change_requested: 'Change requested', accepted: 'Agreed', paid: 'Paid', void: 'Void' } as const;
+const STATUS = { estimate: 'Estimate · confirm after closing', proposed: 'Waiting for the agent', change_requested: 'Change requested', accepted: 'Agreed', paid: 'Paid', void: 'Void' } as const;
 const card = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 
 interface RosterAgent extends BaseTerms { id: string; name: string }

@@ -23,6 +23,7 @@ interface Row {
   agentNet: number | null;
   brokerageNet: number | null;
   paidOn: string | null;
+  dealStatus?: string | null;
   property: string | null;
   agent: { id: string; name: string };
 }
@@ -152,7 +153,7 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
                           <td className="py-2 pr-3 text-slate-300">{splitText(r.splitType, r.splitValue)}</td>
                           <td className="py-2 pr-3 text-right text-slate-200">{r.gross === null ? <span className="text-slate-500" title="Estimate, not confirmed">—</span> : money(r.gross)}{r.gross !== null && r.grossPercent != null && <div className="text-[11px] text-slate-500">{r.grossPercent}% of {money(r.salePrice ?? 0)} sale</div>}</td>
                           <td className="py-2 pr-3 text-right text-emerald-300">{r.agentNet === null ? <span className="text-slate-500">—</span> : money(r.agentNet)}</td>
-                          <td className="py-2 pr-3 text-slate-300">{r.submitted ? <span className="text-amber-300">Needs your approval</span> : r.status === 'estimate' ? <span className="text-amber-300">{STATUS.estimate}</span> : STATUS[r.status]}{r.paidOn ? ` ${r.paidOn}` : ''}</td>
+                          <td className="py-2 pr-3 text-slate-300">{r.submitted ? <span className="text-amber-300">Needs your approval</span> : r.status === 'estimate' ? <span className="text-amber-300">{r.dealStatus !== 'Closed' ? 'Sent by agent · confirm at closing' : STATUS.estimate}</span> : STATUS[r.status]}{r.paidOn ? ` ${r.paidOn}` : ''}</td>
                           <td className="py-2 text-right"><button type="button" onClick={() => openStatement(r.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="text-xs text-blue-400 hover:text-blue-300">Statement</button></td>
                         </tr>
                       ))}

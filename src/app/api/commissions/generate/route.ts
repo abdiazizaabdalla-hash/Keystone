@@ -9,10 +9,10 @@ import { SplitError } from '@/lib/commissionMath';
 import { CLOSED_STAGE } from '@/lib/oversightMath';
 import { commissionForTransaction, ensureEstimateStatement, isMissingTable, notifyCommission, termsFromLink, viewOf, breakdown } from '@/lib/commissions';
 
-// An agent asks for the commission statement on one of their own deals. There is no gross to enter: the statement starts as an
-// ESTIMATE built from the base terms their brokerage set for them, and the brokerage owner confirms the actual commission from the
-// closing documents. Normally the estimate already exists (it is made when the deal starts); this covers deals that started before
-// the terms were set. Nothing here moves money.
+// An agent sends their commission invoice to their brokerage for one of their own deals, open or closed. There is no gross to enter:
+// the invoice starts as an ESTIMATE built from the base terms their brokerage set for them (sale price x commission rate, split, fees),
+// and the brokerage owner confirms the actual commission from the closing documents. It is the same record as the commission
+// statement, so a deal never has two. Sending it again does nothing new. Nothing here moves money.
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,7 +26,6 @@ export async function POST(request: NextRequest) {
 
     const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id, property_address, status').eq('id', transactionId).maybeSingle();
     if (!tx || tx.tc_user_id !== user.id) throw new AuthError('Not found', 404);
-    if (tx.status !== CLOSED_STAGE) return NextResponse.json({ error: 'A commission statement opens when the deal closes.' }, { status: 409 });
 
     const link = await activeLinkForAgent(user.id);
     if (!link || !(await overseesAgent(link.owner_user_id, user.id))) {
@@ -36,13 +35,14 @@ export async function POST(request: NextRequest) {
     if (existing) return NextResponse.json({ ...viewOf(existing), summary: breakdown(existing) }, { status: 200 });
 
     if (!termsFromLink(link).split) {
-      throw new SplitError('Your brokerage has not set your commission terms yet. Ask them to set your base split, and the estimate will appear here.');
+      throw new SplitError('Your brokerage has not set your commission terms yet. Ask them to set your base split, and you can send your commission invoice.');
     }
-    const row = await ensureEstimateStatement(transactionId);
+    const row = await ensureEstimateStatement(transactionId, { allowOpen: true });
     if (!row) throw new Error('Could not start the commission statement');
 
     await logAudit(request, user, 'commission.generate', { entityType: 'commission', entityId: row.id, metadata: { transactionId } });
-    await notifyCommission({ recipientId: link.owner_user_id, actorId: user.id, transactionId, title: `${row.statement_number}: the agent asked for a commission statement · ${tx.property_address ?? 'a deal'}`, link: `/dashboard/collaborate/deals/${transactionId}` });
+    const closed = tx.status === CLOSED_STAGE;
+    await notifyCommission({ recipientId: link.owner_user_id, actorId: user.id, transactionId, title: closed ? `${row.statement_number}: the agent sent a commission invoice · ${tx.property_address ?? 'a deal'}` : `${row.statement_number}: the agent sent a commission invoice before closing · ${tx.property_address ?? 'a deal'}. Confirm the actual commission when it closes.`, link: `/dashboard/collaborate/deals/${transactionId}` });
     return NextResponse.json({ ...viewOf(row), summary: breakdown(row) }, { status: 201 });
   } catch (error) {
     if (error instanceof SplitError) return NextResponse.json({ error: error.message }, { status: 400 });

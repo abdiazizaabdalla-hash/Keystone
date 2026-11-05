@@ -6,6 +6,7 @@ import { formatDisplayDate } from '@/lib/dueDates';
 import { invoiceTotals } from '@/lib/workspaceInvoiceMath';
 import { openStatement } from '@/lib/commissionClient';
 import { INVOICE_TEMPLATES } from '@/lib/workspaceInvoiceTemplates';
+import AgentCommissionInvoiceForm from './AgentCommissionInvoiceForm';
 
 interface Line {
   description: string;
@@ -49,6 +50,8 @@ interface CommissionInvoiceRow {
   status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
   submitted?: boolean;
   agentNet: number | null;
+  estimate?: { agentNet: number | null } | null;
+  dealStatus?: string | null;
   gross?: number | null;
   salePrice?: number | null;
   grossPercent?: number | null;
@@ -61,6 +64,7 @@ interface CommissionInvoiceRow {
 }
 
 function commissionState(c: CommissionInvoiceRow): { label: string; bucket: 'draft' | 'sent' | 'paid'; cls: string } {
+  if (c.status === 'estimate' && c.dealStatus !== 'Closed') return { label: 'Sent · confirmed at closing', bucket: 'sent', cls: 'bg-blue-500/10 text-blue-300 border-blue-500/40 border-dashed' };
   if (c.status === 'estimate') return { label: 'Estimate · not confirmed', bucket: 'draft', cls: 'bg-amber-500/10 text-amber-300 border-amber-500/40 border-dashed' };  if (c.status === 'paid') return { label: 'Paid', bucket: 'paid', cls: 'bg-green-500/10 text-green-300 border-green-500/40' };
   if (c.status === 'accepted') return { label: 'Approved · waiting to be paid', bucket: 'sent', cls: 'bg-blue-500/10 text-blue-300 border-blue-500/40' };
   if (c.status === 'proposed') return { label: 'Confirmed · review it', bucket: 'draft', cls: 'bg-amber-500/10 text-amber-300 border-amber-500/40' };
@@ -80,7 +84,7 @@ const inputCls = 'w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 
 
 // An agent with their own workspace: invoices from templates, billed to anyone in their contacts (or typed in), with an
 // optional link to a deal when a coordinator is on it. Separate from the coordinator's commission invoices.
-export default function AgentInvoices({ initialTransactionId, startNew }: { initialTransactionId?: string; startNew?: boolean }) {
+export default function AgentInvoices({ initialTransactionId, startNew, commissionTransactionId }: { initialTransactionId?: string; startNew?: boolean; commissionTransactionId?: string }) {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [commissions, setCommissions] = useState<CommissionInvoiceRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,6 +93,8 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
   const [picking, setPicking] = useState(Boolean(initialTransactionId) || Boolean(startNew));
   const [editing, setEditing] = useState<InvoiceRow | null>(null);
   const [busy, setBusy] = useState(false);
+  // The commission invoice to the agent's brokerage (see AgentCommissionInvoiceForm), opened from the template list or from a deal.
+  const [commissionForm, setCommissionForm] = useState(Boolean(commissionTransactionId));
 
   // Bumping `reloadKey` fetches the list again.
   const [reloadKey, setReloadKey] = useState(0);
@@ -135,6 +141,15 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
     setBusy(true);
     setError('');
     try {
+      // The commission split goes to the agent's own brokerage with everything filled in; with no brokerage it is a plain invoice.
+      if (templateKey === 'commission_split') {
+        const opts = await authFetch('/api/commissions/invoice-options').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        if (opts?.inBrokerage) {
+          setPicking(false);
+          setCommissionForm(true);
+          return;
+        }
+      }
       const res = await authFetch('/api/workspace-invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -204,6 +219,8 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
       </div>
 
       {error && <p className="mb-4 text-sm text-red-300">{error}</p>}
+
+      {commissionForm && <AgentCommissionInvoiceForm initialTransactionId={commissionTransactionId} onClose={() => setCommissionForm(false)} onSent={load} />}
 
       {picking && (
         <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-5">
@@ -282,7 +299,7 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
                   <p className="font-semibold text-slate-100 truncate">
                     {c.statementNumber} · {c.brokerage?.name ?? 'Your brokerage'}
                   </p>
-                  <p className="text-xs text-slate-500 truncate">Commission statement from your brokerage{c.property ? ` · ${c.property}` : ''}</p>
+                  <p className="text-xs text-slate-500 truncate">Commission invoice to your brokerage{c.property ? ` · ${c.property}` : ''}</p>
                   {c.gross != null && c.status !== 'estimate' && (
                     <p className="text-xs text-slate-400 truncate">
                       Brokerage received {money(c.gross)}{c.grossPercent != null && c.salePrice ? ` (${c.grossPercent}% of the ${money(c.salePrice)} sale price)` : ''}
@@ -292,7 +309,7 @@ export default function AgentInvoices({ initialTransactionId, startNew }: { init
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full border ${state.cls}`}>{state.label}</span>
-                  <span className="font-semibold text-slate-100">{c.agentNet === null ? '—' : money(c.agentNet)}</span>
+                  <span className="font-semibold text-slate-100">{c.agentNet !== null ? money(c.agentNet) : c.estimate?.agentNet != null ? <span title="Estimate">≈ {money(c.estimate.agentNet)}</span> : '—'}</span>
                 </div>
               </button>
             );

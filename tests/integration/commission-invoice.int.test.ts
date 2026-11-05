@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GET } from '@/app/api/commissions/route';
 import { POST as generate } from '@/app/api/commissions/generate/route';
+import { GET as invoiceOptions } from '@/app/api/commissions/invoice-options/route';
 import { POST as propose } from '@/app/api/commissions/route';
 import { PATCH } from '@/app/api/commissions/[id]/route';
 import { admin, call, cleanup, createActor, seedDeal, type Actor, type Deal } from './helpers';
@@ -62,9 +63,24 @@ beforeAll(async () => {
 afterAll(cleanup);
 
 describe('asking for the statement', () => {
-  it('is refused while the deal is still open', async () => {
-    expect((await gen(agent, { transactionId: dOpen.transactionId })).status).toBe(409);
-    const { data } = await admin.from('deal_commissions').select('id').eq('transaction_id', dOpen.transactionId);
+  it('works on a deal that is still open: an estimate the owner confirms when it closes', async () => {
+    const res = await gen(agent, { transactionId: dOpen.transactionId });
+    expect(res.status, JSON.stringify(res.json)).toBe(201);
+    expect(v(res)).toMatchObject({ status: 'estimate', gross: null, agentNet: null });
+    // the broker sees it on the deal, and it is not confirmable until the deal closes
+    const owner = (await forDeal(broker, dOpen.transactionId)).json as { role: string; canPropose: boolean; commission: View | null };
+    expect(owner.role).toBe('owner');
+    expect(owner.commission?.status).toBe('estimate');
+    expect(owner.canPropose).toBe(false);
+    const bell = (await admin.from('notifications').select('title').eq('recipient_user_id', broker.id).eq('event_type', 'commission')).data ?? [];
+    expect(bell.some((b) => /before closing/.test(String(b.title)))).toBe(true);
+  });
+  it('an agent with an open deal and terms is offered the invoice before anything exists', async () => {
+    const open2 = await seedDeal(agent, 'CIOPEN2');
+    const res = (await forDeal(agent, open2.transactionId)).json as { canInvoice?: boolean; commission: unknown; brokerage?: { name: string } };
+    expect(res.canInvoice).toBe(true);
+    expect(res.commission).toBeNull();
+    const { data } = await admin.from('deal_commissions').select('id').eq('transaction_id', open2.transactionId);
     expect(data).toEqual([]);
   });
   it('needs a login, an agent workspace, their own deal, a brokerage and a base split', async () => {
@@ -96,7 +112,43 @@ describe('asking for the statement', () => {
     expect(after.role).toBe('agent');
     expect(after.commission.grossStatus).toBe('estimate');
     const bell = (await admin.from('notifications').select('title').eq('recipient_user_id', broker.id).eq('event_type', 'commission')).data ?? [];
-    expect(bell.some((b) => /asked for a commission statement/.test(String(b.title)))).toBe(true);
+    expect(bell.some((b) => /sent a commission invoice/.test(String(b.title)))).toBe(true);
+  });
+});
+
+describe('what the agent sees when they start an invoice', () => {
+  type Options = { inBrokerage: boolean; brokerage?: { name: string }; termsSet?: boolean; deals?: { id: string; closed: boolean; statement: { status: string } | null; preview: { gross: number | null; agentNet: number | null; split: { type: string; value: number } | null } | null }[] };
+  const options = (who: Actor | null) => call(h(invoiceOptions), who, { method: 'GET', path: '/api/commissions/invoice-options' });
+  it('needs a login and an agent workspace', async () => {
+    expect((await options(null)).status).toBe(401);
+    expect((await options(broker)).status).toBe(403);
+  });
+  it('an agent in no brokerage has nothing to invoice', async () => {
+    expect(((await options(loner)).json as Options).inBrokerage).toBe(false);
+  });
+  it('lists the brokerage as the bill-to and the deals, open and closed, with the split filled in from the terms', async () => {
+    const res = (await options(agent)).json as Options;
+    expect(res.inBrokerage).toBe(true);
+    expect(res.termsSet).toBe(true);
+    expect(res.brokerage?.name).toBeTruthy();
+    const open = res.deals!.find((d) => d.id === dOpen.transactionId);
+    const closed = res.deals!.find((d) => d.id === d3.transactionId);
+    expect(open).toMatchObject({ closed: false });
+    expect(closed).toMatchObject({ closed: true });
+    // d3 has no invoice yet, so it comes with the calculation worked out from the brokerage's terms
+    expect(closed?.statement).toBeNull();
+    expect(closed?.preview?.split).toEqual({ type: 'percent', value: 80 });
+    // dOpen was sent above, so it shows as the invoice that exists, not a fresh preview
+    expect(open?.statement?.status).toBe('estimate');
+    expect(open?.preview).toBeNull();
+  });
+  it('never lists another agent’s deals', async () => {
+    const res = (await options(agent)).json as Options;
+    expect(res.deals!.some((d) => d.id === dOther.transactionId)).toBe(false);
+  });
+  it('with no terms set there is nothing to calculate', async () => {
+    const res = (await options(noSplit)).json as Options;
+    expect(res).toMatchObject({ inBrokerage: true, termsSet: false });
   });
 });
 

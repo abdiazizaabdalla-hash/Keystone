@@ -29,8 +29,8 @@ export async function GET(request: NextRequest) {
 
     const rows = commissionRows ?? [];
     const closedIds = new Set(deals.filter((d) => d.status === CLOSED_STAGE).map((d) => d.id));
-    // A commission estimate only exists to be seen once its deal has closed.
-    const live = rows.filter((r) => r.status !== 'void' && (r.status !== 'estimate' || closedIds.has(r.transaction_id as string)));
+    // An estimate on an open deal is an invoice the agent sent early; it has no amounts and waits for the closing documents.
+    const live = rows.filter((r) => r.status !== 'void');
     const withCommission = new Set(live.map((r) => r.transaction_id as string));
     // An estimate has no amount to pay yet, so it is not 'owed'; it is something the owner still has to confirm.
     const unpaid = live.filter((r) => r.status !== 'paid' && r.status !== 'estimate');
