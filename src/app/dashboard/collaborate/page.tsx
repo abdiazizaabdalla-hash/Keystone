@@ -6,6 +6,8 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import Link from 'next/link';
 import TeamMessaging from '@/components/TeamMessaging';
 import MessagesInbox from '@/components/MessagesInbox';
+import BrokerageMembership from '@/components/BrokerageMembership';
+import { readPersona } from '@/lib/persona';
 import BrokerageCommissions from '@/components/BrokerageCommissions';
 import TeamContacts from '@/components/TeamContacts';
 import BrokerageRoster from '@/components/BrokerageRoster';
@@ -42,10 +44,12 @@ interface TeamResponse {
   seatPriceLabel?: string;
   members: Member[];
   pendingInvites: PendingInvite[];
+  /** True when the caller is an agent who joined this brokerage (read-only roster, board and shared items). */
+  viaBrokerage?: boolean;
   brokerageAgents?: { linkId: string; userId: string | null; name: string; email: string; status: string }[];
 }
 
-type Tab = 'overview' | 'messages' | 'contacts' | 'people' | 'agents' | 'commissions' | 'templates' | 'settings';
+type Tab = 'overview' | 'messages' | 'contacts' | 'people' | 'agents' | 'commissions' | 'templates' | 'settings' | 'brokerage';
 
 // Role tags in the roster: a brokerage can have a broker, agents and coordinators.
 const KIND_LABEL = { broker: 'Broker', agent: 'Agent', tc: 'TC' } as const;
@@ -58,6 +62,12 @@ export default function CollaboratePage() {
   // Unread private messages from agents (brokerage owners only); added to the Messages badge.
   const [agentUnread, setAgentUnread] = useState(0);
   const [teamContacts, setTeamContacts] = useState<ContactRow[]>([]);
+  // An agent with their own workspace who is not in a brokerage yet still lands here, to see invitations.
+  const [isWorkspaceAgent, setIsWorkspaceAgent] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setIsWorkspaceAgent(readPersona().workspace === true), 0);
+    return () => clearTimeout(t);
+  }, []);
 
   const setTab = (next: Tab) => {
     setTabState(next);
@@ -72,7 +82,7 @@ export default function CollaboratePage() {
   useEffect(() => {
     const t = setTimeout(async () => {
       const wanted = window.location.hash.replace('#', '');
-      if (['overview', 'messages', 'contacts', 'people', 'agents', 'commissions', 'templates', 'settings'].includes(wanted)) setTabState(wanted as Tab);
+      if (['overview', 'messages', 'contacts', 'people', 'agents', 'commissions', 'templates', 'settings', 'brokerage'].includes(wanted)) setTabState(wanted as Tab);
       try {
         const [sum, list] = await Promise.all([authFetch('/api/team/messages/summary'), authFetch('/api/contacts')]);
         if (sum.ok) setUnread((await sum.json()).total || 0);
@@ -271,6 +281,16 @@ export default function CollaboratePage() {
     );
   }
 
+  if ((!data || !data.team) && isWorkspaceAgent && isFeatureOnClient('brokerage')) {
+    return (
+      <div className="p-4 md:p-8 max-w-6xl">
+        <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Collaborate</h1>
+        <p className="text-slate-400 mb-6 max-w-3xl">Your brokerage’s team, messages, templates and contacts show up here once you join one.</p>
+        <BrokerageMembership onChanged={load} />
+      </div>
+    );
+  }
+
   if (!data || !data.team) {
     return (
       <div className="p-4 md:p-8">
@@ -281,13 +301,22 @@ export default function CollaboratePage() {
   }
 
   const isOwner = data.role === 'owner';
+  const isAgentMember = data.viaBrokerage === true;
   const isBrokerage = data.planId === 'brokerage';
   const seatsUsed = data.members.length + data.pendingInvites.length;
-  const teamLabel = data.team.name || (isBrokerage ? 'Your brokerage' : 'Your team');
+  const teamLabel = data.team.name || (isBrokerage || isAgentMember ? 'Your brokerage' : 'Your team');
 
   // With the brokerage feature on, Collaborate is the brokerage's home: Agents first, no coordinator-team overview.
   const brokerageMode = isFeatureOnClient('brokerage');
-  const tabs: { id: Tab; label: string; badge?: number }[] = brokerageMode
+  const tabs: { id: Tab; label: string; badge?: number }[] = isAgentMember
+    ? [
+        { id: 'messages', label: 'Messages', badge: unread + agentUnread },
+        { id: 'people', label: 'People' },
+        { id: 'contacts', label: 'Contacts' },
+        { id: 'templates', label: 'Templates' },
+        { id: 'brokerage', label: 'Membership' },
+      ]
+    : brokerageMode
     ? [
         ...(isOwner ? [{ id: 'agents' as Tab, label: 'Agents' }] : []),
         { id: 'messages', label: 'Messages', badge: unread + agentUnread },
@@ -317,7 +346,9 @@ export default function CollaboratePage() {
         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 capitalize">{data.role}</span>
       </div>
       <p className="text-slate-400 mb-6 max-w-3xl">
-        {brokerageMode
+        {isAgentMember
+          ? 'Your brokerage: who is in it, the team board and your private messages with your broker, and the templates and contacts it shares. Your own contacts and clients stay private.'
+          : brokerageMode
           ? 'Invite and manage your agents and coordinators, message them, and share templates. Agents and coordinators keep their own contacts private.'
           : 'Your team’s home base. Each coordinator’s deals, agents and contacts stay private to their own login; only contacts someone chooses to share appear here.'}
       </p>
@@ -439,11 +470,13 @@ export default function CollaboratePage() {
         </div>
       )}
 
-      {activeTab === 'messages' && (brokerageMode && isOwner
-        ? <MessagesInbox members={data.members} isOwner={isOwner} onAgentUnreadChange={setAgentUnread} />
+      {activeTab === 'messages' && (brokerageMode
+        ? <MessagesInbox members={data.members} isOwner={isOwner} viewer={isAgentMember ? 'agent' : isOwner ? 'owner' : 'member'} onAgentUnreadChange={setAgentUnread} />
         : <TeamMessaging members={data.members} isOwner={isOwner} />)}
 
-      {activeTab === 'contacts' && <TeamContacts onLoaded={setTeamContacts} />}
+      {activeTab === 'contacts' && <TeamContacts onLoaded={setTeamContacts} readOnly={isAgentMember} />}
+
+      {activeTab === 'brokerage' && isAgentMember && <BrokerageMembership onChanged={load} />}
 
       {activeTab === 'people' && (
         <div className="max-w-4xl">

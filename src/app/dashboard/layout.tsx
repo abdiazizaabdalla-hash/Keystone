@@ -227,7 +227,7 @@ export default function DashboardLayout({
   };
 
   useEffect(() => {
-    if (!isTeamPlan(plan)) return;
+    if (!isTeamPlan(plan) && !(isFeatureOnClient('brokerage') && isAgentAccount && hasWorkspace)) return;
     let cancelled = false;
     const load = async () => {
       if (document.visibilityState !== 'visible') return;
@@ -248,7 +248,7 @@ export default function DashboardLayout({
       window.clearInterval(id);
       window.removeEventListener('team-chat-read', load);
     };
-  }, [plan]);
+  }, [plan, isAgentAccount, hasWorkspace]);
 
   // Default to collapsed on small screens (phones/narrow tablets) so the
   // nav doesn't eat most of the viewport, but respect an explicit choice

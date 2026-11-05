@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import ChatBubbles, { Avatar, type ChatLine } from './chat/ChatBubbles';
 
-// The brokerage owner's Messages tab, laid out like an inbox: the team board pinned at the top of the list, then a private
-// conversation with each agent (and each teammate), all in one box. Pick one on the left, read and reply on the right.
-// Private threads are readable only by the owner and that one person (the server checks every request).
+// The one Messages screen, laid out like an inbox: the team board pinned at the top of the list, then the private
+// conversations the viewer has. Pick one on the left, read and reply on the right. It is used by the broker (Collaborate →
+// Messages: a conversation with each agent and each teammate), by an agent (Messages, and Collaborate → Messages: the board
+// plus the one with their broker) and by a coordinator on the team. Private threads are readable only by the two people in
+// them (the server checks every request).
 
 interface Member { userId: string; email: string; name: string; isYou: boolean; kind?: 'broker' | 'agent' | 'tc' }
 interface AgentConv { id: string; role: 'agent' | 'owner'; name: string; email: string | null; lastMessage: { fromMe: boolean; body: string; createdAt: string } | null; unread: number }
@@ -26,9 +28,14 @@ function short(iso: string): string {
   return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-export default function MessagesInbox({ members, isOwner, onAgentUnreadChange }: { members: Member[]; isOwner: boolean; onAgentUnreadChange?: (n: number) => void }) {
+/** Who is looking: the broker (owner), an agent in the brokerage, or a coordinator/teammate on the team. */
+export type InboxViewer = 'owner' | 'agent' | 'member';
+
+export default function MessagesInbox({ members, isOwner, viewer = isOwner ? 'owner' : 'member', onAgentUnreadChange }: { members: Member[]; isOwner: boolean; viewer?: InboxViewer; onAgentUnreadChange?: (n: number) => void }) {
+  const isAgentViewer = viewer === 'agent';
   const meId = members.find((m) => m.isYou)?.userId;
-  const teammates = useMemo(() => members.filter((m) => !m.isYou), [members]);
+  // An agent talks to their broker in private; everyone else on the board is reached by posting there.
+  const teammates = useMemo(() => (isAgentViewer ? [] : members.filter((m) => !m.isYou)), [members, isAgentViewer]);
   const nameOfMember = useCallback((id: string) => {
     const m = members.find((x) => x.userId === id);
     return m ? m.name || m.email.split('@')[0] : 'Former teammate';
@@ -62,7 +69,7 @@ export default function MessagesInbox({ members, isOwner, onAgentUnreadChange }:
       const [a, t] = await Promise.all([authFetch('/api/brokerage-messages'), authFetch('/api/team/messages/summary')]);
       if (a.ok) {
         const json = await a.json();
-        const list: AgentConv[] = (json.conversations ?? []).filter((c: AgentConv) => c.role === 'agent');
+        const list: AgentConv[] = (json.conversations ?? []).filter((c: AgentConv) => c.role === (isAgentViewer ? 'owner' : 'agent'));
         setAgents(list);
         const cur = activeRef.current;
         notifyRef.current?.(list.reduce((n, c) => n + (cur.kind === 'agent' && cur.id === c.id ? 0 : c.unread), 0));
@@ -71,7 +78,7 @@ export default function MessagesInbox({ members, isOwner, onAgentUnreadChange }:
     } catch {
       /* the list just does not refresh this round */
     }
-  }, []);
+  }, [isAgentViewer]);
 
   const toTeamLines = useCallback((list: TeamMsg[], thread: Thread): ChatLine[] => list.map((m) => {
     const who = members.find((x) => x.userId === m.senderId);
@@ -87,15 +94,15 @@ export default function MessagesInbox({ members, isOwner, onAgentUnreadChange }:
     };
   }), [members, meId, nameOfMember, isOwner]);
 
-  const toAgentLines = useCallback((list: BrokerageMsg[], agentId: string, agentName: string): ChatLine[] => list.map((m) => ({
+  const toAgentLines = useCallback((list: BrokerageMsg[], otherId: string, otherName: string): ChatLine[] => list.map((m) => ({
     id: m.id,
     senderKey: m.sender_id,
-    senderName: m.sender_id === agentId ? agentName : 'You',
-    mine: m.sender_id !== agentId,
+    senderName: m.sender_id === otherId ? otherName : 'You',
+    mine: m.sender_id !== otherId,
     body: m.body,
     createdAt: m.created_at,
-    tag: m.sender_id === agentId ? 'Agent' : undefined,
-  })), []);
+    tag: m.sender_id === otherId ? (isAgentViewer ? 'Broker' : 'Agent') : undefined,
+  })), [isAgentViewer]);
 
   const loadThread = useCallback(async (thread: Thread, first: boolean) => {
     if (first) { setLoading(true); setLines([]); setError(''); stick.current = true; }
@@ -180,9 +187,9 @@ export default function MessagesInbox({ members, isOwner, onAgentUnreadChange }:
 
   const open = (t: Thread) => { setActive(t); setShowChat(true); setDraft(''); };
   const badge = (n: number) => (n > 0 ? <span className="shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-blue-500 text-white text-xs font-semibold flex items-center justify-center">{n > 99 ? '99+' : n}</span> : null);
-  const agentName = active.kind === 'agent' ? agents.find((a) => a.id === active.id)?.name ?? 'Agent' : '';
+  const agentName = active.kind === 'agent' ? agents.find((a) => a.id === active.id)?.name ?? (isAgentViewer ? 'Your broker' : 'Agent') : '';
   const title = active.kind === 'board' ? 'Team board' : active.kind === 'agent' ? agentName : nameOfMember(active.id);
-  const subtitle = active.kind === 'board' ? 'Visible to everyone on your team' : 'Private: only the two of you can read this';
+  const subtitle = active.kind === 'board' ? (isAgentViewer ? 'Visible to everyone in the brokerage' : 'Visible to everyone on your team') : 'Private: only the two of you can read this';
   const boardUnread = teamUnread['board'] || 0;
 
   const row = (t: Thread, selected: boolean, left: React.ReactNode, name: string, preview: string, time: string | null, count: number) => (
@@ -207,16 +214,16 @@ export default function MessagesInbox({ members, isOwner, onAgentUnreadChange }:
     <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
       <div className="px-4 md:px-6 py-4 border-b border-slate-600">
         <h2 className="font-display font-semibold text-slate-100">Messages</h2>
-        <p className="text-xs text-slate-400 mt-0.5">The team board is seen by your whole team. Messages with an agent or teammate are private between the two of you.</p>
+        <p className="text-xs text-slate-400 mt-0.5">{isAgentViewer ? 'The team board is seen by the whole brokerage. Messages with your broker are private between the two of you.' : 'The team board is seen by your whole team. Messages with an agent or teammate are private between the two of you.'}</p>
       </div>
 
       <div className="md:flex md:h-[36rem]">
         <div className={`${showChat ? 'hidden' : 'block'} md:block md:w-80 md:shrink-0 md:border-r border-slate-600 overflow-y-auto max-h-[32rem] md:max-h-none`}>
           {row({ kind: 'board' }, active.kind === 'board', <span className="h-10 w-10 shrink-0 rounded-full bg-blue-500/20 text-blue-300 flex items-center justify-center" aria-hidden><svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V5Z" /></svg></span>, 'Team board', boardPreview ? `${boardPreview.who}: ${boardPreview.body}` : 'Posts for the whole team', boardPreview ? short(boardPreview.at) : null, boardUnread)}
 
-          {sectionLabel('Private messages · agents')}
+          {sectionLabel(isAgentViewer ? 'Private messages · your broker' : 'Private messages · agents')}
           {agents.length === 0 ? (
-            <p className="px-4 py-2 text-xs text-slate-500">Once an agent joins your brokerage you can message them privately here.</p>
+            <p className="px-4 py-2 text-xs text-slate-500">{isAgentViewer ? 'Your broker’s messages show up here.' : 'Once an agent joins your brokerage you can message them privately here.'}</p>
           ) : (
             agents.map((a) => row({ kind: 'agent', id: a.id }, active.kind === 'agent' && active.id === a.id, <Avatar name={a.name} id={a.id} size="lg" />, a.name, a.lastMessage ? `${a.lastMessage.fromMe ? 'You: ' : ''}${a.lastMessage.body}` : 'No messages yet', a.lastMessage ? short(a.lastMessage.createdAt) : null, a.unread))
           )}

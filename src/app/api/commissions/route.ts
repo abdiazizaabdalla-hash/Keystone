@@ -263,7 +263,7 @@ export async function POST(request: NextRequest) {
     await logAudit(request, user, confirming ? (existing && existing.status !== 'estimate' ? 'commission.revise' : 'commission.confirm') : 'commission.terms', { entityType: 'commission', entityId: row.id, metadata: { transactionId, splitType, splitValue, grossCents: row.gross_cents } });
     if (confirming) {
       const revised = !!existing && existing.status !== 'estimate' && existing.status !== 'void';
-      await notifyCommission({ recipientId: agentId, actorId: user.id, transactionId, title: `${revised ? 'Your brokerage revised' : 'Your brokerage confirmed'} the commission statement · ${tx!.property_address ?? 'a deal'}`, link: `/dashboard/transactions/${transactionId}` });
+      await notifyCommission({ recipientId: agentId, actorId: user.id, transactionId, title: `${revised ? 'Your brokerage revised' : 'Your brokerage confirmed'} the commission statement · ${tx!.property_address ?? 'a deal'}`, link: `/dashboard/transactions/${transactionId}`, email: { source: 'commission_confirmed', subject: `${revised ? 'Your commission statement was revised' : 'Your commission was confirmed'} · ${tx!.property_address ?? 'a deal'}`, paragraphs: [`Your brokerage ${revised ? 'revised' : 'confirmed'} the commission statement for ${tx!.property_address ?? 'a deal'} (${row.statement_number}).`, 'Review it, and agree or ask for a change, on the deal.'], linkLabel: 'Review the statement' } });
     }
     return NextResponse.json({ ...viewOf(row), summary: breakdown(row) }, { status: existing ? 200 : 201 });
   } catch (error) {

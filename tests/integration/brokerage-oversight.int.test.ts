@@ -128,20 +128,16 @@ describe('after the agent accepts', () => {
     expect((res.json as { documents: unknown[] }).documents.length).toBe(1);
   });
 
-  it('the owner can edit that agent’s deal and tick its steps, and no other deal', async () => {
-    expect((await call(h(patchTransaction), broker, { method: 'PATCH', path: `/api/transactions/x?id=${dealA.transactionId}`, body: { status: 'Inspection & Repairs' } })).status).toBe(200);
-    expect(await stageOf(dealA.transactionId)).toBe('Inspection & Repairs');
-    expect((await call(h(toggleTask), broker, { method: 'PATCH', path: '/api/tasks', body: { taskId: dealA.taskId } })).status).toBe(200);
-    expect((await admin.from('tasks').select('completed').eq('id', dealA.taskId).single()).data?.completed).toBe(true);
-    expect((await call(h(patchTransaction), broker, { method: 'PATCH', path: `/api/transactions/x?id=${dealC.transactionId}`, body: { status: 'Closed' } })).status).toBe(403);
-    expect((await call(h(toggleTask), broker, { method: 'PATCH', path: '/api/tasks', body: { taskId: dealC.taskId } })).status).toBe(403);
+  it('the owner has a read-only view: cannot edit that agent’s deal, tick its steps or add documents', async () => {
+    const before = await stageOf(dealA.transactionId);
+    expect((await call(h(patchTransaction), broker, { method: 'PATCH', path: `/api/transactions/x?id=${dealA.transactionId}`, body: { status: 'Inspection & Repairs' } })).status).toBe(403);
+    expect((await call(h(patchTransaction), broker, { method: 'PATCH', path: `/api/transactions/x?id=${dealA.transactionId}`, body: { closingDate: '2031-01-15' } })).status).toBe(403);
+    expect(await stageOf(dealA.transactionId)).toBe(before);
+    const task = (await admin.from('tasks').select('completed').eq('id', dealA.taskId).single()).data?.completed;
+    expect((await call(h(toggleTask), broker, { method: 'PATCH', path: '/api/tasks', body: { taskId: dealA.taskId } })).status).toBe(403);
+    expect((await admin.from('tasks').select('completed').eq('id', dealA.taskId).single()).data?.completed).toBe(task);
     expect((await call(h(patchTransaction), otherBroker, { method: 'PATCH', path: `/api/transactions/x?id=${dealA.transactionId}`, body: { status: 'Closed' } })).status).toBe(403);
     expect(await stageOf(dealC.transactionId)).not.toBe('Closed');
-  });
-
-  it('edits by the owner are written to the audit log', async () => {
-    const { data } = await admin.from('audit_log').select('action, entity_id').eq('actor_id', broker.id).eq('action', 'brokerage.deal_edit');
-    expect(data?.some((r) => r.entity_id === dealA.transactionId)).toBe(true);
   });
 
   it('the owner hears about updates on the deal, but never private messages', async () => {
@@ -213,25 +209,20 @@ describe('leaving and removing', () => {
 });
 
 describe('stage and date changes reach the right people', () => {
-  it('the agent hears when the owner moves a deal, and the owner hears when the agent does', async () => {
-    await admin.auth.admin.updateUserById(broker.id, { app_metadata: { plan: 'team' } });
+  it('the owner hears when the agent moves a deal, and cannot move it themselves', async () => {
+    await admin.auth.admin.updateUserById(broker.id, { app_metadata: { plan: 'team' } }); // the previous test lapsed it
     await admin.from('brokerage_links').update({ status: 'active' }).eq('owner_user_id', broker.id).eq('agent_user_id', agentA.id);
     const mine = async (user: Actor) => (await admin.from('notifications').select('title, event_type').eq('recipient_user_id', user.id).in('event_type', ['stage_changed', 'date_changed'])).data ?? [];
     const agentBefore = (await mine(agentA)).length;
     const brokerBefore = (await mine(broker)).length;
-    expect((await call(h(patchTransaction), broker, { method: 'PATCH', path: `/api/transactions/x?id=${dealA.transactionId}`, body: { closingDate: '2031-01-15' } })).status).toBe(200);
-    await new Promise((r) => setTimeout(r, 1500));
-    const afterOwner = await mine(agentA);
-    expect(afterOwner.length).toBe(agentBefore + 1);
-    expect(afterOwner.some((n) => /brokerage changed the key dates/.test(n.title as string))).toBe(true);
-    expect((await mine(broker)).length).toBe(brokerBefore); // you do not hear about your own edit
+    expect((await call(h(patchTransaction), broker, { method: 'PATCH', path: `/api/transactions/x?id=${dealA.transactionId}`, body: { closingDate: '2031-01-15' } })).status).toBe(403);
+    await new Promise((r) => setTimeout(r, 800));
+    expect((await mine(agentA)).length).toBe(agentBefore);
     expect((await call(h(patchTransaction), agentA, { method: 'PATCH', path: `/api/transactions/x?id=${dealA.transactionId}`, body: { closingDate: '2031-02-20' } })).status).toBe(200);
     await new Promise((r) => setTimeout(r, 1500));
     expect((await mine(broker)).length).toBe(brokerBefore + 1);
   });
-});
 
-describe('the compliance report', () => {
   it('includes the open files of agents who joined, and nobody else’s', async () => {
     await admin.auth.admin.updateUserById(broker.id, { app_metadata: { plan: 'team' } });
     await admin.from('brokerage_links').update({ status: 'active' }).eq('owner_user_id', broker.id).eq('agent_user_id', agentA.id);

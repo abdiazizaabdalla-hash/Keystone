@@ -65,7 +65,7 @@ export default function AgentBrokerageStrip({ deals = [] }: { deals?: StripDeal[
     <section className="mb-6 bg-white/5 border border-white/10 rounded-2xl px-5 py-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-slate-200"><span className="font-semibold">{info.name}</span> <span className="text-slate-400">· your brokerage</span></p>
-        <Link href="/dashboard/brokerage" className="text-sm text-blue-400 hover:text-blue-300">Open →</Link>
+        <Link href="/dashboard/collaborate" className="text-sm text-blue-400 hover:text-blue-300">Open →</Link>
       </div>
       {todo.length === 0 ? (
         <p className="text-sm text-slate-500 mt-1">Nothing waiting on you.</p>

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { getTeamForUser } from '@/lib/team';
-import { BOARD_THREAD, describeMessagingError, SETUP_MISSING_RESPONSE } from '@/lib/teamMessaging';
+import { BOARD_THREAD, resolveTeamAccess, describeMessagingError, SETUP_MISSING_RESPONSE } from '@/lib/teamMessaging';
 
 const LOOKBACK_DAYS = 30;
 
@@ -13,11 +12,11 @@ const LOOKBACK_DAYS = 30;
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    const membership = await getTeamForUser(user.id);
-    if (!membership) {
+    const access = await resolveTeamAccess(user.id);
+    if (!access) {
       return NextResponse.json({ total: 0, byThread: {} });
     }
-    const teamId = membership.team.id;
+    const teamId = access.teamId;
 
     const [{ data: reads }, { data: incoming, error }] = await Promise.all([
       supabaseServer.from('team_message_reads').select('thread, last_read_at').eq('user_id', user.id).eq('team_id', teamId),

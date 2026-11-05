@@ -15,7 +15,7 @@ type Who = 'all' | 'mine' | 'teammates';
 
 // The team's shared address book: every contact a teammate (or you) chose to share. Everything
 // else stays personal on the Contacts page. Open a contact for its full profile.
-export default function TeamContacts({ onLoaded }: { onLoaded?: (shared: ContactRow[]) => void }) {
+export default function TeamContacts({ onLoaded, readOnly = false }: { onLoaded?: (shared: ContactRow[]) => void; readOnly?: boolean }) {
   const router = useRouter();
   const [all, setAll] = useState<ContactRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +39,7 @@ export default function TeamContacts({ onLoaded }: { onLoaded?: (shared: Contact
 
   const load = useCallback(async () => {
     try {
-      const res = await authFetch('/api/contacts');
+      const res = await authFetch(readOnly ? '/api/brokerage/contacts' : '/api/contacts');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load contacts');
       setAll(Array.isArray(data) ? data : []);
@@ -50,7 +50,7 @@ export default function TeamContacts({ onLoaded }: { onLoaded?: (shared: Contact
     } finally {
       setLoading(false);
     }
-  }, [handleAuth]);
+  }, [handleAuth, readOnly]);
 
   useEffect(() => {
     const t = setTimeout(load, 0);
@@ -85,20 +85,28 @@ export default function TeamContacts({ onLoaded }: { onLoaded?: (shared: Contact
     <div>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <p className="text-sm text-slate-400 max-w-xl">
-          Contacts you and your teammates chose to share. Everyone on the team can see and edit these details; notes and follow-ups stay private to whoever wrote them. Your other contacts stay personal on the{' '}
-          <Link href="/dashboard/contacts" className="text-blue-400 hover:text-blue-300">
-            Contacts page
-          </Link>
-          .
+          {readOnly ? (
+            'Contacts your brokerage shares with every agent, like preferred lenders, title companies and inspectors. Your own contacts stay private on the Contacts page.'
+          ) : (
+            <>
+              Contacts you and your teammates chose to share. Everyone on the team can see and edit these details; notes and follow-ups stay private to whoever wrote them. Your other contacts stay personal on the{' '}
+              <Link href="/dashboard/contacts" className="text-blue-400 hover:text-blue-300">
+                Contacts page
+              </Link>
+              .
+            </>
+          )}
         </p>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setSyncing(true)} className="px-4 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg transition">
-            Sync contacts
-          </button>
-          <button type="button" onClick={() => setAdding(true)} className="px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">
-            + Add shared contact
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setSyncing(true)} className="px-4 py-2.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg transition">
+              Sync contacts
+            </button>
+            <button type="button" onClick={() => setAdding(true)} className="px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">
+              + Add shared contact
+            </button>
+          </div>
+        )}
       </div>
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
@@ -107,8 +115,8 @@ export default function TeamContacts({ onLoaded }: { onLoaded?: (shared: Contact
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, company, tag…" className={`${inputCls} max-w-sm`} />
         <select value={who} onChange={(e) => setWho(e.target.value as Who)} className={inputCls.replace("w-full", "w-auto")} aria-label="Shared by">
           <option value="all">Everyone&rsquo;s</option>
-          <option value="mine">Shared by me</option>
-          <option value="teammates">Shared by teammates</option>
+          {!readOnly && <option value="mine">Shared by me</option>}
+          {!readOnly && <option value="teammates">Shared by teammates</option>}
         </select>
         {tags.length > 0 && (
           <select value={tag || ''} onChange={(e) => setTag(e.target.value || null)} className={inputCls.replace("w-full", "w-auto")} aria-label="Tag">
@@ -125,10 +133,12 @@ export default function TeamContacts({ onLoaded }: { onLoaded?: (shared: Contact
       {shared.length === 0 ? (
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 text-center">
           <p className="text-slate-200 font-semibold mb-1">No shared contacts yet</p>
-          <p className="text-slate-400 text-sm mb-5">Share the contacts your whole team works with, like preferred lenders, title companies and inspectors. Use Sync to share many at once.</p>
-          <button type="button" onClick={() => setSyncing(true)} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg">
-            Sync contacts
-          </button>
+          <p className="text-slate-400 text-sm">{readOnly ? 'Your brokerage has not shared any contacts yet.' : 'Share the contacts your whole team works with, like preferred lenders, title companies and inspectors. Use Sync to share many at once.'}</p>
+          {!readOnly && (
+            <button type="button" onClick={() => setSyncing(true)} className="mt-5 px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg">
+              Sync contacts
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-white/5 border border-white/10 rounded-2xl overflow-x-auto">
@@ -147,14 +157,18 @@ export default function TeamContacts({ onLoaded }: { onLoaded?: (shared: Contact
                   key={c.id}
                   onClick={(e) => {
                     if ((e.target as HTMLElement).closest('a, button')) return;
-                    router.push(`/dashboard/contacts/${c.id}`);
+                    if (!readOnly) router.push(`/dashboard/contacts/${c.id}`);
                   }}
-                  className="border-b border-slate-700/60 last:border-0 hover:bg-slate-700/20 cursor-pointer"
+                  className={`border-b border-slate-700/60 last:border-0 hover:bg-slate-700/20 ${readOnly ? '' : 'cursor-pointer'}`}
                 >
                   <td className="px-4 py-3">
-                    <Link href={`/dashboard/contacts/${c.id}`} className="text-slate-100 font-medium break-words hover:text-blue-300">
-                      {c.name || c.email}
-                    </Link>
+                    {readOnly ? (
+                      <span className="text-slate-100 font-medium break-words">{c.name || c.email}</span>
+                    ) : (
+                      <Link href={`/dashboard/contacts/${c.id}`} className="text-slate-100 font-medium break-words hover:text-blue-300">
+                        {c.name || c.email}
+                      </Link>
+                    )}
                     {c.contact_type === 'organization' && <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-slate-600 text-slate-400">Org</span>}
                     <p className="text-xs text-slate-500 break-words">{[c.role, c.company].filter(Boolean).join(' · ')}</p>
                   </td>
@@ -175,7 +189,7 @@ export default function TeamContacts({ onLoaded }: { onLoaded?: (shared: Contact
                       ))}
                     </div>
                   </td>
-                  <td className="px-2 py-3 text-slate-400 text-xs">{c.is_mine === false ? c.shared_by_name || 'A teammate' : 'You'}</td>
+                  <td className="px-2 py-3 text-slate-400 text-xs">{c.is_mine === false ? c.shared_by_name || (readOnly ? 'The brokerage' : 'A teammate') : 'You'}</td>
                 </tr>
               ))}
               {visible.length === 0 && (

@@ -117,6 +117,8 @@ describe('proposing', () => {
     const bell = (await admin.from('notifications').select('title, link').eq('recipient_user_id', agentA.id).eq('event_type', 'commission')).data ?? [];
     expect(bell.length).toBe(1);
     expect(bell[0].link).toBe(`/dashboard/transactions/${dealA.transactionId}`);
+    const mails = (await admin.from('email_outbox').select('to_emails, subject').eq('source', 'commission_confirmed').eq('owner_user_id', broker.id)).data ?? [];
+    expect(mails.some((m) => (m.to_emails as string[]).includes(agentA.email))).toBe(true);
   });
 
   it('uses the agent’s default split when none is given, and numbers statements in order', async () => {
@@ -224,6 +226,8 @@ describe('payment is recorded by the owner', () => {
     expect((await act(agentA, id, { action: 'set_preference', preference: 'outside' })).status).toBe(409);
     const bell = (await admin.from('notifications').select('title').eq('recipient_user_id', agentA.id).eq('event_type', 'commission')).data ?? [];
     expect(bell.some((n) => /marked paid/.test(n.title as string))).toBe(true);
+    const mails = (await admin.from('email_outbox').select('to_emails, subject, body').eq('source', 'commission_paid').eq('owner_user_id', broker.id)).data ?? [];
+    expect(mails.some((m) => (m.to_emails as string[]).includes(agentA.email) && /ACH 4471/.test(m.body as string))).toBe(true);
   });
 });
 

@@ -2,6 +2,7 @@ import { supabaseServer } from './supabase';
 import { getMutedTypes } from './notifications';
 import { brokerageOwnersForDeal, overseesAgent } from './oversight';
 import { commissionForTransaction, ensureEstimateStatement } from './commissions';
+import { sendBrokerageEmail } from './oversightServer';
 
 // When a deal in a brokerage closes: the commission statement is created (an estimate), and the brokerage owner is told it closed and
 // where the statement stands.
@@ -35,6 +36,7 @@ export async function notifyDealClosed(transactionId: string, actorId: string): 
     for (const ownerId of owners) {
       if (ownerId === actorId || !(await overseesAgent(ownerId, agentId))) continue;
       await put(ownerId, actorId, transactionId, 'deal_closed', `Deal closed${where}`, ownerBody, ownerLink);
+      await sendBrokerageEmail({ outboxOwnerId: ownerId, fromLabel: 'Relay TC', to: { userId: ownerId }, source: 'brokerage_deal_closed', subject: `Deal closed${where}`, paragraphs: [`${tx.property_address ?? 'A deal'} closed.`, ownerBody], path: ownerLink, linkLabel: 'Open the deal' });
     }
     // The agent is not asked to invoice anyone: the brokerage owner confirms the actual commission, and the agent is told then.
   } catch (error) {

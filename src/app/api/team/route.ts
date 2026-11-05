@@ -29,6 +29,7 @@ import { getUserPlan } from '@/lib/privileged';
 import { logAudit } from '@/lib/audit';
 import { hasAgentRole } from '@/lib/appMetadata';
 import { brokerageOn, listOwnerLinks, agentLabels } from '@/lib/oversight';
+import { resolveTeamAccess } from '@/lib/teamMessaging';
 
 interface UserInfo {
   email: string;
@@ -64,6 +65,39 @@ export async function GET(request: NextRequest) {
     }
 
     if (!membership) {
+      // An agent who joined a brokerage sees that brokerage's roster, read-only (nothing to manage, no seats).
+      const access = await resolveTeamAccess(user.id);
+      if (access?.viaBrokerage) {
+        const [{ data: teamRow }, teamMemberIds, links] = await Promise.all([
+          supabaseServer.from('teams').select('id, name').eq('id', access.teamId).single(),
+          getTeamMemberUserIds(access.teamId),
+          listOwnerLinks(access.ownerId),
+        ]);
+        const agentIds = links.filter((l) => l.status === 'active' && l.agent_user_id).map((l) => l.agent_user_id as string);
+        const [infos, labels] = await Promise.all([Promise.all(teamMemberIds.map((id) => getUserInfo(id))), agentLabels(agentIds)]);
+        const members = [
+          ...teamMemberIds.map((id, i) => ({
+            userId: id,
+            email: infos[i].email,
+            name: infos[i].name,
+            kind: id === access.ownerId ? ('broker' as const) : infos[i].kind,
+            role: id === access.ownerId ? ('owner' as const) : ('member' as const),
+            isYou: false,
+          })),
+          ...agentIds
+            .filter((id) => !teamMemberIds.includes(id))
+            .map((id) => ({ userId: id, email: labels.get(id)?.email ?? 'unknown', name: labels.get(id)?.name ?? '', kind: 'agent' as const, role: 'member' as const, isYou: id === user.id })),
+        ];
+        return NextResponse.json({
+          team: { id: access.teamId, name: teamRow?.name ?? null },
+          role: 'member',
+          viaBrokerage: true,
+          planId: null,
+          seatLimit: 0,
+          members,
+          pendingInvites: [],
+        });
+      }
       return NextResponse.json({ team: null, role: null, members: [], pendingInvites: [], seatLimit: TEAM_SEAT_LIMIT });
     }
 

@@ -123,7 +123,7 @@ describe('a conversation', () => {
     // Two broker messages were sent before the agent read them: one notification. The agent's reply made one for the broker.
     const forAgent = await rows(agentA);
     expect(forAgent).toHaveLength(1);
-    expect(forAgent[0].link).toBe('/dashboard/brokerage');
+    expect(forAgent[0].link).toBe('/dashboard/messages');
     const forBroker = await rows(broker);
     expect(forBroker).toHaveLength(1);
     expect(forBroker[0].link).toBe('/dashboard/collaborate#messages');

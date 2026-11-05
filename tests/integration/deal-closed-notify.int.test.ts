@@ -44,6 +44,11 @@ describe('when a deal closes', () => {
     expect(made).toEqual([{ status: 'estimate' }]);
     expect(ownerRows[0].link).toBe(`/dashboard/collaborate/deals/${d1.transactionId}`);
     expect(await bell(agent, 'deal_closed')).toHaveLength(0);
+    // the owner also gets an email (the local outbox here), the agent none
+    const mails = (await admin.from('email_outbox').select('to_emails, subject').eq('source', 'brokerage_deal_closed').eq('owner_user_id', broker.id)).data ?? [];
+    expect(mails).toHaveLength(1);
+    expect((mails[0].to_emails as string[])).toContain(broker.email);
+    expect(mails[0].subject).toMatch(/^Deal closed/);
     // saving it as Closed again is not a new close, and the generic "stage moved" line is not added on top
     await close(agent, d1);
     expect(await bell(broker, 'deal_closed')).toHaveLength(1);
@@ -65,9 +70,10 @@ describe('when a deal closes', () => {
     expect((await bell(agent, 'deal_closed')).length).toBe(0);
   });
 
-  it('when the owner closes a deal, the agent is told nothing about invoicing', async () => {
+  it('the owner cannot close an agent’s deal (read-only), and the agent is told nothing about invoicing', async () => {
     const extra = await seedDeal(agent, 'DC4');
-    expect((await close(broker, extra)).status).toBe(200);
+    expect((await close(broker, extra)).status).toBe(403);
+    expect((await close(agent, extra)).status).toBe(200);
     expect((await bell(agent, 'deal_closed')).filter((r) => /invoice/i.test(String(r.title)))).toHaveLength(0);
   });
 

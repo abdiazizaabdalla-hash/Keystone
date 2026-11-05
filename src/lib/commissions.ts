@@ -136,10 +136,15 @@ export async function loadCommissionFor(id: string, userId: string): Promise<{ r
 }
 
 /** A line in someone's notification bell about a commission. Never throws. */
-export async function notifyCommission(params: { recipientId: string; actorId: string; transactionId: string; title: string; link: string }): Promise<void> {
+export async function notifyCommission(params: { recipientId: string; actorId: string; transactionId: string; title: string; link: string; email?: { source: string; subject: string; paragraphs: string[]; linkLabel: string } }): Promise<void> {
   try {
     if ((await getMutedTypes(params.recipientId)).includes('commission')) return;
     await supabaseServer.from('notifications').insert({ recipient_user_id: params.recipientId, actor_user_id: params.actorId, transaction_id: params.transactionId, event_type: 'commission', title: params.title.slice(0, 200), link: params.link });
+    // The moments an agent is waiting on money also get an email (the bell is easy to miss).
+    if (params.email) {
+      const { sendBrokerageEmail } = await import('./oversightServer');
+      await sendBrokerageEmail({ outboxOwnerId: params.actorId, fromLabel: 'Relay TC', to: { userId: params.recipientId }, source: params.email.source, subject: params.email.subject, paragraphs: params.email.paragraphs, path: params.link, linkLabel: params.email.linkLabel });
+    }
   } catch (error) {
     console.error('Commission notification failed:', error);
   }

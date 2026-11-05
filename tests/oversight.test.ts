@@ -115,3 +115,21 @@ describe('rosterStats (the broker\'s live roster line)', () => {
     expect(rosterStats([], [], today)).toEqual({ openDeals: 0, lateTasks: 0, lateDeals: 0, closingThisWeek: 0, lastActivity: null });
   });
 });
+
+describe('weekly broker digest', () => {
+  it('is empty with no agents, and lists the late ones first', async () => {
+    const { digestParagraphs, digestSubject } = await import('../src/lib/brokerageDigestRules');
+    expect(digestParagraphs([])).toBeNull();
+    const agents = [
+      { name: 'Ana', openDeals: 2, lateTasks: 0, closingThisWeek: 1, closingAddresses: ['1 Oak St'] },
+      { name: 'Ben', openDeals: 1, lateTasks: 3, closingThisWeek: 0, closingAddresses: [] },
+    ];
+    const text = digestParagraphs(agents)!;
+    expect(text[0]).toContain('3 steps are late');
+    expect(text[1].split('\n')[0]).toBe('Ben: 1 open deal, 3 late');
+    expect(text[1].split('\n')[1]).toBe('Ana: 2 open deals, nothing late, 1 closing this week');
+    expect(text[2]).toContain('1 Oak St (Ana)');
+    expect(digestSubject(agents)).toContain('3 late steps');
+    expect(digestSubject([{ ...agents[0] }])).toBe('Your week across your agents');
+  });
+});

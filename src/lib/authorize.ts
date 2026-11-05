@@ -4,7 +4,6 @@ import { getEntitlements } from './entitlements';
 import { getVisibleTcUserIds } from './team';
 import type { WithAppMetadata } from './appMetadata';
 import { assertTrialActive, TrialExpiredError } from './trial';
-import { canOverseeDeal } from './oversight';
 
 // The one place that answers "may this person touch this deal?".
 //
@@ -33,11 +32,6 @@ export interface DealAccessOptions {
   participants?: 'none' | 'any' | 'full';
   /** Older spelling of participants: true = 'any'. */
   collaborators?: boolean;
-  /**
-   * true = the owner of a brokerage that an agent has joined may also act on that agent's deals (the agent accepted
-   * this oversight). Only set on the few routes a brokerage owner edits through; off unless the brokerage feature is on.
-   */
-  oversight?: boolean;
   /** 403 message for a coordinator who is not allowed. */
   deniedMessage: string;
 }
@@ -88,7 +82,7 @@ export async function authorizeDeal(
   user: { id: string; created_at?: string } & WithAppMetadata,
   isAdmin: boolean,
   transactionId: string,
-  { scope, participants, collaborators, oversight, deniedMessage }: DealAccessOptions
+  { scope, participants, collaborators, deniedMessage }: DealAccessOptions
 ): Promise<DealRef> {
   const mode = participants ?? (collaborators ? 'any' : 'none');
   const canOwn = getEntitlements(user).canOwnWorkspace;
@@ -116,9 +110,6 @@ export async function authorizeDeal(
     if (mode === 'any') return deal ?? fetchDeal(transactionId);
     if ((await participantLevel(user as { id: string; created_at: string } & WithAppMetadata)) === 'full') return deal ?? fetchDeal(transactionId);
   }
-
-  // The owner of the brokerage this deal's agent has joined.
-  if (oversight && canOwn && (await canOverseeDeal(user.id, transactionId))) return deal ?? fetchDeal(transactionId);
 
   if (canOwn && !deal) throw new AuthError('Transaction not found', 404);
   throw new AuthError(canOwn ? deniedMessage : mode !== 'none' ? 'You do not have access to this transaction' : deniedMessage, 403);

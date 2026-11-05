@@ -11,9 +11,8 @@ import { queueCalendarSync } from '@/lib/calendarSync';
 import { isFeatureOn } from '@/lib/features';
 import { evaluateTemplateRulesQuietly } from '@/lib/templateRules';
 import { isStateCode } from '@/lib/usStates';
-import { brokerageOn, brokerageOwnersForDeal, canOverseeDeal } from '@/lib/oversight';
+import { brokerageOn, brokerageOwnersForDeal } from '@/lib/oversight';
 import { notifyDeal } from '@/lib/notifications';
-import { logAudit } from '@/lib/audit';
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
@@ -27,7 +26,6 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Transaction ID is required' }, { status: 400 });
     }
 
-    let overseerEdit = false;
     if (!isAdmin) {
       const { data: existingTx } = await supabaseServer
         .from('transactions')
@@ -38,18 +36,14 @@ export async function PATCH(request: NextRequest) {
       if (existingTx) {
         // The transaction's own assigned TC can always edit it. A team
         // owner (the brokerage admin) can additionally edit any
-        // transaction belonging to their team -- oversight means more
-        // than read-only visibility -- but a regular teammate still
-        // can't touch someone else's deal.
+        // transaction belonging to their team, but a regular teammate still
+        // can't touch someone else's deal. A brokerage owner with an agent's
+        // deal in their read-only view is NOT on this list: only the agent
+        // (and whoever they added to the deal) can change it.
         const membership = await getTeamForUser(user.id);
         const isOwnerOfVisibleTeam = membership?.role === 'owner';
         const visibleIds = isOwnerOfVisibleTeam ? await getVisibleTcUserIds(user.id) : [user.id];
-        const overseer = !visibleIds.includes(existingTx.tc_user_id) && (await canOverseeDeal(user.id, transactionId));
-        const allowed = visibleIds.includes(existingTx.tc_user_id) || (await isFullParticipant(user.id, transactionId)) || overseer;
-        overseerEdit = allowed && overseer;
-        if (allowed && overseer) {
-          await logAudit(request, user, 'brokerage.deal_edit', { entityType: 'transaction', entityId: transactionId, metadata: { fields: Object.keys(body).filter((k) => ['status', 'acceptanceDate', 'closingDate'].includes(k)) } });
-        }
+        const allowed = visibleIds.includes(existingTx.tc_user_id) || (await isFullParticipant(user.id, transactionId));
 
         if (!allowed) {
           return NextResponse.json({ error: 'You do not have permission to update this transaction' }, { status: 403 });
@@ -158,13 +152,12 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // Brokerage oversight: when the brokerage owner changes a deal, the agent hears about it; when the agent changes
-    // the stage or dates of a deal their brokerage oversees, the owner hears. Deals outside a brokerage are unchanged.
+    // Brokerage oversight: when the agent changes the stage or dates of a deal their brokerage oversees, the owner hears. Deals outside a brokerage are unchanged.
     if (brokerageOn() && (status !== undefined || acceptanceDate !== undefined || closingDate !== undefined)) {
-      if (overseerEdit || (await brokerageOwnersForDeal(transactionId)).length > 0) {
+      if ((await brokerageOwnersForDeal(transactionId)).length > 0) {
         // (A close gets its own, more useful notification below.)
-        if (status !== undefined && stageChanged && !closingNow) await notifyDeal({ transactionId, actorUserId: user.id, type: 'stage_changed', title: overseerEdit ? `Your brokerage moved the stage to ${status}` : `Stage moved to ${status}` });
-        if (acceptanceDate !== undefined || closingDate !== undefined) await notifyDeal({ transactionId, actorUserId: user.id, type: 'date_changed', title: overseerEdit ? 'Your brokerage changed the key dates' : 'Key dates changed' });
+        if (status !== undefined && stageChanged && !closingNow) await notifyDeal({ transactionId, actorUserId: user.id, type: 'stage_changed', title: `Stage moved to ${status}` });
+        if (acceptanceDate !== undefined || closingDate !== undefined) await notifyDeal({ transactionId, actorUserId: user.id, type: 'date_changed', title: 'Key dates changed' });
       }
     }
 

@@ -50,7 +50,7 @@ export const OVERSIGHT_TERMS = {
     'Production numbers: deals closed and sales volume.',
     'Updates on your deals in their notification bell (not your messages).',
   ],
-  canDo: ['Change a deal’s stage and key dates, and tick or edit checklist steps.'],
+  canDo: ['Confirm the commission on a closed deal and mark it paid. They cannot change your deals, dates, checklists or documents: they see a read-only copy.'],
   private: ['Your templates, contacts, messages with clients, invoices and settings stay private.'],
   leave: 'You can leave at any time from this page. Your deals stay yours.',
 };

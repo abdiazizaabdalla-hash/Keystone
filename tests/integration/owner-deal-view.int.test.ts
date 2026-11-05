@@ -59,15 +59,14 @@ describe('the owner’s read-only copy of an agent’s deal', () => {
 });
 
 describe('documents', () => {
-  it('the owner can add a document to the agent’s deal', async () => {
+  it('the owner cannot add a document to the agent’s deal (read-only view)', async () => {
     const res = await uploadAs(broker, deal.transactionId);
-    expect(res.status, JSON.stringify(res.json)).toBeLessThan(300);
-    const { data: rows } = await admin.from('documents').select('id, uploaded_by').eq('transaction_id', deal.transactionId).eq('file_name', 'broker-note.pdf');
-    expect(rows?.length).toBe(1);
-    expect(rows![0].uploaded_by).toBe(broker.id);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    const { data: rows } = await admin.from('documents').select('id').eq('transaction_id', deal.transactionId).eq('file_name', 'broker-note.pdf');
+    expect(rows?.length).toBe(0);
   });
 
-  it('the owner cannot add documents outside their brokerage, and cannot delete any', async () => {
+  it('the owner cannot add documents elsewhere, and cannot delete any', async () => {
     expect((await uploadAs(broker, outsiderDeal.transactionId)).status).toBeGreaterThanOrEqual(400);
     expect((await uploadAs(otherBroker, deal.transactionId)).status).toBeGreaterThanOrEqual(400);
     const del = await call(h(deleteDocument), broker, { method: 'DELETE', path: `/api/documents?id=${deal.documentId}` });

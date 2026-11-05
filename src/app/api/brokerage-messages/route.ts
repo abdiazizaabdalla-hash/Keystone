@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       const name = (user.user_metadata?.full_name as string | undefined)?.trim() || user.email || 'Someone';
       await supabaseServer
         .from('notifications')
-        .insert({ recipient_user_id: withId, actor_user_id: user.id, event_type: 'brokerage_message', title: `${name} sent you a private message`.slice(0, 200), link: pair.me === 'owner' ? '/dashboard/brokerage' : '/dashboard/collaborate#messages' })
+        .insert({ recipient_user_id: withId, actor_user_id: user.id, event_type: 'brokerage_message', title: `${name} sent you a private message`.slice(0, 200), link: pair.me === 'owner' ? '/dashboard/messages' : '/dashboard/collaborate#messages' })
         .then(({ error: e }) => e && console.error('Brokerage message notification failed:', e));
     }
 
