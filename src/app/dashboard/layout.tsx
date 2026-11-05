@@ -10,6 +10,7 @@ import PageHint from '@/components/PageHint';
 import { isTeamPlan } from '@/lib/plans';
 import { isFeatureOnClient } from '@/lib/features';
 import { savePersona } from '@/lib/persona';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 
 // Collapsed sidebar is icon-only -- narrow enough to stay useful on small
 // screens without hiding navigation entirely. Expanded shows icon + label.
@@ -376,15 +377,21 @@ export default function DashboardLayout({
     }
   };
 
+  // Brokers manage their agents from Collaborate, so the separate Agents page is for coordinators and independent agents' coordinators only.
+  // While we are still finding out who owns a team plan, hide it for team-plan users rather than flash it.
+  const brokerOwner = useBrokerageOwner();
+  const showAgentsNav = !isAgentAccount && brokerOwner !== true && !(brokerOwner === null && isFeatureOnClient('brokerage') && isTeamPlan(plan));
+  // Agents in a brokerage use the same Collaborate hub as their broker (no separate Brokerage page).
+  const agentCollaborate = isFeatureOnClient('brokerage') && isAgentAccount && hasWorkspace;
+
   const primaryNav = isAgentAccount && !hasWorkspace ? PRIMARY_NAV.filter((i) => i.href !== '/dashboard/invoices') : PRIMARY_NAV;
 
   const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
     { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
-    ...(isAgentAccount ? [] : [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }]),
+    ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }] : []),
     ...(isFeatureOnClient('templates') && !(isAgentAccount && !hasWorkspace) ? [{ href: '/dashboard/templates', label: 'Templates', icon: 'templates' }] : []),
     { href: '/dashboard/search', label: 'Search', icon: 'search' },
-    ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: teamUnread }] : []),
-    ...(isFeatureOnClient('brokerage') && isAgentAccount && hasWorkspace ? [{ href: '/dashboard/brokerage', label: 'Brokerage', icon: 'collaborate' }] : []),
+    ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: teamUnread }] : []),
     { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
     { href: '/dashboard/account', label: 'Account', icon: 'account' },
     ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin', icon: 'admin' }] : []),
@@ -446,10 +453,9 @@ export default function DashboardLayout({
             {[
               ...primaryNav.map((i) => ({ href: i.href, label: i.label })),
               { href: '/dashboard/contacts', label: 'Contacts' },
-              ...(isAgentAccount ? [] : [{ href: '/dashboard/agents', label: 'Agents' }]),
+              ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents' }] : []),
               { href: '/dashboard/search', label: 'Search' },
-              ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: teamUnread > 0 ? `Collaborate (${teamUnread})` : 'Collaborate' }] : []),
-              ...(isFeatureOnClient('brokerage') && isAgentAccount && hasWorkspace ? [{ href: '/dashboard/brokerage', label: 'Brokerage' }] : []),
+              ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: teamUnread > 0 ? `Collaborate (${teamUnread})` : 'Collaborate' }] : []),
               { href: '/dashboard/settings', label: 'Settings' },
               { href: '/dashboard/account', label: plan ? `Account · ${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan` : 'Account' },
               ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin' }] : []),

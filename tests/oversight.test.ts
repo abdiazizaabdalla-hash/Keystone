@@ -95,3 +95,23 @@ describe('owner home helpers', () => {
     expect(out.map((x) => x.id)).toEqual(['a']);
   });
 });
+
+describe('rosterStats (the broker\'s live roster line)', () => {
+  const today = '2026-03-10';
+  const health = (n: number) => ({ overdueTasks: n });
+  it('counts open deals, late steps, closings in the next 7 days and the latest activity', async () => {
+    const { rosterStats } = await import('../src/lib/oversightMath');
+    const deals = [
+      { status: 'Under Contract', closing_date: '2026-03-12', updated_at: '2026-03-08T10:00:00Z', health: health(2) },
+      { status: 'Under Contract', closing_date: '2026-03-17', updated_at: '2026-03-01T10:00:00Z', health: health(0) },
+      { status: 'Under Contract', closing_date: '2026-03-18', updated_at: '2026-03-02T10:00:00Z', health: health(1) },
+      { status: 'Closed', closing_date: '2026-03-11', updated_at: '2026-03-03T10:00:00Z', health: health(0) },
+    ];
+    const r = rosterStats(deals, [{ updated_at: '2026-03-09T09:00:00Z' }], today);
+    expect(r).toEqual({ openDeals: 3, lateTasks: 3, lateDeals: 2, closingThisWeek: 2, lastActivity: '2026-03-09T09:00:00Z' });
+  });
+  it('is all zero for an agent with nothing yet', async () => {
+    const { rosterStats } = await import('../src/lib/oversightMath');
+    expect(rosterStats([], [], today)).toEqual({ openDeals: 0, lateTasks: 0, lateDeals: 0, closingThisWeek: 0, lastActivity: null });
+  });
+});

@@ -2,6 +2,8 @@
 
 import MoneyInput from '@/components/MoneyInput';
 import { readPersona } from '@/lib/persona';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { isFeatureOnClient } from '@/lib/features';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -40,6 +42,22 @@ function SettingsContent() {
     const t = setTimeout(() => setIsAgentAcct(readPersona().workspace === true), 0);
     return () => clearTimeout(t);
   }, []);
+  // These blocks are for coordinators who bill agents. A broker, or an agent working under a brokerage, has no use for them.
+  const brokerOwner = useBrokerageOwner();
+  const [inBrokerage, setInBrokerage] = useState(false);
+  useEffect(() => {
+    if (!isAgentAcct || !isFeatureOnClient('brokerage')) return;
+    let live = true;
+    authFetch('/api/brokerage')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => live && setInBrokerage(!!j?.current))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [isAgentAcct]);
+  const hideFeeBlocks = brokerOwner === true || isAgentAcct;
+  const hideDueWorkflow = brokerOwner === true || (isAgentAcct && inBrokerage);
   const [stripeConnectStatus, setStripeConnectStatus] = useState<{ connected: boolean; status: string | null } | null>(null);
   const [isStartingStripeConnect, setIsStartingStripeConnect] = useState(false);
   const [isSavingPaymentPreference, setIsSavingPaymentPreference] = useState(false);
@@ -475,6 +493,8 @@ function SettingsContent() {
           </div>
         </div>
 
+        {!hideFeeBlocks && (
+          <>
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
           <h2 className="text-lg font-bold text-slate-100 mb-1">Agent Defaults</h2>
           <p className="text-sm text-slate-400 mb-6">
@@ -531,7 +551,10 @@ function SettingsContent() {
             />
           </div>
         </div>
+          </>
+        )}
 
+        {!hideDueWorkflow && (
         <div id="due-date-workflow" className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 scroll-mt-6">
           <h2 className="text-lg font-bold text-slate-100 mb-1">Due-Date Workflow</h2>
           <p className="text-sm text-slate-400 mb-6">
@@ -577,6 +600,7 @@ function SettingsContent() {
             {isSavingDueDateWorkflow ? 'Saving...' : 'Save'}
           </button>
         </div>
+        )}
 
         <div id="checklist-templates" className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 scroll-mt-6">
           <div className="flex items-start justify-between gap-4 mb-1">

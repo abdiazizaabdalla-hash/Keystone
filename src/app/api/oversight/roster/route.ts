@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
-import { CLOSED_STAGE, agentLabels, assertBrokerageOwner, isOpenListing, listOwnerLinks, loadOversightDeals, loadOversightListings, productionFor } from '@/lib/oversight';
+import { CLOSED_STAGE, OVERSIGHT_TERMS, agentLabels, assertBrokerageOwner, isOpenListing, listOwnerLinks, loadOversightDeals, loadOversightListings, productionFor, rosterStats } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { viewOf, type CommissionRow } from '@/lib/commissions';
 
@@ -40,7 +40,9 @@ export async function GET(request: NextRequest) {
         const ml = listings.filter((x) => x.tc_user_id === id && isOpenListing(x.status));
         const mc = commissions.filter((c) => c.agentId === id && c.status !== 'void');
         const production = productionFor(mine, today);
+        const allListings = listings.filter((x) => x.tc_user_id === id);
         return {
+          ...rosterStats(mine, allListings, today),
           id,
           linkId: l.id,
           name: label?.name ?? 'Agent',
@@ -48,7 +50,6 @@ export async function GET(request: NextRequest) {
           phone: phoneOf.get(id) ?? null,
           joinedAt: l.responded_at,
           baseCommission: l.default_split_type && l.default_split_value !== null && l.default_split_value !== undefined ? { type: l.default_split_type, value: Number(l.default_split_value) } : null,
-          openDeals: open.length,
           pipelineVolume: production.pipelineVolume,
           closedThisYear: production.closedThisYear,
           volumeThisYear: production.volumeThisYear,
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => a.name.localeCompare(b.name));
 
     const pending = links.filter((l) => l.status === 'pending').map((l) => ({ linkId: l.id, email: l.invited_email, invitedAt: l.invited_at }));
-    return NextResponse.json({ agents, pending });
+    return NextResponse.json({ agents, pending, terms: OVERSIGHT_TERMS });
   } catch (error) {
     return oversightError(error, 'load your agents');
   }

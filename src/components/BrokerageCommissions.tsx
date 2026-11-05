@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { openStatement } from '@/lib/commissionClient';
 
-// Commission ledger. Owners see every deal's split with their agents, can set each agent's default split and download a CSV.
+// Commission ledger. Owners see every deal's split with their agents, and download a CSV; each agent's base terms live on their profile.
 // Agents see their own statements. Splits are proposed on the deal itself (the Commission box).
 
 type SplitType = 'percent' | 'flat_agent' | 'flat_brokerage';
@@ -25,22 +25,17 @@ interface Row {
   agent?: { name: string };
   brokerage?: { name: string };
 }
-interface AgentDefault { linkId: string; id: string; name: string; email: string | null; defaultSplit: { type: SplitType; value: number } | null }
 
 const money = (n: number) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const splitText = (t: SplitType, v: number) => (t === 'percent' ? `Agent keeps ${v}%` : t === 'flat_agent' ? `Agent gets ${money(v)}` : `Brokerage fee ${money(v)}`);
 const STATUS = { proposed: 'Waiting for the agent', change_requested: 'Change requested', accepted: 'Agreed', paid: 'Paid', void: 'Void' } as const;
 const card = 'bg-white/5 border border-white/10 rounded-2xl p-5';
-const field = 'px-2 py-1.5 rounded-lg bg-slate-900/60 border border-white/10 text-sm text-slate-100';
 
 export default function BrokerageCommissions({ mode }: { mode: 'owner' | 'agent' }) {
   const [asOwner, setAsOwner] = useState<Row[]>([]);
   const [asAgent, setAsAgent] = useState<Row[]>([]);
-  const [agents, setAgents] = useState<AgentDefault[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState('');
-  const [drafts, setDrafts] = useState<Record<string, { type: SplitType; value: string }>>({});
 
   const load = useCallback(async () => {
     try {
@@ -49,8 +44,6 @@ export default function BrokerageCommissions({ mode }: { mode: 'owner' | 'agent'
       if (!res.ok) throw new Error(json.error || 'Could not load commissions');
       setAsOwner(json.asOwner ?? []);
       setAsAgent(json.asAgent ?? []);
-      setAgents(json.agents ?? []);
-      setDrafts(Object.fromEntries((json.agents ?? []).map((a: AgentDefault) => [a.linkId, { type: a.defaultSplit?.type ?? 'percent', value: a.defaultSplit ? String(a.defaultSplit.value) : '' }])));
       setLoaded(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load commissions');
@@ -61,21 +54,6 @@ export default function BrokerageCommissions({ mode }: { mode: 'owner' | 'agent'
     const t = setTimeout(load, 0);
     return () => clearTimeout(t);
   }, [load]);
-
-  const saveDefault = async (a: AgentDefault, clear = false) => {
-    setSaving(a.linkId);
-    setError('');
-    try {
-      const d = drafts[a.linkId];
-      const res = await authFetch(`/api/oversight/${a.linkId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(clear ? { splitType: null } : { splitType: d.type, splitValue: Number(d.value) }) });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not save that');
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save that');
-    } finally {
-      setSaving('');
-    }
-  };
 
   const downloadCsv = async () => {
     try {
@@ -141,33 +119,6 @@ export default function BrokerageCommissions({ mode }: { mode: 'owner' | 'agent'
         <div className={card}><p className="text-xs text-slate-400">{mode === 'owner' ? 'Net to agents' : 'Net to you'}</p><p className="text-xl font-semibold text-emerald-300">{money(sum(live, 'agentNet'))}</p></div>
         <div className={card}><p className="text-xs text-slate-400">Not paid yet ({open.length})</p><p className="text-xl font-semibold text-slate-100">{money(sum(open, mode === 'owner' ? 'brokerageNet' : 'agentNet'))}</p><p className="text-[11px] text-slate-500">{mode === 'owner' ? 'your net on open deals' : 'your net on open deals'}</p></div>
       </div>
-
-      {mode === 'owner' && (
-        <div className={card}>
-          <h2 className="text-lg font-semibold text-slate-100 mb-1">Default split for each agent</h2>
-          <p className="text-xs text-slate-400 mb-3">Used when you propose a split on one of their deals. You can still change it deal by deal, and the agent has to agree each time.</p>
-          {agents.length === 0 ? <p className="text-sm text-slate-400">No agents have joined yet.</p> : (
-            <ul className="divide-y divide-white/5">
-              {agents.map((a) => {
-                const d = drafts[a.linkId] ?? { type: 'percent' as SplitType, value: '' };
-                return (
-                  <li key={a.linkId} className="py-3 flex flex-wrap items-center gap-2">
-                    <span className="flex-1 min-w-[10rem] text-sm text-slate-100">{a.name}<span className="block text-[11px] text-slate-500">{a.defaultSplit ? splitText(a.defaultSplit.type, a.defaultSplit.value) : 'No default'}</span></span>
-                    <select value={d.type} onChange={(e) => setDrafts({ ...drafts, [a.linkId]: { ...d, type: e.target.value as SplitType } })} className={field}>
-                      <option value="percent">Agent keeps %</option>
-                      <option value="flat_agent">Agent gets $ (fixed)</option>
-                      <option value="flat_brokerage">Brokerage fee $ (fixed)</option>
-                    </select>
-                    <input type="number" step="0.01" min="0" max={d.type === 'percent' ? 100 : undefined} value={d.value} onChange={(e) => setDrafts({ ...drafts, [a.linkId]: { ...d, value: e.target.value } })} placeholder={d.type === 'percent' ? '80' : '0.00'} className={`${field} w-24`} aria-label={`Default split for ${a.name}`} />
-                    <button type="button" disabled={saving === a.linkId || d.value === ''} onClick={() => saveDefault(a)} className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-blue-500 hover:bg-blue-400 text-white disabled:opacity-50">Save</button>
-                    {a.defaultSplit && <button type="button" disabled={saving === a.linkId} onClick={() => saveDefault(a, true)} className="text-xs text-slate-400 hover:text-red-300">Clear</button>}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      )}
 
       <div className={card}>
         <div className="flex items-center justify-between gap-2 mb-3">

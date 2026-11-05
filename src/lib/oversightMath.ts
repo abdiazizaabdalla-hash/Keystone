@@ -164,3 +164,36 @@ export function closedWithoutCommission<T extends { id: string; status: string |
   const since = addDays(today, -days);
   return deals.filter((d) => d.status === CLOSED_STAGE && !withCommission.has(d.id) && (d.closing_date || d.updated_at || '').slice(0, 10) >= since);
 }
+
+
+// ---- Live roster: one line per agent ----
+
+export interface RosterStats {
+  openDeals: number;
+  /** Open checklist steps past their due date, across the agent's open deals. */
+  lateTasks: number;
+  /** Open deals with at least one late step. */
+  lateDeals: number;
+  /** Open deals closing today through the next 7 days. */
+  closingThisWeek: number;
+  /** Most recent change on any of their deals or listings (ISO timestamp), or null. */
+  lastActivity: string | null;
+}
+
+/** What the broker's roster shows for one agent. `today` is YYYY-MM-DD. */
+export function rosterStats(
+  deals: (Pick<OversightDeal, 'status' | 'closing_date' | 'updated_at'> & { health: Pick<DealHealth, 'overdueTasks'> })[],
+  listings: { updated_at: string | null }[],
+  today: string
+): RosterStats {
+  const open = deals.filter((d) => d.status !== CLOSED_STAGE);
+  const end = addDays(today, 7);
+  const stamps = [...deals.map((d) => d.updated_at), ...listings.map((l) => l.updated_at)].filter((x): x is string => !!x).sort();
+  return {
+    openDeals: open.length,
+    lateTasks: open.reduce((n, d) => n + d.health.overdueTasks, 0),
+    lateDeals: open.filter((d) => d.health.overdueTasks > 0).length,
+    closingThisWeek: open.filter((d) => d.closing_date && d.closing_date.slice(0, 10) >= today && d.closing_date.slice(0, 10) <= end).length,
+    lastActivity: stamps.length ? stamps[stamps.length - 1] : null,
+  };
+}

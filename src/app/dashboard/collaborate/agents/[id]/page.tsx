@@ -94,7 +94,7 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
   if (!data) {
     return (
       <div className="p-4 md:p-8 max-w-5xl">
-        <Link href="/dashboard/agents" className="text-sm text-blue-400 hover:text-blue-300">← Back to agents</Link>
+        <Link href="/dashboard/collaborate#agents" className="text-sm text-blue-400 hover:text-blue-300">← Back to agents</Link>
         <p className="text-slate-400 text-sm mt-4">{error || 'Loading…'}</p>
       </div>
     );
@@ -107,7 +107,7 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="p-4 md:p-8 max-w-5xl space-y-5">
-      <Link href="/dashboard/agents" className="text-sm text-blue-400 hover:text-blue-300">← Back to agents</Link>
+      <Link href="/dashboard/collaborate#agents" className="text-sm text-blue-400 hover:text-blue-300">← Back to agents</Link>
 
       <div className={card}>
         <div className="flex flex-wrap items-start justify-between gap-3">

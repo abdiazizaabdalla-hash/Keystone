@@ -8,7 +8,7 @@ import TeamMessaging from '@/components/TeamMessaging';
 import MessagesInbox from '@/components/MessagesInbox';
 import BrokerageCommissions from '@/components/BrokerageCommissions';
 import TeamContacts from '@/components/TeamContacts';
-import BrokerageOversight from '@/components/BrokerageOversight';
+import BrokerageRoster from '@/components/BrokerageRoster';
 import BrokerageTemplates from '@/components/BrokerageTemplates';
 import { isFeatureOnClient } from '@/lib/features';
 import type { ContactRow } from '@/lib/contactsCrm';
@@ -567,7 +567,7 @@ export default function CollaboratePage() {
         </div>
       )}
 
-      {activeTab === 'agents' && isOwner && brokerageMode && <BrokerageOversight />}
+      {activeTab === 'agents' && isOwner && brokerageMode && <BrokerageRoster />}
 
       {activeTab === 'commissions' && isOwner && brokerageMode && <BrokerageCommissions mode="owner" />}
 
