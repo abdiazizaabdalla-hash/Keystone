@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PUBLIC_PLANS } from '@/lib/plans';
-import { decodeStoredRole, decodeStoredWorkspace } from '@/lib/authClient';
+import { decodeStoredRole, fetchHasWorkspace } from '@/lib/authClient';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import ShotRow from '@/components/ShotRow';
 import HomeVideo from '@/components/HomeVideo';
@@ -24,7 +24,11 @@ export default function Home() {
       // no agents-table rows of their own, so needsOnboarding was always
       // true for them). Check which kind of session this actually is
       // before deciding where "already signed in" should go.
-      router.push(decodeStoredRole() === 'agent' && !decodeStoredWorkspace() ? '/agent' : '/dashboard');
+      if (decodeStoredRole() !== 'agent') {
+        router.push('/dashboard');
+      } else {
+        fetchHasWorkspace().then((has) => router.push(has ? '/dashboard' : '/agent'));
+      }
       return;
     }
     // Deferred so the state update is not a synchronous effect update.

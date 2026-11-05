@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { clearSession, decodeStoredWorkspace } from '@/lib/authClient';
+import { clearSession, fetchHasWorkspace } from '@/lib/authClient';
 import NotificationBell from '@/components/NotificationBell';
 
 // Lightweight mirror of the TC sidebar (dashboard/layout.tsx) -- just
@@ -53,8 +53,13 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   // An agent the admin gave a workspace to gets a way back to it from the shared-deals portal.
   const [hasWorkspace, setHasWorkspace] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setHasWorkspace(decodeStoredWorkspace()), 0);
-    return () => clearTimeout(t);
+    let cancelled = false;
+    fetchHasWorkspace().then((has) => {
+      if (!cancelled) setHasWorkspace(has);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

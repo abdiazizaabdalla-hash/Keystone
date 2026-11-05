@@ -26,6 +26,8 @@ export default function AgentOnboardingPage() {
   const [dealsPerYear, setDealsPerYear] = useState<string | null>(null);
   const [license, setLicense] = useState('');
   const [invitedBy, setInvitedBy] = useState<string | null>(null);
+  // An agent whose workspace the brokerage provides (Agent Basic) has no Starter trial.
+  const [fromBrokerage, setFromBrokerage] = useState(false);
   const askStates = isFeatureOnClient('templates');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -45,6 +47,7 @@ export default function AgentOnboardingPage() {
           return;
         }
         setName(data.fullName || '');
+        setFromBrokerage(data.agentLevel === 'basic');
         // A brokerage that already invited this agent: say so, and start the brokerage field from it.
         if (isFeatureOnClient('brokerage')) {
           try {
@@ -255,7 +258,7 @@ export default function AgentOnboardingPage() {
         >
           {saving ? 'Setting up...' : 'Continue: upload your first contract'}
         </button>
-        <p className="text-xs text-slate-500 mt-3">Your first 30 days are free. No card needed.</p>
+        <p className="text-xs text-slate-500 mt-3">{fromBrokerage ? 'Free while you are in your brokerage. No card needed.' : 'Your first 30 days are free. No card needed.'}</p>
       </main>
     </div>
   );

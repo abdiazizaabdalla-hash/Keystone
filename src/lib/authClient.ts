@@ -66,6 +66,23 @@ export function decodeStoredWorkspace(): boolean {
   }
 }
 
+/**
+ * Like decodeStoredWorkspace, but asks the server, so it also sees a workspace that comes from a brokerage (Agent Basic), which is
+ * worked out per request and is never in the token. Used only to pick where to send an agent; the server decides what they may do.
+ */
+export async function fetchHasWorkspace(): Promise<boolean> {
+  if (!isFeatureOnClient('agent_workspace')) return false;
+  if (decodeStoredWorkspace()) return true;
+  if (decodeStoredRole() !== 'agent') return false;
+  try {
+    const res = await authFetch('/api/auth/me');
+    if (!res.ok) return false;
+    return ((await res.json()) as { agentWorkspace?: boolean }).agentWorkspace === true;
+  } catch {
+    return false;
+  }
+}
+
 export function saveSession(accessToken: string, refreshToken: string, userId: string) {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);

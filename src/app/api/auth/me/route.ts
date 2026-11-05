@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getEntitlements } from '@/lib/entitlements';
+import { hasBrokerageAccess } from '@/lib/brokerageAccessMeta';
 import { mergeUserMetadata } from '@/lib/userMetadata';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { getUserPlan, isPlatformAdmin } from '@/lib/privileged';
@@ -34,6 +35,7 @@ function shapeUser(user: {
     accountType: getAccountType(user.app_metadata),
     // True for an agent the admin has given a workspace (and only while the feature is switched on).
     agentWorkspace: getEntitlements(user).kind === 'agent_workspace',
+    agentLevel: getEntitlements(user).agentLevel,
     coordinationMode: getCoordinationMode(meta),
     defaultFlatFee:
       typeof meta.default_flat_fee === 'number' ? meta.default_flat_fee : DEFAULT_FLAT_FEE,
@@ -97,7 +99,7 @@ export async function GET(request: NextRequest) {
     // the same "already paying" check assertTrialActive uses server-side,
     // and the fuller version account/summary exposes for the Account page.
     let trial = null;
-    if (shaped.plan === 'starter') {
+    if (shaped.plan === 'starter' && !hasBrokerageAccess(user)) {
       const billing = await getStripeCustomerByUserId(user.id);
       const hasActivePaidStarter =
         billing?.plan === 'starter' &&

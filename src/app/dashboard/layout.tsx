@@ -169,6 +169,8 @@ export default function DashboardLayout({
   const [isAgentAccount, setIsAgentAccount] = useState(false);
   // An agent with their own workspace keeps the Invoices tab (their own invoices, not the coordinator's).
   const [hasWorkspace, setHasWorkspace] = useState(false);
+  // Agent Basic: the workspace is provided by their brokerage, so there is no Starter plan to show or upgrade.
+  const [fromBrokerage, setFromBrokerage] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [trial, setTrial] = useState<{
     applies: boolean;
@@ -338,6 +340,7 @@ export default function DashboardLayout({
           }
           savePersona({ accountType: data.accountType === 'agent' ? 'agent' : 'tc', coordinationMode: data.coordinationMode ?? null, workspace: Boolean(data.agentWorkspace) });
           setHasWorkspace(Boolean(data.agentWorkspace));
+          setFromBrokerage(data.agentLevel === 'basic');
           setTrial(data.trial || null);
           setUserName(data.fullName || data.email || '');
           setIsAdmin(Boolean(data.is_admin));
@@ -434,12 +437,12 @@ export default function DashboardLayout({
             <span className="text-white font-display font-semibold">Relay TC{plan && (
               <span
                 className={`ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${
-                  plan === 'starter'
+                  plan === 'starter' && !fromBrokerage
                     ? 'bg-slate-700/60 text-slate-300 border-slate-600'
                     : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
                 }`}
               >
-                {plan}
+                {fromBrokerage ? 'basic' : plan}
               </span>
             )}</span>
           </Link>
@@ -533,12 +536,12 @@ export default function DashboardLayout({
                 {plan && (
                   <span
                     className={`inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${
-                      plan === 'starter'
+                      plan === 'starter' && !fromBrokerage
                         ? 'bg-slate-700/60 text-slate-300 border-slate-600'
                         : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
                     }`}
                   >
-                    {plan}
+                    {fromBrokerage ? 'basic' : plan}
                   </span>
                 )}
               </div>
@@ -609,18 +612,31 @@ export default function DashboardLayout({
           )}
           {plan && !collapsed && (
             <div className="flex items-center justify-between px-3 py-1.5 bg-slate-700/60 border border-slate-600 rounded-lg">
-              <span className="text-xs text-slate-400">
-                <span className="text-slate-200 font-semibold capitalize">{plan}</span> plan
-              </span>
-              <Link href="/dashboard/account" className="text-xs text-blue-400 hover:text-blue-300 font-medium">
-                {plan === 'starter' ? 'Upgrade' : 'Manage'}
-              </Link>
+              {fromBrokerage ? (
+                <>
+                  <span className="text-xs text-slate-400">
+                    <span className="text-slate-200 font-semibold">Agent Basic</span> · from your brokerage
+                  </span>
+                  <Link href="/dashboard/collaborate#brokerage" className="text-xs text-blue-400 hover:text-blue-300 font-medium">
+                    Brokerage
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs text-slate-400">
+                    <span className="text-slate-200 font-semibold capitalize">{plan}</span> plan
+                  </span>
+                  <Link href="/dashboard/account" className="text-xs text-blue-400 hover:text-blue-300 font-medium">
+                    {plan === 'starter' ? 'Upgrade' : 'Manage'}
+                  </Link>
+                </>
+              )}
             </div>
           )}
           {plan && collapsed && (
             <Link
               href="/dashboard/account"
-              title={`${plan} plan -- ${plan === 'starter' ? 'Upgrade' : 'Manage'}`}
+              title={fromBrokerage ? 'Agent Basic, from your brokerage' : `${plan} plan -- ${plan === 'starter' ? 'Upgrade' : 'Manage'}`}
               className="flex items-center justify-center py-2 bg-slate-700/60 border border-slate-600 rounded-lg text-xs text-slate-200 font-semibold uppercase"
             >
               {plan.charAt(0)}

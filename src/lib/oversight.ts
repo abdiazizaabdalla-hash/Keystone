@@ -2,7 +2,7 @@ import { supabaseServer } from './supabase';
 import { isFeatureOn } from './features';
 import { AuthError } from './auth';
 import { isTeamPlan } from './plans';
-import { getUserPlan, type WithAppMetadata } from './appMetadata';
+import { getUserPlan, hasAgentRole, type WithAppMetadata } from './appMetadata';
 import { getEntitlements } from './entitlements';
 import { CLOSED_STAGE, normaliseEmail, dealHealth, nextStepFor, listingHealth, isOpenListing, type DealHealth, type ListingHealth, type NextStep, type OversightDeal, type OversightListing, type OversightTask } from './oversightMath';
 
@@ -67,10 +67,19 @@ export function assertBrokerageOwner(user: WithAppMetadata): void {
   if (!isTeamPlan(getUserPlan(user))) throw new AuthError('Brokerage oversight is part of the Team and Brokerage plans.', 403);
 }
 
-/** An agent who can join a brokerage: feature on and an agent workspace of their own. */
+/** An agent who has a workspace of their own (an admin grant) or one a brokerage provides (Agent Basic). Used where the agent runs their own deals. */
 export function assertWorkspaceAgent(user: WithAppMetadata): void {
   if (!brokerageOn()) throw new AuthError('Not found', 404);
   if (getEntitlements(user).kind !== 'agent_workspace') throw new AuthError('Joining a brokerage needs an agent workspace of your own.', 403);
+}
+
+/**
+ * An agent who may answer a brokerage invitation or see their brokerage page: any agent account, including a free portal login
+ * (Guest). Accepting is what gives a Guest their Basic workspace, so it cannot require one already. Coordinators and admins are not agents.
+ */
+export function assertBrokerageAgent(user: WithAppMetadata): void {
+  if (!brokerageOn()) throw new AuthError('Not found', 404);
+  if (!hasAgentRole(user)) throw new AuthError('Only agent accounts can join a brokerage.', 403);
 }
 
 async function ownerStillOnTeamPlan(ownerId: string): Promise<boolean> {

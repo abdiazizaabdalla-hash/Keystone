@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
-import { assertWorkspaceAgent, activeLinkForAgent, agentLabels, pendingInvitesFor } from '@/lib/oversight';
+import { assertBrokerageAgent, activeLinkForAgent, agentLabels, pendingInvitesFor } from '@/lib/oversight';
 import { isDuplicateLink, notifyOwnerRoster, oversightError } from '@/lib/oversightServer';
 import { getUserPlan } from '@/lib/appMetadata';
 import { isTeamPlan } from '@/lib/plans';
@@ -12,7 +12,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const { id } = await params;
     const { user } = await getUserFromRequest(request);
-    assertWorkspaceAgent(user);
+    assertBrokerageAgent(user);
     const body = (await request.json().catch(() => ({}))) as { action?: unknown };
     const action = body.action;
     if (action !== 'accept' && action !== 'decline' && action !== 'leave') throw new AuthError('Choose accept, decline or leave.', 400);

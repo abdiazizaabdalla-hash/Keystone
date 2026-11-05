@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import AgentCalendarPrompt from '@/components/AgentCalendarPrompt';
+import AgentBrokerageInvites from '@/components/AgentBrokerageInvites';
 import AgentTransactionList, { type AgentTransaction } from '@/components/AgentTransactionList';
 import AgentListingCard, { type AgentListingSummary } from '@/components/AgentListingCard';
 import type { ListingStatus } from '@/lib/listingsShared';
@@ -165,6 +166,8 @@ export default function AgentHubPage() {
         </div>
 
         <AgentCalendarPrompt />
+
+        <AgentBrokerageInvites />
 
         {pendingInvites.length > 0 && (
           <div className="mb-8">

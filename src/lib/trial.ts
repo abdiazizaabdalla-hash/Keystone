@@ -2,6 +2,7 @@ import { DEFAULT_PLAN } from './plans';
 import { getStripeCustomerByUserId } from './stripeCustomers';
 import { getUserPlan } from './privileged';
 import { assertNotCollaborator } from './workspaceGuard';
+import { hasBrokerageAccess } from './brokerageAccessMeta';
 
 // Starter used to be free forever. It's now a 30-day
 // trial, after which the account needs to add
@@ -121,6 +122,8 @@ export async function assertTrialActive(
   // share (direct messages) opt in with { allowCollaborator: true }, and the
   // routes that already branch on the caller being an agent never reach this.
   if (!options.allowCollaborator) assertNotCollaborator(user);
+  // An agent whose workspace comes from their brokerage (Agent Basic) is free: the Starter trial and its paywall do not apply.
+  if (hasBrokerageAccess(user)) return;
   const planId = (getUserPlan(user) as string | undefined) || DEFAULT_PLAN;
   if (planId !== 'starter') return;
 

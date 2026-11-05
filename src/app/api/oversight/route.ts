@@ -18,7 +18,7 @@ import { isDuplicateLink, oversightError, sendBrokerageInvite, todayIso } from '
 
 // The brokerage owner's view of their roster.
 // GET: every invited and joined agent, with production and what needs attention, plus totals.
-// POST { email }: invite an agent who has (or will have) a workspace of their own.
+// POST { email }: invite an agent. Accepting gives them a free Basic workspace (see agentAccess.ts); an agent with a workspace of their own keeps it.
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);

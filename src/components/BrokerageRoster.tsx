@@ -181,7 +181,7 @@ export default function BrokerageRoster() {
 
       {inviting && (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-          <p className="text-sm text-slate-400 mb-3 max-w-2xl">The agent needs their own Relay workspace. They get an invitation and choose whether to join. Until they accept, you see nothing of theirs.</p>
+          <p className="text-sm text-slate-400 mb-3 max-w-2xl">They get an invitation and choose whether to join. Joining gives them a free Relay workspace for their own deals. Until they accept, you see nothing of theirs.</p>
           <form onSubmit={invite} className="flex flex-col sm:flex-row gap-2 max-w-xl">
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="agent@example.com" aria-label="Agent email" className="flex-1 px-3 py-2 rounded-lg bg-slate-900/60 border border-white/10 text-sm text-slate-100 placeholder:text-slate-500" />
             <button disabled={busy || !email} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition">

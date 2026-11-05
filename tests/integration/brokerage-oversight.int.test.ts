@@ -58,7 +58,8 @@ describe('who may use it', () => {
     expect((await call(h(invite), agentA, { method: 'POST', path: '/api/oversight', body: { email: 'x@example.test' } })).status).toBe(403);
     expect((await call(h(overview), free, { method: 'GET', path: '/api/oversight' })).status).toBe(403);
     expect((await call(h(myBrokerage), broker, { method: 'GET', path: '/api/brokerage' })).status).toBe(403);
-    expect((await call(h(myBrokerage), free, { method: 'GET', path: '/api/brokerage' })).status).toBe(403);
+    // A free agent login may see and answer invitations: accepting is what gives them a Basic workspace.
+    expect((await call(h(myBrokerage), free, { method: 'GET', path: '/api/brokerage' })).status).toBe(200);
     expect((await call(h(overview), null, { method: 'GET', path: '/api/oversight' })).status).toBe(401);
   });
 });

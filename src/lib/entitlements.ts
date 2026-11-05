@@ -1,5 +1,7 @@
 import { hasAgentRole, isPlatformAdmin, type WithAppMetadata } from './appMetadata';
 import { isFeatureOn } from './features';
+import type { AgentLevel } from './tiers';
+import { hasBrokerageAccess } from './brokerageAccessMeta';
 
 // One place that answers "what kind of account is this, and what may it own?"
 //
@@ -31,6 +33,11 @@ export interface Entitlements {
   canOwnWorkspace: boolean;
   /** May be added to another account's deals and work on them. Everyone signed in can. */
   canJoinSharedDeals: true;
+  /**
+   * The agent tier this account is on (see tiers.ts): guest = a free portal login, basic = a workspace the brokerage provides,
+   * pro = a workspace of their own (admin grant today, subscription later). Null for coordinators and admins, who are not agents.
+   */
+  agentLevel: Exclude<AgentLevel, 'none'> | null;
 }
 
 /** app_metadata.agent_workspace === true is the admin's grant of an agent workspace. */
@@ -48,8 +55,11 @@ export function getEntitlements(user: WithAppMetadata | null | undefined): Entit
 
   const kind: AccountKind = isAdmin ? 'admin' : workspace ? 'agent_workspace' : isCollaborator ? 'collaborator' : 'coordinator';
 
+  const agentLevel: Entitlements['agentLevel'] = kind === 'agent_workspace' ? (hasBrokerageAccess(user) ? 'basic' : 'pro') : kind === 'collaborator' ? 'guest' : null;
+
   return {
     kind,
+    agentLevel,
     isAdmin,
     isCollaborator,
     canOwnWorkspace: !isCollaborator,

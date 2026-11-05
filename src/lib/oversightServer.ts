@@ -60,7 +60,7 @@ export async function sendBrokerageInvite(params: { ownerUserId: string; ownerLa
     subject: `${params.ownerLabel} invited you to join their brokerage on Relay TC`,
     paragraphs: [
       `${params.ownerLabel} invited you to join their brokerage on Relay TC.`,
-      'If you accept, they see a read-only copy of your deals, deadlines and production numbers, and you get their team board, private messages and shared templates and contacts. They cannot change your deals. Your own templates, contacts and client messages stay private. You can leave at any time.',
+      'If you accept, you get a free Relay workspace for your own deals, plus their team board, private messages and shared templates and contacts. They see a read-only copy of your deals, deadlines and production numbers. They cannot change your deals. Your own templates, contacts and client messages stay private. You can leave at any time.',
     ],
     path: '/dashboard/collaborate#brokerage',
     linkLabel: 'Review and accept',

@@ -8,7 +8,7 @@ import { authFetch } from '@/lib/authClient';
 
 interface Owner { id: string; name: string; email: string | null }
 interface Terms { sees: string[]; canDo: string[]; private: string[]; leave: string }
-interface Data { current: { id: string; owner: Owner; since: string | null; paused?: boolean } | null; invites: { id: string; owner: Owner; invitedAt: string }[]; terms: Terms }
+interface Data { providesWorkspace?: boolean; current: { id: string; owner: Owner; since: string | null; paused?: boolean } | null; invites: { id: string; owner: Owner; invitedAt: string }[]; terms: Terms }
 
 const card = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 
@@ -32,7 +32,10 @@ export default function BrokerageMembership({ onChanged }: { onChanged?: () => v
   }, [load]);
 
   const act = async (id: string, action: 'accept' | 'decline' | 'leave') => {
-    if (action === 'leave' && !window.confirm('Leave this brokerage? They will no longer see your deals. Your deals stay yours.')) return;
+    const leaveWarning = data?.providesWorkspace
+      ? 'Leave this brokerage? They will no longer see your deals. Your free workspace comes from this brokerage, so it ends when you leave: your deals and listings are kept, but you cannot open them until you have a workspace of your own.'
+      : 'Leave this brokerage? They will no longer see your deals. Your deals stay yours.';
+    if (action === 'leave' && !window.confirm(leaveWarning)) return;
     setBusy(id);
     setError('');
     try {

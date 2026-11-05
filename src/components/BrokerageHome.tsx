@@ -116,7 +116,7 @@ export default function BrokerageHome({ compact = false }: { compact?: boolean }
           <p className="text-slate-400 mb-6 max-w-xl mx-auto">
             {t.pendingInvites > 0
               ? `${t.pendingInvites} invitation${t.pendingInvites === 1 ? ' is' : 's are'} out. Once an agent accepts, their deals, listings and production show up here, and you can set their commission and message them.`
-              : 'Agents with their own Relay workspace join your brokerage by invitation. Then you see their deals and listings, what needs attention, and set up commissions here.'}
+              : 'Agents join your brokerage by invitation, with a free Relay workspace for their own deals. Then you see their deals and listings, what needs attention, and set up commissions here.'}
           </p>
           <Link href="/dashboard/collaborate#agents" className="inline-block px-6 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition">{t.pendingInvites > 0 ? 'See invitations' : 'Invite an agent'}</Link>
         </div>

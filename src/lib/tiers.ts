@@ -1,6 +1,7 @@
 // The tier model for agents and brokerages: who gets which features, how many seats a brokerage has, and where an agent's
-// access comes from. Pure (no database, no billing), and NOT wired into any route yet: it is the single place the rules
-// will live so that billing, the pilot and the feature gates all read the same answer. See docs/PRICING_ENTITLEMENT_DESIGN.md.
+// access comes from. Pure (no database, no billing), and mostly not wired into routes yet: it is the single place the rules
+// will live so that billing, the pilot and the feature gates all read the same answer. Agent Basic access is now derived per request
+// (agentAccess.ts) and shown as `agentLevel`; the brokerage limits and gates below are still to be wired. See docs/PRICING_ENTITLEMENT_DESIGN.md.
 //
 // These tiers are new and separate from the TC plans (Starter, Pro, Team). A brokerage owner keeps their TC plan; their
 // brokerage tier is a different fact. Two ideas keep this simple:
@@ -43,7 +44,7 @@ export const BROKERAGE_FEATURES: Record<Tier, readonly BrokerageFeature[]> = { b
 export const BROKERAGE_INCLUDED_SEATS: Record<Tier, number> = { basic: 10, pro: 25 };
 
 /**
- * Numeric limits that differ by tier. PROPOSED values, to be confirmed: the plan says only "limited" administrators on Basic.
+ * Numeric limits that differ by tier. Confirmed: one extra administrator on Basic, five on Pro (no multi-administrator feature is built yet).
  * `requiredDocumentLists` is how many separate required-document lists the brokerage can keep (Basic: one for every file).
  */
 export const BROKERAGE_LIMITS: Record<Tier, { requiredDocumentLists: number; extraAdministrators: number }> = {
