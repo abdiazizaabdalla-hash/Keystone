@@ -79,7 +79,8 @@ export default function BrokerageAccountBanner() {
         )}
         {error && <p className="text-red-300 mt-1">{error}</p>}
       </div>
-      {account.canRequestUpgrade && (
+      {/* During the pilot they already have full Pro, so there is nothing to ask for; the request returns once the pilot has ended. */}
+      {account.status !== 'pilot' && account.canRequestUpgrade && (
         account.upgradeRequested ? (
           <p className="text-sm text-emerald-300">Upgrade requested. We will be in touch.</p>
         ) : (
