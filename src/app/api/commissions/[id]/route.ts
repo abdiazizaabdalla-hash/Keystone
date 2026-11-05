@@ -1,3 +1,4 @@
+import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
@@ -66,6 +67,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return bad('Unknown action.');
       }
     } else {
+      await assertBrokerageManageable(user.id);
       if (action === 'approve') {
         if (row.status === 'estimate') return bad('Confirm the actual commission first. An estimate cannot be approved.', 409);
         if (row.status !== 'change_requested' || row.change_note) return bad('There is no agent invoice waiting for your approval.', 409);

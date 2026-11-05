@@ -4,6 +4,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { assertBrokerageOwner } from '@/lib/oversight';
+import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { oversightError, sendBrokerageInvite } from '@/lib/oversightServer';
 
 // POST: send a pending invitation again (the email may have been missed or gone to spam). Owner only, pending links only,
@@ -13,6 +14,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const { user } = await getUserFromRequest(request);
     assertBrokerageOwner(user);
+    await assertBrokerageManageable(user.id);
     const { data: link, error } = await supabaseServer.from('brokerage_links').select('id, invited_email').eq('id', id).eq('owner_user_id', user.id).eq('status', 'pending').maybeSingle();
     if (error) throw error;
     if (!link || !link.invited_email) throw new AuthError('Not found', 404);

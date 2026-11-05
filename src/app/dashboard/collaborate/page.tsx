@@ -10,6 +10,7 @@ import BrokerageMembership from '@/components/BrokerageMembership';
 import { readPersona } from '@/lib/persona';
 import BrokerageCommissions from '@/components/BrokerageCommissions';
 import TeamContacts from '@/components/TeamContacts';
+import BrokerageAccountBanner from '@/components/BrokerageAccountBanner';
 import BrokerageFileReview from '@/components/BrokerageFileReview';
 import BrokerageRoster from '@/components/BrokerageRoster';
 import BrokerageTemplates from '@/components/BrokerageTemplates';
@@ -354,6 +355,8 @@ export default function CollaboratePage() {
           ? 'Invite and manage your agents and coordinators, message them, and share templates. Agents and coordinators keep their own contacts private.'
           : 'Your team’s home base. Each coordinator’s deals, agents and contacts stay private to their own login; only contacts someone chooses to share appear here.'}
       </p>
+
+      {isOwner && brokerageMode && <BrokerageAccountBanner />}
 
       <div className="flex gap-1 border-b border-white/10 mb-6 overflow-x-auto" role="tablist" aria-label="Team sections">
         {tabs.map((t) => (

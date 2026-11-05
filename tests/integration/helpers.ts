@@ -128,6 +128,8 @@ export async function cleanup(): Promise<void> {
   await admin.from('deal_commissions').delete().in('agent_user_id', created);
   await admin.from('brokerage_messages').delete().in('owner_user_id', created);
   await admin.from('brokerage_messages').delete().in('agent_user_id', created);
+  await admin.from('brokerage_account_events').delete().in('owner_user_id', created);
+  await admin.from('brokerage_accounts').delete().in('owner_user_id', created);
   await admin.from('brokerage_file_reviews').delete().in('owner_user_id', created);
   await admin.from('brokerage_file_requirements').delete().in('owner_user_id', created);
   await admin.from('brokerage_links').delete().in('owner_user_id', created);

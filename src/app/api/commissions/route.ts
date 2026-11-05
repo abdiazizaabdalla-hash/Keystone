@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
+import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { activeLinkForAgent, agentLabels, assertBrokerageOwner, brokerageOn, canOverseeDeal, listOwnerLinks, overseesAgent } from '@/lib/oversight';
 import { CLOSED_STAGE } from '@/lib/oversightMath';
 import { oversightError } from '@/lib/oversightServer';
@@ -145,6 +146,7 @@ export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
     assertBrokerageOwner(user);
+    await assertBrokerageManageable(user.id);
     const input = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const transactionId = typeof input.transactionId === 'string' ? input.transactionId : '';
     if (!transactionId) return NextResponse.json({ error: 'Choose a deal.' }, { status: 400 });

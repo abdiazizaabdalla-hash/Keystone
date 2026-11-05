@@ -14,9 +14,6 @@
 
 export type Tier = 'basic' | 'pro';
 
-/** Where an account's tier comes from. 'pilot' is the complimentary manual onboarding; billing adds 'subscription'. */
-export type TierSource = 'pilot' | 'subscription' | 'admin';
-
 // ---- Brokerage ----
 
 export type BrokerageFeature =
@@ -65,7 +62,7 @@ export function brokerageSeatLimit(tier: Tier, extraSeats = 0): number {
 /**
  * Whether another invitation may go out. Pending invitations count toward the limit, so a brokerage cannot over-invite and then
  * be surprised. A brokerage already over its limit (after a downgrade) cannot invite more, but nobody is removed.
- * `inGoodStanding: false` (a lapsed brokerage) also stops new invitations; existing agents and deals are untouched.
+ * `inGoodStanding: false` (a lapsed brokerage, see brokeragePilot.ts) also stops new invitations; existing agents and deals are untouched.
  */
 export function canInviteAnother(counts: { active: number; pending: number }, tier: Tier, extraSeats = 0, inGoodStanding = true): boolean {
   return inGoodStanding && counts.active + counts.pending < brokerageSeatLimit(tier, extraSeats);
@@ -131,11 +128,4 @@ export function resolveAgentAccess(input: AgentTierInput): AgentAccess {
   if (input.brokerage?.inGoodStanding) return { level: 'basic', source: 'brokerage' };
   if (input.invitedByCoordinator) return { level: 'guest', source: 'coordinator_invite' };
   return { level: 'none', source: null };
-}
-
-/** Whether a brokerage account is in good standing: a pilot account is until its end date, and a subscription is while it is active. */
-export function brokerageInGoodStanding(account: { source: TierSource; subscriptionActive?: boolean; pilotEndsOn?: string | null }, today: string): boolean {
-  if (account.source === 'pilot') return !account.pilotEndsOn || account.pilotEndsOn >= today;
-  if (account.source === 'admin') return true;
-  return account.subscriptionActive === true;
 }

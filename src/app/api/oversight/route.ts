@@ -13,6 +13,7 @@ import {
   loadOversightDeals,
   productionFor,
 } from '@/lib/oversight';
+import { assertCanInvite } from '@/lib/brokerageAccount';
 import { isDuplicateLink, oversightError, sendBrokerageInvite, todayIso } from '@/lib/oversightServer';
 
 // The brokerage owner's view of their roster.
@@ -75,7 +76,9 @@ export async function POST(request: NextRequest) {
     const email = cleanEmail(body.email);
     if (email === (user.email ?? '').toLowerCase()) throw new AuthError('You cannot invite yourself.', 400);
 
-    const { count } = await supabaseServer.from('brokerage_links').select('id', { count: 'exact', head: true }).eq('owner_user_id', user.id).in('status', ['pending', 'active']);
+    const { data: open } = await supabaseServer.from('brokerage_links').select('status').eq('owner_user_id', user.id).in('status', ['pending', 'active']);
+    const count = (open ?? []).length;
+    await assertCanInvite(user.id, { active: (open ?? []).filter((l) => l.status === 'active').length, pending: (open ?? []).filter((l) => l.status === 'pending').length });
     if ((count ?? 0) >= MAX_LINKS_PER_OWNER) throw new AuthError(`You can have up to ${MAX_LINKS_PER_OWNER} agents and invitations.`, 400);
 
     // If they already have an account the invite is waiting on their page; if not, it waits for the email they sign up with.

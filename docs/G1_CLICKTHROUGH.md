@@ -50,7 +50,22 @@ Invitation flow (use a second agent login or `agent-free@local.relay` upgraded b
 14. [ ] Privacy check: the broker can never see an agent's client messages, fee terms or private contacts. Confirm none appear in the deal view or profile.
 15. [ ] Phone width: Agents list, File review list and the Flag form are usable.
 
-## D. Things this run cannot prove (decide before launch)
+## D. Pilot lifecycle (admin and broker)
+
+Run with `admin@local.relay` and the broker. Needs `add-brokerage-accounts.sql` applied.
+
+1. [ ] Admin page, "Brokerage pilots". Expect: a start-pilot form, a yellow list of owners who have agents but no account, and the accounts table.
+2. [ ] Start a pilot for the broker's email. Expect: "Pilot started… ends <date 30 days out>"; the broker gets a welcome email in `email_outbox` saying no payment and no automatic billing.
+3. [ ] Broker, Collaborate. Expect: a banner "Brokerage Pro pilot: 30 days left", up to 25 agents, and a "Request upgrade" button. Click it. Expect: "Upgrade requested"; the admin gets a bell and the row shows "Asked to upgrade".
+4. [ ] Invite agents. Expect: it works, and refuses past 25 including open invitations.
+5. [ ] In relay-test set the account's `pilot_ends_on` to 14, then 7, then 3 days out and call `GET /api/cron/brokerage-pilot` with the secret each time. Expect: one email and bell each time (14, 7, 3), none repeated on a second call.
+6. [ ] Set `pilot_ends_on` to today and call the cron. Expect: an expiry email, status `pilot_expired`, the banner turns amber "Your pilot has ended".
+7. [ ] Expired broker. Expect: roster, deals, file review list, commissions list, production CSV and messages all still work; Invite, Resend, file-review changes and commission actions are refused with "Your pilot has ended…". Nothing deleted.
+8. [ ] Admin: Extend 15 days. Expect: management works again; the button disappears (once only).
+9. [ ] Admin: Convert. Expect: banner gone, full Pro, no Stripe object created (check Stripe stays untouched).
+10. [ ] Admin: Terminate on another test account. Expect: read-only, banner "account is paused".
+
+## E. Things this run cannot prove (decide before launch)
 
 - Real email delivery: locally everything goes to `email_outbox`. Resend domain verification and a real inbox test are still open.
 - Scale: the roster and review list read up to 2,000 deals; a brokerage with 100+ agents needs a look at paging.

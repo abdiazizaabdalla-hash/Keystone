@@ -4,6 +4,8 @@ import { Fragment, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { getPlan } from '@/lib/plans';
+import AdminBrokeragePilots from '@/components/AdminBrokeragePilots';
+import { isFeatureOnClient } from '@/lib/features';
 
 interface AgentAccount {
   id: string;
@@ -321,6 +323,8 @@ export default function AdminPage() {
         <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Admin Panel</h1>
         <p className="text-slate-400">Manage all TC users and accounts</p>
       </div>
+
+      {isFeatureOnClient('brokerage') && <AdminBrokeragePilots />}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

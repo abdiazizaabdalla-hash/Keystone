@@ -3,6 +3,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { assertBrokerageOwner, canOverseeDeal } from '@/lib/oversight';
+import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { oversightError, sendBrokerageEmail } from '@/lib/oversightServer';
 import { REVIEW_NOTE_MAX } from '@/lib/fileReview';
 
@@ -13,6 +14,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { transactionId } = await params;
     const { user } = await getUserFromRequest(request);
     assertBrokerageOwner(user);
+    await assertBrokerageManageable(user.id);
     if (!(await canOverseeDeal(user.id, transactionId))) throw new AuthError('Not found', 404);
     const body = (await request.json().catch(() => ({}))) as { status?: unknown; note?: unknown };
     const status = body.status;

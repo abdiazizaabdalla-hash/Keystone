@@ -85,14 +85,31 @@ Every capability asks one question (`brokerageHas(tier, feature)` or `agentHas(l
 
 Numbers that differ by tier are proposed, not agreed: Basic keeps one required-document list and one extra administrator; Pro keeps ten lists and five extra administrators.
 
-### 3.5 Pilot
+### 3.5 The complimentary pilot (built)
 
-First brokerages are onboarded by inserting one `brokerage_accounts` row (`source: pilot`). The recommendation is to give pilots `tier: pro` so they see everything you may charge for, with `pilot_ends_on` set so the end of the pilot is a date, not a surprise. Their agents get Basic through the link with no payment step.
+30 days of full Brokerage Pro, up to 25 agents, no payment method, no automatic billing, no automatic renewal. It starts the day an admin grants it (that is "successfully onboarded"). Stored in `brokerage_accounts` (`add-brokerage-accounts.sql`), kept apart from Stripe: the table has no billing fields and nothing here creates a charge or subscription.
+
+| Status | Meaning | What the brokerage can do |
+|---|---|---|
+| `pilot` | Within the 30 days (or the extension) | Everything in Pro, up to 25 agents counting open invitations |
+| `pilot_expired` | The end date has come | Read-only: see and export all agents, deals, reviews, commission records and history; message agents. Cannot invite, resend, change file-review settings or reviews, change base terms, or confirm and pay commissions. An upgrade request is offered. |
+| `converted` | Admin recorded the move to paid Pro | Full Pro again |
+| `terminated` | Admin ended it | Same read-only state; no upgrade offer, contact Relay |
+
+Rules: the end date is 30 days after the grant and the account is treated as expired from that date even before the nightly job records it. One 15-day extension, by an admin, from an active pilot (adds to the end date) or an expired one (restarts for 15 days). Converting only records the decision and the date; payment is arranged separately and no Stripe object is touched. Nothing is ever deleted: expiry, termination and conversion all keep every record, and each step is written to `brokerage_account_events`.
+
+Notices: a daily job (`/api/cron/brokerage-pilot`) emails and rings the owner at 14, 7 and 3 days before the end and on the day it ends, once each per end date; after a missed night only the most urgent notice is sent. Granting, extending, converting and terminating also notify the owner.
+
+Admin controls (Admin page, "Brokerage pilots"): start a pilot by owner email (they must already be on the Team plan), extend, convert, terminate, see days left, agent counts and who asked to upgrade, and a list of owners who have agents but no account yet. The owner sees a banner on Collaborate with days left and a "Request upgrade" button that notifies every admin.
+
+An owner with no account row is unchanged (behaves as today). Before the brokerage flag is turned on in production, every brokerage owner needs a row; the Admin page lists the ones that do not.
+
+Not yet wired to the agent side: agents of an expired brokerage keep their access today. Making Basic agent access depend on the brokerage being in good standing is step 3 below.
 
 ## 4. Order of work after approval (each step small and testable)
 
-1. **Table and read helper.** `add-brokerage-accounts.sql`, `getBrokerageAccount(ownerId)`, a script to grant a pilot. No route changes.
-2. **Seat limit.** The invite route uses `canInviteAnother`. Behavior for existing owners with a row only.
+1. **Table, pilot, admin controls, notices.** Built (section 3.5).
+2. **Seat limit.** Built: the invite route enforces the account's seat allowance for owners with a row.
 3. **Agent Basic via brokerage.** `assertWorkspaceAgent` also accepts an agent whose Basic comes from a brokerage (today it requires the admin grant), and the Pro-only agent features (contacts, templates, follow-ups) are gated behind `agentHas`. A Guest still cannot create deals. This is the one change to existing behavior and the one to review most carefully.
 4. **Gates.** Wrap the Pro brokerage features in `brokerageHas` as each is built. Today's agent-by-month CSV, required-document review and flags are Basic, so nothing already built is taken away. During the pilot every account is Pro.
 5. **Billing, later and separately.** Stripe writes `source: subscription` and `subscription_active`. No route changes.
@@ -105,7 +122,7 @@ Settled by you: new tiers separate from the TC plans; Basic agents run their own
 
 Still open, with a recommendation for each:
 
-1. **Pilot tier.** Pro for every pilot brokerage, with an end date, so they see everything you may charge for.
+1. **Pilot tier.** Decided: 30 days of Pro.
 2. **Listings.** Are they in Agent Basic? The broker's view includes listings, so I recommend yes. Agent invoices, AI contract intake and templates would then sit in Pro.
 3. **"Limited" administrators on Basic.** I proposed one extra administrator on Basic and five on Pro. There is no multi-administrator feature built yet; it would be a new role on the owner's team.
 4. **Today's commission statements.** They are built (broker confirms, agent accepts, broker marks paid). Your table puts commission oversight at "Later" for both tiers. I recommend leaving today's statements in Basic as they are and treating Step 2 and 3 (received and paid events, caps, co-agents, CDA export) as the later part. Say if you would rather hide statements until that is decided.

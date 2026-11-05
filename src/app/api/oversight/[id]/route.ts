@@ -3,6 +3,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { assertBrokerageOwner } from '@/lib/oversight';
+import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { oversightError } from '@/lib/oversightServer';
 import { SplitError, cleanBaseFees, cleanRate, isSplitType, toCents } from '@/lib/commissionMath';
 import { isCapReset } from '@/lib/commissionCap';
@@ -36,6 +37,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params;
     const { user } = await getUserFromRequest(request);
     assertBrokerageOwner(user);
+    await assertBrokerageManageable(user.id);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const { data: link, error } = await supabaseServer.from('brokerage_links').select('id').eq('id', id).eq('owner_user_id', user.id).eq('status', 'active').maybeSingle();
     if (error) throw error;

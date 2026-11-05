@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BROKERAGE_LIMITS, agentHas, brokerageHas, brokerageInGoodStanding, brokerageSeatLimit, canInviteAnother, resolveAgentAccess, UNRELEASED_BROKERAGE_FEATURES } from '@/lib/tiers';
+import { BROKERAGE_LIMITS, agentHas, brokerageHas, brokerageSeatLimit, canInviteAnother, resolveAgentAccess, UNRELEASED_BROKERAGE_FEATURES } from '@/lib/tiers';
 
 describe('brokerage tiers', () => {
   it('both tiers have the operating basics, including the agent-by-month CSV and required-document review', () => {
@@ -39,14 +39,6 @@ describe('brokerage tiers', () => {
     expect(canInviteAnother({ active: 12, pending: 0 }, 'basic')).toBe(false);
     expect(canInviteAnother({ active: 12, pending: 0 }, 'basic', 5)).toBe(true);
     expect(canInviteAnother({ active: 1, pending: 0 }, 'pro', 0, false)).toBe(false);
-  });
-  it('good standing: pilot until its end date, admin always, subscription only while active', () => {
-    expect(brokerageInGoodStanding({ source: 'pilot' }, '2026-11-05')).toBe(true);
-    expect(brokerageInGoodStanding({ source: 'pilot', pilotEndsOn: '2026-12-01' }, '2026-11-05')).toBe(true);
-    expect(brokerageInGoodStanding({ source: 'pilot', pilotEndsOn: '2026-11-01' }, '2026-11-05')).toBe(false);
-    expect(brokerageInGoodStanding({ source: 'admin' }, '2026-11-05')).toBe(true);
-    expect(brokerageInGoodStanding({ source: 'subscription', subscriptionActive: true }, '2026-11-05')).toBe(true);
-    expect(brokerageInGoodStanding({ source: 'subscription' }, '2026-11-05')).toBe(false);
   });
 });
 
