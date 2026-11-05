@@ -251,8 +251,8 @@ export default function CollaboratePage() {
       // /api/team. This message just confirms that to the owner.
       setInviteMessage(
         json.emailSent === false
-          ? 'Removed from your team and moved to the Starter plan (the notification email failed to send — let them know directly).'
-          : "Removed from your team and moved to the Starter plan — they've been emailed."
+          ? 'Removed from your team (the notification email failed to send — let them know directly).'
+          : "Removed from your team — they've been emailed."
       );
       await load();
     } catch (err) {

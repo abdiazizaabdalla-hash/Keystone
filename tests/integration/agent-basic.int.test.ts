@@ -3,6 +3,8 @@ import { GET as overview, POST as invite } from '@/app/api/oversight/route';
 import { GET as myBrokerage } from '@/app/api/brokerage/route';
 import { PATCH as answer } from '@/app/api/brokerage/[id]/route';
 import { GET as me, PATCH as patchMe } from '@/app/api/auth/me/route';
+import { GET as accountSummary } from '@/app/api/account/summary/route';
+import { GET as roster } from '@/app/api/oversight/roster/route';
 import { GET as listTransactions } from '@/app/api/transactions/route';
 import { GET as listTemplates, POST as createTemplate } from '@/app/api/templates/route';
 import { PUT as saveStepEmail } from '@/app/api/step-email-templates/route';
@@ -97,6 +99,23 @@ describe('accepting a brokerage invitation', () => {
     const roster = await call(h(overview), broker, { method: 'GET', path: '/api/oversight' });
     const row = (roster.json as { agents: { userId: string | null; production: { activeDeals: number } }[] }).agents.find((a) => a.userId === guest.id);
     expect(row?.production.activeDeals).toBe(1);
+  });
+
+  it('an agent in the brokerage is told they are in one, so no plan is shown to them; the Account page has no plan or billing either', async () => {
+    const mine = await call(h(me), guest, { method: 'GET', path: '/api/auth/me' });
+    expect(mine.json).toMatchObject({ inBrokerage: true });
+    const summary = await call(h(accountSummary), guest, { method: 'GET', path: '/api/account/summary' });
+    expect(summary.json).toMatchObject({ inBrokerage: true, trial: null });
+    const own = await call(h(me), proAgent, { method: 'GET', path: '/api/auth/me' });
+    expect(own.json).toMatchObject({ inBrokerage: false });
+  });
+
+  it('the broker sees each agent\'s base commission terms on the roster, for the Commissions tab', async () => {
+    const res = await call(h(roster), broker, { method: 'GET', path: '/api/oversight/roster' });
+    const row = (res.json as { agents: { id: string; baseRate: unknown; baseFees: unknown[]; baseCap: unknown }[] }).agents.find((a) => a.id === guest.id);
+    expect(row).toBeDefined();
+    expect(row).toHaveProperty('baseRate');
+    expect(row?.baseFees).toEqual([]);
   });
 
   it('an agent who has a workspace of their own is Pro and stays Pro', async () => {

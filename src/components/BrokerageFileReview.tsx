@@ -21,6 +21,9 @@ interface FileRow {
 }
 interface Data { required: string[]; files: FileRow[]; totals: { listed: number; needsReview: number; flagged: number; reviewed: number } }
 
+// Every document type that can be required (the 'other' bucket is not a type to require).
+const allTypes: string[] = DOCUMENT_CATEGORIES.filter((c) => c.key !== 'other').flatMap((c) => [...c.types]);
+
 const card = 'bg-white/5 border border-white/10 rounded-2xl';
 const date = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No closing date');
 
@@ -102,6 +105,15 @@ export default function BrokerageFileReview() {
         </div>
         {editing && (
           <div className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" onClick={() => setDraft(allTypes)} disabled={draft.length === allTypes.length} className="px-3 py-1.5 border border-slate-600 hover:border-slate-500 disabled:opacity-40 text-slate-200 text-xs font-semibold rounded-lg transition">
+                Select all
+              </button>
+              <button type="button" onClick={() => setDraft([])} disabled={draft.length === 0} className="px-3 py-1.5 border border-slate-600 hover:border-slate-500 disabled:opacity-40 text-slate-200 text-xs font-semibold rounded-lg transition">
+                Deselect all
+              </button>
+              <span className="text-xs text-slate-500">{draft.length} of {allTypes.length} selected</span>
+            </div>
             <div className="grid md:grid-cols-2 gap-4">
               {DOCUMENT_CATEGORIES.filter((c) => c.key !== 'other').map((c) => (
                 <fieldset key={c.key}>

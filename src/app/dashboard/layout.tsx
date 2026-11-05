@@ -169,7 +169,7 @@ export default function DashboardLayout({
   const [isAgentAccount, setIsAgentAccount] = useState(false);
   // An agent with their own workspace keeps the Invoices tab (their own invoices, not the coordinator's).
   const [hasWorkspace, setHasWorkspace] = useState(false);
-  // Agent Basic: the workspace is provided by their brokerage, so there is no Starter plan to show or upgrade.
+  // An agent inside a brokerage has no plan of their own to show or upgrade; only the broker sees the plan.
   const [fromBrokerage, setFromBrokerage] = useState(false);
   // The brokerage's plan has ended: this workspace is read-only (the server enforces it; this only explains it).
   const [readOnly, setReadOnly] = useState(false);
@@ -342,7 +342,7 @@ export default function DashboardLayout({
           }
           savePersona({ accountType: data.accountType === 'agent' ? 'agent' : 'tc', coordinationMode: data.coordinationMode ?? null, workspace: Boolean(data.agentWorkspace) });
           setHasWorkspace(Boolean(data.agentWorkspace));
-          setFromBrokerage(data.agentLevel === 'basic');
+          setFromBrokerage(data.agentLevel === 'basic' || data.inBrokerage === true);
           setReadOnly(data.readOnly === true);
           setTrial(data.trial || null);
           setUserName(data.fullName || data.email || '');
@@ -417,6 +417,9 @@ export default function DashboardLayout({
     ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin', icon: 'admin' }] : []),
   ];
 
+  // Only a paid tier (Pro / Team) is ever named on screen, and never on an agent inside a brokerage.
+  const showPlanChip = Boolean(plan) && plan !== 'starter' && !fromBrokerage;
+
   if (isLoading) {
     return (
       <div className="min-h-screen app-bg flex items-center justify-center">
@@ -437,15 +440,9 @@ export default function DashboardLayout({
             <span className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1">
               <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
             </span>
-            <span className="text-white font-display font-semibold">Relay TC{plan && (
-              <span
-                className={`ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${
-                  plan === 'starter' && !fromBrokerage
-                    ? 'bg-slate-700/60 text-slate-300 border-slate-600'
-                    : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
-                }`}
-              >
-                {fromBrokerage ? 'basic' : plan}
+            <span className="text-white font-display font-semibold">Relay TC{showPlanChip && (
+              <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40">
+                {plan}
               </span>
             )}</span>
           </Link>
@@ -536,15 +533,9 @@ export default function DashboardLayout({
             {!collapsed && (
               <div className="min-w-0">
                 <h1 className="text-white font-display font-semibold text-lg truncate">Relay TC</h1>
-                {plan && (
-                  <span
-                    className={`inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${
-                      plan === 'starter' && !fromBrokerage
-                        ? 'bg-slate-700/60 text-slate-300 border-slate-600'
-                        : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
-                    }`}
-                  >
-                    {fromBrokerage ? 'basic' : plan}
+                {showPlanChip && (
+                  <span className="inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40">
+                    {plan}
                   </span>
                 )}
               </div>
@@ -613,36 +604,27 @@ export default function DashboardLayout({
               <p className="text-sm font-semibold text-slate-100 truncate">{userName}</p>
             </div>
           )}
-          {plan && !collapsed && (
+          {plan && !fromBrokerage && !collapsed && (
             <div className="flex items-center justify-between px-3 py-1.5 bg-slate-700/60 border border-slate-600 rounded-lg">
-              {fromBrokerage ? (
-                <>
-                  <span className="text-xs text-slate-400">
-                    <span className="text-slate-200 font-semibold">Agent Basic</span> · from your brokerage
-                  </span>
-                  <Link href="/dashboard/collaborate#brokerage" className="text-xs text-blue-400 hover:text-blue-300 font-medium">
-                    Brokerage
-                  </Link>
-                </>
+              {showPlanChip ? (
+                <span className="text-xs text-slate-400">
+                  <span className="text-slate-200 font-semibold capitalize">{plan}</span> plan
+                </span>
               ) : (
-                <>
-                  <span className="text-xs text-slate-400">
-                    <span className="text-slate-200 font-semibold capitalize">{plan}</span> plan
-                  </span>
-                  <Link href="/dashboard/account" className="text-xs text-blue-400 hover:text-blue-300 font-medium">
-                    {plan === 'starter' ? 'Upgrade' : 'Manage'}
-                  </Link>
-                </>
+                <span className="text-xs text-slate-400">Get more with Pro</span>
               )}
+              <Link href="/dashboard/account" className="text-xs text-blue-400 hover:text-blue-300 font-medium">
+                {showPlanChip ? 'Manage' : 'Upgrade'}
+              </Link>
             </div>
           )}
-          {plan && collapsed && (
+          {plan && !fromBrokerage && collapsed && (
             <Link
               href="/dashboard/account"
-              title={fromBrokerage ? 'Agent Basic, from your brokerage' : `${plan} plan -- ${plan === 'starter' ? 'Upgrade' : 'Manage'}`}
+              title={showPlanChip ? `${plan} plan -- Manage` : 'Upgrade'}
               className="flex items-center justify-center py-2 bg-slate-700/60 border border-slate-600 rounded-lg text-xs text-slate-200 font-semibold uppercase"
             >
-              {plan.charAt(0)}
+              {showPlanChip ? plan.charAt(0) : '↑'}
             </Link>
           )}
           <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={16} />
@@ -678,7 +660,7 @@ export default function DashboardLayout({
         {trial?.applies && trial.expired && (
           <div className="px-6 py-3 bg-red-900/40 border-b border-red-700 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-red-200">
-              Your free Starter trial has ended. Add payment to keep creating and editing on Relay.
+              Your free trial has ended. Add payment to keep creating and editing on Relay.
             </p>
             <button
               onClick={startStarterCheckout}
@@ -693,8 +675,8 @@ export default function DashboardLayout({
           <div className="px-6 py-2.5 bg-blue-900/30 border-b border-blue-700/60 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-blue-200">
               {trial.daysLeft === 0
-                ? 'Your free Starter trial ends today.'
-                : `Your free Starter trial ends in ${trial.daysLeft} day${trial.daysLeft === 1 ? '' : 's'}.`}{' '}
+                ? 'Your free trial ends today.'
+                : `Your free trial ends in ${trial.daysLeft} day${trial.daysLeft === 1 ? '' : 's'}.`}{' '}
               Then it&apos;s $19/month to keep going.
             </p>
             <Link href="/dashboard/account" className="text-xs text-blue-300 hover:text-blue-200 font-medium whitespace-nowrap">

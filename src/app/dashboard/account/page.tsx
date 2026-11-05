@@ -11,6 +11,7 @@ import AccountSecuritySection from '@/components/AccountSecuritySection';
 
 interface AccountSummary {
   email: string;
+  inBrokerage?: boolean;
   deletionRequestedAt?: string | null;
   createdAt: string;
   plan: { id: string; name: string };
@@ -187,10 +188,12 @@ function AccountContent() {
           <span className="text-sm text-slate-400">Email</span>
           <span className="text-sm text-slate-100 break-all">{summary.email}</span>
         </div>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <span className="text-sm text-slate-400">Plan</span>
-          <span className="text-sm text-slate-100 font-semibold">{summary.plan.name}</span>
-        </div>
+        {!summary.inBrokerage && (
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <span className="text-sm text-slate-400">Plan</span>
+            <span className="text-sm text-slate-100 font-semibold">{summary.plan.id === 'starter' ? 'Free' : summary.plan.name}</span>
+          </div>
+        )}
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <span className="text-sm text-slate-400">Member since</span>
           <span className="text-sm text-slate-100">{memberSince}</span>
@@ -204,7 +207,7 @@ function AccountContent() {
       </div>
 
       {/* Trial status (Starter only, while it still applies) */}
-      {summary.trial?.applies && (
+      {!summary.inBrokerage && summary.trial?.applies && (
         <div
           className={`rounded-lg p-6 mb-6 border ${
             summary.trial.expired
@@ -216,7 +219,7 @@ function AccountContent() {
             <>
               <p className="text-sm text-red-200 font-semibold mb-1">Your free trial has ended</p>
               <p className="text-sm text-red-200/80 mb-4">
-                Add payment to keep creating and editing transactions, agents, and invoices on Starter.
+                Add payment to keep creating and editing transactions, agents, and invoices.
               </p>
             </>
           ) : (
@@ -240,12 +243,19 @@ function AccountContent() {
               ? 'Redirecting…'
               : summary.trial.expired
               ? 'Add payment — $19/month'
-              : 'Continue on Starter — $19/month'}
+              : 'Add payment — $19/month'}
           </button>
         </div>
       )}
 
+      {summary.inBrokerage && (
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
+          <p className="text-sm text-slate-300">Your workspace comes from your brokerage, so there is nothing to subscribe to or pay for here.</p>
+        </div>
+      )}
+
       {/* Billing actions */}
+      {!summary.inBrokerage && (
       <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6 space-y-4">
         <h2 className="text-lg font-display font-semibold text-slate-100">Billing</h2>
 
@@ -268,7 +278,7 @@ function AccountContent() {
           <div className="space-y-3">
             <p className="text-sm text-slate-400">
               {summary.plan.id === 'starter'
-                ? "You're on the Starter plan. Upgrade for unlimited transactions and agents."
+                ? 'Upgrade to Pro for custom templates, automation and more.'
                 : `You're on the ${summary.plan.name} plan.`}
             </p>
             {otherPlans.length > 0 && (
@@ -292,9 +302,10 @@ function AccountContent() {
           </div>
         )}
       </div>
+      )}
 
       {/* Usage (Pro/Team perk) */}
-      {summary.usage ? (
+      {summary.inBrokerage ? null : summary.usage ? (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-6">
           <h2 className="text-lg font-display font-semibold text-slate-100">Usage</h2>
           <UsageBar label="Agent profiles" used={summary.usage.agents} max={summary.usage.maxAgents} />

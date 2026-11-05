@@ -7,6 +7,9 @@ import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
 import { getTeamForUser, getVisibleTcUserIds } from '@/lib/team';
 import { getUserPlan } from '@/lib/privileged';
+import { activeLinkForAgent, brokerageOn } from '@/lib/oversight';
+import { hasBrokerageAccess } from '@/lib/brokerageAccessMeta';
+import { hasAgentRole } from '@/lib/appMetadata';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -60,6 +63,16 @@ export async function GET(request: NextRequest) {
 
     const billing = await getStripeCustomerByUserId(user.id);
 
+    // An agent inside a brokerage has no plan or billing of their own; the Account page shows that instead.
+    let inBrokerage = hasBrokerageAccess(user);
+    if (!inBrokerage && brokerageOn() && hasAgentRole(user)) {
+      try {
+        inBrokerage = (await activeLinkForAgent(user.id)) !== null;
+      } catch {
+        inBrokerage = false;
+      }
+    }
+
     // A Team plan member (not the owner) never has their own Stripe
     // subscription row -- the owner's does the billing. Surfaced so the
     // Billing section can say that instead of wrongly implying they're
@@ -79,7 +92,7 @@ export async function GET(request: NextRequest) {
       billing?.plan === 'starter' &&
       !!billing.stripe_subscription_id &&
       ['active', 'trialing'].includes(billing.subscription_status || '');
-    if (plan.id === 'starter' && !hasActivePaidStarter) {
+    if (plan.id === 'starter' && !hasActivePaidStarter && !inBrokerage) {
       const status = await getTrialStatus(user.id, user.created_at, user.app_metadata as Record<string, unknown> | null);
       trial = {
         applies: status.applies,
@@ -95,6 +108,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       email: user.email,
+      inBrokerage,
       createdAt: user.created_at,
       deletionRequestedAt: (user.app_metadata as { deletion_requested_at?: string } | null)?.deletion_requested_at ?? null,
       plan: {

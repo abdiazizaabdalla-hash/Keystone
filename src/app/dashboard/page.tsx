@@ -441,7 +441,9 @@ export default function Dashboard() {
           ? 'Upload an executed contract. Relay reads it, builds the deal, the checklist and the deadlines, and reminds you before each one.'
           : 'Upload an executed contract and Relay builds the deal, the checklist and the deadlines for you.';
     return (
-      <div className="p-4 md:p-8">
+      <div className={`p-4 md:p-8 mx-auto ${teamBoard ? 'max-w-7xl' : ''}`}>
+        <div className={teamBoard ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-6 lg:items-start' : ''}>
+        <div className="min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">{isAgent ? 'Your transactions' : 'Dashboard'}</h1>
@@ -463,6 +465,11 @@ export default function Dashboard() {
           >
             {isAgent ? 'Upload a contract' : 'Create Your First Deal'}
           </Link>
+        </div>
+        </div>
+        <aside className={teamBoard ? 'mt-6 lg:mt-0 lg:sticky lg:top-6' : 'hidden'}>
+          <TeamBoardCard onAvailable={setTeamBoard} />
+        </aside>
         </div>
       </div>
     );

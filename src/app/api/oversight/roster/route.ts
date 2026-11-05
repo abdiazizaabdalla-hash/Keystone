@@ -3,7 +3,7 @@ import { getUserFromRequest } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { CLOSED_STAGE, OVERSIGHT_TERMS, agentLabels, assertBrokerageOwner, isOpenListing, listOwnerLinks, loadOversightDeals, loadOversightListings, productionFor, rosterStats } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
-import { viewOf, type CommissionRow } from '@/lib/commissions';
+import { viewOf, termsFromLink, type CommissionRow } from '@/lib/commissions';
 
 // A quick snapshot of every agent in the brokerage, for the Agents page: who they are, how many deals and listings,
 // the current ones, their latest commission statements and base commission. Nothing private to the agent.
@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
         const mc = commissions.filter((c) => c.agentId === id && c.status !== 'void');
         const production = productionFor(mine, today);
         const allListings = listings.filter((x) => x.tc_user_id === id);
+        const terms = termsFromLink(l);
         return {
           ...rosterStats(mine, allListings, today),
           id,
@@ -50,6 +51,10 @@ export async function GET(request: NextRequest) {
           phone: phoneOf.get(id) ?? null,
           joinedAt: l.responded_at,
           baseCommission: l.default_split_type && l.default_split_value !== null && l.default_split_value !== undefined ? { type: l.default_split_type, value: Number(l.default_split_value) } : null,
+          // The agent's base commission terms, so the Commissions tab can show and change them without opening the profile.
+          baseRate: terms.commission,
+          baseFees: terms.fees.map((f) => ({ label: f.label, amount: f.amount })),
+          baseCap: terms.cap ? { amount: terms.cap.capCents / 100, reset: terms.cap.reset, start: (l.cap_start as string | null) ?? null } : null,
           pipelineVolume: production.pipelineVolume,
           closedThisYear: production.closedThisYear,
           volumeThisYear: production.volumeThisYear,

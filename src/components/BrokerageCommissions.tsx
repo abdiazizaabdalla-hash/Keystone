@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { openStatement } from '@/lib/commissionClient';
+import AgentCommissionTerms, { type BaseTerms } from './AgentCommissionTerms';
 
-// Commission ledger. Owners see every deal's split with their agents, and download a CSV; each agent's base terms live on their profile.
+// Commission ledger. Owners see every deal's split with their agents, download a CSV, and set each agent's base terms here (the same terms as on the agent's profile).
 // Agents see their own statements. Splits are proposed on the deal itself (the Commission box).
 
 type SplitType = 'percent' | 'flat_agent' | 'flat_brokerage';
@@ -31,11 +32,15 @@ const splitText = (t: SplitType, v: number) => (t === 'percent' ? `Agent keeps $
 const STATUS = { proposed: 'Waiting for the agent', change_requested: 'Change requested', accepted: 'Agreed', paid: 'Paid', void: 'Void' } as const;
 const card = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 
+interface RosterAgent extends BaseTerms { id: string; name: string }
+
+
 export default function BrokerageCommissions({ mode }: { mode: 'owner' | 'agent' }) {
   const [asOwner, setAsOwner] = useState<Row[]>([]);
   const [asAgent, setAsAgent] = useState<Row[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
+  const [agents, setAgents] = useState<RosterAgent[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -44,11 +49,16 @@ export default function BrokerageCommissions({ mode }: { mode: 'owner' | 'agent'
       if (!res.ok) throw new Error(json.error || 'Could not load commissions');
       setAsOwner(json.asOwner ?? []);
       setAsAgent(json.asAgent ?? []);
+      if (mode === 'owner') {
+        const r = await authFetch('/api/oversight/roster');
+        const rj = await r.json().catch(() => ({}));
+        if (r.ok) setAgents(rj.agents ?? []);
+      }
       setLoaded(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load commissions');
     }
-  }, []);
+  }, [mode]);
 
   useEffect(() => {
     const t = setTimeout(load, 0);
@@ -119,6 +129,25 @@ export default function BrokerageCommissions({ mode }: { mode: 'owner' | 'agent'
         <div className={card}><p className="text-xs text-slate-400">{mode === 'owner' ? 'Net to agents' : 'Net to you'}</p><p className="text-xl font-semibold text-emerald-300">{money(sum(live, 'agentNet'))}</p></div>
         <div className={card}><p className="text-xs text-slate-400">Not paid yet ({open.length})</p><p className="text-xl font-semibold text-slate-100">{money(sum(open, mode === 'owner' ? 'brokerageNet' : 'agentNet'))}</p><p className="text-[11px] text-slate-500">{mode === 'owner' ? 'your net on open deals' : 'your net on open deals'}</p></div>
       </div>
+
+      {mode === 'owner' && (
+        <div className={card}>
+          <h2 className="text-lg font-semibold text-slate-100">Agent commission terms</h2>
+          <p className="text-xs text-slate-400 mb-3">Each agent&apos;s rate, split, fees and cap. These start every new deal&apos;s commission; you can still change them on a deal.</p>
+          {agents.length === 0 ? <p className="text-sm text-slate-400">No agents on your roster yet.</p> : (
+            <div className="divide-y divide-white/5">
+              {agents.map((a) => (
+                <div key={a.id} className="py-3 first:pt-0 last:pb-0">
+                  <Link href={`/dashboard/collaborate/agents/${a.id}`} className="text-sm font-semibold text-slate-100 hover:text-blue-300">{a.name}</Link>
+                  <div className="mt-1">
+                    <AgentCommissionTerms terms={a} onSaved={load} title="Terms" showHelp={false} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className={card}>
         <div className="flex items-center justify-between gap-2 mb-3">

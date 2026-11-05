@@ -5,6 +5,7 @@ import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getEntitlements } from '@/lib/entitlements';
 import { hasBrokerageAccess, isBrokerageReadOnly } from '@/lib/brokerageAccessMeta';
 import { assertAgentHas } from '@/lib/agentGates';
+import { activeLinkForAgent, brokerageOn } from '@/lib/oversight';
 import { mergeUserMetadata } from '@/lib/userMetadata';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { getUserPlan, isPlatformAdmin } from '@/lib/privileged';
@@ -95,13 +96,24 @@ export async function GET(request: NextRequest) {
 
     const shaped = shapeUser(user);
 
+    // An agent who belongs to a brokerage sees no plan of their own, whether the brokerage gave them the workspace or the
+    // admin did: there is one kind of agent inside a brokerage, and only the broker sees the plan.
+    let inBrokerage = false;
+    if (brokerageOn() && (shaped.accountType === 'agent' || shaped.agentWorkspace)) {
+      try {
+        inBrokerage = (await activeLinkForAgent(user.id)) !== null;
+      } catch {
+        inBrokerage = false;
+      }
+    }
+
     // Lightweight trial info for the dashboard-wide banner (see
     // DashboardLayout) -- null whenever it doesn't apply: not on Starter,
     // grandfathered in, or already paying for Starter post-trial. Mirrors
     // the same "already paying" check assertTrialActive uses server-side,
     // and the fuller version account/summary exposes for the Account page.
     let trial = null;
-    if (shaped.plan === 'starter' && !hasBrokerageAccess(user)) {
+    if (shaped.plan === 'starter' && !hasBrokerageAccess(user) && !inBrokerage) {
       const billing = await getStripeCustomerByUserId(user.id);
       const hasActivePaidStarter =
         billing?.plan === 'starter' &&
@@ -150,7 +162,7 @@ export async function GET(request: NextRequest) {
       : [];
     const hintsEligible = Date.now() - new Date(user.created_at).getTime() < 30 * 24 * 60 * 60 * 1000;
 
-    return NextResponse.json({ ...shaped, trial, needsOnboarding: needsOnboardingFlow, firstRunGuides: guides, seenHints, hintsEligible });
+    return NextResponse.json({ ...shaped, inBrokerage, trial, needsOnboarding: needsOnboardingFlow, firstRunGuides: guides, seenHints, hintsEligible });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
