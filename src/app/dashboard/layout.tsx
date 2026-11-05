@@ -181,8 +181,10 @@ export default function DashboardLayout({
   const [collapsed, setCollapsed] = useState(false);
   // Phones only: the sidebar is replaced by a top bar with a slide-down menu.
   const [mobileOpen, setMobileOpen] = useState(false);
-  // Unread team messages (Team/Brokerage plans) -- shown on the Collaborate link.
+  // Unread team messages (Team/Brokerage plans) -- shown on the Collaborate link, or on Messages for a broker and for brokerage agents.
   const [teamUnread, setTeamUnread] = useState(0);
+  // Unread private broker and agent messages (the brokerage feature only).
+  const [privateUnread, setPrivateUnread] = useState(0);
   // New-account first-run guide (see components/FirstRunGuide.tsx). restartKey
   // is bumped by the "Tutorial" menu entry to bring the welcome screen back.
   const [guides, setGuides] = useState<Record<GuideKind, boolean>>({ transaction: false, listing: false });
@@ -236,6 +238,13 @@ export default function DashboardLayout({
         if (!res.ok || cancelled) return;
         const json = await res.json();
         setTeamUnread(typeof json.total === 'number' ? json.total : 0);
+        if (isFeatureOnClient('brokerage')) {
+          const pm = await authFetch('/api/brokerage-messages');
+          if (pm.ok && !cancelled) {
+            const pj = await pm.json();
+            setPrivateUnread(typeof pj.unread === 'number' ? pj.unread : 0);
+          }
+        }
       } catch {
         // Non-critical -- the badge just doesn't update.
       }
@@ -384,6 +393,11 @@ export default function DashboardLayout({
   // Agents in a brokerage use the same Collaborate hub as their broker (no separate Brokerage page).
   const agentCollaborate = isFeatureOnClient('brokerage') && isAgentAccount && hasWorkspace;
 
+  // A broker and agents in a brokerage read everything under Messages, so the unread count sits there and not on Collaborate.
+  const messagesBadge = isFeatureOnClient('brokerage') && (brokerOwner === true || agentCollaborate);
+  const messagesUnread = messagesBadge ? teamUnread + privateUnread : 0;
+  const collaborateUnread = messagesBadge ? 0 : teamUnread;
+
   const primaryNav = isAgentAccount && !hasWorkspace ? PRIMARY_NAV.filter((i) => i.href !== '/dashboard/invoices') : PRIMARY_NAV;
 
   const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
@@ -391,7 +405,7 @@ export default function DashboardLayout({
     ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }] : []),
     ...(isFeatureOnClient('templates') && !(isAgentAccount && !hasWorkspace) ? [{ href: '/dashboard/templates', label: 'Templates', icon: 'templates' }] : []),
     { href: '/dashboard/search', label: 'Search', icon: 'search' },
-    ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: teamUnread }] : []),
+    ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: collaborateUnread }] : []),
     { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
     { href: '/dashboard/account', label: 'Account', icon: 'account' },
     ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin', icon: 'admin' }] : []),
@@ -451,11 +465,11 @@ export default function DashboardLayout({
         {mobileOpen && (
           <div className="absolute left-0 right-0 top-full max-h-[calc(100vh-56px)] overflow-y-auto bg-slate-900 border-b border-white/10 shadow-xl px-3 pb-3 space-y-1">
             {[
-              ...primaryNav.map((i) => ({ href: i.href, label: i.label })),
+              ...primaryNav.map((i) => ({ href: i.href, label: i.href === '/dashboard/messages' && messagesUnread > 0 ? `Messages (${messagesUnread})` : i.label })),
               { href: '/dashboard/contacts', label: 'Contacts' },
               ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents' }] : []),
               { href: '/dashboard/search', label: 'Search' },
-              ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: teamUnread > 0 ? `Collaborate (${teamUnread})` : 'Collaborate' }] : []),
+              ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: collaborateUnread > 0 ? `Collaborate (${collaborateUnread})` : 'Collaborate' }] : []),
               { href: '/dashboard/settings', label: 'Settings' },
               { href: '/dashboard/account', label: plan ? `Account · ${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan` : 'Account' },
               ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin' }] : []),
@@ -567,6 +581,7 @@ export default function DashboardLayout({
               label={item.label}
               collapsed={collapsed}
               active={isActivePath(pathname, item.href)}
+              badge={item.href === '/dashboard/messages' ? messagesUnread : 0}
               icon={NAV_ICONS[item.icon]}
             />
           ))}

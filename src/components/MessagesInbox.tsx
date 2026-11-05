@@ -112,6 +112,8 @@ export default function MessagesInbox({ members, isOwner, viewer = isOwner ? 'ow
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json.error || 'Could not load this conversation');
         if (same(activeRef.current, thread)) setLines(toAgentLines(json.messages ?? [], thread.id, json.name ?? 'Agent'));
+        // Opening the thread marks what they sent as read on the server; tell the sidebar so its unread count drops.
+        if (((json.messages ?? []) as { sender_id: string; read_at: string | null }[]).some((m) => m.sender_id !== meId && !m.read_at)) window.dispatchEvent(new Event('team-chat-read'));
       } else {
         const key = thread.kind === 'board' ? 'board' : thread.id;
         const res = await authFetch(`/api/team/messages?thread=${encodeURIComponent(key)}`);
