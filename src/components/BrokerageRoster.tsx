@@ -100,6 +100,35 @@ export default function BrokerageRoster() {
     }
   };
 
+  const resend = async (p: Pending) => {
+    setError('');
+    setMessage('');
+    try {
+      const res = await authFetch(`/api/oversight/${p.linkId}/resend`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Could not resend that invitation');
+      setMessage(`Invitation sent again to ${p.email}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not resend that invitation');
+    }
+  };
+
+  const exportProduction = async () => {
+    setError('');
+    try {
+      const res = await authFetch(`/api/oversight/production?year=${new Date().getFullYear()}`);
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not export production');
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `production-by-agent-${new Date().getFullYear()}.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not export production');
+    }
+  };
+
   const cancel = async (p: Pending) => {
     if (!window.confirm(`Cancel the invitation to ${p.email}?`)) return;
     setError('');
@@ -124,6 +153,7 @@ export default function BrokerageRoster() {
   return (
     <div className="space-y-5">
       {error && <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</p>}
+      {message && !inviting && <p className="text-sm text-emerald-300">{message}</p>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
@@ -141,6 +171,9 @@ export default function BrokerageRoster() {
 
       <div className="flex flex-wrap items-center gap-3">
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your agents" aria-label="Search your agents" className="flex-1 min-w-[12rem] bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
+        <button type="button" onClick={exportProduction} className="px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-xl transition whitespace-nowrap">
+          Export production (CSV)
+        </button>
         <button type="button" onClick={() => setInviting((v) => !v)} aria-expanded={inviting} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition whitespace-nowrap">
           {inviting ? 'Close' : '+ Invite an agent'}
         </button>
@@ -212,7 +245,10 @@ export default function BrokerageRoster() {
             {pending.map((p) => (
               <li key={p.linkId} className="flex items-center justify-between gap-3 text-sm">
                 <span className="text-slate-300 truncate">{p.email}</span>
-                <button type="button" onClick={() => cancel(p)} className="text-slate-400 hover:text-red-300 shrink-0">Cancel</button>
+                <span className="flex items-center gap-4 shrink-0">
+                  <button type="button" onClick={() => resend(p)} className="text-blue-400 hover:text-blue-300">Resend</button>
+                  <button type="button" onClick={() => cancel(p)} className="text-slate-400 hover:text-red-300">Cancel</button>
+                </span>
               </li>
             ))}
           </ul>

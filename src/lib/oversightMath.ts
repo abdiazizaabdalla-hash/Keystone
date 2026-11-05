@@ -197,3 +197,32 @@ export function rosterStats(
     lastActivity: stamps.length ? stamps[stamps.length - 1] : null,
   };
 }
+
+// ---- Production by agent and month (the CSV export) ----
+
+export interface MonthlyProductionRow {
+  month: string; // YYYY-MM
+  agentId: string;
+  closedDeals: number;
+  volume: number;
+}
+
+/**
+ * Closed deals and sales volume per agent per month. A closed deal counts in the month of its closing date (or the day it was
+ * last updated if it has none), the same rule as productionFor. `year` limits it to one calendar year. Newest month first,
+ * then the agent with the most volume.
+ */
+export function productionByMonth(deals: OversightDeal[], year?: string): MonthlyProductionRow[] {
+  const rows = new Map<string, MonthlyProductionRow>();
+  for (const d of deals) {
+    if (d.status !== CLOSED_STAGE) continue;
+    const month = (d.closing_date || d.updated_at || '').slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(month) || (year && !month.startsWith(year))) continue;
+    const key = `${month}|${d.tc_user_id}`;
+    const row = rows.get(key) ?? { month, agentId: d.tc_user_id, closedDeals: 0, volume: 0 };
+    row.closedDeals += 1;
+    row.volume += money(d.purchase_price);
+    rows.set(key, row);
+  }
+  return [...rows.values()].sort((a, b) => b.month.localeCompare(a.month) || b.volume - a.volume);
+}

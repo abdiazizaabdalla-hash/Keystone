@@ -3,7 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { agentLabels, brokerageOn } from '@/lib/oversight';
-import { oversightError } from '@/lib/oversightServer';
+import { oversightError, sendBrokerageEmail } from '@/lib/oversightServer';
 import { BROKERAGE_MESSAGE_MAX, messagePartners, resolvePair, summarise, type BrokerageMessageRow } from '@/lib/brokerageMessages';
 
 // Private messages between a brokerage owner and one of their agents. Off (404) unless the brokerage feature is on.
@@ -85,6 +85,18 @@ export async function POST(request: NextRequest) {
         .from('notifications')
         .insert({ recipient_user_id: withId, actor_user_id: user.id, event_type: 'brokerage_message', title: `${name} sent you a private message`.slice(0, 200), link: pair.me === 'owner' ? '/dashboard/messages' : '/dashboard/collaborate#messages' })
         .then(({ error: e }) => e && console.error('Brokerage message notification failed:', e));
+      // The same burst rule applies to the email: one email per run of unread messages, with the first lines of it.
+      const preview = text.length > 240 ? `${text.slice(0, 240).trimEnd()}…` : text;
+      await sendBrokerageEmail({
+        outboxOwnerId: pair.ownerId,
+        fromLabel: name,
+        to: { userId: withId },
+        source: 'brokerage_message',
+        subject: `${name} sent you a private message on Relay TC`,
+        paragraphs: [`${name} wrote:`, preview, 'Reply inside Relay TC. This message is private between the two of you.'],
+        path: pair.me === 'owner' ? '/dashboard/messages' : '/dashboard/collaborate#messages',
+        linkLabel: 'Open the message',
+      });
     }
 
     return NextResponse.json(message, { status: 201 });

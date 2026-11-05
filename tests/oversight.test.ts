@@ -133,3 +133,24 @@ describe('weekly broker digest', () => {
     expect(digestSubject([{ ...agents[0] }])).toBe('Your week across your agents');
   });
 });
+
+describe('productionByMonth', () => {
+  it('counts closed deals per agent per month by closing date, newest month first', async () => {
+    const { productionByMonth } = await import('@/lib/oversightMath');
+    const rows = productionByMonth([
+      deal({ id: '1', tc_user_id: 'a', status: 'Closed', closing_date: '2026-10-15', purchase_price: 300000 }),
+      deal({ id: '2', tc_user_id: 'a', status: 'Closed', closing_date: '2026-10-28', purchase_price: '200000' }),
+      deal({ id: '3', tc_user_id: 'b', status: 'Closed', closing_date: '2026-10-02', purchase_price: 600000 }),
+      deal({ id: '4', tc_user_id: 'a', status: 'Closed', closing_date: null, updated_at: '2026-09-09T10:00:00Z', purchase_price: 100000 }),
+      deal({ id: '5', tc_user_id: 'a', status: 'Contract Pending', closing_date: '2026-10-20', purchase_price: 999999 }),
+      deal({ id: '6', tc_user_id: 'a', status: 'Closed', closing_date: '2025-12-31', purchase_price: 100 }),
+    ]);
+    expect(rows).toEqual([
+      { month: '2026-10', agentId: 'b', closedDeals: 1, volume: 600000 },
+      { month: '2026-10', agentId: 'a', closedDeals: 2, volume: 500000 },
+      { month: '2026-09', agentId: 'a', closedDeals: 1, volume: 100000 },
+      { month: '2025-12', agentId: 'a', closedDeals: 1, volume: 100 },
+    ].sort((x, y) => y.month.localeCompare(x.month) || y.volume - x.volume));
+    expect(productionByMonth([deal({ status: 'Closed', closing_date: '2026-10-15' }), deal({ id: 'x', status: 'Closed', closing_date: '2025-10-15' })], '2026')).toHaveLength(1);
+  });
+});
