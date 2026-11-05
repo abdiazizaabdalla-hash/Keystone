@@ -75,8 +75,9 @@ export function canInviteAnother(counts: { active: number; pending: number }, ti
  * What an agent can do:
  *  - none: no access.
  *  - guest: invited by a coordinator (TC) onto specific deals. Works on those deals only; cannot create or run their own. Free.
- *  - basic: brokerage-granted, free to the agent. Runs their own deals, with the brokerage's visibility on top.
- *  - pro: the agent's own paid workspace (or an admin grant): everything in Basic plus their own CRM, follow-ups and templates.
+ *  - basic: brokerage-granted, free to the agent. Runs their own deals, with the brokerage's visibility on top. Includes AI intake,
+ *    follow-ups and using templates; not saving custom templates or emails, and no automation.
+ *  - pro: the agent's own paid workspace (or an admin grant): everything in Basic plus custom templates and emails, and automation.
  */
 export type AgentLevel = 'none' | 'guest' | 'basic' | 'pro';
 
@@ -86,14 +87,20 @@ export type AgentFeature =
   | 'key_dates'
   | 'messaging' // messages on a deal; with a brokerage, also the team board and the broker thread
   | 'own_deals' // create and run their own deals
-  | 'crm_contacts'
+  | 'listings'
+  | 'ai_intake' // read a contract and fill in the deal
   | 'follow_ups'
-  | 'templates'
-  | 'workflow_extras';
+  | 'crm_contacts'
+  | 'invoices'
+  | 'template_use' // use the brokerage's templates and Relay's standard forms, and send them from a deal
+  | 'custom_templates' // save their own templates, emails, checklists and workflows
+  | 'automation'; // rules and workflows that act on their own downstream
 
 const GUEST_AGENT: AgentFeature[] = ['deal_visibility', 'documents', 'key_dates', 'messaging'];
-const BASIC_AGENT: AgentFeature[] = [...GUEST_AGENT, 'own_deals'];
-const PRO_AGENT: AgentFeature[] = [...BASIC_AGENT, 'crm_contacts', 'follow_ups', 'templates', 'workflow_extras'];
+// Basic runs a whole deal, including AI intake, follow-ups and using templates. It cannot save customised templates or emails,
+// and has nothing that runs on its own (confirmed). Contacts and invoices stay in Basic until you say otherwise.
+const BASIC_AGENT: AgentFeature[] = [...GUEST_AGENT, 'own_deals', 'listings', 'ai_intake', 'follow_ups', 'crm_contacts', 'invoices', 'template_use'];
+const PRO_AGENT: AgentFeature[] = [...BASIC_AGENT, 'custom_templates', 'automation'];
 
 export const AGENT_FEATURES: Record<AgentLevel, readonly AgentFeature[]> = { none: [], guest: GUEST_AGENT, basic: BASIC_AGENT, pro: PRO_AGENT };
 export const agentHas = (level: AgentLevel, feature: AgentFeature): boolean => AGENT_FEATURES[level].includes(feature);

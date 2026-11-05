@@ -3,6 +3,9 @@ import { AuthError } from './auth';
 import { supabaseServer } from './supabase';
 import { outboxOnly } from './dealEmail';
 import { escapeHtml } from './escapeHtml';
+import { findUserIdByEmail } from './team';
+import { createAgentLoginLink } from './agentInvite';
+import { hasAgentRole, type WithAppMetadata } from './appMetadata';
 
 export function oversightError(error: unknown, what: string) {
   if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
@@ -50,8 +53,40 @@ export async function sendBrokerageEmail(params: { outboxOwnerId: string; fromLa
   }
 }
 
+const AGENT_WORKSPACE_PATH = '/dashboard/collaborate#brokerage';
+/** Where a free agent login starts: our sign-in page for invited agents, which sends them a fresh link and, the first time, has them set a password. */
+const agentSetupPath = (email: string) => `/agent/login?invited=1&email=${encodeURIComponent(email)}`;
+
+/**
+ * Who an invitation is going to and where the email should send them. An agent who already has a workspace of their own signs in as usual.
+ * Anyone else becomes (or already is) a free agent login: an email with no account gets one made here (tagged as an agent, nothing sent
+ * by Supabase), so a brokerage can bring in an agent who has never used Relay without opening public agent sign-up. An email that belongs
+ * to a coordinator or other non-agent login is refused, because that account must not be turned into an agent.
+ */
+export async function prepareInvitee(email: string): Promise<{ agentUserId: string | null; path: string }> {
+  const existingId = await findUserIdByEmail(email).catch(() => null);
+  if (existingId) {
+    const { data } = await supabaseServer.auth.admin.getUserById(existingId);
+    const user = data.user as (WithAppMetadata & { id: string }) | null;
+    if (!user) return { agentUserId: null, path: agentSetupPath(email) };
+    if (!hasAgentRole(user)) throw new AuthError('That email already has a Relay account that is not an agent account. Invite the email the agent uses for their own work, or ask them to use a different one.', 409);
+    return { agentUserId: existingId, path: user.app_metadata?.agent_workspace === true ? AGENT_WORKSPACE_PATH : agentSetupPath(email) };
+  }
+  const link = await createAgentLoginLink(email, process.env.NEXT_PUBLIC_APP_URL || 'https://relaytc.com');
+  if (!link.ok) throw new AuthError('Could not set up an account for that email. Check the address and try again.', 400);
+  return { agentUserId: link.userId, path: agentSetupPath(email) };
+}
+
+/** Where the email should send an already-invited address (for resending). No account is created. */
+export async function invitePathFor(email: string): Promise<string> {
+  const id = await findUserIdByEmail(email).catch(() => null);
+  if (!id) return agentSetupPath(email);
+  const { data } = await supabaseServer.auth.admin.getUserById(id);
+  return data.user?.app_metadata?.agent_workspace === true ? AGENT_WORKSPACE_PATH : agentSetupPath(email);
+}
+
 /** Tell an agent they were invited. Never throws. */
-export async function sendBrokerageInvite(params: { ownerUserId: string; ownerLabel: string; toEmail: string }): Promise<'outbox' | 'sent' | 'failed'> {
+export async function sendBrokerageInvite(params: { ownerUserId: string; ownerLabel: string; toEmail: string; path?: string }): Promise<'outbox' | 'sent' | 'failed'> {
   const result = await sendBrokerageEmail({
     outboxOwnerId: params.ownerUserId,
     fromLabel: params.ownerLabel,
@@ -60,10 +95,10 @@ export async function sendBrokerageInvite(params: { ownerUserId: string; ownerLa
     subject: `${params.ownerLabel} invited you to join their brokerage on Relay TC`,
     paragraphs: [
       `${params.ownerLabel} invited you to join their brokerage on Relay TC.`,
-      'If you accept, you get a free Relay workspace for your own deals, plus their team board, private messages and shared templates and contacts. They see a read-only copy of your deals, deadlines and production numbers. They cannot change your deals. Your own templates, contacts and client messages stay private. You can leave at any time.',
+      'If you accept, you get a free Relay workspace for your own deals, plus their team board, private messages and shared templates and contacts. They see a read-only copy of your deals, deadlines and production numbers and cannot change your deals. Your own templates, contacts and client messages stay private. You can leave at any time.',
     ],
-    path: '/dashboard/collaborate#brokerage',
-    linkLabel: 'Review and accept',
+    path: params.path ?? AGENT_WORKSPACE_PATH,
+    linkLabel: params.path && params.path !== AGENT_WORKSPACE_PATH ? 'Set up your login and review the invitation' : 'Review and accept',
   });
   return result === 'skipped' ? 'failed' : result;
 }

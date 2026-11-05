@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { assertAgentHas } from '@/lib/agentGates';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { LIMITS, stepKey } from '@/lib/stepEmailTemplates';
 
@@ -48,6 +49,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const user = await requireTc(request);
+    assertAgentHas(user, 'custom_templates');
     const body = await request.json().catch(() => ({}));
     const customName = typeof body.name === 'string' ? body.name.trim().slice(0, 60) : '';
     if (body.name !== undefined && !customName) {
@@ -104,6 +106,7 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const user = await requireTc(request);
+    assertAgentHas(user, 'custom_templates');
     const params = new URL(request.url).searchParams;
     const rawKey = params.get('key') || '';
     const key = rawKey.startsWith('custom:') ? rawKey.slice(0, 100) : stepKey(params.get('stepName') || '');

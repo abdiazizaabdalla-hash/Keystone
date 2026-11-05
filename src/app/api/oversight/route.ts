@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
-import { findUserIdByEmail } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
 import {
   MAX_LINKS_PER_OWNER,
@@ -14,7 +13,7 @@ import {
   productionFor,
 } from '@/lib/oversight';
 import { assertCanInvite } from '@/lib/brokerageAccount';
-import { isDuplicateLink, oversightError, sendBrokerageInvite, todayIso } from '@/lib/oversightServer';
+import { isDuplicateLink, oversightError, prepareInvitee, sendBrokerageInvite, todayIso } from '@/lib/oversightServer';
 
 // The brokerage owner's view of their roster.
 // GET: every invited and joined agent, with production and what needs attention, plus totals.
@@ -81,8 +80,8 @@ export async function POST(request: NextRequest) {
     await assertCanInvite(user.id, { active: (open ?? []).filter((l) => l.status === 'active').length, pending: (open ?? []).filter((l) => l.status === 'pending').length });
     if ((count ?? 0) >= MAX_LINKS_PER_OWNER) throw new AuthError(`You can have up to ${MAX_LINKS_PER_OWNER} agents and invitations.`, 400);
 
-    // If they already have an account the invite is waiting on their page; if not, it waits for the email they sign up with.
-    const agentUserId = await findUserIdByEmail(email).catch(() => null);
+    // The agent gets a free agent login if they have none (see prepareInvitee); the invitation then waits on their /agent page.
+    const { agentUserId, path } = await prepareInvitee(email);
     if (agentUserId === user.id) throw new AuthError('You cannot invite yourself.', 400);
 
     const { data, error } = await supabaseServer
@@ -94,7 +93,7 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
 
     const ownerLabel = (typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name.trim()) || user.email || 'A brokerage owner';
-    const delivery = await sendBrokerageInvite({ ownerUserId: user.id, ownerLabel, toEmail: email });
+    const delivery = await sendBrokerageInvite({ ownerUserId: user.id, ownerLabel, toEmail: email, path });
     await logAudit(request, user, 'brokerage.invite', { entityType: 'brokerage_link', entityId: data.id, metadata: { delivery } });
     return NextResponse.json({ ...data, delivery }, { status: 201 });
   } catch (error) {

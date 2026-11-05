@@ -3,7 +3,8 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getEntitlements } from '@/lib/entitlements';
-import { hasBrokerageAccess } from '@/lib/brokerageAccessMeta';
+import { hasBrokerageAccess, isBrokerageReadOnly } from '@/lib/brokerageAccessMeta';
+import { assertAgentHas } from '@/lib/agentGates';
 import { mergeUserMetadata } from '@/lib/userMetadata';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { getUserPlan, isPlatformAdmin } from '@/lib/privileged';
@@ -36,6 +37,7 @@ function shapeUser(user: {
     // True for an agent the admin has given a workspace (and only while the feature is switched on).
     agentWorkspace: getEntitlements(user).kind === 'agent_workspace',
     agentLevel: getEntitlements(user).agentLevel,
+    readOnly: isBrokerageReadOnly(user),
     coordinationMode: getCoordinationMode(meta),
     defaultFlatFee:
       typeof meta.default_flat_fee === 'number' ? meta.default_flat_fee : DEFAULT_FLAT_FEE,
@@ -201,6 +203,9 @@ export async function PATCH(request: NextRequest) {
       seenHint,
       password,
     } = body;
+
+    // Due-date workflows act on their own (automatic reminders), so they are not part of a brokerage-provided workspace.
+    if (dueDateWorkflowEnabled !== undefined || dueDateWorkflowSteps !== undefined) assertAgentHas(user, 'automation');
 
     // Password changes go straight through the admin API on this same
     // user id -- not mergeUserMetadata below, which only ever touches

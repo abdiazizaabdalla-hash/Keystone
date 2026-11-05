@@ -15,7 +15,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'custom_templates');
     const { id } = await params;
     await loadOwnTemplate(id, user.id);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -37,7 +37,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 // DELETE: removes the template, its uploaded file and its rules. What it already generated stays in the approvals history.
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'custom_templates');
     const { id } = await params;
     const template = await loadOwnTemplate(id, user.id);
     if (template.storage_path) await supabaseServer.storage.from(TEMPLATE_BUCKET).remove([template.storage_path as string]);

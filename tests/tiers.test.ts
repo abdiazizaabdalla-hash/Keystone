@@ -52,7 +52,9 @@ describe('agent levels', () => {
   it('an agent invited by a paying brokerage runs their own deals with no subscription of their own', () => {
     expect(resolveAgentAccess({ ...none, brokerage: { inGoodStanding: true } })).toEqual({ level: 'basic', source: 'brokerage' });
     expect(agentHas('basic', 'own_deals')).toBe(true);
-    for (const f of ['crm_contacts', 'follow_ups', 'templates', 'workflow_extras'] as const) expect(agentHas('basic', f)).toBe(false);
+    // Basic includes AI intake, follow-ups and using templates, but not saving custom templates or emails, and nothing automatic.
+    for (const f of ['listings', 'ai_intake', 'follow_ups', 'template_use'] as const) expect(agentHas('basic', f)).toBe(true);
+    for (const f of ['custom_templates', 'automation'] as const) expect(agentHas('basic', f)).toBe(false);
   });
   it('Brokerage Basic beats a coordinator invitation', () => {
     expect(resolveAgentAccess({ ...none, brokerage: { inGoodStanding: true }, invitedByCoordinator: true }).level).toBe('basic');
@@ -62,8 +64,8 @@ describe('agent levels', () => {
     expect(resolveAgentAccess({ ...none, brokerage: { inGoodStanding: false }, invitedByCoordinator: true })).toEqual({ level: 'guest', source: 'coordinator_invite' });
     expect(agentHas('none', 'documents')).toBe(false);
   });
-  it('Agent Pro adds CRM, follow-ups, templates and extras, and survives leaving the brokerage', () => {
-    for (const f of ['own_deals', 'crm_contacts', 'follow_ups', 'templates', 'workflow_extras'] as const) expect(agentHas('pro', f)).toBe(true);
+  it('Agent Pro adds custom templates and emails and automation, and survives leaving the brokerage', () => {
+    for (const f of ['own_deals', 'ai_intake', 'follow_ups', 'template_use', 'custom_templates', 'automation'] as const) expect(agentHas('pro', f)).toBe(true);
     expect(resolveAgentAccess({ ...none, ownSubscription: true, brokerage: { inGoodStanding: true } })).toEqual({ level: 'pro', source: 'own_subscription' });
     expect(resolveAgentAccess({ ...none, ownSubscription: true })).toEqual({ level: 'pro', source: 'own_subscription' });
     expect(resolveAgentAccess({ ...none, adminGrant: true })).toEqual({ level: 'pro', source: 'admin_grant' });

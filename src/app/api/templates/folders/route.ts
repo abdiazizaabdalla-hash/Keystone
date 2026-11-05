@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'custom_templates');
     const body = (await request.json().catch(() => ({}))) as { name?: unknown };
     const name = cleanFolderName(body.name);
     const { count } = await supabaseServer.from('template_folders').select('id', { count: 'exact', head: true }).eq('owner_user_id', user.id);

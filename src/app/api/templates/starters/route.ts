@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 // POST { keys?: string[] }: copy starters (all of them when no keys are given) into your library. Safe to repeat.
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'custom_templates');
     const body = (await request.json().catch(() => ({}))) as { keys?: unknown };
     const wanted = Array.isArray(body.keys) ? body.keys.filter((k): k is string => typeof k === 'string') : null;
     const { data: existing, error: existingError } = await supabaseServer.from('doc_templates').select('starter_key').eq('owner_user_id', user.id).not('starter_key', 'is', null);

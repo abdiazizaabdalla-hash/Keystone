@@ -9,7 +9,7 @@ type Ctx = { params: Promise<{ id: string }> };
 // PATCH { name }: rename.
 export async function PATCH(request: NextRequest, { params }: Ctx) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'custom_templates');
     const { id } = await params;
     await loadOwnFolder(id, user.id);
     const body = (await request.json().catch(() => ({}))) as { name?: unknown };
@@ -26,7 +26,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 // DELETE: remove the folder. The documents in it are not touched, only the shortcuts.
 export async function DELETE(request: NextRequest, { params }: Ctx) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'custom_templates');
     const { id } = await params;
     await loadOwnFolder(id, user.id);
     await supabaseServer.from('template_pins').delete().eq('owner_user_id', user.id).eq('kind', 'custom').eq('ref', id);

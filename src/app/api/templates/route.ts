@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'custom_templates');
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     if (body.brokerageShared === true) assertBrokerageOwner(user);
     const fields = cleanTemplateInput(body, true);

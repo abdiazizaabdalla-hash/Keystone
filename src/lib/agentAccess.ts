@@ -1,6 +1,7 @@
 import { supabaseServer } from './supabase';
 import { getUserPlan, type WithAppMetadata } from './appMetadata';
 import { mayGetBrokerageAccess, withBrokerageAccess } from './brokerageAccessMeta';
+import { effectiveStatus } from './brokeragePilot';
 import { isFeatureOn } from './features';
 import { isTeamPlan } from './plans';
 
@@ -11,6 +12,8 @@ import { isTeamPlan } from './plans';
 // brokerage link whose owner is still on a team plan, and if there is one we mark THIS request's copy of the user as a workspace
 // agent whose access comes from the brokerage. Because it is worked out on read, the access ends by itself the moment the link
 // ends (the agent leaves, the owner removes them, or the owner drops off a team plan), and a stored grant can never go stale.
+//
+// A brokerage that has lapsed (see below) leaves its agents read-only rather than cutting them off.
 //
 // Every existing check (getEntitlements, isCollaboratorOnly, authorizeDeal) reads these fields, so no route has to change to
 // treat a Basic agent as a workspace agent.
@@ -24,13 +27,24 @@ export async function applyBrokerageAccess<T extends WithAppMetadata & { id: str
   try {
     const { data: link } = await supabaseServer.from('brokerage_links').select('owner_user_id').eq('agent_user_id', user.id).eq('status', 'active').maybeSingle();
     if (!link?.owner_user_id) return user;
-    const { data: owner } = await supabaseServer.auth.admin.getUserById(link.owner_user_id as string);
-    if (!owner.user || !isTeamPlan(getUserPlan(owner.user as WithAppMetadata))) return user;
-    return withBrokerageAccess(user);
+    const ownerId = link.owner_user_id as string;
+    const { data: owner } = await supabaseServer.auth.admin.getUserById(ownerId);
+    if (!owner.user) return user;
+    // The agent keeps their workspace for as long as they are on the roster. It becomes read-only when the brokerage has lapsed: the
+    // owner is off a team plan, or the pilot has ended or the account was paused (brokeragePilot.ts). Nothing is deleted.
+    let lapsed = !isTeamPlan(getUserPlan(owner.user as WithAppMetadata));
+    if (!lapsed) {
+      const { data: account } = await supabaseServer.from('brokerage_accounts').select('status, pilot_ends_on').eq('owner_user_id', ownerId).maybeSingle();
+      if (account) {
+        const status = effectiveStatus({ status: account.status as 'pilot', pilot_ends_on: (account.pilot_ends_on as string | null) ?? null }, new Date().toISOString().slice(0, 10));
+        lapsed = status === 'pilot_expired' || status === 'terminated';
+      }
+    }
+    return withBrokerageAccess(user, { readOnly: lapsed });
   } catch (error) {
     console.error('Brokerage access lookup failed:', error);
     return user;
   }
 }
 
-export { ACCESS_SOURCE_KEY, BROKERAGE_ACCESS_SOURCE, hasBrokerageAccess } from './brokerageAccessMeta';
+export { ACCESS_SOURCE_KEY, BROKERAGE_ACCESS_SOURCE, READ_ONLY_KEY, hasBrokerageAccess, isBrokerageReadOnly, readOnlyAllows, READ_ONLY_MESSAGE } from './brokerageAccessMeta';

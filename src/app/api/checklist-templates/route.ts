@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { assertAgentHas } from '@/lib/agentGates';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { getPlanLimits } from '@/lib/plans';
 import {
@@ -60,6 +61,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    assertAgentHas(user, 'custom_templates');
     assertNotCollaborator(user);
     const { customChecklists } = getPlanLimits(getUserPlan(user));
 

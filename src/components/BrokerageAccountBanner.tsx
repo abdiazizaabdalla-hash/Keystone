@@ -68,7 +68,7 @@ export default function BrokerageAccountBanner() {
         {ended && (
           <>
             <p className="text-slate-100 font-semibold">Your pilot has ended</p>
-            <p className="text-slate-300">Your agents, deals, reviews and messages are all still here and readable. Inviting agents, file review and commission actions are paused until you upgrade to Brokerage Pro ($199/month).</p>
+            <p className="text-slate-300">Your agents, deals, reviews and messages are all still here and readable. Inviting agents, file review and commission actions are paused, and your agents&apos; workspaces are read-only (they can read and message, not add or change deals) until you upgrade to Brokerage Pro ($199/month).</p>
           </>
         )}
         {paused && (

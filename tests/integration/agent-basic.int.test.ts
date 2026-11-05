@@ -2,7 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GET as overview, POST as invite } from '@/app/api/oversight/route';
 import { GET as myBrokerage } from '@/app/api/brokerage/route';
 import { PATCH as answer } from '@/app/api/brokerage/[id]/route';
-import { GET as me } from '@/app/api/auth/me/route';
+import { GET as me, PATCH as patchMe } from '@/app/api/auth/me/route';
+import { GET as listTransactions } from '@/app/api/transactions/route';
+import { GET as listTemplates, POST as createTemplate } from '@/app/api/templates/route';
+import { PUT as saveStepEmail } from '@/app/api/step-email-templates/route';
+import { POST as createChecklistTemplate } from '@/app/api/checklist-templates/route';
+import { POST as addRule } from '@/app/api/templates/[id]/rules/route';
 import { POST as createAgent } from '@/app/api/agents/route';
 import { POST as createTransaction } from '@/app/api/transactions/route';
 import { addCollaboratorToDeal, admin, call, cleanup, createActor, createCollaborator, seedDeal, type Actor, type Deal } from './helpers';
@@ -100,21 +105,109 @@ describe('accepting a brokerage invitation', () => {
   });
 });
 
-describe('Basic lasts only while the brokerage has them', () => {
-  it('ends when the owner is no longer on a team plan, and returns when they are', async () => {
+describe('a lapsed brokerage leaves its agents read-only, not locked out', () => {
+  const readOnlyMessage = /read-only/i;
+
+  it('when the owner is no longer on a team plan: they can read and message, and cannot add or change', async () => {
     await setAppMetadata(broker, { plan: 'starter' });
-    expect((await makeDeal(guest, 'LAPSED')).status).toBe(403);
-    expect(((await call(h(me), guest, { method: 'GET', path: '/api/auth/me' })).json as { isAgent?: boolean }).isAgent).toBe(true);
+    const mine = await call(h(me), guest, { method: 'GET', path: '/api/auth/me' });
+    expect(mine.json).toMatchObject({ agentWorkspace: true, agentLevel: 'basic', readOnly: true });
+    expect((await call(h(listTransactions), guest, { method: 'GET', path: '/api/transactions' })).status).toBe(200);
+    const blocked = await makeDeal(guest, 'LAPSED');
+    expect(blocked.status).toBe(403);
+    expect(JSON.stringify(blocked.json)).toMatch(readOnlyMessage);
     await setAppMetadata(broker, { plan: 'team' });
     expect((await makeDeal(guest, 'BACK')).status).toBeLessThan(300);
   });
 
-  it('ends when the agent leaves, but the deals are kept and the Guest access to the coordinator deal remains', async () => {
+  it('when the pilot has ended: read-only too, and it ends the moment the broker converts', async () => {
+    await admin.from('brokerage_accounts').upsert({ owner_user_id: broker.id, tier: 'pro', status: 'pilot', pilot_started_on: '2026-01-01', pilot_ends_on: '2026-01-31' });
+    const ended = await call(h(me), guest, { method: 'GET', path: '/api/auth/me' });
+    expect(ended.json).toMatchObject({ readOnly: true });
+    expect(JSON.stringify((await makeDeal(guest, 'ENDED')).json)).toMatch(readOnlyMessage);
+    await admin.from('brokerage_accounts').update({ status: 'converted' }).eq('owner_user_id', broker.id);
+    expect(((await call(h(me), guest, { method: 'GET', path: '/api/auth/me' })).json as { readOnly?: boolean }).readOnly).toBe(false);
+    expect((await makeDeal(guest, 'CONVERTED')).status).toBeLessThan(300);
+  });
+
+  it('a paused (terminated) account is read-only as well, but the agent can still leave', async () => {
+    await admin.from('brokerage_accounts').update({ status: 'terminated' }).eq('owner_user_id', broker.id);
+    expect(JSON.stringify((await makeDeal(guest, 'PAUSED')).json)).toMatch(readOnlyMessage);
     expect((await call(h(answer), guest, { method: 'PATCH', path: `/api/brokerage/${linkId}`, params: { id: linkId }, body: { action: 'leave' } })).status).toBe(200);
+    await admin.from('brokerage_accounts').delete().eq('owner_user_id', broker.id);
+  });
+
+  it('after leaving, access ends but the deals are kept and the Guest access to the coordinator deal remains', async () => {
     expect((await makeDeal(guest, 'LEFT')).status).toBe(403);
     const { data: kept } = await admin.from('transactions').select('id').eq('tc_user_id', guest.id);
-    expect((kept ?? []).length).toBe(2);
+    expect((kept ?? []).length).toBe(3);
     const { data: shared } = await admin.from('transaction_agents').select('transaction_id').eq('agent_user_id', guest.id).eq('transaction_id', sharedDeal.transactionId);
     expect((shared ?? []).length).toBe(1);
+  });
+});
+
+describe('what Agent Basic includes', () => {
+  let basic: Actor;
+  let basicLink = '';
+
+  beforeAll(async () => {
+    basic = await createCollaborator('ab-basic2');
+    const sent = await call(h(invite), broker, { method: 'POST', path: '/api/oversight', body: { email: basic.email } });
+    basicLink = (sent.json as { id: string }).id;
+    await call(h(answer), basic, { method: 'PATCH', path: `/api/brokerage/${basicLink}`, params: { id: basicLink }, body: { action: 'accept' } });
+  }, 30_000);
+
+  it('can use templates, but cannot save their own templates, emails or checklists, or build rules', async () => {
+    expect((await call(h(listTemplates), basic, { method: 'GET', path: '/api/templates' })).status).toBe(200);
+    const body = { kind: 'email', name: 'Mine', subject: 'Hi', body: 'Hello' };
+    for (const res of [
+      await call(h(createTemplate), basic, { method: 'POST', path: '/api/templates', body }),
+      await call(h(saveStepEmail), basic, { method: 'PUT', path: '/api/step-email-templates', body: { stepName: 'Inspection', subject: 'x', body: 'y' } }),
+      await call(h(createChecklistTemplate), basic, { method: 'POST', path: '/api/checklist-templates', body: { name: 'Mine', steps: [] } }),
+      await call(h(addRule), basic, { method: 'POST', path: '/api/templates/none/rules', params: { id: '00000000-0000-0000-0000-000000000000' }, body: {} }),
+    ]) {
+      expect(res.status).toBe(403);
+      expect(JSON.stringify(res.json)).toMatch(/Agent Pro/);
+    }
+  });
+
+  it('cannot turn on the automatic due-date workflow, but can still change their name', async () => {
+    const auto = await call(h(patchMe), basic, { method: 'PATCH', path: '/api/auth/me', body: { dueDateWorkflowEnabled: true } });
+    expect(auto.status).toBe(403);
+    expect(JSON.stringify(auto.json)).toMatch(/Agent Pro/);
+    expect((await call(h(patchMe), basic, { method: 'PATCH', path: '/api/auth/me', body: { fullName: 'Basic Agent' } })).status).toBe(200);
+  });
+
+  it('an agent with a workspace of their own is not held back by any of this', async () => {
+    const res = await call(h(createTemplate), proAgent, { method: 'POST', path: '/api/templates', body: { kind: 'email', name: 'Pro mine', subject: 'Hi', body: 'Hello' } });
+    expect(res.status, JSON.stringify(res.json)).toBeLessThan(300);
+    expect((await call(h(patchMe), proAgent, { method: 'PATCH', path: '/api/auth/me', body: { dueDateWorkflowEnabled: false } })).status).toBe(200);
+  });
+});
+
+describe('inviting someone who has never used Relay', () => {
+  it('creates a free agent login for the email, counts as a seat, and sends them to set up their login', async () => {
+    const email = `it-new-agent-${Date.now()}@example.test`;
+    const sent = await call(h(invite), broker, { method: 'POST', path: '/api/oversight', body: { email } });
+    expect(sent.status, JSON.stringify(sent.json)).toBe(201);
+    const { data: link } = await admin.from('brokerage_links').select('agent_user_id, status').eq('id', (sent.json as { id: string }).id).single();
+    expect(link?.status).toBe('pending');
+    const { data: made } = await admin.auth.admin.getUserById(link!.agent_user_id as string);
+    expect(made.user?.email).toBe(email);
+    expect(made.user?.app_metadata.role).toBe('agent');
+    expect(made.user?.app_metadata.agent_workspace).toBeUndefined();
+    const { data: mail } = await admin.from('email_outbox').select('body').eq('owner_user_id', broker.id).eq('source', 'brokerage_invite').order('created_at', { ascending: false }).limit(1);
+    expect(mail?.[0]?.body).toContain('/agent/login?invited=1');
+    // The pending invitation uses a seat.
+    const roster = await call(h(overview), broker, { method: 'GET', path: '/api/oversight' });
+    expect((roster.json as { totals: { pending: number } }).totals.pending).toBeGreaterThanOrEqual(1);
+    await admin.from('brokerage_links').delete().eq('id', (sent.json as { id: string }).id);
+    await admin.auth.admin.deleteUser(link!.agent_user_id as string);
+  });
+
+  it('refuses an email that belongs to a coordinator account, which must not be turned into an agent', async () => {
+    const res = await call(h(invite), broker, { method: 'POST', path: '/api/oversight', body: { email: tc.email } });
+    expect(res.status).toBe(409);
+    expect(JSON.stringify(res.json)).toMatch(/not an agent account/);
   });
 });

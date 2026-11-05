@@ -14,7 +14,7 @@ const ALLOWED: Record<string, string> = {
 // POST (multipart, field "file"): attach your own form to a "form" template. GET: a short-lived link to open it.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'custom_templates');
     const { id } = await params;
     const template = await loadOwnTemplate(id, user.id);
     if (template.kind !== 'form') throw new AuthError('Only a form template carries a file.', 400);

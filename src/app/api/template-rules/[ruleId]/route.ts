@@ -5,7 +5,7 @@ import { evaluateTemplateRulesQuietly } from '@/lib/templateRules';
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ ruleId: string }> }) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'automation');
     const { ruleId } = await params;
     await loadOwnRule(ruleId, user.id);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -21,7 +21,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ ruleId: string }> }) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'automation');
     const { ruleId } = await params;
     await loadOwnRule(ruleId, user.id);
     // Drafts already waiting are cleared with the rule; ones already sent or dismissed stay as the record.

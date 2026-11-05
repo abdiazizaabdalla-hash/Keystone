@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { assertAgentHas } from '@/lib/agentGates';
 import { getPlanLimits } from '@/lib/plans';
 import { normalizeTemplateSteps, validateTemplateName, validateTemplateSteps } from '@/lib/checklistTemplates';
 import { getUserPlan } from '@/lib/privileged';
@@ -27,6 +28,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const { id } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
+    assertAgentHas(user, 'custom_templates');
     assertNotCollaborator(user);
     const { customChecklists } = getPlanLimits(getUserPlan(user));
 
@@ -88,6 +90,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     const { id } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
+    assertAgentHas(user, 'custom_templates');
     assertNotCollaborator(user);
 
     const existing = isAdmin

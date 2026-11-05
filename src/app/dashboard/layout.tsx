@@ -171,6 +171,8 @@ export default function DashboardLayout({
   const [hasWorkspace, setHasWorkspace] = useState(false);
   // Agent Basic: the workspace is provided by their brokerage, so there is no Starter plan to show or upgrade.
   const [fromBrokerage, setFromBrokerage] = useState(false);
+  // The brokerage's plan has ended: this workspace is read-only (the server enforces it; this only explains it).
+  const [readOnly, setReadOnly] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [trial, setTrial] = useState<{
     applies: boolean;
@@ -341,6 +343,7 @@ export default function DashboardLayout({
           savePersona({ accountType: data.accountType === 'agent' ? 'agent' : 'tc', coordinationMode: data.coordinationMode ?? null, workspace: Boolean(data.agentWorkspace) });
           setHasWorkspace(Boolean(data.agentWorkspace));
           setFromBrokerage(data.agentLevel === 'basic');
+          setReadOnly(data.readOnly === true);
           setTrial(data.trial || null);
           setUserName(data.fullName || data.email || '');
           setIsAdmin(Boolean(data.is_admin));
@@ -666,6 +669,12 @@ export default function DashboardLayout({
 
       {/* Main Content */}
       <div className="flex-1 min-w-0 overflow-auto">
+        {readOnly && (
+          <div className="px-6 py-3 bg-amber-900/30 border-b border-amber-700/60" role="status">
+            <p className="text-sm text-amber-100 font-semibold">Your workspace is read-only for now</p>
+            <p className="text-sm text-amber-200/90">Your brokerage&apos;s Relay plan has ended. Your deals, listings and messages are all still here and you can keep messaging, but you cannot add or change anything until your broker upgrades to Brokerage Pro.</p>
+          </div>
+        )}
         {trial?.applies && trial.expired && (
           <div className="px-6 py-3 bg-red-900/40 border-b border-red-700 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-red-200">

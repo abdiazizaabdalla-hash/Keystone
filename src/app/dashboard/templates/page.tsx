@@ -78,6 +78,26 @@ export default function TemplatesPage() {
   const [editing, setEditing] = useState<Template | { new: Kind; name?: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [installing, setInstalling] = useState(false);
+  // A workspace the brokerage provides (Agent Basic) can use templates but not save its own; the server enforces it, this explains it.
+  const [basicAgent, setBasicAgent] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    authFetch('/api/auth/me')
+      .then(async (res) => {
+        if (res.ok && !cancelled) setBasicAgent(((await res.json()) as { agentLevel?: string }).agentLevel === 'basic');
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const openEditor = (next: Template | { new: Kind; name?: string }) => {
+    if (basicAgent) {
+      setNotice('Saving your own templates and emails is part of Agent Pro. You can use your brokerage’s templates and Relay’s standard forms from any deal.');
+      return;
+    }
+    setEditing(next);
+  };
 
   const section: Section = view === 'emails' ? 'emails' : 'documents';
 
@@ -138,6 +158,10 @@ export default function TemplatesPage() {
   const missingStarters = section === 'emails' ? starters.filter((s) => !s.installed) : [];
 
   const installStarters = async () => {
+    if (basicAgent) {
+      setNotice('Saving your own templates and emails is part of Agent Pro. You can use your brokerage’s templates and Relay’s standard forms from any deal.');
+      return;
+    }
     setInstalling(true);
     setNotice(null);
     try {
@@ -240,15 +264,15 @@ export default function TemplatesPage() {
                 </button>
               )}
               {section === 'documents' ? (
-                <button type="button" className={btnPrimary} onClick={() => setEditing({ new: 'form' })}>
+                <button type="button" className={btnPrimary} onClick={() => openEditor({ new: 'form' })}>
                   Upload a form
                 </button>
               ) : (
                 <>
-                  <button type="button" className={btnGhost} onClick={() => setEditing({ new: 'letter' })}>
+                  <button type="button" className={btnGhost} onClick={() => openEditor({ new: 'letter' })}>
                     New letter
                   </button>
-                  <button type="button" className={btnPrimary} onClick={() => setEditing({ new: 'email' })}>
+                  <button type="button" className={btnPrimary} onClick={() => openEditor({ new: 'email' })}>
                     New email
                   </button>
                 </>
@@ -257,7 +281,7 @@ export default function TemplatesPage() {
           </div>
 
           {section === 'documents' ? (
-            <DocumentsLibrary reloadKey={reloadKey} showArchived={showArchived} onEdit={(t) => setEditing(t as Template)} onUpload={(presetName) => setEditing({ new: 'form', name: presetName })} />
+            <DocumentsLibrary reloadKey={reloadKey} showArchived={showArchived} onEdit={(t) => openEditor(t as Template)} onUpload={(presetName) => openEditor({ new: 'form', name: presetName })} />
           ) : (
             <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -295,7 +319,7 @@ export default function TemplatesPage() {
                     Add the starters
                   </button>
                 )}
-                <button type="button" className={btnGhost} onClick={() => setEditing({ new: 'email' })}>
+                <button type="button" className={btnGhost} onClick={() => openEditor({ new: 'email' })}>
                   New email
                 </button>
               </div>
@@ -303,7 +327,7 @@ export default function TemplatesPage() {
           ) : (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {templates.map((t) => (
-                <button key={t.id} type="button" onClick={() => (t.from_brokerage ? setNotice('This one is provided by your brokerage. Use it from a deal; only your brokerage can change it.') : setEditing(t))} className={`text-left bg-white/5 border ${t.from_brokerage ? 'border-amber-400/30 hover:border-amber-400/60' : 'border-white/10 hover:border-white/25'} rounded-2xl p-4 transition min-w-0 flex flex-col`}>
+                <button key={t.id} type="button" onClick={() => (t.from_brokerage ? setNotice('This one is provided by your brokerage. Use it from a deal; only your brokerage can change it.') : openEditor(t))} className={`text-left bg-white/5 border ${t.from_brokerage ? 'border-amber-400/30 hover:border-amber-400/60' : 'border-white/10 hover:border-white/25'} rounded-2xl p-4 transition min-w-0 flex flex-col`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-slate-100 font-semibold truncate">{t.name}</div>

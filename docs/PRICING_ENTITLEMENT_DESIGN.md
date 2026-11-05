@@ -104,7 +104,7 @@ Admin controls (Admin page, "Brokerage pilots"): start a pilot by owner email (t
 
 An owner with no account row is unchanged (behaves as today). Before the brokerage flag is turned on in production, every brokerage owner needs a row; the Admin page lists the ones that do not.
 
-Agent side: an agent's Basic workspace follows the brokerage link and the owner still being on a team plan (step 3 below), not the pilot. When a pilot ends unconverted the owner's management is paused (read-only downgrade) but the agents keep working; nothing is taken from them. Confirm or change this in section 5.
+Agent side (decided): when the pilot ends unconverted, or an admin pauses the account, or the owner leaves a team plan, every agent the brokerage provided for moves to read-only as well. They keep their workspace and can read everything, keep messaging, leave the brokerage and export; they cannot create or change deals, listings or anything else. One rule in `getUserFromRequest` enforces it for every route. Converting (or the owner returning to a team plan) restores editing at once. An agent with a workspace of their own (admin grant or, later, their own subscription) is never made read-only by this.
 
 ## 4. Order of work after approval (each step small and testable)
 
@@ -112,7 +112,8 @@ Agent side: an agent's Basic workspace follows the brokerage link and the owner 
 2. **Seat limit.** Built: the invite route enforces the account's seat allowance for owners with a row.
 3. **Agent Basic via brokerage.** Built in two parts.
    - **3a. Basic access (built).** `src/lib/agentAccess.ts`. On every request, an agent with no workspace grant of their own who has an active brokerage link to an owner still on a team plan is treated as a workspace agent for that request (`agentLevel: 'basic'`). Nothing is stored on the agent, so it ends by itself when they leave, are removed, or the owner leaves the team plan; their deals and listings are kept and the agent falls back to Guest (portal login). Any agent account, including a Guest, can see and accept a brokerage invitation (a card on the Guest's /agent page); accepting leads to the normal short workspace setup. Basic is free: the Starter trial and its paywall do not apply. An admin-granted workspace is Pro and is never lowered. A Guest still cannot create deals.
-   - **3b. Pro-only features (not built, needs your go-ahead).** Gate the agent's own contacts/CRM, follow-ups, templates, invoices and AI contract intake behind `agentHas`. This removes screens a brokerage-provided agent would otherwise see, so it ships on its own and is tested on its own.
+   - **3b. What Basic includes (built).** AI contract intake, follow-ups, listings and using templates (the brokerage's, Relay's standard forms, sending from a deal). Not included: saving custom templates, emails and checklists, template rules, and the automatic due-date workflow, and nothing automated downstream (the AI assistant, when built, is Pro). Enforced on the server (`agentGates.ts`) and explained on the Templates screen. Contacts and invoices were not discussed and are left in Basic for now.
+   - **3c. Inviting someone with no Relay account (built).** The invitation creates a free agent login for that email (no public agent sign-up), emails them a link to set a password, and shows the invitation on their dashboard; accepting takes one of the brokerage's seats (pending invitations already count) and leads to the short workspace setup. An email that belongs to a coordinator login is refused.
 4. **Gates.** Wrap the Pro brokerage features in `brokerageHas` as each is built. Today's agent-by-month CSV, required-document review and flags are Basic, so nothing already built is taken away. During the pilot every account is Pro.
 5. **Billing, later and separately.** Stripe writes `source: subscription` and `subscription_active`. No route changes.
 
@@ -120,9 +121,9 @@ Not touched in any step: TC plans and checklists, Stripe, production flags, deal
 
 ## 5. Decisions
 
-Settled by you: new tiers separate from the TC plans; Basic agents run their own deals; Guest agents (TC-invited) cannot create or run their own; reporting is split Basic/Advanced rather than all Pro; a lapsed brokerage cannot invite more agents but nothing is removed or deleted; listings are in Agent Basic; one extra administrator on Basic and five on Pro; today's commission statements stay in Basic; the read-only downgrade when a pilot expires, and a pilot starting when an admin grants it.
+Settled by you: new tiers separate from the TC plans; Basic agents run their own deals; Guest agents (TC-invited) cannot create or run their own; reporting is split Basic/Advanced rather than all Pro; a lapsed brokerage cannot invite more agents but nothing is removed or deleted; listings are in Agent Basic; one extra administrator on Basic and five on Pro; today's commission statements stay in Basic; the read-only downgrade when a pilot expires, and a pilot starting when an admin grants it; every agent under a lapsed brokerage becomes read-only (not cut off); brokerage invitations can bring in someone with no account, who then holds one of the 10 or 25 seats; AI intake, follow-ups and using templates are in Basic, saving custom templates or emails and automation are Pro.
 
-Settled in the last round (kept here for the record):
+Settled (kept here for the record):
 
 1. **Pilot tier.** Decided: 30 days of Pro.
 2. **Listings.** Are they in Agent Basic? The broker's view includes listings, so I recommend yes. Agent invoices, AI contract intake and templates would then sit in Pro.

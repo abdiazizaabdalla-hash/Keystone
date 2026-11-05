@@ -9,7 +9,7 @@ type Ctx = { params: Promise<{ id: string }> };
 // POST { kind, ref }: put a document, TREC form or state forms source in the folder. Adding twice is fine.
 export async function POST(request: NextRequest, { params }: Ctx) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'custom_templates');
     const { id } = await params;
     await loadOwnFolder(id, user.id);
     const body = (await request.json().catch(() => ({}))) as { kind?: string; ref?: string };
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
 // DELETE ?kind=&ref=: take it out of the folder.
 export async function DELETE(request: NextRequest, { params }: Ctx) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'custom_templates');
     const { id } = await params;
     await loadOwnFolder(id, user.id);
     const kind = request.nextUrl.searchParams.get('kind');

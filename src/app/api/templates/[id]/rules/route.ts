@@ -20,7 +20,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user } = await requireTemplatesUser(request);
+    const { user } = await requireTemplatesUser(request, 'automation');
     const { id } = await params;
     await loadOwnTemplate(id, user.id);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;

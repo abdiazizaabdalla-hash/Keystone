@@ -6,6 +6,8 @@ import { assertNotCollaborator } from './workspaceGuard';
 import { isStateCode } from './usStates';
 import { CONTACT_CATEGORIES } from './contactCategories';
 import { brokerageOwnersFor } from './oversight';
+import { assertAgentHas } from './agentGates';
+import type { AgentFeature } from './tiers';
 
 export const TEMPLATE_BUCKET = 'transaction-documents';
 export const TEMPLATE_KINDS = ['email', 'letter', 'form'] as const;
@@ -13,10 +15,12 @@ export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
 export const TEMPLATE_CATEGORIES = ['general', 'welcome', 'post_closing', 'disclosure', 'offer', 'listing', 'closing'] as const;
 
 /** Templates belong to a coordinator or an agent with a workspace. Off (404) until the feature is released. */
-export async function requireTemplatesUser(request: NextRequest) {
+export async function requireTemplatesUser(request: NextRequest, needs?: AgentFeature) {
   const { user, isAdmin } = await getUserFromRequest(request);
   if (!isFeatureOn('templates')) throw new AuthError('Not found', 404);
   assertNotCollaborator(user);
+  // Saving templates and building rules is not part of a brokerage-provided workspace (Agent Basic); using them is.
+  if (needs) assertAgentHas(user, needs);
   return { user, isAdmin };
 }
 

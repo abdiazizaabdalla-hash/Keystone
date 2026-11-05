@@ -55,7 +55,8 @@ export function daysLeft(row: Pick<AccountRow, 'status' | 'pilot_ends_on'>, toda
  *  - pilot and converted: the full tier, with the seat allowance.
  *  - pilot_expired and terminated: the downgrade policy. Everything is kept (agents, deals, files, reviews, commission records,
  *    messages) and stays readable and exportable, messaging continues, but managing the brokerage stops: no invitations, no
- *    file-review or commission changes, no Pro-only features. Upgrading restores it.
+ *    file-review or commission changes, no Pro-only features. Upgrading restores it. The agents on the roster are read-only too
+ *    (agentAccess.ts): they can read and message, but not create or change anything.
  */
 export function accessFor(row: AccountRow, today: string) {
   const status = effectiveStatus(row, today);
@@ -128,7 +129,7 @@ export function noticeText(day: number, endsOn: string): { title: string; paragr
       title: 'Your Brokerage Pro pilot has ended',
       paragraphs: [
         'Your 30-day Brokerage Pro pilot has ended. Nothing was deleted: your agents, their deals, your file reviews, commission records and messages are all still here and readable.',
-        'Managing the brokerage (inviting agents, file review, commission actions and the Pro tools) is paused. Upgrade to Brokerage Pro to pick up where you left off.',
+        'Managing the brokerage (inviting agents, file review, commission actions and the Pro tools) is paused, and your agents\' workspaces are read-only: they can read everything and keep messaging, but not add or change deals. Upgrade to Brokerage Pro to pick up where you left off.',
       ],
     };
   }
@@ -136,7 +137,7 @@ export function noticeText(day: number, endsOn: string): { title: string; paragr
     title: `Your Brokerage Pro pilot ends in ${day} days`,
     paragraphs: [
       `Your complimentary Brokerage Pro pilot ends on ${endsOn}, in ${day} days. You are not charged and nothing renews automatically.`,
-      'To keep managing your brokerage after that, upgrade to Brokerage Pro. If you want to give the pilot more time, tell us and we will review it.',
+      'To keep managing your brokerage, and to keep your agents able to add and change deals, upgrade to Brokerage Pro before then. If you want to give the pilot more time, tell us and we will review it.',
     ],
   };
 }

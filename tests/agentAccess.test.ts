@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/supabase', () => ({ supabase: {}, supabaseServer: {} }));
 
 import { getEntitlements } from '@/lib/entitlements';
-import { hasBrokerageAccess, mayGetBrokerageAccess, withBrokerageAccess } from '@/lib/brokerageAccessMeta';
+import { hasBrokerageAccess, isBrokerageReadOnly, mayGetBrokerageAccess, readOnlyAllows, withBrokerageAccess } from '@/lib/brokerageAccessMeta';
 import { assertTrialActive } from '@/lib/trial';
 
 const on = { brokerage: true, agentWorkspace: true };
@@ -63,5 +63,26 @@ describe('Basic is free: the Starter trial does not apply', () => {
   it('a Basic agent whose trial date has passed is not blocked', async () => {
     const expired = { trial_ends_at: '2020-01-01T00:00:00Z' };
     await expect(assertTrialActive({ ...withBrokerageAccess(u({ role: 'agent', ...expired })) } as never)).resolves.toBeUndefined();
+  });
+});
+
+describe('a lapsed brokerage makes its agents read-only', () => {
+  it('only a brokerage-provided agent is ever read-only, and only when marked', () => {
+    expect(isBrokerageReadOnly(withBrokerageAccess(u({ role: 'agent' })))).toBe(false);
+    expect(isBrokerageReadOnly(withBrokerageAccess(u({ role: 'agent' }), { readOnly: true }))).toBe(true);
+    // An admin-granted workspace and a coordinator are never made read-only by this.
+    expect(isBrokerageReadOnly(u({ role: 'agent', agent_workspace: true, agent_read_only: true }))).toBe(false);
+    expect(isBrokerageReadOnly(u({ plan: 'team' }))).toBe(false);
+    expect(isBrokerageReadOnly(null)).toBe(false);
+  });
+
+  it('a read-only agent can read anything, message, leave, and manage their own sign-in, but change nothing else', () => {
+    for (const path of ['/api/transactions', '/api/listings', '/api/oversight', '/api/anything']) expect(readOnlyAllows('GET', path)).toBe(true);
+    for (const [method, path] of [['POST', '/api/messages'], ['POST', '/api/brokerage-messages'], ['PATCH', '/api/brokerage/abc'], ['POST', '/api/team/messages'], ['PATCH', '/api/notifications'], ['PATCH', '/api/auth/me'], ['POST', '/api/direct-messages']] as const) {
+      expect(readOnlyAllows(method, path)).toBe(true);
+    }
+    for (const [method, path] of [['POST', '/api/transactions'], ['PATCH', '/api/transactions/1'], ['DELETE', '/api/listings/2'], ['POST', '/api/agents'], ['PUT', '/api/step-email-templates'], ['POST', '/api/templates'], ['POST', '/api/documents'], ['POST', '/api/commissions'], ['POST', '/api/messagesevil'], ['POST', '/api/brokerage-evil']] as const) {
+      expect(readOnlyAllows(method, path)).toBe(false);
+    }
   });
 });
