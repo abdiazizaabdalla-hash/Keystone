@@ -41,6 +41,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ accounts: rows, unmanaged });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
+    const info = error as { code?: string } | null;
+    if (info && (info.code === 'PGRST205' || info.code === '42P01')) {
+      console.error('Admin brokerages: tables missing:', error);
+      return NextResponse.json({ error: 'The brokerage tables are not in this database yet. Run add-brokerage-oversight.sql and add-brokerage-accounts.sql in Supabase.' }, { status: 503 });
+    }
     console.error('Admin brokerages failed:', error);
     return NextResponse.json({ error: 'Failed to load brokerage accounts' }, { status: 500 });
   }
