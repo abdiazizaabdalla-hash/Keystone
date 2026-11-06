@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthClient } from '@/lib/supabase';
+import { createAuthClient, supabaseServer } from '@/lib/supabase';
 import { applyPendingTeamInvite, sameOriginRedirect } from '@/lib/teamInvites';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { mergeAppMetadata } from '@/lib/privileged';
@@ -7,6 +7,16 @@ import { LEGAL_VERSION } from '@/lib/site';
 import { logAudit } from '@/lib/audit';
 import { notifyNewSignup } from '@/lib/signupNotification';
 import { agentSelfServeEnabled, AGENT_SELF_SERVE_OFF_MESSAGE } from '@/lib/agentSelfServe';
+
+// Local testing only: skip the confirmation email. Needs RELAY_AUTO_CONFIRM_SIGNUP=1
+// (set only in .env.development.local), a non-production build, and a
+// Supabase project that is not production. Anything else leaves signup alone.
+function autoConfirmEnabled(): boolean {
+  if (process.env.RELAY_AUTO_CONFIRM_SIGNUP !== '1') return false;
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL) return false;
+  if ((process.env.NEXT_PUBLIC_SUPABASE_URL || '').includes('vjfttwkiaqrfaygrrrzf')) return false;
+  return true;
+}
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -59,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     const trimmedName = typeof fullName === 'string' ? fullName.trim() : '';
 
-    const { data, error } = await createAuthClient().auth.signUp({
+    const signUp = await createAuthClient().auth.signUp({
       email,
       password,
       options: {
@@ -68,8 +78,22 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const { error } = signUp;
+    let { data } = signUp;
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    if (autoConfirmEnabled() && data.user && !data.session && (data.user.identities?.length ?? 0) > 0) {
+      const { error: confirmError } = await supabaseServer.auth.admin.updateUserById(data.user.id, { email_confirm: true });
+      if (confirmError) {
+        console.error('Local auto-confirm failed:', confirmError);
+      } else {
+        const signedIn = await createAuthClient().auth.signInWithPassword({ email, password });
+        if (signedIn.data.session && signedIn.data.user) {
+          data = { user: signedIn.data.user, session: signedIn.data.session };
+        }
+      }
     }
 
     // If someone invited this email to a Team workspace before they signed
