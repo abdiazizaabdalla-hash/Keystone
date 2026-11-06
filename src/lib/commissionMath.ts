@@ -13,6 +13,8 @@ export const isSplitType = (v: unknown): v is SplitType => typeof v === 'string'
 export interface Deduction {
   label: string;
   amount: number; // dollars
+  /** Set when the agent added this line to their own invoice (the brokerage's own fees carry no mark). */
+  by?: 'agent';
 }
 
 export interface SplitInput {
@@ -80,13 +82,13 @@ export function cleanDeductions(value: unknown): Deduction[] {
   if (!Array.isArray(value)) throw new SplitError('Fees must be a list.');
   const out: Deduction[] = [];
   for (const raw of value) {
-    const r = raw as { label?: unknown; amount?: unknown };
+    const r = raw as { label?: unknown; amount?: unknown; by?: unknown };
     const label = typeof r.label === 'string' ? r.label.trim().slice(0, 60) : '';
     const amount = typeof r.amount === 'number' ? r.amount : typeof r.amount === 'string' && r.amount.trim() !== '' ? Number(r.amount) : 0;
     if (!label && !amount) continue;
     if (!label) throw new SplitError('Give each fee a name.');
     if (!Number.isFinite(amount) || amount < 0) throw new SplitError('Fees cannot be negative.');
-    out.push({ label, amount: fromCents(toCents(amount)) });
+    out.push({ label, amount: fromCents(toCents(amount)), ...(r.by === 'agent' ? { by: 'agent' as const } : {}) });
   }
   if (out.length > 10) throw new SplitError('No more than 10 fees on a deal.');
   return out;
@@ -105,7 +107,7 @@ export interface BaseFee extends Deduction {
 }
 
 export function cleanBaseFees(value: unknown): BaseFee[] {
-  return cleanDeductions(value).map((d) => ({ ...d, when: 'agent_share' as const }));
+  return cleanDeductions(value).map((d) => ({ label: d.label, amount: d.amount, when: 'agent_share' as const }));
 }
 
 /**
@@ -145,3 +147,14 @@ export const grossPercentOfPrice = (price: number | null | undefined, grossCents
 
 export const rateLabel = (rate: CommissionRate): string =>
   rate.type === 'percent' ? `${rate.value}% of the sale price` : `$${rate.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} flat`;
+
+/**
+ * An invoice's fee lines after the agent edits THEIR lines: the brokerage's own lines stay exactly as they are, and the agent's
+ * lines (marked `by: 'agent'`) are replaced by what they sent. The agent can never change or remove a brokerage line.
+ */
+export function mergeAgentFees(existing: Deduction[] | null | undefined, agentLines: unknown): Deduction[] {
+  const mine = cleanDeductions(agentLines).map((d) => ({ label: d.label, amount: d.amount, by: 'agent' as const }));
+  const theirs = (existing ?? []).filter((d) => d.by !== 'agent');
+  if (theirs.length + mine.length > 10) throw new SplitError('No more than 10 fees on a deal.');
+  return [...theirs, ...mine];
+}

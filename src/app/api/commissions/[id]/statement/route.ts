@@ -18,8 +18,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       supabaseServer.from('transactions').select('property_address, file_number, purchase_price').eq('id', row.transaction_id).maybeSingle(),
       agentLabels([row.owner_user_id, row.agent_user_id]),
     ]);
-    // An estimate is not a statement: the brokerage owner has not confirmed the gross commission yet.
-    if (row.status === 'estimate' || row.gross_cents === null) throw new AuthError('This commission is still an estimate. Confirm the actual commission first, then the statement can be downloaded.', 409);
+    // The PDF is the final statement: it exists once the brokerage has confirmed the actual commission AND the agent has agreed to it.
+    if (row.status === 'estimate' || row.gross_cents === null) throw new AuthError('The PDF is ready once your brokerage confirms the actual commission and you both agree to it.', 409);
+    if (row.status !== 'accepted' && row.status !== 'paid') throw new AuthError('The PDF is ready once your brokerage and the agent both agree to the amounts.', 409);
     const b = breakdown(row);
     const num = (n: number | null) => n ?? 0;
     const pdf = await generateCommissionStatementPdf({

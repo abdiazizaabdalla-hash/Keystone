@@ -63,7 +63,7 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator }
             {!estimate && <p className="text-xs text-slate-400 mt-0.5">Your brokerage received {money(c.gross)} in commission on this deal. The rest is its share and any fees.</p>}
             <p className={`text-sm mt-0.5 ${state.cls}`}>{state.text}</p>
           </div>
-          {!estimate && <button type="button" onClick={() => openStatement(c.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="shrink-0 px-3 py-1.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg">View statement</button>}
+          {(c.status === 'accepted' || c.status === 'paid') && <button type="button" onClick={() => openStatement(c.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="shrink-0 px-3 py-1.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg">View statement</button>}
         </div>
         {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
         {other}

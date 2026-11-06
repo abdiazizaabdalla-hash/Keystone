@@ -141,17 +141,21 @@ describe('after the agent accepts', () => {
     expect(await stageOf(dealC.transactionId)).not.toBe('Closed');
   });
 
-  it('the owner hears about updates on the deal, but never private messages', async () => {
+  it('the owner is only pushed new files, closings and commission invoices, never routine updates or private messages', async () => {
     const before = (await notificationsFor(broker)).length;
     await notifyDeal({ transactionId: dealA.transactionId, actorUserId: agentA.id, type: 'task_completed', title: 'Step completed' });
+    await notifyDeal({ transactionId: dealA.transactionId, actorUserId: agentA.id, type: 'document_added', title: 'Document added' });
+    await notifyDeal({ transactionId: dealA.transactionId, actorUserId: agentA.id, type: 'stage_changed', title: 'Stage changed' });
     await notifyDeal({ transactionId: dealA.transactionId, actorUserId: agentA.id, type: 'message', title: 'New message', body: 'private words' });
+    expect((await notificationsFor(broker)).length).toBe(before);
+    await notifyDeal({ transactionId: dealA.transactionId, actorUserId: agentA.id, type: 'commission', title: 'Commission invoice sent' });
     const rows = await notificationsFor(broker);
     expect(rows.length).toBe(before + 1);
-    const added = rows.find((n) => n.event_type === 'task_completed');
+    const added = rows.find((n) => n.event_type === 'commission');
     expect(added?.link).toBe(`/dashboard/collaborate/deals/${dealA.transactionId}`);
     expect(rows.some((n) => n.body === 'private words')).toBe(false);
     // Someone else's deal never reaches this owner.
-    await notifyDeal({ transactionId: dealC.transactionId, actorUserId: agentC.id, type: 'task_completed', title: 'Step completed' });
+    await notifyDeal({ transactionId: dealC.transactionId, actorUserId: agentC.id, type: 'commission', title: 'Commission invoice sent' });
     expect((await notificationsFor(broker)).length).toBe(before + 1);
   });
 
@@ -202,7 +206,7 @@ describe('leaving and removing', () => {
     expect((await call(h(dealList), broker, { method: 'GET', path: '/api/oversight/deals' })).status).toBe(403);
     expect((await call(h(toggleTask), broker, { method: 'PATCH', path: '/api/tasks', body: { taskId: dealA.taskId } })).status).toBe(403);
     const before = (await notificationsFor(broker)).length;
-    await notifyDeal({ transactionId: dealA.transactionId, actorUserId: agentA.id, type: 'stage_changed', title: 'Stage changed' });
+    await notifyDeal({ transactionId: dealA.transactionId, actorUserId: agentA.id, type: 'commission', title: 'Commission invoice sent' });
     expect((await notificationsFor(broker)).length).toBe(before);
     // The agent is told sharing is paused rather than shown as active.
     expect(((await call(h(myBrokerage), agentA, { method: 'GET', path: '/api/brokerage' })).json as { current: { paused: boolean } }).current.paused).toBe(true);
@@ -210,7 +214,7 @@ describe('leaving and removing', () => {
 });
 
 describe('stage and date changes reach the right people', () => {
-  it('the owner hears when the agent moves a deal, and cannot move it themselves', async () => {
+  it('the owner is not pushed deadline changes, and cannot move the deal themselves', async () => {
     await admin.auth.admin.updateUserById(broker.id, { app_metadata: { plan: 'team' } }); // the previous test lapsed it
     await admin.from('brokerage_links').update({ status: 'active' }).eq('owner_user_id', broker.id).eq('agent_user_id', agentA.id);
     const mine = async (user: Actor) => (await admin.from('notifications').select('title, event_type').eq('recipient_user_id', user.id).in('event_type', ['stage_changed', 'date_changed'])).data ?? [];
@@ -221,7 +225,7 @@ describe('stage and date changes reach the right people', () => {
     expect((await mine(agentA)).length).toBe(agentBefore);
     expect((await call(h(patchTransaction), agentA, { method: 'PATCH', path: `/api/transactions/x?id=${dealA.transactionId}`, body: { closingDate: '2031-02-20' } })).status).toBe(200);
     await new Promise((r) => setTimeout(r, 1500));
-    expect((await mine(broker)).length).toBe(brokerBefore + 1);
+    expect((await mine(broker)).length).toBe(brokerBefore);
   });
 
   it('includes the open files of agents who joined, and nobody else’s', async () => {

@@ -5,11 +5,11 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import { brokerageOn, overseesAgent } from '@/lib/oversight';
 import { oversightError } from '@/lib/oversightServer';
-import { SplitError } from '@/lib/commissionMath';
+import { SplitError, computeSplit, mergeAgentFees } from '@/lib/commissionMath';
 import { isMissingTable, loadCommissionFor, notifyCommission, viewOf, type CommissionRow } from '@/lib/commissions';
 
 // PATCH { action }
-//   agent:  'accept' | 'request_change' (note) | 'set_preference' (preference: 'relay' | 'outside')
+//   agent:  'edit' (extraFees, note: the agent's own lines and note on an estimate) | 'accept' | 'request_change' (note, extraFees?) | 'set_preference' (preference: 'relay' | 'outside')
 //   owner:  'approve' (an invoice the agent generated before this was an estimate) | 'mark_paid' (paidOn, note) | 'void'
 // An ESTIMATE has no figures yet, so nothing can be accepted, approved or paid on it. The agent can still leave a note on it,
 // which tells the brokerage what to fix before they confirm the actual commission (see POST /api/commissions).
@@ -43,12 +43,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         update.accepted_at = now;
         update.change_note = null;
         notify = { recipientId: row.owner_user_id, title: `${row.statement_number}: the agent agreed to the split`, link };
+      } else if (action === 'edit') {
+        // The agent's own lines and note on an invoice the brokerage has not confirmed yet. The brokerage's lines are never touched.
+        if (row.status !== 'estimate') return bad('Your brokerage already confirmed the amounts. Ask for a change instead.', 409);
+        const note = typeof body.note === 'string' ? body.note.trim() : '';
+        if (note.length > 1000) return bad('That note is too long (1,000 characters max).');
+        update.deductions = mergeAgentFees(row.deductions, body.extraFees);
+        update.change_note = note || null;
+        notify = { recipientId: row.owner_user_id, title: `${row.statement_number}: the agent updated the invoice`, link };
       } else if (action === 'request_change' && row.status === 'estimate') {
         const note = typeof body.note === 'string' ? body.note.trim() : '';
         if (!note) return bad('Tell your brokerage what should change.');
         if (note.length > 1000) return bad('That note is too long (1,000 characters max).');
         // The estimate stays an estimate; the note is what the brokerage reads before confirming.
         update.change_note = note;
+        if (body.extraFees !== undefined) update.deductions = mergeAgentFees(row.deductions, body.extraFees);
         notify = { recipientId: row.owner_user_id, title: `${row.statement_number}: the agent flagged something on the estimate`, link };
       } else if (action === 'request_change') {
         if (row.status !== 'proposed') return bad('You can only ask for a change while a proposal is waiting for you.', 409);
@@ -57,6 +66,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (note.length > 1000) return bad('That note is too long (1,000 characters max).');
         update.status = 'change_requested';
         update.change_note = note;
+        if (body.extraFees !== undefined) {
+          // The agent added or removed lines of their own: the confirmed gross stays, the take-home is worked out again.
+          const deductions = mergeAgentFees(row.deductions, body.extraFees);
+          update.deductions = deductions;
+          if (row.gross_cents !== null) {
+            const r = computeSplit({ gross: Number(row.gross_cents) / 100, splitType: row.split_type, splitValue: Number(row.split_value), deductions });
+            update.agent_net_cents = r.agentNetCents;
+            update.brokerage_net_cents = r.brokerageNetCents;
+          }
+        }
         notify = { recipientId: row.owner_user_id, title: `${row.statement_number}: the agent asked for a change`, link };
       } else if (action === 'set_preference') {
         if (row.status === 'paid') return bad('This commission is already paid.', 409);

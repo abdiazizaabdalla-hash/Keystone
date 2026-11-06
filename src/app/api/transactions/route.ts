@@ -18,6 +18,7 @@ import { getUserPlan } from '@/lib/privileged';
 import { isFeatureOn } from '@/lib/features';
 import { queueCalendarSync, removeTransactionCalendarEvents } from '@/lib/calendarSync';
 import { logAudit } from '@/lib/audit';
+import { queueBrokerageNewFile } from '@/lib/notifications';
 import { findOpenTransactionDuplicate } from '@/lib/duplicates';
 import { inviteAgentToTransaction } from '@/lib/agentInvite';
 import { isStateCode, stateFromAddress } from '@/lib/usStates';
@@ -372,6 +373,7 @@ export async function POST(request: NextRequest) {
     queueCalendarSync(transaction.id);
 
     await logAudit(request, user, 'transaction.create', { entityType: 'transaction', entityId: transaction.id });
+    queueBrokerageNewFile({ kind: 'deal', id: transaction.id, agentUserId: user.id, address: typeof propertyAddress === 'string' ? propertyAddress : null, actorUserId: user.id });
 
     // The agent gets a portal invite right away when they have an email (turn off with inviteAgent: false). It never
     // blocks or undoes the deal; the outcome comes back so the screen can say what happened.

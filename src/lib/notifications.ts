@@ -1,7 +1,7 @@
 import { after } from 'next/server';
 import { supabaseServer } from './supabase';
 import { getDealPeople } from './dealPeople';
-import { brokerageOwnersForDeal } from './oversight';
+import { brokerageOwnersForAgent, brokerageOwnersForDeal, overseesAgent } from './oversight';
 
 // The notification bell: one row in `notifications` per person per event,
 // written here and read back by GET /api/notifications. Every writer in
@@ -18,6 +18,7 @@ export type NotificationType =
   | 'stage_changed'
   | 'client_viewed'
   | 'deal_closed'
+  | 'deal_started'
   | 'commission';
 
 export const NOTIFICATION_TYPES: { type: NotificationType; label: string }[] = [
@@ -27,6 +28,7 @@ export const NOTIFICATION_TYPES: { type: NotificationType; label: string }[] = [
   { type: 'date_changed', label: 'Deadline changes' },
   { type: 'document_added', label: 'New documents' },
   { type: 'client_viewed', label: 'Client opened their progress link' },
+  { type: 'deal_started', label: 'New deals and listings in your brokerage' },
   { type: 'deal_closed', label: 'Deals that close in your brokerage' },
   { type: 'commission', label: 'Commission invoices and reminders' },
 ];
@@ -40,6 +42,9 @@ export function isNotificationType(value: unknown): value is NotificationType {
 // unread row for this long, so a fast back-and-forth is one "4 new
 // messages" row instead of four.
 const COALESCE_WINDOW_MS = 15 * 60 * 1000;
+
+/** The only deal events a brokerage owner is notified about (see notifyDeal). */
+export const BROKER_EVENT_TYPES: ReadonlySet<NotificationType> = new Set<NotificationType>(['deal_started', 'deal_closed', 'commission']);
 
 export interface DealNotification {
   transactionId: string;
@@ -82,9 +87,9 @@ export async function notifyDeal(event: DealNotification): Promise<void> {
       .map((p) => p.userId)
       .filter((id) => id !== event.actorUserId);
 
-    // The owner of a brokerage the deal's agent has joined hears about every update except private messages
-    // (the agent agreed to share their deals, not their conversations).
-    const allBrokers = event.type === 'message' ? [] : await brokerageOwnersForDeal(event.transactionId);
+    // The owner of a brokerage the deal's agent has joined can open any file from Collaborate, but is only pushed the moments that
+    // matter to them: a new file, a closing, a commission invoice. Not every document, checklist tick, stage move or message.
+    const allBrokers = BROKER_EVENT_TYPES.has(event.type) ? await brokerageOwnersForDeal(event.transactionId) : [];
     const brokerIds = allBrokers.filter((id) => id !== event.actorUserId && !recipients.includes(id));
     // Anyone who is the deal's brokerage owner opens it on the owner page, even if they were already on the list as a person on the deal.
     const brokerSet = new Set(allBrokers);
@@ -159,5 +164,36 @@ export function queueDealNotification(event: DealNotification): void {
     after(() => notifyDeal(event));
   } catch {
     // `after` can only run inside a request; if it ever isn't, skip rather than throw.
+  }
+}
+
+/**
+ * A new deal or listing was started by an agent in a brokerage: tell the brokerage owner (once, no matter how many people work on it).
+ * Never throws and never slows the request down.
+ */
+export function queueBrokerageNewFile(file: { kind: 'deal' | 'listing'; id: string; agentUserId: string; address: string | null; actorUserId: string | null }): void {
+  try {
+    after(async () => {
+      try {
+        const owners = await brokerageOwnersForAgent(file.agentUserId);
+        for (const ownerId of owners) {
+          if (ownerId === file.actorUserId || !(await overseesAgent(ownerId, file.agentUserId))) continue;
+          if ((await getMutedTypes(ownerId)).includes('deal_started')) continue;
+          const where = file.address ? ` · ${file.address}` : '';
+          await supabaseServer.from('notifications').insert({
+            recipient_user_id: ownerId,
+            actor_user_id: file.actorUserId,
+            transaction_id: file.kind === 'deal' ? file.id : null,
+            event_type: 'deal_started',
+            title: `${file.kind === 'deal' ? 'New deal started' : 'New listing started'}${where}`.slice(0, 200),
+            link: file.kind === 'deal' ? `/dashboard/collaborate/deals/${file.id}` : `/dashboard/collaborate/listings/${file.id}`,
+          });
+        }
+      } catch (error) {
+        console.error('New file notification failed:', error);
+      }
+    });
+  } catch {
+    // `after` only runs inside a request.
   }
 }

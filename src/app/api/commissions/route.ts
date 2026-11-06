@@ -163,7 +163,9 @@ export async function POST(request: NextRequest) {
     const terms = termsFromLink(link);
     const existing = await commissionForTransaction(transactionId);
     if (existing && existing.owner_user_id !== user.id) throw new AuthError('Not found', 404);
-    if ((!existing || existing.status === 'estimate') && tx!.status !== CLOSED_STAGE) return NextResponse.json({ error: 'Commission opens when the deal closes.' }, { status: 409 });
+    // Before closing the owner can edit the terms and lines of an invoice the agent already sent, but cannot confirm an amount yet.
+    if (!existing && tx!.status !== CLOSED_STAGE) return NextResponse.json({ error: 'Commission opens when the deal closes.' }, { status: 409 });
+    if (existing && existing.status === 'estimate' && hasGross && tx!.status !== CLOSED_STAGE) return NextResponse.json({ error: 'Confirm the actual commission once the deal closes, from the closing documents. You can edit the lines now.' }, { status: 409 });
     if (existing && existing.status === 'paid') return NextResponse.json({ error: 'This commission was already paid. Void it first if it needs to change.' }, { status: 409 });
 
     let splitType = input.splitType;
@@ -230,7 +232,8 @@ export async function POST(request: NextRequest) {
         agent_net_cents: null,
         brokerage_net_cents: null,
         status: 'estimate',
-        change_note: null,
+        // The agent's note stays until the owner confirms (or restarts a voided statement).
+        ...(existing && existing.status !== 'void' ? {} : { change_note: null }),
         commission_type: rate?.type ?? null,
         commission_value: rate?.value ?? null,
         estimated_gross_cents: expectedGrossCents(price, rate),
@@ -262,6 +265,9 @@ export async function POST(request: NextRequest) {
     }
 
     await logAudit(request, user, confirming ? (existing && existing.status !== 'estimate' ? 'commission.revise' : 'commission.confirm') : 'commission.terms', { entityType: 'commission', entityId: row.id, metadata: { transactionId, splitType, splitValue, grossCents: row.gross_cents } });
+    if (!confirming && existing && existing.status === 'estimate') {
+      await notifyCommission({ recipientId: agentId, actorId: user.id, transactionId, title: `${row.statement_number}: your brokerage updated the invoice · ${tx!.property_address ?? 'a deal'}`, link: `/dashboard/transactions/${transactionId}` });
+    }
     if (confirming) {
       const revised = !!existing && existing.status !== 'estimate' && existing.status !== 'void';
       await notifyCommission({ recipientId: agentId, actorId: user.id, transactionId, title: `${revised ? 'Your brokerage revised' : 'Your brokerage confirmed'} the commission statement · ${tx!.property_address ?? 'a deal'}`, link: `/dashboard/transactions/${transactionId}`, email: { source: 'commission_confirmed', subject: `${revised ? 'Your commission statement was revised' : 'Your commission was confirmed'} · ${tx!.property_address ?? 'a deal'}`, paragraphs: [`Your brokerage ${revised ? 'revised' : 'confirmed'} the commission statement for ${tx!.property_address ?? 'a deal'} (${row.statement_number}).`, 'Review it, and agree or ask for a change, on the deal.'], linkLabel: 'Review the statement' } });

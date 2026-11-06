@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import CapNotice, { type CapView } from '@/components/CapNotice';
-import { openStatement } from '@/lib/commissionClient';
 
 // A commission invoice from an agent to the brokerage they belong to. Nothing is typed in: the brokerage is the bill-to, the agent picks
 // one of their deals (open or closed), and every figure is worked out from the terms the brokerage set for them (sale price x commission
@@ -55,6 +54,9 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, onClo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
+  // The agent's own additions before sending: lines taken from their share (a referral fee) and a note for the brokerage.
+  const [extras, setExtras] = useState<{ label: string; amount: string }[]>([]);
+  const [message, setMessage] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -94,10 +96,12 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, onClo
     setError('');
     setNote('');
     try {
-      const res = await authFetch('/api/commissions/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactionId: deal.id }) });
+      const res = await authFetch('/api/commissions/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactionId: deal.id, extraFees: extras.map((x) => ({ label: x.label, amount: x.amount })), note: message }) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || 'Could not send the invoice');
       setNote(`Sent to ${options?.brokerage?.name ?? 'your brokerage'}.`);
+      setExtras([]);
+      setMessage('');
       await load();
       onSent();
     } catch (e) {
@@ -110,6 +114,7 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, onClo
   if (options === null) return <p className="text-sm text-slate-400">Loading…</p>;
   if (!options.inBrokerage) return null;
 
+  const extraTotal = extras.reduce((n, x) => n + (Number(x.amount) || 0), 0);
   const deals = options.deals ?? [];
   const open = deals.filter((d) => !d.closed);
   const closed = deals.filter((d) => d.closed);
@@ -140,7 +145,7 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, onClo
         <>
           <div>
             <label htmlFor="commission-deal" className="block text-xs text-slate-400 mb-1">Transaction</label>
-            <select id="commission-deal" className={field} value={dealId} onChange={(e) => { setDealId(e.target.value); setNote(''); setError(''); }}>
+            <select id="commission-deal" className={field} value={dealId} onChange={(e) => { setDealId(e.target.value); setNote(''); setError(''); setExtras([]); setMessage(''); }}>
               <option value="">Choose a deal…</option>
               {open.length > 0 && <optgroup label="Active deals">{open.map((d) => <option key={d.id} value={d.id}>{label(d)}</option>)}</optgroup>}
               {closed.length > 0 && <optgroup label="Closed deals">{closed.map((d) => <option key={d.id} value={d.id}>{label(d)}</option>)}</optgroup>}
@@ -154,10 +159,26 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, onClo
               <div className={`${row} border-t border-white/10`}><span className="text-slate-300">{calc.confirmed ? 'Commission your brokerage received' : 'Expected commission'}</span><span className="font-semibold text-slate-100">{calc.gross !== null ? money(calc.gross) : '—'}</span></div>
               {calc.split && <div className={row}><span className="text-slate-400">Split</span><span className="text-slate-100 text-right">{splitSides(calc.split.type, calc.split.value)}</span></div>}
               {calc.agentShare !== null && <div className={row}><span className="text-slate-400">Your share before fees</span><span className="text-slate-100">{money(calc.agentShare)}</span></div>}
-              {calc.fees.map((f, i) => <div key={i} className={row}><span className="text-slate-400">{f.label}</span><span className="text-slate-300">−{money(f.amount)}</span></div>)}
-              <div className={`${row} border-t border-white/10`}><span className="text-slate-200 font-semibold">{calc.confirmed ? 'You take home' : 'Estimated take-home'}</span><span className="text-lg font-semibold text-emerald-300">{calc.agentNet !== null ? money(calc.agentNet) : '—'}</span></div>
+              {calc.fees.map((f, i) => <div key={i} className={row}><span className="text-slate-400">{f.label}{(f as Fee & { by?: string }).by === 'agent' && <span className="ml-1.5 text-[10px] uppercase tracking-wide text-sky-300">added by you</span>}</span><span className="text-slate-300">−{money(f.amount)}</span></div>)}
+              {!deal.statement && extras.filter((x) => Number(x.amount) > 0).map((x, i) => <div key={`x${i}`} className={row}><span className="text-slate-400">{x.label || 'Your line'} <span className="text-[10px] uppercase tracking-wide text-sky-300">added by you</span></span><span className="text-slate-300">−{money(Number(x.amount))}</span></div>)}
+              <div className={`${row} border-t border-white/10`}><span className="text-slate-200 font-semibold">{calc.confirmed ? 'You take home' : 'Estimated take-home'}</span><span className="text-lg font-semibold text-emerald-300">{calc.agentNet !== null ? money(calc.agentNet - (deal.statement ? 0 : extraTotal)) : '—'}</span></div>
               {!calc.confirmed && <p className="text-[11px] text-slate-500 mt-1">An estimate. The actual commission can differ with negotiated amounts, concessions or referrals. Your brokerage confirms it from the closing documents, and you review it before anything is marked paid.</p>}
               {calc.gross === null && !deal.statement && <p className="text-xs text-amber-200 mt-2">{!calc.rate ? 'Your brokerage has not set a commission rate for you, so there is no expected commission. You can still send the invoice and they will confirm the amount.' : 'This deal has no sale price yet, so there is no expected commission. You can still send the invoice and they will confirm the amount.'}</p>}
+            </div>
+          )}
+
+          {deal && !deal.statement && calc && (
+            <div className="rounded-xl border border-white/10 bg-slate-800/40 px-4 py-3 space-y-2">
+              <p className="text-xs text-slate-400">Anything to add before you send it? Your brokerage&apos;s terms and fees can&apos;t be changed here, but you can add a line of your own (like a referral fee) and a note.</p>
+              {extras.map((x, i) => (
+                <div key={i} className="flex gap-2">
+                  <input value={x.label} placeholder="Referral fee" maxLength={60} onChange={(e) => setExtras(extras.map((y, j) => (j === i ? { ...y, label: e.target.value } : y)))} className={field} aria-label="Line name" />
+                  <input type="number" step="0.01" min="0" value={x.amount} placeholder="0.00" onChange={(e) => setExtras(extras.map((y, j) => (j === i ? { ...y, amount: e.target.value } : y)))} className={`${field} w-32`} aria-label="Line amount" />
+                  <button type="button" onClick={() => setExtras(extras.filter((_, j) => j !== i))} className="text-slate-500 hover:text-red-300 text-sm px-1" aria-label="Remove line">✕</button>
+                </div>
+              ))}
+              {extras.length < 8 && <button type="button" onClick={() => setExtras([...extras, { label: '', amount: '' }])} className="text-xs text-blue-400 hover:text-blue-300 font-medium">+ Add a line</button>}
+              <textarea value={message} onChange={(e) => setMessage(e.target.value.slice(0, 1000))} rows={2} placeholder={`Note for ${options.brokerage?.name ?? 'your brokerage'} (optional)`} className={field} aria-label="Note for your brokerage" />
             </div>
           )}
 
@@ -172,9 +193,6 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, onClo
               <button type="button" disabled={busy} onClick={send} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
                 {busy ? 'Sending…' : `Send to ${options.brokerage?.name ?? 'your brokerage'}`}
               </button>
-            )}
-            {deal?.statement && deal.statement.status !== 'estimate' && (
-              <button type="button" onClick={() => openStatement(deal.statement!.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="px-4 py-2 border border-white/15 hover:border-white/30 text-slate-200 text-sm font-semibold rounded-xl">View statement</button>
             )}
           </div>
         </>

@@ -21,17 +21,19 @@ const money = (n: number | null) => `$${(n || 0).toLocaleString('en-US', { minim
 const splitText = (t: SplitType, v: number) => (t === 'percent' ? `Agent keeps ${v}%` : t === 'flat_agent' ? `Agent gets ${money(v)} per deal` : `Brokerage fee ${money(v)} per deal`);
 const field = 'px-2 py-1.5 rounded-lg bg-slate-900/60 border border-white/10 text-sm text-slate-100';
 
-export default function AgentCommissionTerms({ terms, onSaved, title = 'Base commission terms', showHelp = true }: { terms: BaseTerms; onSaved: () => void | Promise<void>; title?: string; showHelp?: boolean }) {
-  const [editing, setEditing] = useState(false);
-  const [rateType, setRateType] = useState<'percent' | 'flat'>('percent');
-  const [rateValue, setRateValue] = useState('');
-  const [type, setType] = useState<SplitType>('percent');
-  const [value, setValue] = useState('');
-  const [fees, setFees] = useState<{ label: string; amount: string }[]>([]);
-  const [capOn, setCapOn] = useState(false);
-  const [capAmount, setCapAmount] = useState('');
-  const [capReset, setCapReset] = useState<'calendar_year' | 'anniversary'>('calendar_year');
-  const [capStart, setCapStart] = useState('');
+// With `autoEdit` the form opens straight away with the current terms filled in and the summary is left out (for a popup); `onCancel`
+// is called when it is dismissed.
+export default function AgentCommissionTerms({ terms, onSaved, title = 'Base commission terms', showHelp = true, autoEdit = false, onCancel }: { terms: BaseTerms; onSaved: () => void | Promise<void>; title?: string; showHelp?: boolean; autoEdit?: boolean; onCancel?: () => void }) {
+  const [editing, setEditing] = useState(autoEdit);
+  const [rateType, setRateType] = useState<'percent' | 'flat'>(() => (autoEdit ? terms.baseRate?.type ?? 'percent' : 'percent'));
+  const [rateValue, setRateValue] = useState(() => (autoEdit && terms.baseRate ? String(terms.baseRate.value) : ''));
+  const [type, setType] = useState<SplitType>(() => (autoEdit ? terms.baseCommission?.type ?? 'percent' : 'percent'));
+  const [value, setValue] = useState(() => (autoEdit && terms.baseCommission ? String(terms.baseCommission.value) : ''));
+  const [fees, setFees] = useState<{ label: string; amount: string }[]>(() => (autoEdit ? terms.baseFees.map((f) => ({ label: f.label, amount: String(f.amount) })) : []));
+  const [capOn, setCapOn] = useState(() => autoEdit && !!terms.baseCap);
+  const [capAmount, setCapAmount] = useState(() => (autoEdit && terms.baseCap ? String(terms.baseCap.amount) : ''));
+  const [capReset, setCapReset] = useState<'calendar_year' | 'anniversary'>(() => (autoEdit ? terms.baseCap?.reset ?? 'calendar_year' : 'calendar_year'));
+  const [capStart, setCapStart] = useState(() => (autoEdit ? terms.baseCap?.start ?? '' : ''));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -70,7 +72,7 @@ export default function AgentCommissionTerms({ terms, onSaved, title = 'Base com
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      {!autoEdit && <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-slate-100">{title}</h2>
           <p className="text-sm text-slate-300">{terms.baseRate ? (terms.baseRate.type === 'percent' ? `Commission rate: ${terms.baseRate.value}% of the sale price` : `Commission: ${money(terms.baseRate.value)} flat fee per deal`) : 'No commission rate set'}</p>
@@ -80,8 +82,8 @@ export default function AgentCommissionTerms({ terms, onSaved, title = 'Base com
           {showHelp && <p className="text-[11px] text-slate-500 mt-1">Nothing about commission shows until a deal closes. Then you are told, and Relay makes a statement from these terms: the sale price times the commission rate gives the expected gross, which you confirm from the closing documents. You can change the rate, split and fees on any deal. Nothing is assumed: with no split set, no statement is made.</p>}
         </div>
         {!editing && <button type="button" onClick={startEdit} className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-slate-600 text-slate-200 hover:border-slate-500">{terms.baseCommission ? 'Change' : 'Set base commission'}</button>}
-      </div>
-      {terms.cap && !editing && <CapNotice cap={terms.cap} who="owner" />}
+      </div>}
+      {terms.cap && !editing && !autoEdit && <CapNotice cap={terms.cap} who="owner" />}
       {error && <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mt-3">{error}</p>}
       {editing && (
         <div className="mt-3 space-y-3">
@@ -135,7 +137,7 @@ export default function AgentCommissionTerms({ terms, onSaved, title = 'Base com
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" disabled={saving || value === '' || (capOn && capAmount === '')} onClick={() => saveBase()} className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-blue-500 hover:bg-blue-400 text-white disabled:opacity-50">Save</button>
             {(terms.baseCommission || terms.baseFees.length > 0 || terms.baseCap) && <button type="button" disabled={saving} onClick={() => saveBase(true)} className="text-xs text-slate-400 hover:text-red-300">Clear all terms</button>}
-            <button type="button" onClick={() => setEditing(false)} className="text-xs text-slate-400">Cancel</button>
+            <button type="button" onClick={() => { setEditing(false); onCancel?.(); }} className="text-xs text-slate-400">Cancel</button>
           </div>
         </div>
       )}

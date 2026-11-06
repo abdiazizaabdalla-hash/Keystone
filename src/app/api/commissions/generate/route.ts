@@ -5,7 +5,7 @@ import { logAudit } from '@/lib/audit';
 import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { activeLinkForAgent, assertWorkspaceAgent, brokerageOn, overseesAgent } from '@/lib/oversight';
 import { oversightError } from '@/lib/oversightServer';
-import { SplitError } from '@/lib/commissionMath';
+import { SplitError, mergeAgentFees } from '@/lib/commissionMath';
 import { CLOSED_STAGE } from '@/lib/oversightMath';
 import { commissionForTransaction, ensureEstimateStatement, isMissingTable, notifyCommission, termsFromLink, viewOf, breakdown } from '@/lib/commissions';
 
@@ -37,8 +37,17 @@ export async function POST(request: NextRequest) {
     if (!termsFromLink(link).split) {
       throw new SplitError('Your brokerage has not set your commission terms yet. Ask them to set your base split, and you can send your commission invoice.');
     }
-    const row = await ensureEstimateStatement(transactionId, { allowOpen: true });
+    // Anything the agent adds before sending (their own lines, a note) is checked first, so a bad line never leaves a half-made invoice.
+    const note = typeof input.note === 'string' ? input.note.trim() : '';
+    if (note.length > 1000) throw new SplitError('That note is too long (1,000 characters max).');
+    const baseFees = termsFromLink(link).fees.map((f) => ({ label: f.label, amount: f.amount }));
+    const withExtras = input.extraFees === undefined ? null : mergeAgentFees(baseFees, input.extraFees);
+    let row = await ensureEstimateStatement(transactionId, { allowOpen: true });
     if (!row) throw new Error('Could not start the commission statement');
+    if (withExtras || note) {
+      const { data: updated } = await supabaseServer.from('deal_commissions').update({ ...(withExtras ? { deductions: withExtras } : {}), change_note: note || null, updated_at: new Date().toISOString() }).eq('id', row.id).select('*').single();
+      if (updated) row = updated as typeof row;
+    }
 
     await logAudit(request, user, 'commission.generate', { entityType: 'commission', entityId: row.id, metadata: { transactionId } });
     const closed = tx.status === CLOSED_STAGE;

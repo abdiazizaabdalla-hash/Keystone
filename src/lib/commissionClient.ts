@@ -15,3 +15,17 @@ export async function openStatement(id: string): Promise<void> {
     throw error;
   }
 }
+
+/** Save a commission statement PDF to the person's device. */
+export async function downloadStatement(id: string, fileName: string): Promise<void> {
+  const res = await authFetch(`/api/commissions/${id}/statement`);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not download the statement');
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}

@@ -162,16 +162,21 @@ export async function canOverseeListing(userId: string, listingId: string): Prom
   return overseesAgent(userId, listingOwner);
 }
 
-/** Brokerage owners who should hear about updates on this deal. Empty unless the feature is on. */
+/** Brokerage owners who oversee this agent (active link, owner still on a team plan). Empty unless the feature is on. */
+export async function brokerageOwnersForAgent(agentUserId: string): Promise<string[]> {
+  if (!brokerageOn()) return [];
+  const { data } = await supabaseServer.from('brokerage_links').select('owner_user_id').eq('agent_user_id', agentUserId).eq('status', 'active');
+  const owners: string[] = [];
+  for (const row of data ?? []) if (await ownerStillOnTeamPlan(row.owner_user_id as string)) owners.push(row.owner_user_id as string);
+  return owners;
+}
+
+/** Brokerage owners who oversee the agent this deal belongs to. Empty unless the feature is on. */
 export async function brokerageOwnersForDeal(transactionId: string): Promise<string[]> {
   if (!brokerageOn()) return [];
   const { data: tx } = await supabaseServer.from('transactions').select('tc_user_id').eq('id', transactionId).maybeSingle();
   const dealOwner = tx?.tc_user_id as string | null | undefined;
-  if (!dealOwner) return [];
-  const { data } = await supabaseServer.from('brokerage_links').select('owner_user_id').eq('agent_user_id', dealOwner).eq('status', 'active');
-  const owners: string[] = [];
-  for (const row of data ?? []) if (await ownerStillOnTeamPlan(row.owner_user_id as string)) owners.push(row.owner_user_id as string);
-  return owners;
+  return dealOwner ? brokerageOwnersForAgent(dealOwner) : [];
 }
 
 export interface AgentLabel {

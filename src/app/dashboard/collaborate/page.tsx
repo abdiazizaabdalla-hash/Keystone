@@ -14,6 +14,7 @@ import BrokerageAccountBanner from '@/components/BrokerageAccountBanner';
 import BrokerageFileReview from '@/components/BrokerageFileReview';
 import BrokerageRoster from '@/components/BrokerageRoster';
 import BrokerageTemplates from '@/components/BrokerageTemplates';
+import ComplianceReportMenu from '@/components/ComplianceReportMenu';
 import { isFeatureOnClient } from '@/lib/features';
 import type { ContactRow } from '@/lib/contactsCrm';
 
@@ -342,6 +343,7 @@ export default function CollaboratePage() {
       <div className="flex flex-wrap items-center gap-3 mb-1">
         <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100">{teamLabel}</h1>
         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 capitalize">{data.role}</span>
+        {isOwner && brokerageMode && <div className="ml-auto"><ComplianceReportMenu /></div>}
       </div>
       <p className="text-slate-400 mb-6 max-w-3xl">
         {isAgentMember

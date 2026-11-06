@@ -4,6 +4,7 @@ import { POST as generate } from '@/app/api/commissions/generate/route';
 import { GET as invoiceOptions } from '@/app/api/commissions/invoice-options/route';
 import { POST as propose } from '@/app/api/commissions/route';
 import { PATCH } from '@/app/api/commissions/[id]/route';
+import { GET as statementPdf } from '@/app/api/commissions/[id]/statement/route';
 import { admin, call, cleanup, createActor, seedDeal, type Actor, type Deal } from './helpers';
 
 // The agent asks for the commission statement on a deal. It starts as an estimate built from their brokerage's base terms, with no
@@ -178,5 +179,70 @@ describe('editing instead', () => {
     expect(v(edited)).toMatchObject({ status: 'proposed', submitted: false, agentNet: 6750 });
     expect((await act(broker, created, { action: 'approve' })).status).toBe(409);
     expect(v(await act(agent, created, { action: 'accept' })).status).toBe('accepted');
+  });
+});
+
+describe('editing the invoice together, then the PDF', () => {
+  let deal: Deal;
+  let id = '';
+  const lines = async () => ((await admin.from('deal_commissions').select('deductions, change_note').eq('id', id).single()).data ?? { deductions: [], change_note: null }) as { deductions: { label: string; amount: number; by?: string }[]; change_note: string | null };
+  const pdf = (who: Actor) => call(h(statementPdf), who, { method: 'GET', path: '/x', params: { id } });
+
+  it('the agent adds their own line and a note before sending, and the brokerage’s fees stay theirs', async () => {
+    deal = await seedDeal(agent, 'CIEDIT');
+    await admin.from('transactions').update({ purchase_price: 500000 }).eq('id', deal.transactionId);
+    await admin.from('brokerage_links').update({ default_commission_type: 'percent', default_commission_value: 3, default_fees: [{ label: 'Desk fee', amount: 100, when: 'agent_share' }] }).eq('owner_user_id', broker.id).eq('agent_user_id', agent.id);
+    const res = await gen(agent, { transactionId: deal.transactionId, extraFees: [{ label: 'Referral fee', amount: 500 }], note: 'Referral owed to ABC Realty.' });
+    expect(res.status, JSON.stringify(res.json)).toBe(201);
+    id = v(res).id;
+    const row = await lines();
+    expect(row.deductions).toEqual([{ label: 'Desk fee', amount: 100 }, { label: 'Referral fee', amount: 500, by: 'agent' }]);
+    expect(row.change_note).toBe('Referral owed to ABC Realty.');
+    // $500,000 x 3% = $15,000; 80% = $12,000; less $600 in lines
+    expect((res.json as { estimate: { agentNet: number } }).estimate.agentNet).toBe(11400);
+  });
+
+  it('the agent can change only their own lines, while it is still an estimate', async () => {
+    const edited = await act(agent, id, { action: 'edit', extraFees: [{ label: 'Referral fee', amount: 250 }, { label: 'Marketing', amount: 50 }], note: '' });
+    expect(edited.status, JSON.stringify(edited.json)).toBe(200);
+    expect((await lines()).deductions).toEqual([{ label: 'Desk fee', amount: 100 }, { label: 'Referral fee', amount: 250, by: 'agent' }, { label: 'Marketing', amount: 50, by: 'agent' }]);
+    expect((await lines()).change_note).toBeNull();
+    // clearing their lines leaves the brokerage's fee exactly as it was
+    await act(agent, id, { action: 'edit', extraFees: [], note: 'No extras after all.' });
+    expect((await lines()).deductions).toEqual([{ label: 'Desk fee', amount: 100 }]);
+    expect((await act(broker, id, { action: 'edit', extraFees: [] })).status).toBe(400);
+    expect((await act(other, id, { action: 'edit', extraFees: [] })).status).toBe(404);
+  });
+
+  it('the brokerage can edit lines before closing, keeps the agent’s note, but cannot confirm an amount yet', async () => {
+    const saved = await call(h(propose), broker, { method: 'POST', path: '/api/commissions', body: { transactionId: deal.transactionId, splitType: 'percent', splitValue: 75, deductions: [{ label: 'Desk fee', amount: 150 }] } });
+    expect(saved.status, JSON.stringify(saved.json)).toBe(200);
+    expect(v(saved)).toMatchObject({ status: 'estimate', gross: null });
+    expect((await lines()).change_note).toBe('No extras after all.');
+    const early = await call(h(propose), broker, { method: 'POST', path: '/api/commissions', body: { transactionId: deal.transactionId, gross: 15000, splitType: 'percent', splitValue: 75 } });
+    expect(early.status).toBe(409);
+    expect((await pdf(agent)).status).toBe(409);
+  });
+
+  it('after closing the brokerage confirms; the agent can ask for a change with a line of their own; no PDF until both agree', async () => {
+    await admin.from('transactions').update({ status: 'Closed' }).eq('id', deal.transactionId);
+    const confirmed = await call(h(propose), broker, { method: 'POST', path: '/api/commissions', body: { transactionId: deal.transactionId, gross: 15000, splitType: 'percent', splitValue: 80, deductions: [{ label: 'Desk fee', amount: 100 }] } });
+    expect(confirmed.status, JSON.stringify(confirmed.json)).toBe(200);
+    expect(v(confirmed)).toMatchObject({ status: 'proposed', agentNet: 11900 });
+    expect((await pdf(agent)).status).toBe(409);
+    expect((await pdf(broker)).status).toBe(409);
+    const ask = await act(agent, id, { action: 'request_change', note: 'Add my referral fee.', extraFees: [{ label: 'Referral fee', amount: 500 }] });
+    expect(ask.status, JSON.stringify(ask.json)).toBe(200);
+    expect(v(ask)).toMatchObject({ status: 'change_requested', agentNet: 11400 });
+    expect((await pdf(agent)).status).toBe(409);
+    // the brokerage reviews it and sends it back; the agent agrees; now both can open the PDF
+    const resent = await call(h(propose), broker, { method: 'POST', path: '/api/commissions', body: { transactionId: deal.transactionId, gross: 15000, splitType: 'percent', splitValue: 80, deductions: [{ label: 'Desk fee', amount: 100 }, { label: 'Referral fee', amount: 500, by: 'agent' }] } });
+    expect(v(resent)).toMatchObject({ status: 'proposed', agentNet: 11400 });
+    expect(v(await act(agent, id, { action: 'accept' })).status).toBe('accepted');
+    for (const who of [agent, broker]) {
+      const ok = await pdf(who);
+      expect(ok.status).toBe(200);
+    }
+    expect((await pdf(other)).status).toBe(404);
   });
 });

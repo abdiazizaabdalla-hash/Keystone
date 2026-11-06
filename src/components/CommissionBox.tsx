@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch } from '@/lib/authClient';
-import { openStatement } from '@/lib/commissionClient';
+import { downloadStatement, openStatement } from '@/lib/commissionClient';
 import { computeSplit } from '@/lib/commissionMath';
 import CapNotice, { type CapView } from '@/components/CapNotice';
 
@@ -296,7 +296,12 @@ export default function CommissionBox({ transactionId }: { transactionId: string
               </div>
             </div>
           )}
-          <button type="button" onClick={() => openStatement(c.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="block mt-3 text-xs text-blue-400 hover:text-blue-300 font-medium">Open statement (PDF) →</button>
+          {(c.status === 'accepted' || c.status === 'paid') ? (
+            <div className="flex gap-3 mt-3 text-xs font-medium">
+              <button type="button" onClick={() => openStatement(c.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="text-blue-400 hover:text-blue-300">Open PDF →</button>
+              <button type="button" onClick={() => downloadStatement(c.id, c.statementNumber).catch((e) => setError(e instanceof Error ? e.message : 'Could not download the statement'))} className="text-blue-400 hover:text-blue-300">Download PDF →</button>
+            </div>
+          ) : <p className="text-[11px] text-slate-500 mt-3">The PDF unlocks when you and {isOwner ? 'the agent' : 'your brokerage'} both agree.</p>}
         </>
       )}
 

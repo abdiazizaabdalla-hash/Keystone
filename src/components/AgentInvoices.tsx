@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { invoiceTotals } from '@/lib/workspaceInvoiceMath';
-import { openStatement } from '@/lib/commissionClient';
 import { INVOICE_TEMPLATES } from '@/lib/workspaceInvoiceTemplates';
 import AgentCommissionInvoiceForm from './AgentCommissionInvoiceForm';
+import CommissionInvoicePanel, { type PanelRow } from './CommissionInvoicePanel';
 
 interface Line {
   description: string;
@@ -44,29 +44,12 @@ interface ContactRow {
 }
 
 // A commission invoice the agent sends to their brokerage (made on the deal). It lives here with the rest of their invoices.
-interface CommissionInvoiceRow {
-  id: string;
-  statementNumber: string;
-  status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void';
-  submitted?: boolean;
-  agentNet: number | null;
-  estimate?: { agentNet: number | null } | null;
-  dealStatus?: string | null;
-  gross?: number | null;
-  salePrice?: number | null;
-  grossPercent?: number | null;
-  splitType?: 'percent' | 'flat_agent' | 'flat_brokerage';
-  splitValue?: number;
-  paidOn: string | null;
-  property: string | null;
-  transactionId: string;
-  brokerage: { name: string };
-}
+type CommissionInvoiceRow = PanelRow & { brokerage: { name: string } };
 
 function commissionState(c: CommissionInvoiceRow): { label: string; bucket: 'draft' | 'sent' | 'paid'; cls: string } {
-  if (c.status === 'estimate' && c.dealStatus !== 'Closed') return { label: 'Sent · confirmed at closing', bucket: 'sent', cls: 'bg-blue-500/10 text-blue-300 border-blue-500/40 border-dashed' };
-  if (c.status === 'estimate') return { label: 'Estimate · not confirmed', bucket: 'draft', cls: 'bg-amber-500/10 text-amber-300 border-amber-500/40 border-dashed' };  if (c.status === 'paid') return { label: 'Paid', bucket: 'paid', cls: 'bg-green-500/10 text-green-300 border-green-500/40' };
-  if (c.status === 'accepted') return { label: 'Approved · waiting to be paid', bucket: 'sent', cls: 'bg-blue-500/10 text-blue-300 border-blue-500/40' };
+  if (c.status === 'estimate') return { label: c.dealStatus !== 'Closed' ? 'Sent · confirmed at closing' : 'Sent · waiting for confirmation', bucket: 'sent', cls: 'bg-blue-500/10 text-blue-300 border-blue-500/40 border-dashed' };
+  if (c.status === 'paid') return { label: 'Paid', bucket: 'paid', cls: 'bg-green-500/10 text-green-300 border-green-500/40' };
+  if (c.status === 'accepted') return { label: 'Agreed · waiting to be paid', bucket: 'sent', cls: 'bg-blue-500/10 text-blue-300 border-blue-500/40' };
   if (c.status === 'proposed') return { label: 'Confirmed · review it', bucket: 'draft', cls: 'bg-amber-500/10 text-amber-300 border-amber-500/40' };
   return { label: c.submitted ? 'Sent · waiting for approval' : 'Change requested', bucket: 'draft', cls: 'bg-slate-500/10 text-slate-300 border-slate-500/40' };
 }
@@ -95,6 +78,8 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
   const [busy, setBusy] = useState(false);
   // The commission invoice to the agent's brokerage (see AgentCommissionInvoiceForm), opened from the template list or from a deal.
   const [commissionForm, setCommissionForm] = useState(Boolean(commissionTransactionId));
+  // Which commission invoice is opened to show its lines, edits and PDF.
+  const [openCommission, setOpenCommission] = useState<string | null>(null);
 
   // Bumping `reloadKey` fetches the list again.
   const [reloadKey, setReloadKey] = useState(0);
@@ -288,30 +273,29 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
         <div className="space-y-2">
           {shownCommissions.map((c) => {
             const state = commissionState(c);
+            const isOpen = openCommission === c.id;
+            const brokerage = c.brokerage?.name ?? 'Your brokerage';
             return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => openStatement(c.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the invoice'))}
-                className="w-full text-left bg-white/5 border border-white/10 hover:border-white/25 rounded-2xl p-4 transition flex flex-wrap items-center justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <p className="font-semibold text-slate-100 truncate">
-                    {c.statementNumber} · {c.brokerage?.name ?? 'Your brokerage'}
-                  </p>
-                  <p className="text-xs text-slate-500 truncate">Commission invoice to your brokerage{c.property ? ` · ${c.property}` : ''}</p>
-                  {c.gross != null && c.status !== 'estimate' && (
-                    <p className="text-xs text-slate-400 truncate">
-                      Brokerage received {money(c.gross)}{c.grossPercent != null && c.salePrice ? ` (${c.grossPercent}% of the ${money(c.salePrice)} sale price)` : ''}
-                      {c.splitType === 'percent' && c.splitValue != null ? ` · you keep ${c.splitValue}%, brokerage keeps ${Math.round((100 - c.splitValue) * 1000) / 1000}%` : ''}
+              <div key={c.id} className={`bg-white/5 border rounded-2xl transition ${isOpen ? 'border-white/25' : 'border-white/10 hover:border-white/25'}`}>
+                <button type="button" onClick={() => setOpenCommission(isOpen ? null : c.id)} aria-expanded={isOpen} className="w-full text-left p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-100 truncate">
+                      {c.statementNumber} · {brokerage}
                     </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full border ${state.cls}`}>{state.label}</span>
-                  <span className="font-semibold text-slate-100">{c.agentNet !== null ? money(c.agentNet) : c.estimate?.agentNet != null ? <span title="Estimate">≈ {money(c.estimate.agentNet)}</span> : '—'}</span>
-                </div>
-              </button>
+                    <p className="text-xs text-slate-500 truncate">Commission invoice to your brokerage{c.property ? ` · ${c.property}` : ''}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-xs px-2 py-0.5 rounded-full border ${state.cls}`}>{state.label}</span>
+                    <span className="font-semibold text-slate-100">{c.agentNet !== null ? money(c.agentNet) : c.estimate?.agentNet != null ? <span title="Estimate">≈ {money(c.estimate.agentNet)}</span> : '—'}</span>
+                    <span aria-hidden className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}><svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 fill-current"><path d="M5.5 7.5 10 12l4.5-4.5 1 1L10 14 4.5 8.5z" /></svg></span>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="px-4 pb-4">
+                    <CommissionInvoicePanel role="agent" row={c} counterpart={brokerage} onChanged={load} />
+                  </div>
+                )}
+              </div>
             );
           })}
           {shown.map((inv) => (
@@ -447,6 +431,22 @@ function InvoiceEditor({ invoice, onClose, onChanged }: { invoice: InvoiceRow; o
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
+  const downloadPdf = async () => {
+    const res = await authFetch(`/api/workspace-invoices/${invoice.id}/pdf`);
+    if (!res.ok) {
+      setError('Could not build the PDF');
+      return;
+    }
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${invoice.invoice_number}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  };
+
   const remove = async () => {
     if (!confirm('Delete this draft?')) return;
     await run(() => authFetch(`/api/workspace-invoices/${invoice.id}`, { method: 'DELETE' }), 'Deleted.', () => onClose());
@@ -574,7 +574,10 @@ function InvoiceEditor({ invoice, onClose, onChanged }: { invoice: InvoiceRow; o
           </>
         )}
         <button type="button" onClick={download} className="px-4 py-2 border border-white/15 hover:border-white/30 text-slate-200 text-sm font-semibold rounded-xl">
-          View PDF
+          Open PDF
+        </button>
+        <button type="button" onClick={downloadPdf} className="px-4 py-2 border border-white/15 hover:border-white/30 text-slate-200 text-sm font-semibold rounded-xl">
+          Download PDF
         </button>
         {(invoice.status === 'draft' || invoice.status === 'sent') && (
           <button type="button" disabled={busy} onClick={() => act('mark_paid', 'Marked paid.')} className="px-4 py-2 border border-green-500/40 text-green-300 hover:bg-green-500/10 text-sm font-semibold rounded-xl disabled:opacity-50">

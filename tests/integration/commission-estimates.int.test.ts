@@ -190,7 +190,8 @@ describe('the owner confirms the actual commission', () => {
   it('terms can be changed for one deal and it stays an estimate', async () => {
     const res = await post(broker, { transactionId: dealA.transactionId, splitType: 'percent', splitValue: 75 });
     expect(res.status, JSON.stringify(res.json)).toBe(200);
-    expect(v(res)).toMatchObject({ status: 'estimate', gross: null, splitValue: 75, changeNote: null });
+    // (an agent's note on the estimate stays until the owner confirms it)
+    expect(v(res)).toMatchObject({ status: 'estimate', gross: null, splitValue: 75 });
     const bad = await post(broker, { transactionId: dealA.transactionId, splitType: 'percent', splitValue: 150 });
     expect(bad.status).toBe(400);
   });
@@ -206,13 +207,15 @@ describe('the owner confirms the actual commission', () => {
     expect(data!.cap_snapshot).toMatchObject({ capCents: 1_000_000 });
     const bell = (await admin.from('notifications').select('title').eq('recipient_user_id', agent.id).eq('event_type', 'commission')).data ?? [];
     expect(bell.some((b) => /confirmed the commission statement/.test(String(b.title)))).toBe(true);
-    expect((await pdf(agent, v(res).id)).status).toBe(200);
+    // the PDF is the final statement: it waits for the agent to agree
+    expect((await pdf(agent, v(res).id)).status).toBe(409);
   });
 
   it('then the agent reviews it, but cannot record payment', async () => {
     const id = v({ json: d(await forDeal(agent, dealA.transactionId)).commission }).id;
     expect((await act(agent, id, { action: 'mark_paid' })).status).toBe(400);
     expect(v(await act(agent, id, { action: 'accept' })).status).toBe('accepted');
+    expect((await pdf(agent, id)).status).toBe(200);
     expect((await post(broker, { transactionId: dealA.transactionId, splitType: 'percent', splitValue: 75 })).status).toBe(400); // a confirmed statement needs a gross to change
     expect(v(await act(broker, id, { action: 'mark_paid', paidOn: new Date().toISOString().slice(0, 10) })).status).toBe('paid');
   });

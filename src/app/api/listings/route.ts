@@ -5,6 +5,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
+import { queueBrokerageNewFile } from '@/lib/notifications';
 import { autoAddContact } from '@/lib/contactsAuto';
 import { queueListingCalendarSync } from '@/lib/calendarSync';
 import { sendListingPortalInvite } from '@/lib/agentInvite';
@@ -154,6 +155,7 @@ export async function POST(request: NextRequest) {
     await logListingActivity(listing.id as string, user, 'Listing created');
     queueListingCalendarSync(listing.id as string);
     await logAudit(request, user, 'listing.create', { entityType: 'listing', entityId: listing.id });
+    queueBrokerageNewFile({ kind: 'listing', id: listing.id as string, agentUserId: user.id, address, actorUserId: user.id });
 
     // The agent gets a portal login right away so the listing shows up under Listings in their portal.
     // Skipped quietly when there is no agent, no email or sharing is off; the listing page shows the state.

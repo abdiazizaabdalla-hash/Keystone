@@ -4,6 +4,7 @@ import { GET as view } from '@/app/api/oversight/deals/[id]/view/route';
 import { POST as upload, DELETE as deleteDocument } from '@/app/api/documents/route';
 import { PATCH as patchTransaction } from '@/app/api/transactions/[id]/route';
 import { admin, call, cleanup, createActor, seedDeal, type Actor, type Deal } from './helpers';
+import { notifyDeal } from '@/lib/notifications';
 
 // A brokerage owner sees an agent's deal through one read-only endpoint, can add documents to it, cannot remove them,
 // and the "stage moved" notification opens the owner's page, not the agent's.
@@ -77,12 +78,16 @@ describe('documents', () => {
 });
 
 describe('notifications', () => {
-  it('a stage move opens the owner page for the owner and the agent’s page for the agent’s coordinator', async () => {
+  it('a stage move is not pushed to the owner, but a commission event opens the owner page', async () => {
     const moved = await call(h(patchTransaction), agent, { method: 'PATCH', path: `/api/transactions/x?id=${deal.transactionId}`, body: { status: 'Under Contract' } });
     expect(moved.status, JSON.stringify(moved.json)).toBe(200);
     await new Promise((r) => setTimeout(r, 400));
+    const stage = await admin.from('notifications').select('id').eq('recipient_user_id', broker.id).eq('transaction_id', deal.transactionId).eq('event_type', 'stage_changed');
+    expect(stage.data?.length ?? 0).toBe(0);
+    await notifyDeal({ transactionId: deal.transactionId, actorUserId: agent.id, type: 'commission', title: 'Commission invoice sent' });
     const { data: rows } = await admin.from('notifications').select('link, event_type').eq('recipient_user_id', broker.id).eq('transaction_id', deal.transactionId);
     expect(rows?.length).toBeGreaterThan(0);
     for (const r of rows!) expect(r.link).toBe(`/dashboard/collaborate/deals/${deal.transactionId}`);
   });
 });
+
