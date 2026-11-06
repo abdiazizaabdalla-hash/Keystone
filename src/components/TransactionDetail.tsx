@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import ClientMessagesPanel from '@/components/ClientMessagesPanel';
 import ClientShareCard from '@/components/ClientShareCard';
 import AddCoordinatorModal from '@/components/AddCoordinatorModal';
+import CoordinatorStatus from '@/components/CoordinatorStatus';
 import UseTemplateModal from '@/components/UseTemplateModal';
 import DealStateDocs from '@/components/DealStateDocs';
 import AgentCommissionInvoice from '@/components/AgentCommissionInvoice';
@@ -398,6 +399,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   const [clientFormSignal, setClientFormSignal] = useState(0);
   // The direct conversation with the other professional on the deal exists once someone else is on it.
   const hasThread = Boolean(transaction?.shared) || acceptedAgentUsers.length > 0;
+  // The coordinator an agent invited who has not accepted yet (an agent's invites on a deal are only ever to a coordinator).
+  const pendingCoordinator = agentInvites.find((i) => i.status !== 'accepted') ?? null;
   // Which side your own message bubbles are on.
   const mySide: 'tc' | 'agent' = isAgentAcct ? 'agent' : 'tc';
   const otherPartyName = isAgentAcct ? 'Coordinator' : agentName;
@@ -2801,10 +2804,10 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                   {isAgentAcct && !ownerView && !transaction.shared && (() => {
                     const pending = agentInvites.find((i) => i.status !== 'accepted');
                     if (acceptedAgentUsers.length > 0) {
-                      return <span className="text-sm px-3 py-1.5 border border-green-500/40 text-green-300 rounded-lg">Coordinator: {acceptedAgentUsers[0].email}</span>;
+                      return <span className="text-sm px-3 py-1.5 border border-green-500/40 text-green-300 rounded-lg">Coordinator: {acceptedAgentUsers[0].email} · accepted</span>;
                     }
                     if (pending) {
-                      return <span className="text-sm px-3 py-1.5 border border-amber-500/40 text-amber-300 rounded-lg" title="They have not accepted yet">Coordinator invited: {pending.email}</span>;
+                      return <span className="text-sm px-3 py-1.5 border border-amber-500/40 text-amber-300 rounded-lg" title="They have not accepted yet">Coordinator invited: {pending.email} · not accepted yet</span>;
                     }
                     return (
                       <button
@@ -3786,8 +3789,15 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           {!hasThread ? (
             isAgentAcct ? (
               <div className="text-sm text-slate-400">
-                <p className="mb-3">No coordinator on this deal yet. Add one to message them here. Your client conversations are below.</p>
-                {!transaction.shared && (
+                {pendingCoordinator ? (
+                  <>
+                    <CoordinatorStatus accepted={null} pending={{ email: pendingCoordinator.email, createdAt: pendingCoordinator.created_at }} />
+                    <p className="mt-3">Your client conversations are below.</p>
+                  </>
+                ) : (
+                  <p className="mb-3">No coordinator on this deal yet. Add one to message them here. Your client conversations are below.</p>
+                )}
+                {!transaction.shared && !pendingCoordinator && (
                   <button type="button" onClick={() => setShowAddCoordinator(true)} className="px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition">
                     Add a transaction coordinator
                   </button>
@@ -3801,6 +3811,11 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             )
           ) : (
             <>
+              {isAgentAcct && acceptedAgentUsers.length > 0 && (
+                <div className="mb-3">
+                  <CoordinatorStatus accepted={acceptedAgentUsers[0]} pending={null} compact />
+                </div>
+              )}
               <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
                 {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet -- say hello.</p>}
                 {messages.map((m) => (
