@@ -3,7 +3,7 @@ import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import crypto from 'crypto';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { getVisibleTcUserIds } from '@/lib/team';
+import { authorizeDeal } from '@/lib/authorize';
 import { sanitizeEmailHtml } from '@/lib/emailHtml';
 import {
   MAX_INBOUND_FILES,
@@ -470,29 +470,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
     }
 
-    const { data: transaction, error: txError } = await supabaseServer
-      .from('transactions')
-      .select('id, agent_id')
-      .eq('id', transactionId)
-      .single();
-
-    if (txError || !transaction) {
-      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
-    }
-
-    if (!isAdmin) {
-      const visibleIds = await getVisibleTcUserIds(user.id);
-      const { data: agent } = await supabaseServer
-        .from('agents')
-        .select('id')
-        .eq('id', transaction.agent_id)
-        .in('tc_user_id', visibleIds)
-        .single();
-
-      if (!agent) {
-        return NextResponse.json({ error: 'You do not have permission to view this transaction' }, { status: 403 });
-      }
-    }
+    // Owner, their team, or a paid coordinator the deal was shared with.
+    await authorizeDeal(user, isAdmin, transactionId, {
+      scope: 'team',
+      participants: 'full',
+      deniedMessage: 'You do not have permission to view this transaction',
+    });
 
     const { data, error } = await supabaseServer
       .from('transaction_emails')

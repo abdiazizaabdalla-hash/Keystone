@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
         // logins read their checklist through /api/agent/transactions/[id] instead.
         await authorizeDeal(user, isAdmin, transactionId, {
           scope: 'team',
-          collaborators: false,
+          participants: 'full',
           deniedMessage: 'You do not have permission to view these tasks',
         });
       }
