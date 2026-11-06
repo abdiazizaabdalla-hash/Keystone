@@ -10,8 +10,10 @@ import AddCoordinatorModal from '@/components/AddCoordinatorModal';
 import CoordinatorStatus from '@/components/CoordinatorStatus';
 import UseTemplateModal from '@/components/UseTemplateModal';
 import DealStateDocs from '@/components/DealStateDocs';
+import LibraryPicker from '@/components/LibraryPicker';
 import AgentCommissionInvoice from '@/components/AgentCommissionInvoice';
 import CommissionBox from '@/components/CommissionBox';
+import CommissionAndInvoices from '@/components/CommissionAndInvoices';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import DragHandle from '@/components/DragHandle';
 import MoveMenu from '@/components/MoveMenu';
@@ -378,6 +380,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   const [showAddCoordinator, setShowAddCoordinator] = useState(false);
   const [useTemplate, setUseTemplate] = useState<{ mode: 'all' | 'documents'; initial?: { id: string; kind: 'email' | 'letter' | 'form'; name: string; description: string | null; states: string[] } } | null>(null);
   const [recentNote, setRecentNote] = useState('');
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [recentTemplates, setRecentTemplates] = useState<Array<{ id: string; kind: 'email' | 'letter' | 'form'; name: string; description: string | null; states: string[] }>>([]);
   const [recentKey, setRecentKey] = useState(0);
   const templatesOn = isFeatureOnClient('templates');
@@ -2554,8 +2557,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             onChange={handleDirectFileSelected}
             className="hidden"
           />
-          <div className="flex items-start justify-between gap-4 mb-2">
-            <div>
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
+            <div className="min-w-[14rem] flex-1">
               <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
               <p className="text-sm text-slate-400">
                 Organized by category — a document can optionally be tagged with a checklist stage, but
@@ -2571,6 +2574,16 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                   title="Add a letter or one of your own forms from your templates"
                 >
                   From a template
+                </button>
+              )}
+              {templatesOn && !ownerView && (
+                <button
+                  type="button"
+                  onClick={() => setLibraryOpen(true)}
+                  className="px-4 py-2 border border-slate-600 hover:border-blue-500 text-slate-200 hover:text-blue-300 font-semibold rounded-lg text-sm transition"
+                  title="Pick PDFs from your template library, by state. Each is filed in the right section."
+                >
+                  Add from Library
                 </button>
               )}
               <button
@@ -2754,6 +2767,19 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             transactionId={resolvedParams.id}
             onClose={() => setShowAddCoordinator(false)}
             onInvited={() => void fetchAgentAccess()}
+          />
+        )}
+
+        {libraryOpen && (
+          <LibraryPicker
+            target={{ kind: 'deal', id: resolvedParams.id }}
+            dealState={transaction.property_state ?? stateFromAddress(transaction.property_address)}
+            onClose={() => setLibraryOpen(false)}
+            onAdded={(message) => {
+              setRecentNote(message);
+              void fetchData();
+              setRecentKey((k) => k + 1);
+            }}
           />
         )}
 
@@ -3049,9 +3075,13 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           </div>
 
           {isAgentAcct && !ownerView && (
-          <OverviewSection defaultOpen title={isFeatureOnClient('brokerage') ? 'Commission & invoices' : 'Invoice'} summary={isFeatureOnClient('brokerage') ? 'Your brokerage’s commission statement, and invoices you send to others' : 'Bill a coordinator, client or anyone else'}>
+          isFeatureOnClient('brokerage') ? (
+            <CommissionAndInvoices transactionId={transaction.id} purchasePrice={Number(transaction.purchase_price) || null} hasCoordinator={Boolean(transaction.shared) || acceptedAgentUsers.length > 0} />
+          ) : (
+          <OverviewSection defaultOpen title="Invoice" summary="Bill a coordinator, client or anyone else">
             <AgentCommissionInvoice transactionId={transaction.id} purchasePrice={Number(transaction.purchase_price) || null} hasCoordinator={Boolean(transaction.shared) || acceptedAgentUsers.length > 0} />
           </OverviewSection>
+          )
           )}
 
           {!isAgentAcct && !transaction.shared && (
@@ -3271,7 +3301,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                 </fieldset>
               </section>
 
-              {tab === 'overview' && isFeatureOnClient('brokerage') && transaction?.id && <CommissionBox transactionId={transaction.id} />}
+              {tab === 'overview' && isFeatureOnClient('brokerage') && transaction?.id && !(isAgentAcct && !ownerView) && <CommissionBox transactionId={transaction.id} />}
 
               {tab === 'overview' && templatesOn && !ownerView && (
               <DealStateDocs

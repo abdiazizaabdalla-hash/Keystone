@@ -8,6 +8,8 @@ import { US_STATES } from '@/lib/usStates';
 import TemplateRules from '@/components/TemplateRules';
 import TemplateApprovals from '@/components/TemplateApprovals';
 import DocumentsLibrary from '@/components/DocumentsLibrary';
+import UploadPdfDialog from '@/components/UploadPdfDialog';
+import { DOCUMENT_CATEGORIES, typesForCategory } from '@/lib/documentTaxonomy';
 
 type Kind = 'email' | 'letter' | 'form';
 type Section = 'documents' | 'emails';
@@ -23,6 +25,8 @@ interface Template {
   body: string | null;
   file_name: string | null;
   file_size: number | null;
+  document_category?: string | null;
+  document_type?: string | null;
   archived: boolean;
   last_used_at?: string | null;
   brokerage_shared?: boolean;
@@ -77,6 +81,9 @@ export default function TemplatesPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<Template | { new: Kind; name?: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // The PDF upload dialog (null = closed), and where the Library opens (from a link on a deal: ?tab=library&view=resources&state=TX).
+  const [uploading, setUploading] = useState<{ state: string | null } | null>(null);
+  const [libInit, setLibInit] = useState<{ mode: 'pdfs' | 'resources'; state: string | null; n: number }>({ mode: 'pdfs', state: null, n: 0 });
   const [installing, setInstalling] = useState(false);
   // A workspace the brokerage provides (Agent Basic) can use templates but not save its own; the server enforces it, this explains it.
   const [basicAgent, setBasicAgent] = useState(false);
@@ -91,6 +98,13 @@ export default function TemplatesPage() {
       cancelled = true;
     };
   }, []);
+  const openUpload = (presetState?: string | null) => {
+    if (basicAgent) {
+      setNotice('Saving your own PDFs is part of Agent Pro. You can use your brokerage’s templates and Relay’s standard forms from any deal.');
+      return;
+    }
+    setUploading({ state: presetState ?? null });
+  };
   const openEditor = (next: Template | { new: Kind; name?: string }) => {
     if (basicAgent) {
       setNotice('Saving your own templates and emails is part of Agent Pro. You can use your brokerage’s templates and Relay’s standard forms from any deal.');
@@ -101,10 +115,16 @@ export default function TemplatesPage() {
 
   const section: Section = view === 'emails' ? 'emails' : 'documents';
 
-  // /dashboard/templates?upload=iabs (from a deal's Documents tab) opens the form editor ready for the brokerage's IABS.
+  // /dashboard/templates?upload=pdf&state=TX (from a deal) opens the PDF upload ready for that state; ?tab=library&view=resources&state=TX
+  // opens that state's resources folder.
   useEffect(() => {
     const t = setTimeout(() => {
-      if (new URLSearchParams(window.location.search).get('upload') === 'iabs') setEditing({ new: 'form', name: 'Our brokerage’s IABS' });
+      const p = new URLSearchParams(window.location.search);
+      const st = (p.get('state') || '').toUpperCase();
+      const state = US_STATES.some((x) => x.code === st) ? st : null;
+      if (p.get('upload') === 'pdf' || p.get('upload') === 'iabs') setUploading({ state });
+      if (p.get('view') === 'resources') setLibInit((cur) => ({ mode: 'resources', state, n: cur.n + 1 }));
+      else if (state && p.get('upload') !== 'pdf') setLibInit((cur) => ({ mode: 'pdfs', state, n: cur.n + 1 }));
     }, 0);
     return () => clearTimeout(t);
   }, []);
@@ -206,7 +226,7 @@ export default function TemplatesPage() {
   }
 
   const tabs: { id: Section | 'approvals'; label: string; sub: string; count: number | null; alert?: boolean }[] = [
-    { id: 'documents', label: 'Documents', sub: 'Your own forms, like your brokerage’s IABS', count: counts.documents },
+    { id: 'documents', label: 'Library', sub: 'PDF templates and state resources', count: counts.documents },
     { id: 'emails', label: 'Emails', sub: 'Emails and letters you send from a deal', count: counts.emails },
     { id: 'approvals', label: 'Approvals', sub: 'Drafts waiting for your OK', count: pending, alert: pending > 0 },
   ];
@@ -244,6 +264,18 @@ export default function TemplatesPage() {
         ))}
       </div>
 
+      {uploading && (
+        <UploadPdfDialog
+          presetState={uploading.state}
+          onClose={() => setUploading(null)}
+          onDone={(n) => {
+            setUploading(null);
+            setNotice(`${n} PDF${n === 1 ? '' : 's'} saved to your library.`);
+            reload();
+          }}
+        />
+      )}
+
       {notice && <div className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5">{notice}</div>}
       {error && <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5">{error}</div>}
 
@@ -254,7 +286,7 @@ export default function TemplatesPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <p className="text-sm text-slate-400 max-w-2xl">
               {section === 'documents'
-                ? 'Your own forms (PDF or Word), like your brokerage’s required disclosure. Upload each one once, add it to a deal’s Documents with one click, and tag it with the states it is for.'
+                ? 'PDF Templates are the real PDFs you use on deals, kept by state and category. State Resources are links to each state’s own forms pages. Upload a PDF once, then add it to any deal or listing.'
                 : 'Emails and letters you use again and again, like “congratulations on closing”. Pick one on a deal, check it, and send. A letter is saved as a PDF on the deal. You can also set one to draft itself automatically (see the Approvals tab).'}
             </p>
             <div className="flex gap-2 shrink-0">
@@ -264,8 +296,8 @@ export default function TemplatesPage() {
                 </button>
               )}
               {section === 'documents' ? (
-                <button type="button" className={btnPrimary} onClick={() => openEditor({ new: 'form' })}>
-                  Upload a form
+                <button type="button" className={btnPrimary} onClick={() => openUpload(null)}>
+                  Upload PDFs
                 </button>
               ) : (
                 <>
@@ -281,7 +313,7 @@ export default function TemplatesPage() {
           </div>
 
           {section === 'documents' ? (
-            <DocumentsLibrary reloadKey={reloadKey} showArchived={showArchived} onEdit={(t) => openEditor(t as Template)} onUpload={(presetName) => openEditor({ new: 'form', name: presetName })} />
+            <DocumentsLibrary key={libInit.n} reloadKey={reloadKey} showArchived={showArchived} onEdit={(t) => openEditor(t as Template)} onUpload={openUpload} initialMode={libInit.mode} initialState={libInit.state} />
           ) : (
             <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -377,6 +409,8 @@ function TemplateEditor({ template, startKind, startName, onClose, onSaved }: { 
   const [description, setDescription] = useState(template?.description ?? '');
   const [category, setCategory] = useState(template?.category ?? 'general');
   const [states, setStates] = useState<string[]>(template?.states ?? []);
+  const [docCategory, setDocCategory] = useState<string>(template?.document_category && DOCUMENT_CATEGORIES.some((c) => c.key === template.document_category) ? template.document_category : 'other');
+  const [docType, setDocType] = useState<string>(template?.document_type ?? typesForCategory(template?.document_category ?? 'other')[0] ?? 'General');
   const [pickStates, setPickStates] = useState(false);
   const [subject, setSubject] = useState(template?.subject ?? '');
   const [body, setBody] = useState(template?.body ?? '');
@@ -437,7 +471,7 @@ function TemplateEditor({ template, startKind, startName, onClose, onSaved }: { 
     setBusy(true);
     setError(null);
     try {
-      const payload = { kind, name, description, category, states, subject: kind === 'email' ? subject : '', body: kind === 'form' ? '' : body, ...(canShare || template?.brokerage_shared ? { brokerageShared: shared } : {}) };
+      const payload = { kind, name, description, category, states, subject: kind === 'email' ? subject : '', body: kind === 'form' ? '' : body, ...(kind === 'form' ? { documentCategory: docCategory, documentType: docType } : {}), ...(canShare || template?.brokerage_shared ? { brokerageShared: shared } : {}) };
       const res = await authFetch(saved ? `/api/templates/${saved.id}` : '/api/templates', {
         method: saved ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -493,7 +527,7 @@ function TemplateEditor({ template, startKind, startName, onClose, onSaved }: { 
   };
 
   const remove = async () => {
-    if (!saved || !window.confirm(`Delete “${saved.name}”? This cannot be undone.`)) return;
+    if (!saved || !window.confirm(`Delete “${saved.name}”? This cannot be undone.${saved.kind === 'form' ? ' Copies already added to deals and listings stay where they are.' : ''}`)) return;
     setBusy(true);
     const res = await authFetch(`/api/templates/${saved.id}`, { method: 'DELETE' });
     setBusy(false);
@@ -556,8 +590,8 @@ function TemplateEditor({ template, startKind, startName, onClose, onSaved }: { 
 
           {kind === 'form' && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <div className="text-sm font-semibold text-slate-200 mb-1">Your form file</div>
-              <p className="text-xs text-slate-400 mb-3">Upload the PDF or Word form you are licensed to use. Relay keeps it here and copies it into a deal’s Documents when you pick it. Relay does not supply state legal forms.</p>
+              <div className="text-sm font-semibold text-slate-200 mb-1">PDF file</div>
+              <p className="text-xs text-slate-400 mb-3">Relay keeps this PDF here and copies it into a deal’s Documents when you add it. Replacing it here does not change copies already on deals. Relay does not supply state legal forms.</p>
               {saved?.file_name && (
                 <div className="flex flex-wrap items-center gap-3 mb-3 text-sm">
                   <button type="button" className="text-blue-300 hover:text-blue-200 underline break-all text-left" onClick={openFile}>
@@ -569,7 +603,7 @@ function TemplateEditor({ template, startKind, startName, onClose, onSaved }: { 
               <input
                 ref={fileRef}
                 type="file"
-                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".pdf,application/pdf"
                 disabled={busy || !name.trim()}
                 onChange={(e) => e.target.files?.[0] && uploadFile(e.target.files[0])}
                 className="text-sm text-slate-300 max-w-full"
@@ -582,6 +616,27 @@ function TemplateEditor({ template, startKind, startName, onClose, onSaved }: { 
         {/* Side column: where it applies, and automation */}
         <div className="space-y-4 min-w-0">
           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-4">
+            {kind === 'form' ? (
+              <>
+                <div>
+                  <label className={labelCls}>Files into</label>
+                  <select className={inputCls} value={docCategory} onChange={(e) => { setDocCategory(e.target.value); setDocType(typesForCategory(e.target.value)[0] ?? 'General'); }} aria-label="Document category">
+                    {DOCUMENT_CATEGORIES.map((c) => (
+                      <option key={c.key} value={c.key}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Document type</label>
+                  <select className={inputCls} value={docType} onChange={(e) => setDocType(e.target.value)} aria-label="Document type">
+                    {typesForCategory(docCategory).map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500 mt-1">When you add this to a deal, it goes straight into this section of the deal’s Documents.</p>
+                </div>
+              </>
+            ) : (
             <div>
               <label className={labelCls}>Category</label>
               <select className={inputCls} value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -592,6 +647,7 @@ function TemplateEditor({ template, startKind, startName, onClose, onSaved }: { 
                 ))}
               </select>
             </div>
+            )}
             <div>
               <label className={labelCls}>Short note (only you see this)</label>
               <input className={inputCls} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} />

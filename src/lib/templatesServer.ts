@@ -7,6 +7,7 @@ import { isStateCode } from './usStates';
 import { CONTACT_CATEGORIES } from './contactCategories';
 import { brokerageOwnersFor } from './oversight';
 import { assertAgentHas } from './agentGates';
+import { isValidCategory, isValidDocumentType, resolveDocumentPlacement } from './documentTaxonomy';
 import type { AgentFeature } from './tiers';
 
 export const TEMPLATE_BUCKET = 'transaction-documents';
@@ -62,6 +63,14 @@ export function cleanTemplateInput(body: Record<string, unknown>, forCreate: boo
   }
   if (body.subject !== undefined) out.subject = clip(body.subject, 200) || null;
   if (body.body !== undefined) out.body = typeof body.body === 'string' ? body.body.slice(0, 20000) : null;
+  // Where a PDF template files itself in a deal's Documents (the deal Documents categories, not the email categories above).
+  if (body.documentCategory !== undefined) {
+    const key = typeof body.documentCategory === 'string' ? body.documentCategory : '';
+    if (!isValidCategory(key)) throw new AuthError('Choose a document category from the list.', 400);
+    out.document_category = key;
+    const type = typeof body.documentType === 'string' ? body.documentType : '';
+    out.document_type = type && isValidDocumentType(key, type) ? type : resolveDocumentPlacement(key, null).documentType;
+  }
   if (body.archived !== undefined) out.archived = body.archived === true;
   if (body.brokerageShared !== undefined) out.brokerage_shared = body.brokerageShared === true;
   return out;

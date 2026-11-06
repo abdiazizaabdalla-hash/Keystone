@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
             skipped.push({ templateId: id, name, reason: 'The letter is empty.' });
             continue;
           }
-          const doc = await saveLetterToDeal(user.id, transactionId, name, subject.text.trim() || name, body.text);
+          const doc = await saveLetterToDeal(user.id, transactionId, name, subject.text.trim() || name, body.text, template);
           added.push({ templateId: id, name, kind: 'letter', documentId: (doc?.id as string) ?? null, blanks: [...new Set([...subject.missing, ...body.missing])] });
         } else if (template.kind === 'form') {
           if (!template.storage_path) {

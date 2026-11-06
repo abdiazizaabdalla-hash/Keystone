@@ -7,6 +7,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { uploadIncoming } from '@/lib/incomingUploadClient';
+import LibraryPicker from '@/components/LibraryPicker';
+import { isFeatureOnClient } from '@/lib/features';
+import { stateFromAddress } from '@/lib/usStates';
 import DragHandle from '@/components/DragHandle';
 import MoveMenu from '@/components/MoveMenu';
 import { isDocDrag, isFileDrag, readDocDrag, startDocDrag } from '@/lib/docDrag';
@@ -200,6 +203,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [signingDoc, setSigningDoc] = useState<ListingDoc | null>(null);
   const [docType, setDocType] = useState('General');
   const [uploading, setUploading] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryNote, setLibraryNote] = useState('');
   // Which area an upload is going into, and which areas are folded away (same idea as a deal's Documents).
   const docInputRef = useRef<HTMLInputElement>(null);
   const pendingDocType = useRef<string>('General');
@@ -1616,7 +1621,23 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 e.target.value = '';
               }}
             />
-            <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <h2 className="text-2xl font-bold text-slate-100">Documents</h2>
+              {isFeatureOnClient('templates') && (
+                <button type="button" onClick={() => setLibraryOpen(true)} className="shrink-0 px-4 py-2 border border-slate-600 hover:border-blue-500 text-slate-200 hover:text-blue-300 font-semibold rounded-lg text-sm transition" title="Pick PDFs from your template library, by state">
+                  Add from Library
+                </button>
+              )}
+            </div>
+            {libraryNote && <p className="text-sm text-emerald-300 mb-3" role="status">{libraryNote}</p>}
+            {libraryOpen && (
+              <LibraryPicker
+                target={{ kind: 'listing', id }}
+                dealState={stateFromAddress(listing?.property_address)}
+                onClose={() => setLibraryOpen(false)}
+                onAdded={(message) => { setLibraryNote(message); void loadDocs(); }}
+              />
+            )}
             <p className="text-sm text-slate-400 mb-6">Organized by area, like a deal. Upload into an area, or drag files from your computer or documents between areas. The signed purchase contract goes under Purchase Contract and fills in the deal when you convert. Everything here is copied onto the deal.</p>
             <div className="space-y-3 mb-3">
               {LISTING_DOC_TYPES.map((type) => {

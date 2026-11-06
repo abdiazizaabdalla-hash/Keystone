@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import { US_STATES } from '@/lib/usStates';
+import { DOCUMENT_CATEGORIES, categoryLabel as docCategoryLabel } from '@/lib/documentTaxonomy';
 import { FORM_SOURCES_CHECKED, findFormSource, formSourcesFor, STATE_FORM_INFO, TIER_LABEL, type FormSource, type SourceAccess, type SourceType, type StateTier } from '@/lib/stateFormSources';
 
 export interface DocTemplate {
@@ -13,6 +14,9 @@ export interface DocTemplate {
   category: string;
   states: string[];
   file_name: string | null;
+  document_category?: string | null;
+  document_type?: string | null;
+  brokerage_shared?: boolean;
   archived: boolean;
   last_used_at?: string | null;
   /** Shared with you by the brokerage you belong to: pinned for you, usable, never editable here. */
@@ -45,6 +49,9 @@ interface Pin {
 }
 
 type ItemKind = 'template' | 'trec' | 'source';
+type Mode = 'pdfs' | 'resources';
+
+interface StateLink { id: string; state: string; label: string; url: string }
 
 interface CustomFolder {
   id: string;
@@ -93,12 +100,20 @@ function Star({ on, onClick, label }: { on: boolean; onClick: () => void; label:
 
 // Documents: pinned things and recently used on top, then folders by state. Texas holds TREC's official forms (as links
 // to TREC's own pages, so they are always the current version) next to your own Texas templates.
-export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUpload }: { reloadKey: number; showArchived: boolean; onEdit: (t: DocTemplate) => void; onUpload: (presetName?: string) => void }) {
+export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUpload, initialMode = 'pdfs', initialState = null }: { reloadKey: number; showArchived: boolean; onEdit: (t: DocTemplate) => void; onUpload: (presetState?: string | null) => void; initialMode?: Mode; initialState?: string | null }) {
+  // Two kinds of thing live here and are never mixed: PDF Templates (real PDFs, copied into deals) and State Resources (links that open
+  // a state's own forms pages; never attached to a deal).
+  const [mode, setMode] = useState<Mode>(initialMode);
+  const [links, setLinks] = useState<StateLink[]>([]);
+  const [addingLink, setAddingLink] = useState(false);
+  const [linkLabel, setLinkLabel] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  const [fileNote, setFileNote] = useState('');
   const [templates, setTemplates] = useState<DocTemplate[] | null>(null);
   const [trec, setTrec] = useState<TrecData | null>(null);
   const [trecError, setTrecError] = useState('');
   const [pins, setPins] = useState<Pin[]>([]);
-  const [folder, setFolder] = useState<Folder>(null);
+  const [folder, setFolder] = useState<Folder>(initialState);
   const [q, setQ] = useState('');
   const [pickStates, setPickStates] = useState(false);
   const [error, setError] = useState('');
@@ -114,11 +129,12 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
     let cancelled = false;
     (async () => {
       try {
-        const [tRes, trRes, pRes, fRes] = await Promise.all([
+        const [tRes, trRes, pRes, fRes, lRes] = await Promise.all([
           authFetch(`/api/templates?kinds=form${showArchived ? '&archived=1' : ''}`),
           authFetch('/api/templates/trec'),
           authFetch('/api/templates/pins'),
           authFetch('/api/templates/folders'),
+          authFetch('/api/templates/state-links'),
         ]);
         if (cancelled) return;
         if (!tRes.ok) throw new Error('Could not load your documents');
@@ -131,6 +147,7 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
         }
         if (pRes.ok) setPins((await pRes.json()) as Pin[]);
         if (fRes.ok) setFolders((await fRes.json()) as CustomFolder[]);
+        if (lRes.ok) setLinks((await lRes.json()) as StateLink[]);
         setError('');
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load your documents');
@@ -222,10 +239,53 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
   }, [all]);
   const trecForms = trec?.forms ?? [];
   const recent = [...all].filter((t) => t.last_used_at).sort((a, b) => (b.last_used_at! > a.last_used_at! ? 1 : -1)).slice(0, 5);
-  const count = (code: string) => (byFolder.get(code)?.length ?? 0) + (code === 'TX' ? trecForms.length : 0);
+  const count = (code: string) => byFolder.get(code)?.length ?? 0;
+  const linkCount = (code: string) => formSourcesFor(code).length + (code === 'TX' ? trecForms.length : 0) + links.filter((l) => l.state === code).length;
 
-  const removeBtn = (onClick: () => void) => (
-    <button type="button" onClick={onClick} className="text-[11px] text-slate-500 hover:text-red-300 px-1 leading-none" title="Take it out of this folder (the document itself stays)">
+  const openPdf = async (t: DocTemplate, download: boolean) => {
+    setFileNote('');
+    try {
+      const res = await authFetch(`/api/templates/${t.id}/file`);
+      const data = (await res.json().catch(() => ({}))) as { url?: string | null };
+      if (!res.ok || !data.url) throw new Error('Could not open that PDF');
+      if (download) {
+        const a = document.createElement('a');
+        a.href = data.url;
+        a.download = t.file_name || `${t.name}.pdf`;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else window.open(data.url, '_blank', 'noopener');
+    } catch (e) {
+      setFileNote(e instanceof Error ? e.message : 'Could not open that PDF');
+    }
+  };
+
+  const saveLink = async (code: string) => {
+    const res = await authFetch('/api/templates/state-links', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ state: code, label: linkLabel, url: linkUrl }) });
+    if (!res.ok) {
+      setError(await failMsg(res, 'Could not save that link'));
+      return;
+    }
+    const row = (await res.json()) as StateLink;
+    setLinks((cur) => [...cur, row]);
+    setLinkLabel('');
+    setLinkUrl('');
+    setAddingLink(false);
+    setError('');
+  };
+  const removeLink = async (id: string) => {
+    setLinks((cur) => cur.filter((l) => l.id !== id));
+    const res = await authFetch(`/api/templates/state-links?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      setError(await failMsg(res, 'Could not remove that link'));
+      setLocalKey((k) => k + 1);
+    }
+  };
+
+  const removeBtn = (onClick: () => void, title = 'Take it out of this folder (the document itself stays)') => (
+    <button type="button" onClick={onClick} className="text-[11px] text-slate-500 hover:text-red-300 px-1 leading-none" title={title}>
       Remove
     </button>
   );
@@ -288,17 +348,6 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
     );
   };
 
-  const openBrokerageFile = async (t: DocTemplate) => {
-    if (!t.file_name) return;
-    try {
-      const res = await authFetch(`/api/templates/${t.id}/file`);
-      const data = (await res.json().catch(() => ({}))) as { url?: string | null };
-      if (res.ok && data.url) window.open(data.url, '_blank', 'noopener');
-    } catch {
-      /* the file simply does not open */
-    }
-  };
-
   const templateCard = (t: DocTemplate, remove?: () => void) => (
     <div key={`t-${t.id}`} className="flex items-stretch bg-white/5 border border-white/10 hover:border-white/25 rounded-2xl transition min-w-0">
       <button type="button" onClick={() => onEdit(t)} className="flex-1 min-w-0 text-left p-4">
@@ -309,9 +358,16 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
         {t.description && <span className="block text-xs text-slate-400 mt-0.5 line-clamp-1">{t.description}</span>}
         <span className="block text-xs text-slate-500 mt-2 truncate">
           {t.states.length === 0 ? 'All states' : t.states.slice(0, 4).join(', ') + (t.states.length > 4 ? ` +${t.states.length - 4}` : '')}
-          {t.kind === 'form' && (t.file_name ? ` · ${t.file_name}` : ' · no file yet')}
+          {t.kind === 'form' && ` · ${docCategoryLabel(t.document_category ?? 'other') === 'Uncategorized' ? 'General' : docCategoryLabel(t.document_category ?? 'other')}`}
+          {t.kind === 'form' && !t.file_name ? ' · no file yet' : ''}
           {t.archived ? ' · archived' : ''}
         </span>
+        {t.kind === 'form' && t.file_name && (
+          <span className="mt-2 flex gap-3 text-xs">
+            <span role="link" tabIndex={0} onClick={(e) => { e.stopPropagation(); void openPdf(t, false); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void openPdf(t, false); } }} className="text-blue-300 hover:text-blue-200">Preview</span>
+            <span role="link" tabIndex={0} onClick={(e) => { e.stopPropagation(); void openPdf(t, true); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void openPdf(t, true); } }} className="text-blue-300 hover:text-blue-200">Download</span>
+          </span>
+        )}
       </button>
       <div className="pr-2 pt-2 flex flex-col items-center">
         <Star on={isPinned('template', t.id)} onClick={() => togglePin('template', t.id)} label={isPinned('template', t.id) ? 'Unpin' : 'Pin to the top'} />
@@ -370,6 +426,27 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
     </p>
   );
 
+  // A PDF a brokerage owner shared with the brokerage's agents: usable on any deal, never editable here.
+  const brokerageCard = (t: DocTemplate) => (
+    <div key={`b-${t.id}`} className="bg-white/5 border border-amber-400/30 rounded-2xl p-4 min-w-0">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-slate-100 font-semibold truncate">{t.name}</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-amber-400/15 text-amber-300 border-amber-400/30 shrink-0">Brokerage</span>
+      </div>
+      <span className="block text-xs text-slate-500 mt-2 truncate">
+        {t.states.length === 0 ? 'All states' : t.states.join(', ')}
+        {` · ${docCategoryLabel(t.document_category ?? 'other') === 'Uncategorized' ? 'General' : docCategoryLabel(t.document_category ?? 'other')}`}
+        {t.shared_by ? ` · from ${t.shared_by}` : ''}
+      </span>
+      {t.file_name && (
+        <span className="mt-2 flex gap-3 text-xs">
+          <button type="button" onClick={() => void openPdf(t, false)} className="text-blue-300 hover:text-blue-200">Preview</button>
+          <button type="button" onClick={() => void openPdf(t, true)} className="text-blue-300 hover:text-blue-200">Download</button>
+        </span>
+      )}
+    </div>
+  );
+
   const customTile = (f: CustomFolder) => (
     <div key={`c-${f.id}`} className="flex items-stretch rounded-2xl border bg-white/5 border-white/10 hover:border-white/25 transition min-w-0">
       <button type="button" onClick={() => setFolder(`c:${f.id}`)} className="flex-1 min-w-0 text-left p-4">
@@ -402,10 +479,21 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
     </p>
   );
 
+  // A link the person saved themselves for a state. Opens the page; never attached to a deal.
+  const linkRow = (l: StateLink, showState = true) => (
+    <div key={`link-${l.id}`} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl pl-4 pr-2 py-2.5 min-w-0">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm text-slate-100 font-medium break-words">{showState && <span className="text-slate-400">{stateName(l.state)}: </span>}{l.label}</div>
+        <div className="text-xs text-slate-500 truncate">{l.url}</div>
+      </div>
+      <a href={l.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-200 hover:text-blue-300 rounded-lg transition whitespace-nowrap">Open ↗</a>
+      {removeBtn(() => void removeLink(l.id), 'Delete this link')}
+    </div>
+  );
+
   // Every state folder is the same size. Which states show on your home screen is chosen with "Choose states".
   const folderTile = (code: string) => {
     const n = count(code);
-    const src = formSourcesFor(code).length;
     return (
       <button key={`f-${code}`} type="button" onClick={() => setFolder(code)} className="text-left rounded-2xl border bg-white/5 border-white/10 hover:border-white/25 transition min-w-0 p-4">
         <span className="flex items-center gap-2 text-slate-100 font-semibold">
@@ -415,9 +503,7 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
           <span className="truncate">{folderName(code)}</span>
         </span>
         <span className="block text-xs text-slate-400 mt-1">
-          {code === 'TX'
-            ? `${trecForms.length} official TREC form${trecForms.length === 1 ? '' : 's'} · ${n - trecForms.length} of yours`
-            : `${n} of yours${src > 0 ? ` · ${src} forms source${src === 1 ? '' : 's'}` : ''}`}
+          {mode === 'pdfs' ? (n === 0 ? 'Empty · ready for PDFs' : `${n} PDF${n === 1 ? '' : 's'}`) : `${linkCount(code)} link${linkCount(code) === 1 ? '' : 's'}`}
         </span>
       </button>
     );
@@ -427,25 +513,34 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
 
   const query = q.trim().toLowerCase();
   const searchHits = query
-    ? {
-        templates: all.filter((t) => `${t.name} ${t.description ?? ''}`.toLowerCase().includes(query)),
-        trec: trecForms.filter((f) => `${f.name} ${f.formId}`.toLowerCase().includes(query)),
-        sources: US_STATES.flatMap((st) => formSourcesFor(st.code)).filter((x) => `${x.label} ${x.covers} ${stateName(x.state)}`.toLowerCase().includes(query)),
-      }
+    ? mode === 'pdfs'
+      ? { templates: [...all, ...brokerageDocs].filter((t) => `${t.name} ${t.description ?? ''} ${t.file_name ?? ''}`.toLowerCase().includes(query)), trec: [] as TrecForm[], sources: [] as FormSource[], links: [] as StateLink[] }
+      : {
+          templates: [] as DocTemplate[],
+          trec: trecForms.filter((f) => `${f.name} ${f.formId}`.toLowerCase().includes(query)),
+          sources: US_STATES.flatMap((st) => formSourcesFor(st.code)).filter((x) => `${x.label} ${x.covers} ${stateName(x.state)}`.toLowerCase().includes(query)),
+          links: links.filter((l) => `${l.label} ${l.url} ${stateName(l.state)}`.toLowerCase().includes(query)),
+        }
     : null;
 
   const header = (
-    <input className={inputCls} placeholder="Search your documents, Texas forms and state sources" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search documents" />
+    <input className={inputCls} placeholder={mode === 'pdfs' ? 'Search your PDF templates' : 'Search state resources and links'} value={q} onChange={(e) => setQ(e.target.value)} aria-label={mode === 'pdfs' ? 'Search PDF templates' : 'Search state resources'} />
   );
 
   let body: React.ReactNode;
   if (searchHits) {
     body = (
       <div className="space-y-5">
-        {searchHits.templates.length === 0 && searchHits.trec.length === 0 && searchHits.sources.length === 0 && <p className="text-sm text-slate-400">Nothing matches “{q}”.</p>}
+        {searchHits.templates.length === 0 && searchHits.trec.length === 0 && searchHits.sources.length === 0 && searchHits.links.length === 0 && <p className="text-sm text-slate-400">Nothing matches “{q}”.</p>}
+        {searchHits.links.length > 0 && (
+          <section>
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Your links</h2>
+            <div className="grid lg:grid-cols-2 gap-2">{searchHits.links.map((l) => linkRow(l))}</div>
+          </section>
+        )}
         {searchHits.templates.length > 0 && (
           <section>
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Your documents</h2>
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">PDF templates</h2>
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{searchHits.templates.map((t) => templateCard(t))}</div>
           </section>
         )}
@@ -538,9 +633,14 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
     );
   } else if (folder) {
     const mine = byFolder.get(folder) ?? [];
+    const fromBrokerage = brokerageDocs.filter((t) => t.states.includes(folder));
     const stateInfo = STATE_FORM_INFO[folder];
     const stateSources = formSourcesFor(folder);
-    const grouped = (['contracts', 'addenda', 'other'] as const).map((s) => ({ s, rows: trecForms.filter((f) => f.section === s) })).filter((g) => g.rows.length > 0);
+    const myLinks = links.filter((l) => l.state === folder);
+    const grouped = (['contracts', 'addenda', 'other'] as const).map((sec) => ({ s: sec, rows: trecForms.filter((f) => f.section === sec) })).filter((g) => g.rows.length > 0);
+    const byCategory = DOCUMENT_CATEGORIES.map((c) => ({ c, rows: mine.filter((t) => (t.document_category || 'other') === c.key) })).filter((g) => g.rows.length > 0);
+    const knownKeys = new Set(DOCUMENT_CATEGORIES.map((c) => c.key));
+    const stray = mine.filter((t) => !knownKeys.has(t.document_category || 'other'));
     body = (
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -552,58 +652,113 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
             <Star on={isPinned('folder', folder)} onClick={() => togglePin('folder', folder)} label={isPinned('folder', folder) ? 'Remove from your states' : 'Add to your states'} />
           </div>
         </div>
-        <h2 className="text-2xl font-semibold text-slate-100">{folderName(folder)}</h2>
-
-        {folder === 'TX' && (
-          <section className="space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-200">Official TREC forms</h3>
-              {trecNote()}
-            </div>
-            {trecForms.length === 0 ? (
-              <p className="text-sm text-slate-400">The list of TREC forms is not available yet. Try again in a few minutes, or use TREC’s site directly.</p>
-            ) : (
-              grouped.map((g) => (
-                <div key={g.s}>
-                  <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                    {SECTION_LABEL[g.s]} ({g.rows.length})
-                  </h4>
-                  <div className="grid lg:grid-cols-2 gap-2">{g.rows.map((f) => trecRow(f))}</div>
-                </div>
-              ))
-            )}
-          </section>
-        )}
-
-        {folder !== 'TX' && (
-          <section className="space-y-2">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-200 flex flex-wrap items-center gap-2">
-                Official forms sources for {stateName(folder)}
-                {stateInfo && (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-300 bg-white/5 border border-white/10 rounded-full px-2 py-0.5">
-                    <span className={`w-2 h-2 rounded-full ${TIER_DOT[stateInfo.tier]}`} />
-                    {TIER_LABEL[stateInfo.tier]}
-                  </span>
-                )}
-              </h3>
-              <p className="text-sm text-slate-300 mt-1">{stateInfo ? stateInfo.summary : 'We have not checked this one yet.'}</p>
-            </div>
-            {stateSources.length > 0 && <div className="grid lg:grid-cols-2 gap-2">{stateSources.map((x) => sourceRow(x))}</div>}
-            {stateInfo && sourcesNote()}
-          </section>
-        )}
-
-        <section>
-          <h3 className="text-sm font-semibold text-slate-200 mb-2">{`Your ${stateName(folder)} templates`}</h3>
-          {mine.length === 0 ? (
-            <p className="text-sm text-slate-400">
-              Nothing yet. Upload a form or write a letter and tag it with {stateName(folder)}, and it will appear here.
-            </p>
-          ) : (
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{mine.map((t) => templateCard(t))}</div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-2xl font-semibold text-slate-100">{folderName(folder)}</h2>
+          {mode === 'pdfs' && mine.length + fromBrokerage.length > 0 && (
+            <button type="button" onClick={() => onUpload(folder)} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition">Upload PDF to {stateName(folder)}</button>
           )}
-        </section>
+        </div>
+
+        {mode === 'pdfs' ? (
+          <>
+            {mine.length + fromBrokerage.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/20 bg-white/[0.03] p-8 text-center">
+                <svg viewBox="0 0 20 20" className="w-10 h-10 text-blue-300/70 mx-auto mb-2" fill="currentColor" aria-hidden="true"><path d="M2 6a2 2 0 012-2h3.6a1 1 0 01.7.3L10 6h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+                <p className="text-slate-100 font-semibold">{stateName(folder)} folder is ready</p>
+                <p className="text-sm text-slate-400 mt-1 max-w-md mx-auto">No PDFs yet. Upload the {stateName(folder)} contracts and forms you use, and they will be organized here by category. Relay does not supply state contracts, so nothing is pre-filled.</p>
+                <div className="flex flex-wrap justify-center gap-2 mt-4">
+                  <button type="button" onClick={() => onUpload(folder)} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition">Upload PDF</button>
+                  <button type="button" onClick={() => { setMode('resources'); setAddingLink(true); }} className="px-4 py-2 border border-white/15 hover:border-white/30 text-slate-200 text-sm font-semibold rounded-xl transition">Add a resource link</button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {fromBrokerage.length > 0 && (
+                  <section>
+                    <h3 className="text-sm font-semibold text-slate-200 mb-2">From your brokerage</h3>
+                    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{fromBrokerage.map((t) => brokerageCard(t))}</div>
+                  </section>
+                )}
+                {byCategory.map((g) => (
+                  <section key={g.c.key}>
+                    <h3 className="text-sm font-semibold text-slate-200 mb-2">{g.c.label} <span className="text-slate-500 font-normal">({g.rows.length})</span></h3>
+                    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{g.rows.map((t) => templateCard(t))}</div>
+                  </section>
+                ))}
+                {stray.length > 0 && (
+                  <section>
+                    <h3 className="text-sm font-semibold text-slate-200 mb-2">Other</h3>
+                    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{stray.map((t) => templateCard(t))}</div>
+                  </section>
+                )}
+              </div>
+            )}
+            <button type="button" onClick={() => setMode('resources')} className="text-sm text-blue-300 hover:text-blue-200">Looking for official {stateName(folder)} forms pages? Open {stateName(folder)} resources →</button>
+          </>
+        ) : (
+          <>
+            {folder === 'TX' && (
+              <section className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-200">Official TREC forms</h3>
+                  {trecNote()}
+                </div>
+                {trecForms.length === 0 ? (
+                  <p className="text-sm text-slate-400">The list of TREC forms is not available yet. Try again in a few minutes, or use TREC’s site directly.</p>
+                ) : (
+                  grouped.map((g) => (
+                    <div key={g.s}>
+                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                        {SECTION_LABEL[g.s]} ({g.rows.length})
+                      </h4>
+                      <div className="grid lg:grid-cols-2 gap-2">{g.rows.map((f) => trecRow(f))}</div>
+                    </div>
+                  ))
+                )}
+              </section>
+            )}
+
+            {folder !== 'TX' && (
+              <section className="space-y-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-200 flex flex-wrap items-center gap-2">
+                    Official forms sources for {stateName(folder)}
+                    {stateInfo && (
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-300 bg-white/5 border border-white/10 rounded-full px-2 py-0.5">
+                        <span className={`w-2 h-2 rounded-full ${TIER_DOT[stateInfo.tier]}`} />
+                        {TIER_LABEL[stateInfo.tier]}
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-sm text-slate-300 mt-1">{stateInfo ? stateInfo.summary : 'We have not checked this one yet.'}</p>
+                </div>
+                {stateSources.length > 0 && <div className="grid lg:grid-cols-2 gap-2">{stateSources.map((x) => sourceRow(x))}</div>}
+                {stateInfo && sourcesNote()}
+              </section>
+            )}
+
+            <section className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-slate-200">Your {stateName(folder)} links</h3>
+                {!addingLink && <button type="button" onClick={() => setAddingLink(true)} className="text-sm text-blue-300 hover:text-blue-200">+ Add a link</button>}
+              </div>
+              {addingLink && (
+                <form className="grid sm:grid-cols-[1fr_1.4fr_auto_auto] gap-2" onSubmit={(e) => { e.preventDefault(); void saveLink(folder); }}>
+                  <input className={inputCls} placeholder="Name, like “Association forms”" value={linkLabel} maxLength={140} onChange={(e) => setLinkLabel(e.target.value)} aria-label="Link name" />
+                  <input className={inputCls} placeholder="https://…" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} aria-label="Link address" autoFocus />
+                  <button type="submit" disabled={!linkUrl.trim()} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm">Save link</button>
+                  <button type="button" onClick={() => { setAddingLink(false); setLinkLabel(''); setLinkUrl(''); }} className="px-3 py-2 rounded-lg border border-slate-600 text-slate-300 text-sm">Cancel</button>
+                </form>
+              )}
+              {myLinks.length > 0 ? (
+                <div className="grid lg:grid-cols-2 gap-2">{myLinks.map((l) => linkRow(l, false))}</div>
+              ) : (
+                !addingLink && <p className="text-sm text-slate-400">No links of your own for {stateName(folder)}. Add the pages you check for forms, like your association’s members area.</p>
+              )}
+            </section>
+            <button type="button" onClick={() => setMode('pdfs')} className="text-sm text-blue-300 hover:text-blue-200">Back to {stateName(folder)} PDF templates →</button>
+          </>
+        )}
       </div>
     );
   } else {
@@ -616,51 +771,100 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
     const pinnedTemplates = all.filter((t) => isPinned('template', t.id));
     const pinnedTrec = trecForms.filter((f) => isPinned('trec', f.slug));
     const hasDisclosure = everything.some((t) => /iabs|brokerage services|agency disclosure|consumer notice/i.test(t.name));
-    const hasPins = pinnedCustom.length + pinnedSources.length + pinnedTemplates.length + pinnedTrec.length > 0;
-    body = (
+    const general = all.filter((t) => t.states.length === 0);
+    const statePicker = (
+      <section>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">My states</h2>
+          <button type="button" onClick={() => setPickStates((v) => !v)} className="text-sm text-blue-300 hover:text-blue-200">
+            {pickStates ? 'Done' : 'Add states'}
+          </button>
+        </div>
+        {pickStates && (
+          <div className="mb-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+            <p className="text-sm text-slate-300 mb-2">Tick the states you work in. Each one gets its own folder at the top, even before you have a PDF for it.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
+              {US_STATES.map((st) => {
+                const on = myStates.includes(st.code);
+                return (
+                  <button
+                    key={st.code}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => togglePin('folder', st.code)}
+                    className={`flex items-center gap-2 text-left px-2.5 py-1.5 rounded-lg border text-sm transition ${on ? 'bg-blue-500/20 border-blue-500/50 text-blue-100' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}
+                  >
+                    <span className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center text-[10px] ${on ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-500'}`}>{on ? '✓' : ''}</span>
+                    <span className="truncate">{st.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {myStates.length === 0 ? (
+          <p className="text-sm text-slate-400">{mode === 'pdfs' ? 'Add the states you work in. Each gets a folder that stays ready for the right PDFs, even while it is empty.' : 'Add the states you work in and they show up here, each with its official forms sources.'}</p>
+        ) : (
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{myStates.map((code) => folderTile(code))}</div>
+        )}
+      </section>
+    );
+
+    body = mode === 'resources' ? (
+      <div className="space-y-7">
+        <p className="text-sm text-slate-400 max-w-2xl">Links to each state’s own forms pages. They open on the source’s site, always the current version. They are links, not PDFs, so they are never added to a deal.</p>
+        {(pinnedTrec.length > 0 || pinnedSources.length > 0) && (
+          <section>
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Pinned</h2>
+            <div className="grid lg:grid-cols-2 gap-2">
+              {pinnedTrec.map((f) => trecRow(f))}
+              {pinnedSources.map((x) => sourceRow(x, { showState: true }))}
+            </div>
+          </section>
+        )}
+        {statePicker}
+        <section>
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">All states</h2>
+          <p className="text-sm text-slate-400 mb-2">Open any state to see where its official forms are. The dot shows what each state itself publishes.</p>
+          <p className="mb-2 text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.contracts}`} />State publishes the contracts</span>
+            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.disclosures}`} />State publishes some forms</span>
+            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.association}`} />Contracts come from the REALTOR association</span>
+            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.none}`} />No public source confirmed</span>
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-1.5">
+            {US_STATES.map((st) => (
+              <button
+                key={st.code}
+                type="button"
+                onClick={() => setFolder(st.code)}
+                title={`${st.name}${st.code === 'TX' ? ': official TREC forms' : STATE_FORM_INFO[st.code] ? `: ${TIER_LABEL[STATE_FORM_INFO[st.code].tier]}` : ''}`}
+                className="flex items-center gap-2 text-left px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-slate-200 min-w-0"
+              >
+                <span className={`w-2 h-2 rounded-full shrink-0 ${st.code === 'TX' ? 'bg-emerald-400' : STATE_FORM_INFO[st.code] ? TIER_DOT[STATE_FORM_INFO[st.code].tier] : 'bg-slate-700'}`} />
+                <span className="truncate">{st.name}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+    ) : (
       <div className="space-y-7">
         {brokerageDocs.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">From your brokerage</h2>
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {brokerageDocs.map((t) => (
-                <button
-                  key={`b-${t.id}`}
-                  type="button"
-                  onClick={() => void openBrokerageFile(t)}
-                  className="text-left bg-white/5 border border-amber-400/30 hover:border-amber-400/60 rounded-2xl p-4 transition min-w-0"
-                  title={t.file_name ? 'Open the file' : 'Provided by your brokerage'}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-slate-100 font-semibold truncate">{t.name}</span>
-                    <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-amber-400/15 text-amber-300 border-amber-400/30 shrink-0">Pinned by brokerage</span>
-                  </div>
-                  {t.description && <span className="block text-xs text-slate-400 mt-0.5 line-clamp-1">{t.description}</span>}
-                  <span className="block text-xs text-slate-500 mt-2 truncate">
-                    {t.states.length === 0 ? 'All states' : t.states.join(', ')}
-                    {t.file_name ? ` · ${t.file_name}` : ''}
-                    {t.shared_by ? ` · from ${t.shared_by}` : ''}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{brokerageDocs.map((t) => brokerageCard(t))}</div>
             <p className="text-xs text-slate-500 mt-2">Use these from any deal. Only your brokerage can change them.</p>
           </section>
         )}
 
-        {hasPins && (
+        {(pinnedCustom.length > 0 || pinnedTemplates.length > 0) && (
           <section>
             <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Pinned</h2>
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {pinnedCustom.map((f) => customTile(f))}
               {pinnedTemplates.map((t) => templateCard(t))}
             </div>
-            {(pinnedTrec.length > 0 || pinnedSources.length > 0) && (
-              <div className="grid lg:grid-cols-2 gap-2 mt-3">
-                {pinnedTrec.map((f) => trecRow(f))}
-                {pinnedSources.map((x) => sourceRow(x, { showState: true }))}
-              </div>
-            )}
           </section>
         )}
 
@@ -670,6 +874,27 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{recent.map((t) => templateCard(t))}</div>
           </section>
         )}
+
+        {statePicker}
+
+        <section>
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">General PDFs (every state)</h2>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {general.map((t) => templateCard(t))}
+            {!hasDisclosure && (
+              <button type="button" onClick={() => onUpload(null)} className="text-left rounded-2xl border border-dashed border-white/25 hover:border-blue-400 bg-white/[0.02] p-4 transition min-w-0">
+                <span className="block text-slate-100 font-semibold">+ Add your brokerage’s IABS</span>
+                <span className="block text-xs text-slate-400 mt-1">Upload the disclosure your brokerage gives clients (like an Information About Brokerage Services form) once, then add it to any deal.</span>
+              </button>
+            )}
+            {all.length === 0 && (
+              <button type="button" onClick={() => onUpload(null)} className="text-left rounded-2xl border border-dashed border-white/25 hover:border-blue-400 bg-white/[0.02] p-4 transition min-w-0">
+                <span className="block text-slate-100 font-semibold">+ Upload PDFs</span>
+                <span className="block text-xs text-slate-400 mt-1">Your own PDF forms, kept here and organized by state and category.</span>
+              </button>
+            )}
+          </div>
+        </section>
 
         <section>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -701,91 +926,25 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
             </form>
           )}
           {folders.length === 0 && !creating ? (
-            <p className="text-sm text-slate-400">Make a folder for the documents you use all the time, like everything for a new listing. Then use the folder button on any document, Texas form or state source to add it.</p>
+            <p className="text-sm text-slate-400">Make a folder for the PDFs you use all the time, like everything for a new listing. Folders only hold shortcuts, so nothing is copied or moved.</p>
           ) : (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{folders.filter((f) => !pins.some((p) => p.kind === 'custom' && p.ref === f.id)).map((f) => customTile(f))}</div>
           )}
         </section>
 
         <section>
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">My states</h2>
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={() => setPickStates((v) => !v)} className="text-sm text-blue-300 hover:text-blue-200">
-                {pickStates ? 'Done' : 'Choose states'}
-              </button>
-            </div>
-          </div>
-          {pickStates && (
-            <div className="mb-3 rounded-2xl border border-white/10 bg-white/5 p-3">
-              <p className="text-sm text-slate-300 mb-2">Tick the states you work in. They go to the top of this screen. Every other state stays in the list below.</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
-                {US_STATES.map((st) => {
-                  const on = myStates.includes(st.code);
-                  return (
-                    <button
-                      key={st.code}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => togglePin('folder', st.code)}
-                      className={`flex items-center gap-2 text-left px-2.5 py-1.5 rounded-lg border text-sm transition ${on ? 'bg-blue-500/20 border-blue-500/50 text-blue-100' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}
-                    >
-                      <span className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center text-[10px] ${on ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-500'}`}>{on ? '✓' : ''}</span>
-                      <span className="truncate">{st.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          {myStates.length === 0 ? (
-            <p className="text-sm text-slate-400">Choose the states you work in and they will show up here, each with its official forms sources.</p>
-          ) : (
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">{myStates.map((code) => folderTile(code))}</div>
-          )}
-        </section>
-
-        <section>
-          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">My documents</h2>
-          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {all.map((t) => templateCard(t))}
-            {!hasDisclosure && (
-              <button type="button" onClick={() => onUpload('Our brokerage’s IABS')} className="text-left rounded-2xl border border-dashed border-white/25 hover:border-blue-400 bg-white/[0.02] p-4 transition min-w-0">
-                <span className="block text-slate-100 font-semibold">+ Add your brokerage’s IABS</span>
-                <span className="block text-xs text-slate-400 mt-1">Upload the disclosure your brokerage gives clients (like an Information About Brokerage Services form) once, then add it to any deal.</span>
-              </button>
-            )}
-            {all.length === 0 && (
-              <button type="button" onClick={() => onUpload()} className="text-left rounded-2xl border border-dashed border-white/25 hover:border-blue-400 bg-white/[0.02] p-4 transition min-w-0">
-                <span className="block text-slate-100 font-semibold">+ Upload a form</span>
-                <span className="block text-xs text-slate-400 mt-1">Your own PDF or Word forms, kept here and tagged with the states they are for.</span>
-              </button>
-            )}
-          </div>
-        </section>
-
-        <section>
           <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">All states</h2>
-          <p className="text-sm text-slate-400 mb-2">Open any state to see where its official forms are. The dot shows what each state itself publishes.</p>
-          <p className="mb-2 text-xs text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
-            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.contracts}`} />State publishes the contracts</span>
-            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.disclosures}`} />State publishes some forms</span>
-            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.association}`} />Contracts come from the REALTOR association</span>
-            <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${TIER_DOT.none}`} />No public source confirmed</span>
-          </p>
+          <p className="text-sm text-slate-400 mb-2">Every state has a folder, empty or not. Open one to see its PDFs by category.</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-1.5">
-            {US_STATES.map((st) => (
-              <button
-                key={st.code}
-                type="button"
-                onClick={() => setFolder(st.code)}
-                title={`${st.name}${st.code === 'TX' ? ': official TREC forms' : STATE_FORM_INFO[st.code] ? `: ${TIER_LABEL[STATE_FORM_INFO[st.code].tier]}` : ''}`}
-                className="flex items-center gap-2 text-left px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-slate-200 min-w-0"
-              >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${st.code === 'TX' ? 'bg-emerald-400' : STATE_FORM_INFO[st.code] ? TIER_DOT[STATE_FORM_INFO[st.code].tier] : 'bg-slate-700'}`} />
-                <span className="truncate">{st.name}</span>
-              </button>
-            ))}
+            {US_STATES.map((st) => {
+              const n = count(st.code);
+              return (
+                <button key={st.code} type="button" onClick={() => setFolder(st.code)} className="flex items-center justify-between gap-2 text-left px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-slate-200 min-w-0">
+                  <span className="truncate">{st.name}</span>
+                  {n > 0 && <span className="shrink-0 text-xs text-blue-300">{n}</span>}
+                </button>
+              );
+            })}
           </div>
         </section>
       </div>
@@ -795,6 +954,14 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
   return (
     <div className="space-y-4">
       {error && <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5">{error}</div>}
+      {fileNote && <div className="text-sm text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5">{fileNote}</div>}
+      <div className="inline-flex p-1 bg-white/5 border border-white/10 rounded-xl" role="tablist" aria-label="Library">
+        {([['pdfs', 'PDF Templates'], ['resources', 'State Resources']] as const).map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => { setMode(id); setQ(''); setAddingLink(false); }} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${mode === id ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-white/10'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
       {header}
       {body}
     </div>

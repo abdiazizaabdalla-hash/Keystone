@@ -58,7 +58,7 @@ const STATUS: Record<View['status'], { label: string; cls: string }> = {
 const field = 'px-2 py-1.5 rounded-lg bg-slate-900/60 border border-white/10 text-sm text-slate-100 w-full';
 const btn = 'px-3 py-1.5 rounded-lg text-sm font-semibold transition disabled:opacity-50';
 
-export default function CommissionBox({ transactionId }: { transactionId: string }) {
+export default function CommissionBox({ transactionId, embedded = false }: { transactionId: string; embedded?: boolean }) {
   const router = useRouter();
   const [confirmStripe, setConfirmStripe] = useState(false);
   const [data, setData] = useState<Data | null>(null);
@@ -145,10 +145,10 @@ export default function CommissionBox({ transactionId }: { transactionId: string
   })();
 
   return (
-    <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
+    <section className={embedded ? 'border-t border-white/10 pt-4' : 'bg-white/5 border border-white/10 rounded-2xl p-5'}>
       <div className="flex items-start justify-between gap-2 mb-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-100">Commission</h2>
+          <h2 className={embedded ? 'text-base font-bold text-slate-100' : 'text-lg font-bold text-slate-100'}>Commission</h2>
           <p className="text-xs text-slate-400">{isOwner ? 'Between your brokerage and this agent only. Separate from any Relay coordination fees.' : 'Between you and your brokerage only. Separate from any fees for a coordinator on Relay.'}</p>
         </div>
         {c && (() => {
