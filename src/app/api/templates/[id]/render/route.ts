@@ -26,7 +26,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({
       kind: template.kind,
       name: template.name,
-      subject: subject.text,
+      // A letter's heading on the PDF is already filled in: its own heading if it has one, otherwise the template's name.
+      subject: template.kind === 'letter' && !subject.text.trim() ? (template.name as string) : subject.text,
       body: text.text,
       missing: [...new Set([...subject.missing, ...text.missing])],
       fileName: template.file_name ?? null,

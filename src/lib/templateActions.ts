@@ -24,10 +24,14 @@ function insertDocument(transactionId: string, userId: string, fileName: string,
     .single();
 }
 
+/** The file name a letter template is saved under in a deal's Documents. */
+export const letterFileName = (templateName: string) => `${templateName.replace(/[^A-Za-z0-9._ -]/g, '').trim().slice(0, 80) || 'Letter'}.pdf`;
+
 export async function saveLetterToDeal(userId: string, transactionId: string, templateName: string, heading: string, text: string) {
   if (!text.trim()) throw new AuthError('The letter is empty.', 400);
-  const fileName = `${templateName.replace(/[^A-Za-z0-9._ -]/g, '').trim().slice(0, 80) || 'Letter'}.pdf`;
-  const pdf = await generateLetterPdf(heading, text);
+  const fileName = letterFileName(templateName);
+  // The heading is always filled in: if it was left blank, the letter's own name is used.
+  const pdf = await generateLetterPdf(heading.trim() || templateName, text);
   const storagePath = `${transactionId}/${randomUUID()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   const { error: uploadError } = await supabaseServer.storage.from(TEMPLATE_BUCKET).upload(storagePath, pdf, { contentType: 'application/pdf', upsert: false });
   if (uploadError) throw uploadError;

@@ -1,10 +1,10 @@
-// Built-in starter templates. They are generic on purpose: friendly emails and plain letters, no legal forms and no
+// Built-in starter templates. They are generic on purpose: friendly emails, no legal forms and no
 // state-specific legal text. Installing the pack copies them into the person's own library, where every word is theirs
 // to edit. State forms are the person's own licensed files, uploaded as "form" templates tagged with their state.
 
 export interface StarterTemplate {
   key: string;
-  kind: 'email' | 'letter';
+  kind: 'email' | 'letter'; // the built-in pack is emails only; letters are the person's own
   name: string;
   description: string;
   category: 'post_closing' | 'welcome' | 'general';
@@ -96,22 +96,6 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
     subject: 'Closing is coming up for {{property_address}}',
     body: `Hi {{client_first_name}},\n\nA quick reminder that closing on {{property_address}} is scheduled for {{closing_date}}. A few things to have ready: a government-issued photo ID, and any funds your title company has asked you to bring, in the form they requested.\n\nCall me if you want to go over anything.${SIGN}`,
     suggestedRule: { trigger: 'closing_date', offsetDays: -3, roles: ['Buyer', 'Seller'] },
-  },
-  {
-    key: 'letter_closing_summary',
-    kind: 'letter',
-    name: 'Closing summary letter',
-    description: 'A one-page letter for the deal file.',
-    category: 'post_closing',
-    body: `{{today}}\n\nRe: {{property_address}}\nFile {{file_number}}\n\nThis letter confirms that the transaction for {{property_address}} closed on {{closing_date}}. The final documents are kept in the deal file.\n\nSincerely,\n{{my_name}}\n{{my_email}}`,
-  },
-  {
-    key: 'letter_welcome_client',
-    kind: 'letter',
-    name: 'Client welcome letter',
-    description: 'A short letter introducing how the deal will run.',
-    category: 'welcome',
-    body: `{{today}}\n\nDear {{client_name}},\n\nWelcome. I will be coordinating your transaction at {{property_address}}. Key dates and documents are in your client portal, and I will let you know as each step is completed.\n\nThe contract was accepted on {{acceptance_date}} and closing is set for {{closing_date}}.\n\nSincerely,\n{{my_name}}`,
   },
 ];
 

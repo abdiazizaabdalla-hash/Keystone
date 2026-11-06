@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { US_STATES } from '@/lib/usStates';
 import { STATE_FORM_INFO, TIER_LABEL, formSourcesFor } from '@/lib/stateFormSources';
+import { addTemplatesToDeal, summarizeAdded } from '@/lib/addTemplatesClient';
 
 // On a deal's Documents tab: the documents for the state the property is in (from its address, or the state chosen on
 // the Overview tab). Shows the person's own forms and letters for that state, a place to add their brokerage's IABS,
@@ -45,11 +46,13 @@ const card = 'bg-slate-800/40 border border-white/10 rounded-xl p-3';
 
 const OPEN_KEY = 'relay.stateDocsOpen';
 
-export default function DealStateDocs({ dealState, onUse, onDropFiles }: { dealState: string | null; onUse: (t: DealTemplate) => void; onDropFiles?: (files: FileList) => void }) {
+export default function DealStateDocs({ transactionId, dealState, onAdded, onDropFiles }: { transactionId: string; dealState: string | null; onAdded: () => void; onDropFiles?: (files: FileList) => void }) {
   const [mine, setMine] = useState<DealTemplate[] | null>(null);
   // The folder remembers whether you left it open. Closed by default so the page stays quiet.
   const [open, setOpen] = useState(false);
   const [over, setOver] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [note, setNote] = useState<{ text: string; bad: boolean } | null>(null);
   useEffect(() => {
     const t = setTimeout(() => {
       try { setOpen(window.localStorage.getItem(OPEN_KEY) === '1'); } catch { /* storage is optional */ }
@@ -102,11 +105,28 @@ export default function DealStateDocs({ dealState, onUse, onDropFiles }: { dealS
   const trecPicks = TREC_RECOMMENDED.flatMap((r) => trec.filter((f) => r.match.test(f.name)).map((form) => ({ r, form })));
   const sources = formSourcesFor(dealState);
 
+  // Choosing a letter or form puts it straight into this deal's Documents, filled in with the deal's details. No pop-up to click through.
+  const add = async (list: DealTemplate[], all: boolean) => {
+    if (adding || list.length === 0) return;
+    setAdding(true);
+    setNote(null);
+    try {
+      const result = await addTemplatesToDeal(transactionId, list.map((t) => t.id), all);
+      setNote({ text: summarizeAdded(result), bad: result.added.length === 0 });
+      if (result.added.length > 0) onAdded();
+    } catch (e) {
+      setNote({ text: e instanceof Error ? e.message : 'Could not add that to this deal', bad: true });
+    } finally {
+      setAdding(false);
+    }
+  };
+
   const chip = (t: DealTemplate) => (
     <button
       key={t.id}
       type="button"
-      onClick={() => onUse(t)}
+      disabled={adding}
+      onClick={() => void add([t], false)}
       className="max-w-full inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-sm text-slate-100 transition"
       title={t.description || `Add “${t.name}” to this deal`}
     >
@@ -117,6 +137,7 @@ export default function DealStateDocs({ dealState, onUse, onDropFiles }: { dealS
   );
 
   const yours = stateOnly.length + allState.length;
+  const everything = [...stateOnly, ...allState];
   const recommended = dealState === 'TX' && trecPicks.length > 0 ? trecPicks.length : sources.length;
   const isFile = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
 
@@ -147,7 +168,16 @@ export default function DealStateDocs({ dealState, onUse, onDropFiles }: { dealS
       <p className="text-xs text-slate-500">Chosen from the property address ({dealState}). You can change the state on the Overview tab.</p>
 
       <div className={card}>
-        <p className="text-sm font-semibold text-slate-100 mb-2">Your {stateName} forms and letters</p>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <p className="text-sm font-semibold text-slate-100">Your {stateName} forms and letters</p>
+          {everything.length > 0 && (
+            <button type="button" disabled={adding} onClick={() => void add(everything, true)} className="px-3 py-1.5 bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition" title="Add every PDF below to this deal's Documents, filled in. Ones already there are left alone.">
+              {adding ? 'Adding…' : `Add all ${everything.length} to this deal`}
+            </button>
+          )}
+        </div>
+        {note && <p className={`text-xs mb-2 rounded-lg px-3 py-2 border ${note.bad ? 'text-amber-200 bg-amber-500/10 border-amber-500/30' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'}`} role="status">{note.text}</p>}
+        {everything.length > 0 && <p className="text-xs text-slate-500 mb-2">Click one to add it to this deal, filled in with the deal&rsquo;s details.</p>}
         {mine === null ? (
           <p className="text-sm text-slate-500">Loading…</p>
         ) : stateOnly.length === 0 ? (

@@ -28,6 +28,7 @@ import { readPersona } from '@/lib/persona';
 import { isFeatureOnClient } from '@/lib/features';
 import { US_STATES, stateFromAddress } from '@/lib/usStates';
 import SignatureFieldPlacer from '@/components/SignatureFieldPlacer';
+import { addTemplatesToDeal, summarizeAdded } from '@/lib/addTemplatesClient';
 import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
 
 interface Transaction {
@@ -375,6 +376,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   const [isAgentAcct, setIsAgentAcct] = useState(false);
   const [showAddCoordinator, setShowAddCoordinator] = useState(false);
   const [useTemplate, setUseTemplate] = useState<{ mode: 'all' | 'documents'; initial?: { id: string; kind: 'email' | 'letter' | 'form'; name: string; description: string | null; states: string[] } } | null>(null);
+  const [recentNote, setRecentNote] = useState('');
   const [recentTemplates, setRecentTemplates] = useState<Array<{ id: string; kind: 'email' | 'letter' | 'form'; name: string; description: string | null; states: string[] }>>([]);
   const [recentKey, setRecentKey] = useState(0);
   const templatesOn = isFeatureOnClient('templates');
@@ -2585,7 +2587,20 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                   <button
                     key={t.id}
                     type="button"
-                    onClick={() => setUseTemplate({ mode: 'documents', initial: t })}
+                    onClick={async () => {
+                      // A recently used letter or form goes straight into this deal's Documents.
+                      setRecentNote('');
+                      try {
+                        const result = await addTemplatesToDeal(resolvedParams.id, [t.id], false);
+                        setRecentNote(summarizeAdded(result));
+                        if (result.added.length > 0) {
+                          void fetchData();
+                          setRecentKey((k) => k + 1);
+                        }
+                      } catch (e) {
+                        setRecentNote(e instanceof Error ? e.message : 'Could not add that to this deal');
+                      }
+                    }}
                     className="max-w-full inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-sm text-slate-100 transition"
                     title={t.description || `Add “${t.name}” to this deal`}
                   >
@@ -2594,6 +2609,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                   </button>
                 ))}
               </div>
+              {recentNote && <p className="text-xs text-slate-300 mt-2" role="status">{recentNote}</p>}
             </div>
           )}
 
@@ -3257,7 +3273,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               {tab === 'overview' && templatesOn && !ownerView && (
               <DealStateDocs
                 dealState={transaction?.property_state ?? stateFromAddress(transaction?.property_address)}
-                onUse={(t) => setUseTemplate({ mode: 'documents', initial: t })}
+                transactionId={resolvedParams.id}
+                onAdded={() => { void fetchData(); setRecentKey((k) => k + 1); }}
                 onDropFiles={(files) => void handleDropFilesOnCategory(files, 'contract_disclosures')}
               />
             )}
@@ -3587,7 +3604,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             {tab === 'documents' && templatesOn && !ownerView && (
               <DealStateDocs
                 dealState={transaction?.property_state ?? stateFromAddress(transaction?.property_address)}
-                onUse={(t) => setUseTemplate({ mode: 'documents', initial: t })}
+                transactionId={resolvedParams.id}
+                onAdded={() => { void fetchData(); setRecentKey((k) => k + 1); }}
                 onDropFiles={(files) => void handleDropFilesOnCategory(files, 'contract_disclosures')}
               />
             )}

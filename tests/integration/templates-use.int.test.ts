@@ -6,6 +6,7 @@ import { GET as listTemplates, POST as createTemplate } from '@/app/api/template
 import { POST as uploadFile } from '@/app/api/templates/[id]/file/route';
 import { POST as renderTemplate } from '@/app/api/templates/[id]/render/route';
 import { POST as applyTemplate } from '@/app/api/templates/[id]/apply/route';
+import { POST as addToDeal } from '@/app/api/templates/add-to-deal/route';
 import { admin, call, cleanup, createActor, createCollaborator, type Actor } from './helpers';
 
 // Using a template on a deal: the deal's details fill in; the email goes (to the test outbox), the letter becomes a
@@ -123,5 +124,48 @@ describe('letters and forms into Documents', () => {
     expect(res.status, JSON.stringify(res.json)).toBe(200);
     const { data } = await admin.from('documents').select('file_name').eq('transaction_id', dealId);
     expect(data!.map((d) => d.file_name).sort()).toEqual(['Summary letter.pdf', 'tx-contract.pdf']);
+  });
+});
+
+describe('adding letters and forms to a deal in one go', () => {
+  const add = (who: Actor | null, body: Record<string, unknown>) => call(h(addToDeal), who, { method: 'POST', path: '/api/templates/add-to-deal', body });
+  type Result = { added: { name: string; kind: string; blanks: string[] }[]; skipped: { name: string; reason: string }[] };
+  let welcomeId: string;
+
+  it('a letter with no heading of its own comes filled in with its name', async () => {
+    welcomeId = await make(tc, { kind: 'letter', name: 'Note to client', body: 'Dear {{client_name}}, closing is {{closing_date}}.' });
+    expect(((await render(tc, welcomeId, { transactionId: dealId })).json as { subject: string }).subject).toBe('Note to client');
+  });
+
+  it('adds every letter and form in one request, leaves out what is already there, and says what was left blank', async () => {
+    const res = await add(tc, { transactionId: dealId, templateIds: [letterId, formId, welcomeId, emailId], skipExisting: true });
+    expect(res.status, JSON.stringify(res.json)).toBe(200);
+    const r = res.json as Result;
+    expect(r.added.map((a) => a.name)).toEqual(['Note to client']);
+    expect(r.added[0].blanks).toEqual(['closing_date']);
+    expect(r.skipped.map((x) => x.name).sort()).toEqual(['Hello', 'My form', 'Summary letter']);
+    const { data } = await admin.from('documents').select('file_name').eq('transaction_id', dealId);
+    expect(data!.map((d) => d.file_name).sort()).toEqual(['Note to client.pdf', 'Summary letter.pdf', 'tx-contract.pdf']);
+  });
+
+  it('adding all again changes nothing', async () => {
+    const r = (await add(tc, { transactionId: dealId, templateIds: [letterId, formId, welcomeId], skipExisting: true })).json as Result;
+    expect(r.added).toEqual([]);
+    expect(r.skipped).toHaveLength(3);
+  });
+
+  it('choosing one letter adds it straight away, even if it is already there', async () => {
+    const r = (await add(tc, { transactionId: dealId, templateIds: [letterId] })).json as Result;
+    expect(r.added.map((a) => a.name)).toEqual(['Summary letter']);
+    const { data } = await admin.from('documents').select('file_name').eq('transaction_id', dealId).eq('file_name', 'Summary letter.pdf');
+    expect(data).toHaveLength(2);
+  });
+
+  it('is closed to anyone else and needs something to add', async () => {
+    expect((await add(null, { transactionId: dealId, templateIds: [letterId] })).status).toBe(401);
+    expect((await add(free, { transactionId: dealId, templateIds: [letterId] })).status).toBe(403);
+    expect((await add(other, { transactionId: dealId, templateIds: [letterId] })).status).toBe(403);
+    expect((await add(tc, { transactionId: dealId, templateIds: [] })).status).toBe(400);
+    expect((await add(tc, { templateIds: [letterId] })).status).toBe(400);
   });
 });

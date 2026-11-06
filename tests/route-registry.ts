@@ -207,6 +207,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/templates/[id]/file': { kind: 'session', methods: ['GET', 'POST'] },
   '/api/templates/[id]/render': { kind: 'session', methods: ['POST'] },
   '/api/templates/[id]/apply': { kind: 'session', methods: ['POST'] },
+  '/api/templates/add-to-deal': { kind: 'session', methods: ['POST'], why: 'Adds the caller’s own letters and forms to a deal they are allowed to use templates on, in one go.' },
   '/api/templates/[id]/rules': { kind: 'session', methods: ['GET', 'POST'] },
   '/api/template-rules/[ruleId]': { kind: 'session', methods: ['DELETE', 'PATCH'] },
   '/api/template-runs': { kind: 'session', methods: ['GET'] },
