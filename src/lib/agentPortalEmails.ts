@@ -1,5 +1,86 @@
 import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
 import { escapeHtml } from '@/lib/escapeHtml';
+import { outboxOnly } from '@/lib/dealEmail';
+import { supabaseServer } from '@/lib/supabase';
+
+/** An email that could not be sent (Resend refused it, or the key is missing). Callers already treat a failed send as an error. */
+export class EmailDeliveryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EmailDeliveryError';
+  }
+}
+
+/** Plain-text version of one of these emails, for the test outbox. Links are kept as "label (url)". */
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<a [^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '$2 ($1)')
+    .replace(/<\/(p|h2|div)>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&#x27;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// The one place these emails leave the app. Resend reports a refused send (bad key, unverified sending domain,
+// invalid address) as { error } instead of throwing, so the result is checked here and a failure is thrown: nothing
+// can say "sent" about an email that was not. With RELAY_OUTBOX_ONLY=1 (a developer machine) nothing is sent: the
+// email is recorded in email_outbox under `ownerUserId` (when given) so it can be read in the test outbox.
+export async function deliverEmail(email: {
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+  replyTo?: string;
+  /** What kind of email this is, for the outbox and the logs. */
+  source: string;
+  /** Whose test outbox it lands in. */
+  ownerUserId?: string;
+}): Promise<void> {
+  if (outboxOnly()) {
+    if (!email.ownerUserId) {
+      console.info(`[outbox] ${email.source} to ${email.to}: ${email.subject}`);
+      return;
+    }
+    const { error } = await supabaseServer.from('email_outbox').insert({
+      owner_user_id: email.ownerUserId,
+      source: email.source,
+      to_emails: [email.to],
+      reply_to: email.replyTo ?? null,
+      from_name: 'Relay TC',
+      subject: email.subject,
+      body: htmlToText(email.html),
+    });
+    if (error) {
+      console.error('Could not record an email in the test outbox:', error);
+      throw new EmailDeliveryError('The email could not be recorded in the test outbox.');
+    }
+    return;
+  }
+  let result;
+  try {
+    result = await getResendClient().emails.send({
+      from: email.from,
+      to: email.to,
+      subject: email.subject,
+      html: email.html,
+      ...(email.replyTo ? { replyTo: email.replyTo } : {}),
+    });
+  } catch (err) {
+    console.error(`Could not send a ${email.source} email:`, err);
+    throw new EmailDeliveryError('The email could not be sent.');
+  }
+  if (result.error) {
+    console.error(`Resend rejected a ${email.source} email:`, result.error);
+    throw new EmailDeliveryError('The email could not be sent.');
+  }
+}
 
 const wrapper = (title: string, bodyHtml: string) => `
   <div style="font-family: Georgia, serif; color: #1a1a1a; max-width: 520px; margin: 0 auto;">
@@ -20,8 +101,10 @@ export async function sendAgentInviteEmail(params: {
   propertyAddress: string | null;
   loginUrl: string;
   fromListing?: boolean;
+  /** Whose test outbox it lands in when RELAY_OUTBOX_ONLY=1: the person sending the invitation. */
+  ownerUserId?: string;
 }) {
-  const { toEmail, tcLabel, propertyAddress, loginUrl, fromListing } = params;
+  const { toEmail, tcLabel, propertyAddress, loginUrl, fromListing, ownerUserId } = params;
   const dealLabel = propertyAddress ? `for ${propertyAddress}` : 'on Relay TC';
   const where = propertyAddress ? `at ${propertyAddress}` : '';
   const html = wrapper(
@@ -37,8 +120,7 @@ export async function sendAgentInviteEmail(params: {
      message ${tcLabel} right from the page.</p>`
   );
 
-  const resend = getResendClient();
-  return resend.emails.send({
+  return deliverEmail({ source: 'sendAgentInviteEmail', ownerUserId,
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject: fromListing ? `Your listing${propertyAddress ? ` at ${propertyAddress}` : ''} is now an active transaction` : `${tcLabel} added you to a deal on Relay TC`,
@@ -55,8 +137,10 @@ export async function sendTcInviteEmail(params: {
   appUrl: string;
   /** False when the agent said this coordinator is not on Relay TC yet. */
   usesRelay?: boolean;
+  /** Whose test outbox it lands in when RELAY_OUTBOX_ONLY=1: the person sending the invitation. */
+  ownerUserId?: string;
 }) {
-  const { toEmail, agentLabel, propertyAddress, appUrl, usesRelay = true } = params;
+  const { toEmail, agentLabel, propertyAddress, appUrl, usesRelay = true, ownerUserId } = params;
   const dealLabel = propertyAddress ? `the deal at ${propertyAddress}` : 'a deal';
   const html = wrapper(
     "You've been invited to coordinate a deal",
@@ -68,8 +152,7 @@ export async function sendTcInviteEmail(params: {
      <p><a href="${appUrl}/auth" style="color: #b45309;">Create your Relay TC account</a> with this email address, then accept the invitation at the top of your Transactions page.</p>
      <p style="font-size: 13px; color: #555;">If you were not expecting this, you can ignore the email. Nothing is shared with you until you accept.</p>`
   );
-  const resend = getResendClient();
-  return resend.emails.send({
+  return deliverEmail({ source: 'sendTcInviteEmail', ownerUserId,
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject: `${agentLabel} invited you to coordinate a deal on Relay TC`,
@@ -87,8 +170,7 @@ export async function sendAgentLoginLinkEmail(params: { toEmail: string; loginUr
      <p style="font-size: 13px; color: #555;">This link works for the next ${minutes} minutes and can be opened more than once. After that, ask for a new one on the sign-in page.
      If you didn't ask for it, you can ignore this email.</p>`
   );
-  const resend = getResendClient();
-  return resend.emails.send({ from: INVOICE_FROM_EMAIL, to: toEmail, subject: 'Your Relay TC sign-in link', html });
+  return deliverEmail({ source: 'sendAgentLoginLinkEmail', from: INVOICE_FROM_EMAIL, to: toEmail, subject: 'Your Relay TC sign-in link', html });
 }
 
 // Notifies whoever didn't send the most recent message in a transaction
@@ -112,8 +194,7 @@ export async function sendNewMessageEmail(params: {
      <p><a href="${portalUrl}" style="color: #b45309;">Reply on Relay TC</a></p>`
   );
 
-  const resend = getResendClient();
-  return resend.emails.send({
+  return deliverEmail({ source: 'sendNewMessageEmail',
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject: `${senderLabel} sent a message about ${dealLabel}`,
@@ -127,8 +208,10 @@ export async function sendAgentListingInviteEmail(params: {
   tcLabel: string;
   propertyAddress: string | null;
   loginUrl: string;
+  /** Whose test outbox it lands in when RELAY_OUTBOX_ONLY=1: the person sending the invitation. */
+  ownerUserId?: string;
 }) {
-  const { toEmail, tcLabel, propertyAddress, loginUrl } = params;
+  const { toEmail, tcLabel, propertyAddress, loginUrl, ownerUserId } = params;
   const listingLabel = propertyAddress ? `your listing at ${propertyAddress}` : 'your listing';
   const html = wrapper(
     'Follow your listing on Relay TC',
@@ -139,8 +222,7 @@ export async function sendAgentListingInviteEmail(params: {
      <p>You'll see the listing's offers, showings and key dates, and you can message ${escapeHtml(tcLabel)} right from the page.</p>`
   );
 
-  const resend = getResendClient();
-  return resend.emails.send({
+  return deliverEmail({ source: 'sendAgentListingInviteEmail', ownerUserId,
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject: `${tcLabel} gave you access to your listing on Relay TC`,
@@ -159,8 +241,7 @@ export async function sendDirectMessageEmail(params: { toEmail: string; senderLa
      <p><a href="${portalUrl}" style="color: #b45309;">Reply on Relay TC</a></p>`
   );
 
-  const resend = getResendClient();
-  return resend.emails.send({
+  return deliverEmail({ source: 'sendDirectMessageEmail',
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject: `${senderLabel} sent you a message on Relay TC`,
@@ -180,8 +261,7 @@ export async function sendAgentCalendarInviteEmail(params: { toEmail: string; tc
      <p style="font-size: 13px; color: #555;">You do it once: sign in, open Settings, and choose Connect Google Calendar. Every date on your deals is added right away,
      and later changes follow automatically. You can disconnect at any time.</p>`
   );
-  const resend = getResendClient();
-  return resend.emails.send({ from: INVOICE_FROM_EMAIL, to: toEmail, subject: `Add your deal dates to your calendar${propertyAddress ? ` (${propertyAddress})` : ''}`, html });
+  return deliverEmail({ source: 'sendAgentCalendarInviteEmail', from: INVOICE_FROM_EMAIL, to: toEmail, subject: `Add your deal dates to your calendar${propertyAddress ? ` (${propertyAddress})` : ''}`, html });
 }
 
 // One email when an agent is given access to several existing deals/listings at once (instead of one email per item).
@@ -191,8 +271,10 @@ export async function sendAgentAccessSummaryEmail(params: {
   deals: number;
   listings: number;
   loginUrl: string;
+  /** Whose test outbox it lands in when RELAY_OUTBOX_ONLY=1: the person sending the invitation. */
+  ownerUserId?: string;
 }) {
-  const { toEmail, tcLabel, deals, listings, loginUrl } = params;
+  const { toEmail, tcLabel, deals, listings, loginUrl, ownerUserId } = params;
   const parts = [
     deals > 0 ? `${deals} deal${deals === 1 ? '' : 's'}` : '',
     listings > 0 ? `${listings} listing${listings === 1 ? '' : 's'}` : '',
@@ -205,8 +287,7 @@ export async function sendAgentAccessSummaryEmail(params: {
      <p style="font-size: 13px; color: #555;">This link doesn't expire. It takes you to a page that emails you a fresh sign-in link when you ask for one.</p>
      <p>Once in, you'll see each one's checklist, documents and dates, and you can message ${escapeHtml(tcLabel)} right from the page.</p>`
   );
-  const resend = getResendClient();
-  return resend.emails.send({
+  return deliverEmail({ source: 'sendAgentAccessSummaryEmail', ownerUserId,
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject: `${tcLabel} gave you access to ${what} on Relay TC`,
@@ -238,8 +319,7 @@ export async function sendClientProgressEmail(params: {
      <p style="font-size: 13px; color: #555;">No account or password needed. Bookmark this page to check back any time; it updates automatically.
      Questions? Just reply to this email and it will go to ${escapeHtml(agentLabel)}.</p>`
   );
-  const resend = getResendClient();
-  return resend.emails.send({
+  return deliverEmail({ source: 'sendClientProgressEmail',
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject: `${agentLabel} shared your transaction progress${where}`,
@@ -271,8 +351,7 @@ export async function sendClientMessageEmail(params: {
      <p><a href="${linkUrl}" style="color: #b45309;">Open your progress page to reply</a></p>
      <p style="font-size: 13px; color: #555;">No account or password needed.</p>`
   );
-  const resend = getResendClient();
-  return resend.emails.send({
+  return deliverEmail({ source: 'sendClientMessageEmail',
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject: `${senderLabel} sent you a message${where}`,

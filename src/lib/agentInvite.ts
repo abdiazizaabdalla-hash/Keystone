@@ -45,7 +45,7 @@ export async function createAgentLoginLink(email: string, appUrl: string, opts: 
   return { ok: true, actionLink, alreadyHadAccount: Boolean(user && !isNew), userId: user?.id ?? null, isAgent: Boolean(user && (isNew || hasAgentRole(user))) };
 }
 
-export type ListingInviteOutcome = 'sent' | 'already' | 'no_agent' | 'no_email' | 'not_shared' | 'other_account' | 'failed';
+export type ListingInviteOutcome = 'sent' | 'already' | 'no_agent' | 'no_email' | 'not_shared' | 'other_account' | 'failed' | 'email_failed';
 
 /**
  * Emails the listing's agent a login for the agent portal, where the listing shows up under Listings.
@@ -53,7 +53,7 @@ export type ListingInviteOutcome = 'sent' | 'already' | 'no_agent' | 'no_email' 
  */
 export async function sendListingPortalInvite(params: {
   listing: { id: string; agent_id?: unknown; share_with_agent?: unknown; property_address?: unknown };
-  user: { email?: string | null; user_metadata?: Record<string, unknown> | null };
+  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null };
   appUrl: string;
   /** Skip when this agent was already invited to this listing (used for automatic invites; the Send button always sends). */
   onlyIfNew?: boolean;
@@ -80,12 +80,18 @@ export async function sendListingPortalInvite(params: {
 
     const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
     if (!params.silent) {
-      await sendAgentListingInviteEmail({
-        toEmail: email,
-        tcLabel,
-        propertyAddress: (listing.property_address as string | null) || null,
-        loginUrl: agentSetupUrl(appUrl, email),
-      });
+      try {
+        await sendAgentListingInviteEmail({
+          toEmail: email,
+          tcLabel,
+          propertyAddress: (listing.property_address as string | null) || null,
+          loginUrl: agentSetupUrl(appUrl, email),
+          ownerUserId: user.id,
+        });
+      } catch (emailError) {
+        console.error('The listing invitation email was not sent (the agent still has access):', emailError);
+        return 'email_failed';
+      }
     }
     await logListingActivity(listing.id, user, `Invited ${agent.name || email} (${email}) to the agent portal`);
     return 'sent';
@@ -104,7 +110,7 @@ export function agentSetupUrl(appUrl: string, email: string): string {
   return `${appUrl}/agent/login?invited=1&email=${encodeURIComponent(email)}`;
 }
 
-export type TxInviteOutcome = 'sent' | 'already' | 'no_agent' | 'no_email' | 'failed';
+export type TxInviteOutcome = 'sent' | 'already' | 'no_agent' | 'no_email' | 'failed' | 'email_failed';
 
 /** Invites the transaction's agent (or `email`) to the portal for this deal. Skips quietly when they are already invited. Never throws. */
 export async function inviteAgentToTransaction(params: {
@@ -156,7 +162,12 @@ export async function inviteAgentToTransaction(params: {
 
     const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
     if (!params.silent) {
-      await sendAgentInviteEmail({ toEmail: email, tcLabel, propertyAddress: (transaction.property_address as string | null) || null, loginUrl: agentSetupUrl(appUrl, email), fromListing: params.fromListing === true });
+      try {
+        await sendAgentInviteEmail({ toEmail: email, tcLabel, propertyAddress: (transaction.property_address as string | null) || null, loginUrl: agentSetupUrl(appUrl, email), fromListing: params.fromListing === true, ownerUserId: user.id });
+      } catch (emailError) {
+        console.error('The deal invitation email was not sent (the invitation is saved):', emailError);
+        return 'email_failed';
+      }
     }
     return 'sent';
   } catch (error) {
@@ -165,7 +176,7 @@ export async function inviteAgentToTransaction(params: {
   }
 }
 
-export type TcInviteOutcome = 'sent' | 'already' | 'no_email' | 'agent_account' | 'failed';
+export type TcInviteOutcome = 'sent' | 'already' | 'no_email' | 'agent_account' | 'failed' | 'email_failed';
 
 /**
  * An agent with a workspace invites a coordinator onto their deal. Only the pending invite row is made and the
@@ -197,7 +208,12 @@ export async function inviteTcToTransaction(params: {
     if (insertError) throw insertError;
 
     const agentLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'An agent';
-    await sendTcInviteEmail({ toEmail: email, agentLabel, propertyAddress: (transaction.property_address as string | null) || null, appUrl, usesRelay: params.usesRelay });
+    try {
+      await sendTcInviteEmail({ toEmail: email, agentLabel, propertyAddress: (transaction.property_address as string | null) || null, appUrl, usesRelay: params.usesRelay, ownerUserId: user.id });
+    } catch (emailError) {
+      console.error('The coordinator invitation email was not sent (the invitation is saved, so it can be resent):', emailError);
+      return 'email_failed';
+    }
     return 'sent';
   } catch (error) {
     console.error('inviteTcToTransaction failed (ignored):', error);
@@ -205,7 +221,7 @@ export async function inviteTcToTransaction(params: {
   }
 }
 
-export type TcResendOutcome = 'sent' | 'not_pending' | 'no_email' | 'failed';
+export type TcResendOutcome = 'sent' | 'not_pending' | 'no_email' | 'failed' | 'email_failed';
 
 /**
  * Sends a coordinator invitation again. Only an invitation this agent sent that is still waiting can be resent; nothing is created or
@@ -225,7 +241,12 @@ export async function resendTcInvite(params: {
     const { data: existing } = await supabaseServer.from('agent_invites').select('status, invited_by').eq('transaction_id', transaction.id).eq('email', email).maybeSingle();
     if (!existing || existing.status !== 'pending' || existing.invited_by !== user.id) return 'not_pending';
     const agentLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'An agent';
-    await sendTcInviteEmail({ toEmail: email, agentLabel, propertyAddress: (transaction.property_address as string | null) || null, appUrl, usesRelay: params.usesRelay });
+    try {
+      await sendTcInviteEmail({ toEmail: email, agentLabel, propertyAddress: (transaction.property_address as string | null) || null, appUrl, usesRelay: params.usesRelay, ownerUserId: user.id });
+    } catch (emailError) {
+      console.error('The coordinator invitation was not resent:', emailError);
+      return 'email_failed';
+    }
     return 'sent';
   } catch (error) {
     console.error('resendTcInvite failed (ignored):', error);
@@ -285,7 +306,7 @@ export async function grantAgentPortalAccess(params: {
     if (deals + listings > 0) {
       try {
         const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
-        await sendAgentAccessSummaryEmail({ toEmail: email, tcLabel, deals, listings, loginUrl: agentSetupUrl(appUrl, email) });
+        await sendAgentAccessSummaryEmail({ toEmail: email, tcLabel, deals, listings, loginUrl: agentSetupUrl(appUrl, email), ownerUserId: user.id });
         emailed = true;
       } catch (err) {
         console.error('Could not send the agent access summary email (access was still granted):', err);

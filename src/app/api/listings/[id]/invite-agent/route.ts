@@ -14,6 +14,7 @@ const MESSAGE: Record<Exclude<ListingInviteOutcome, 'sent' | 'already'>, { statu
   not_shared: { status: 400, error: 'Turn on "Share with the agent" first. The agent only sees listings that are shared.' },
   other_account: { status: 409, error: 'That email already belongs to a coordinator login, which cannot be used as an agent. Use a different email on the agent.' },
   failed: { status: 502, error: 'Could not send the invite. Please try again.' },
+  email_failed: { status: 502, error: 'The agent has access, but the email could not be sent. Please try again in a few minutes.' },
 };
 
 // GET: has this listing's agent been invited to the agent portal, and when? (from the listing's activity log)

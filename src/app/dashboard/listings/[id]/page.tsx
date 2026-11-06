@@ -754,7 +754,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       });
       txId = tx.id as string;
       const notes: string[] = [];
-      if (tx.agentInvite === 'failed') {
+      if (tx.agentInvite === 'failed' || tx.agentInvite === 'email_failed') {
         notes.push(`The agent portal invite to ${agents.find((a) => a.id === listing.agent_id)?.email || 'the agent'} did not go out. You can send it from the deal.`);
       }
 

@@ -156,6 +156,7 @@ export async function POST(request: NextRequest) {
         }
         const resent = await resendTcInvite({ transaction, user, appUrl: request.nextUrl.origin, email, usesRelay: body.usesRelay !== false });
         if (resent === 'not_pending') return NextResponse.json({ error: 'There is no waiting invitation for that address on this deal.' }, { status: 404 });
+        if (resent === 'email_failed') return NextResponse.json({ error: 'The email could not be sent. Please try again in a few minutes.' }, { status: 502 });
         if (resent !== 'sent') return NextResponse.json({ error: 'Failed to send the invitation again' }, { status: 500 });
         return NextResponse.json({ status: 'resent', email, inviteEmailSent: true });
       }
@@ -165,6 +166,10 @@ export async function POST(request: NextRequest) {
       }
       if (outcome === 'agent_account') {
         return NextResponse.json({ error: 'That email belongs to an agent account. Invite a coordinator here.' }, { status: 400 });
+      }
+      // The invitation is saved (it shows as waiting, and Resend invitation works) but the email did not go out.
+      if (outcome === 'email_failed') {
+        return NextResponse.json({ status: 'invited', email, inviteEmailSent: false });
       }
       if (outcome !== 'sent') {
         return NextResponse.json({ error: 'Failed to send invite' }, { status: 500 });

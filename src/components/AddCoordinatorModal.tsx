@@ -20,6 +20,8 @@ export default function AddCoordinatorModal({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [sentTo, setSentTo] = useState('');
+  // The invitation was saved but the email did not go out (it can be sent again from the deal page).
+  const [emailFailed, setEmailFailed] = useState(false);
 
   const send = async () => {
     const address = email.trim();
@@ -37,6 +39,7 @@ export default function AddCoordinatorModal({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not send the invitation');
+      setEmailFailed(data.inviteEmailSent === false);
       setSentTo(address);
       onInvited();
     } catch (err) {
@@ -60,7 +63,13 @@ export default function AddCoordinatorModal({
 
         {sentTo ? (
           <div>
-            <p className="text-slate-200 mb-2">Invitation sent to {sentTo}.</p>
+            {emailFailed ? (
+              <p className="text-amber-300 mb-2" role="alert">
+                The invitation for {sentTo} is saved, but the email could not be sent. Use Resend invitation on the deal page to try again.
+              </p>
+            ) : (
+              <p className="text-slate-200 mb-2">Invitation sent to {sentTo}.</p>
+            )}
             <p className="text-sm text-slate-400 mb-5">
               {usesRelay === false
                 ? 'The email explains Relay TC and how to create an account. Once they accept, the deal appears in their list and you can message each other here.'
