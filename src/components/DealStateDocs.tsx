@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type DragEvent } from 'react';
+import { useAgentAccess } from '@/lib/useAgentAccess';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { US_STATES } from '@/lib/usStates';
@@ -46,6 +47,7 @@ export default function DealStateDocs({ transactionId, dealState, onAdded, onDro
     });
   };
   const [picking, setPicking] = useState(false);
+  const { readOnly } = useAgentAccess();
 
   useEffect(() => {
     if (!dealState) return;
@@ -142,8 +144,8 @@ export default function DealStateDocs({ transactionId, dealState, onAdded, onDro
       <div className={card}>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <p className="text-sm font-semibold text-slate-100">Your {stateName} PDFs</p>
-          <button type="button" onClick={() => setPicking(true)} className="px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-200 hover:text-blue-300 text-xs font-semibold rounded-lg transition">Add from Library</button>
-          {everything.length > 0 && (
+          {!readOnly && <button type="button" onClick={() => setPicking(true)} className="px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-200 hover:text-blue-300 text-xs font-semibold rounded-lg transition">Add from Library</button>}
+          {everything.length > 0 && !readOnly && (
             <button type="button" disabled={adding} onClick={() => void add(everything, true)} className="px-3 py-1.5 bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition" title="Add every PDF below to this deal's Documents, filled in. Ones already there are left alone.">
               {adding ? 'Adding…' : `Add all ${everything.length} to this deal`}
             </button>

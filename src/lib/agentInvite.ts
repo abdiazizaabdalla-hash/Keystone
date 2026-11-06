@@ -205,6 +205,34 @@ export async function inviteTcToTransaction(params: {
   }
 }
 
+export type TcResendOutcome = 'sent' | 'not_pending' | 'no_email' | 'failed';
+
+/**
+ * Sends a coordinator invitation again. Only an invitation this agent sent that is still waiting can be resent; nothing is created or
+ * changed, the same email just goes out once more. Never throws.
+ */
+export async function resendTcInvite(params: {
+  transaction: { id: string; property_address?: unknown };
+  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null };
+  appUrl: string;
+  email: string;
+  usesRelay?: boolean;
+}): Promise<TcResendOutcome> {
+  try {
+    const { transaction, user, appUrl } = params;
+    const email = normalize(params.email);
+    if (!email.includes('@')) return 'no_email';
+    const { data: existing } = await supabaseServer.from('agent_invites').select('status, invited_by').eq('transaction_id', transaction.id).eq('email', email).maybeSingle();
+    if (!existing || existing.status !== 'pending' || existing.invited_by !== user.id) return 'not_pending';
+    const agentLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'An agent';
+    await sendTcInviteEmail({ toEmail: email, agentLabel, propertyAddress: (transaction.property_address as string | null) || null, appUrl, usesRelay: params.usesRelay });
+    return 'sent';
+  } catch (error) {
+    console.error('resendTcInvite failed (ignored):', error);
+    return 'failed';
+  }
+}
+
 const normalize = (e: string | null | undefined) => (e || '').trim().toLowerCase();
 
 export type GrantAccessResult = { ok: boolean; reason?: 'no_agent' | 'no_email'; deals: number; listings: number; emailed: boolean };

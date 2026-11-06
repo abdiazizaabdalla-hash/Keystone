@@ -4,6 +4,7 @@ import MoneyInput from '@/components/MoneyInput';
 import { readPersona } from '@/lib/persona';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 import { isFeatureOnClient } from '@/lib/features';
+import { useAgentAccess } from '@/lib/useAgentAccess';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -57,7 +58,9 @@ function SettingsContent() {
     };
   }, [isAgentAcct]);
   const hideFeeBlocks = brokerOwner === true || isAgentAcct;
-  const hideDueWorkflow = brokerOwner === true || (isAgentAcct && inBrokerage);
+  // Automation is a Pro capability (tiers.ts): a Basic agent's server refuses these settings, so do not show them.
+  const { level: agentLevel } = useAgentAccess();
+  const hideDueWorkflow = brokerOwner === true || (isAgentAcct && inBrokerage) || agentLevel === 'basic';
   const [stripeConnectStatus, setStripeConnectStatus] = useState<{ connected: boolean; status: string | null } | null>(null);
   const [isStartingStripeConnect, setIsStartingStripeConnect] = useState(false);
   const [isSavingPaymentPreference, setIsSavingPaymentPreference] = useState(false);

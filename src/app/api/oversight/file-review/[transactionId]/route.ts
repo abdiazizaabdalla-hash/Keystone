@@ -13,7 +13,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { transactionId } = await params;
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     await assertBrokerageManageable(user.id);
     if (!(await canOverseeDeal(user.id, transactionId))) throw new AuthError('Not found', 404);
     const body = (await request.json().catch(() => ({}))) as { status?: unknown; note?: unknown };

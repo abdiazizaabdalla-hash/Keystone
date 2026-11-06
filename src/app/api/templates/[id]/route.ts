@@ -19,7 +19,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params;
     await loadOwnTemplate(id, user.id);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    if (body.brokerageShared === true) assertBrokerageOwner(user);
+    if (body.brokerageShared === true) await assertBrokerageOwner(user);
     const fields = cleanTemplateInput(body, false);
     const { data, error } = await supabaseServer
       .from('doc_templates')

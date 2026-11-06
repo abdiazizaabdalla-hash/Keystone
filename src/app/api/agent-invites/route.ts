@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { inviteAgentToTransaction, inviteTcToTransaction } from '@/lib/agentInvite';
+import { inviteAgentToTransaction, inviteTcToTransaction, resendTcInvite } from '@/lib/agentInvite';
+import { checkRateLimit } from '@/lib/rateLimit';
 import { getEntitlements } from '@/lib/entitlements';
 import { hasAgentRole } from '@/lib/privileged';
 
@@ -147,6 +148,16 @@ export async function POST(request: NextRequest) {
     if (callerIsWorkspaceAgent || body.inviteeRole === 'tc') {
       if (!callerIsWorkspaceAgent) {
         return NextResponse.json({ error: 'Only an agent with a workspace invites a coordinator' }, { status: 403 });
+      }
+      // "Resend invitation": the same email again for an invitation still waiting. Three a day per coordinator address, per deal.
+      if (body.resend === true) {
+        if (!(await checkRateLimit(`tc-invite-resend:${user.id}:${transactionId}:${email}`, 3, 86400))) {
+          return NextResponse.json({ error: 'That invitation was already sent again a few times today. Please wait and try tomorrow.' }, { status: 429 });
+        }
+        const resent = await resendTcInvite({ transaction, user, appUrl: request.nextUrl.origin, email, usesRelay: body.usesRelay !== false });
+        if (resent === 'not_pending') return NextResponse.json({ error: 'There is no waiting invitation for that address on this deal.' }, { status: 404 });
+        if (resent !== 'sent') return NextResponse.json({ error: 'Failed to send the invitation again' }, { status: 500 });
+        return NextResponse.json({ status: 'resent', email, inviteEmailSent: true });
       }
       const outcome = await inviteTcToTransaction({ transaction, user, appUrl: request.nextUrl.origin, email, usesRelay: body.usesRelay !== false });
       if (outcome === 'already') {

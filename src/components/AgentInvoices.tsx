@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAgentAccess } from '@/lib/useAgentAccess';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { invoiceTotals } from '@/lib/workspaceInvoiceMath';
@@ -74,6 +75,7 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | 'draft' | 'sent' | 'paid' | 'void'>('all');
   const [picking, setPicking] = useState(Boolean(initialTransactionId) || Boolean(startNew));
+  const { readOnly } = useAgentAccess();
   const [editing, setEditing] = useState<InvoiceRow | null>(null);
   const [busy, setBusy] = useState(false);
   // The commission invoice to the agent's brokerage (see AgentCommissionInvoiceForm), opened from the template list or from a deal.
@@ -194,6 +196,7 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
           <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Invoices</h1>
           <p className="text-slate-400">Your brokerage commission statements, plus referral fees, splits, expenses and services billed from a template.</p>
         </div>
+        {!readOnly && (
         <button
           type="button"
           onClick={() => setPicking(true)}
@@ -201,6 +204,7 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
         >
           + New invoice
         </button>
+        )}
       </div>
 
       {error && <p className="mb-4 text-sm text-red-300">{error}</p>}

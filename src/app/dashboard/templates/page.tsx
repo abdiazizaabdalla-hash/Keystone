@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { useAgentAccess } from '@/lib/useAgentAccess';
 import { isFeatureOnClient } from '@/lib/features';
 import { MERGE_FIELDS } from '@/lib/templateMerge';
 import { US_STATES } from '@/lib/usStates';
@@ -66,6 +67,7 @@ async function readError(res: Response, fallback: string) {
 }
 
 export default function TemplatesPage() {
+  const { readOnly: readOnlyAgent } = useAgentAccess();
   const enabled = isFeatureOnClient('templates');
   const [view, setView] = useState<Section | 'approvals'>('documents');
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -296,9 +298,11 @@ export default function TemplatesPage() {
                 </button>
               )}
               {section === 'documents' ? (
+                readOnlyAgent ? null : (
                 <button type="button" className={btnPrimary} onClick={() => openUpload(null)}>
                   Upload PDFs
                 </button>
+                )
               ) : (
                 <>
                   <button type="button" className={btnGhost} onClick={() => openEditor({ new: 'letter' })}>

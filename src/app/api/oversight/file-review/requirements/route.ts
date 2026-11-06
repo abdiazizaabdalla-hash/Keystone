@@ -11,7 +11,7 @@ import { cleanRequiredTypes } from '@/lib/fileReview';
 export async function PUT(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     await assertBrokerageManageable(user.id);
     const body = (await request.json().catch(() => ({}))) as { types?: unknown };
     const types = cleanRequiredTypes(body.types);

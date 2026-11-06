@@ -14,7 +14,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     if (!(await canOverseeDeal(user.id, id))) throw new AuthError('Not found', 404);
 
     const { data: deal, error } = await supabaseServer.from('transactions').select('*').eq('id', id).single();

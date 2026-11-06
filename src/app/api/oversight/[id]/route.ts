@@ -13,7 +13,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     const { id } = await params;
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     const { data: link, error } = await supabaseServer.from('brokerage_links').select('id, status, agent_user_id').eq('id', id).eq('owner_user_id', user.id).in('status', ['pending', 'active']).maybeSingle();
     if (error) throw error;
     if (!link) throw new AuthError('Not found', 404);
@@ -36,7 +36,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const { id } = await params;
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     await assertBrokerageManageable(user.id);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const { data: link, error } = await supabaseServer.from('brokerage_links').select('id').eq('id', id).eq('owner_user_id', user.id).eq('status', 'active').maybeSingle();

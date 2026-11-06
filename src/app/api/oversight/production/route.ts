@@ -9,7 +9,7 @@ import { toCsv } from '@/lib/contactsCrm';
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     const yearParam = request.nextUrl.searchParams.get('year') ?? '';
     const year = /^\d{4}$/.test(yearParam) ? yearParam : undefined;
     const links = await listOwnerLinks(user.id);

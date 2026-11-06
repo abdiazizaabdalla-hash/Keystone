@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     const placement = resolveDocumentPlacement(rawCategory || null, String(form.get('documentType') ?? ''));
 
     const share = scope === 'brokerage' || String(form.get('share') ?? '') === 'true';
-    if (share) assertBrokerageOwner(user);
+    if (share) await assertBrokerageOwner(user);
 
     const baseName = file.name.replace(/\.pdf$/i, '');
     const name = String(form.get('name') ?? '').trim().slice(0, 140) || baseName.slice(0, 140) || 'Untitled PDF';

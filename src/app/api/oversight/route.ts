@@ -21,7 +21,7 @@ import { isDuplicateLink, oversightError, prepareInvitee, sendBrokerageInvite, t
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     if (request.nextUrl.searchParams.get('check') === '1') return NextResponse.json({ owner: true });
     const today = todayIso();
     const links = await listOwnerLinks(user.id);
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     const body = (await request.json().catch(() => ({}))) as { email?: unknown };
     const email = cleanEmail(body.email);
     if (email === (user.email ?? '').toLowerCase()) throw new AuthError('You cannot invite yourself.', 400);

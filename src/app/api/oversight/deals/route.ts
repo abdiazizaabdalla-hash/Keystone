@@ -9,7 +9,7 @@ import { supabaseServer } from '@/lib/supabase';
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     const ids = await activeAgentIds(user.id);
     const only = request.nextUrl.searchParams.get('agent');
     const show = request.nextUrl.searchParams.get('show') ?? 'open';

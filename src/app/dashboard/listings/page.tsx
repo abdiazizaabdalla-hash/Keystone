@@ -11,6 +11,7 @@ import { formatDisplayDate } from '@/lib/dueDates';
 import { LISTING_STATUS_LABEL, daysOnMarket, type ListingStatus } from '@/lib/listingsShared';
 import { useListingsImport } from '@/components/useListingsImport';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { useAgentAccess } from '@/lib/useAgentAccess';
 import { readPersona } from '@/lib/persona';
 import AgentListingsList from '@/components/AgentListingsList';
 
@@ -61,6 +62,7 @@ const STATUS_STYLE: Record<ListingStatus, string> = {
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '—');
 
 function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
+  const { readOnly } = useAgentAccess();
   const router = useRouter();
   const [listings, setListings] = useState<ListingRow[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
@@ -292,6 +294,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
           <Link href="/dashboard/listings/template" className="text-sm text-slate-400 hover:text-slate-200">
             Edit default checklist
           </Link>
+          {!readOnly && (
           <button
             type="button"
             onClick={importer.openPicker}
@@ -300,6 +303,8 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
           >
             {importer.working ? 'Importing…' : 'Import CSV'}
           </button>
+          )}
+          {!readOnly && (
           <button
             type="button"
             data-tour="new-listing-btn"
@@ -311,6 +316,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
           >
             + New listing
           </button>
+          )}
         </div>
       </div>
 

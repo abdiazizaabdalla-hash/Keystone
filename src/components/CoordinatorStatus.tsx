@@ -3,7 +3,7 @@
 // Where a deal's transaction coordinator stands for the agent who invited them: invited and waiting, or accepted.
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null);
 
-export default function CoordinatorStatus({ accepted, pending, compact = false }: { accepted: { email: string; addedAt: string } | null; pending: { email: string; createdAt: string } | null; compact?: boolean }) {
+export default function CoordinatorStatus({ accepted, pending, compact = false, onResend, resending = false, resendNote = '' }: { accepted: { email: string; addedAt: string } | null; pending: { email: string; createdAt: string } | null; onResend?: () => void; resending?: boolean; resendNote?: string; compact?: boolean }) {
   if (!accepted && !pending) return null;
   const ok = !!accepted;
   const email = accepted?.email ?? pending?.email ?? '';
@@ -20,6 +20,14 @@ export default function CoordinatorStatus({ accepted, pending, compact = false }
       <p className="text-xs text-slate-400 mt-1.5">
         {ok ? `Your transaction coordinator${date ? ` joined on ${date}` : ' has joined'}.${compact ? '' : ' You can message them here.'}` : `Invitation sent${date ? ` on ${date}` : ''}. They accept from their Relay TC account, and then you can message each other here.`}
       </p>
+      {!ok && onResend && (
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <button type="button" onClick={onResend} disabled={resending} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-600 hover:border-blue-500 text-slate-200 hover:text-blue-300 disabled:opacity-50 transition">
+            {resending ? 'Sending…' : 'Resend invitation'}
+          </button>
+          {resendNote && <span className="text-xs text-slate-400" role="status">{resendNote}</span>}
+        </div>
+      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { oversightError, todayIso } from '@/lib/oversightServer';
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     const today = todayIso();
     const links = await listOwnerLinks(user.id);
     const activeLinks = links.filter((l) => l.status === 'active' && l.agent_user_id);

@@ -10,7 +10,7 @@ import { viewOf, termsFromLink, type CommissionRow } from '@/lib/commissions';
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     const today = todayIso();
     const links = await listOwnerLinks(user.id);
     const active = links.filter((l) => l.status === 'active' && l.agent_user_id);

@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
     if (!brokerageOn()) throw new AuthError('Not found', 404);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     const account = await getAccount(user.id);
     if (!account) return NextResponse.json({ account: null });
     const today = new Date().toISOString().slice(0, 10);
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
     if (!brokerageOn()) throw new AuthError('Not found', 404);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     const body = (await request.json().catch(() => ({}))) as { action?: unknown };
     if (body.action !== 'request_upgrade') return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
     const label = (typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name.trim()) || user.email || 'A brokerage';

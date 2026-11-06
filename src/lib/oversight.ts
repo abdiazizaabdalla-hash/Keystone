@@ -3,6 +3,7 @@ import { isFeatureOn } from './features';
 import { AuthError } from './auth';
 import { isTeamPlan } from './plans';
 import { getUserPlan, hasAgentRole, type WithAppMetadata } from './appMetadata';
+import { getTeamForUser } from './team';
 import { getEntitlements } from './entitlements';
 import { CLOSED_STAGE, normaliseEmail, dealHealth, nextStepFor, listingHealth, isOpenListing, type DealHealth, type ListingHealth, type NextStep, type OversightDeal, type OversightListing, type OversightTask } from './oversightMath';
 
@@ -61,10 +62,16 @@ export function cleanEmail(value: unknown): string {
   return email;
 }
 
-/** A brokerage owner: feature on, Team or Brokerage plan. Agents with a workspace and free logins are refused. */
-export function assertBrokerageOwner(user: WithAppMetadata): void {
+/**
+ * A brokerage owner: feature on, Team or Brokerage plan, and the owner of that Team. Agents with a workspace and free logins are refused.
+ * A Team member's own login also carries the Team plan (it is copied onto each seat), so the plan alone cannot tell an owner from a seat:
+ * a person who belongs to a team as anything but its owner is refused. (An owner whose team row has not been created yet is allowed.)
+ */
+export async function assertBrokerageOwner(user: WithAppMetadata & { id: string }): Promise<void> {
   if (!brokerageOn()) throw new AuthError('Not found', 404);
   if (!isTeamPlan(getUserPlan(user))) throw new AuthError('Brokerage oversight is part of the Team and Brokerage plans.', 403);
+  const membership = await getTeamForUser(user.id);
+  if (membership && membership.role !== 'owner') throw new AuthError('Only the owner of the Team can run a brokerage.', 403);
 }
 
 /** An agent who has a workspace of their own (an admin grant) or one a brokerage provides (Agent Basic). Used where the agent runs their own deals. */

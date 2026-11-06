@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     await assertBrokerageManageable(user.id);
     const input = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const transactionId = typeof input.transactionId === 'string' ? input.transactionId : '';

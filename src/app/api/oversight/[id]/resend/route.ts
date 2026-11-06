@@ -13,7 +13,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id } = await params;
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     await assertBrokerageManageable(user.id);
     const { data: link, error } = await supabaseServer.from('brokerage_links').select('id, invited_email').eq('id', id).eq('owner_user_id', user.id).eq('status', 'pending').maybeSingle();
     if (error) throw error;

@@ -11,7 +11,7 @@ import { compareReviewRows, inReviewWindow, missingRequired, type ReviewStatus }
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     const today = todayIso();
     const links = await listOwnerLinks(user.id);
     const ids = links.filter((l) => l.status === 'active' && l.agent_user_id).map((l) => l.agent_user_id as string);

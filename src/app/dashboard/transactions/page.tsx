@@ -7,6 +7,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { useWorkspaceAgent } from '@/lib/useWorkspaceAgent';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { useAgentAccess } from '@/lib/useAgentAccess';
 import AgentDealsList from '@/components/AgentDealsList';
 
 interface Transaction {
@@ -42,6 +43,7 @@ interface Agent {
 }
 
 function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
+  const { readOnly } = useAgentAccess();
   const router = useRouter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [agents, setAgents] = useState<Map<string, string>>(new Map());
@@ -263,15 +265,19 @@ function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
           </div>
         )}
         <div className="flex flex-wrap items-center gap-3">
-          <Link href="/dashboard/transactions/import" className="hidden sm:inline text-sm text-slate-400 hover:text-slate-200">
-            Import CSV
-          </Link>
-          <Link
-            href="/dashboard/transactions/new"
-            className="px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition whitespace-nowrap"
-          >
-            + New deal
-          </Link>
+          {!readOnly && (
+            <Link href="/dashboard/transactions/import" className="hidden sm:inline text-sm text-slate-400 hover:text-slate-200">
+              Import CSV
+            </Link>
+          )}
+          {!readOnly && (
+            <Link
+              href="/dashboard/transactions/new"
+              className="px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition whitespace-nowrap"
+            >
+              + New deal
+            </Link>
+          )}
         </div>
       </div>
 

@@ -29,6 +29,7 @@ import KeyDatesPanel from '@/components/KeyDatesPanel';
 import OverviewSection from '@/components/OverviewSection';
 import { readPersona } from '@/lib/persona';
 import { isFeatureOnClient } from '@/lib/features';
+import { useAgentAccess } from '@/lib/useAgentAccess';
 import { US_STATES, stateFromAddress } from '@/lib/usStates';
 import SignatureFieldPlacer from '@/components/SignatureFieldPlacer';
 import { addTemplatesToDeal, summarizeAdded } from '@/lib/addTemplatesClient';
@@ -381,6 +382,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   const [useTemplate, setUseTemplate] = useState<{ mode: 'all' | 'documents'; initial?: { id: string; kind: 'email' | 'letter' | 'form'; name: string; description: string | null; states: string[] } } | null>(null);
   const [recentNote, setRecentNote] = useState('');
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const { readOnly: readOnlyAgent } = useAgentAccess();
   const [recentTemplates, setRecentTemplates] = useState<Array<{ id: string; kind: 'email' | 'letter' | 'form'; name: string; description: string | null; states: string[] }>>([]);
   const [recentKey, setRecentKey] = useState(0);
   const templatesOn = isFeatureOnClient('templates');
@@ -611,6 +613,33 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
       setInviteMessage(error instanceof Error ? error.message : 'Failed to send invite');
     } finally {
       setIsInvitingAgent(false);
+    }
+  };
+
+  // "Resend invitation" on a coordinator who has not accepted yet (the agent's own deal page).
+  const [resendingCoordinator, setResendingCoordinator] = useState(false);
+  const [resendNote, setResendNote] = useState('');
+  const handleResendCoordinator = async (email: string) => {
+    if (!transaction) return;
+    try {
+      setResendingCoordinator(true);
+      setResendNote('');
+      const res = await authFetch('/api/agent-invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId: transaction.id, email, inviteeRole: 'tc', resend: true }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || 'Failed to send the invitation again');
+      setResendNote(`Invitation sent again to ${email}.`);
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setResendNote(error instanceof Error ? error.message : 'Failed to send the invitation again');
+    } finally {
+      setResendingCoordinator(false);
     }
   };
 
@@ -2523,6 +2552,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                 </svg>
               </span>
             </button>
+            {!readOnlyAgent && (
             <button
               onClick={() => triggerDirectUpload(cat.key)}
               disabled={uploadingSlot === 'upload'}
@@ -2530,6 +2560,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             >
               {uploadingSlot === 'upload' && directUploadCategory === cat.key ? 'Uploading…' : '+ Upload'}
             </button>
+            )}
           </div>
           {!isCollapsed && (
             <div className="px-4 pb-4 space-y-2">
@@ -2576,7 +2607,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                   From a template
                 </button>
               )}
-              {templatesOn && !ownerView && (
+              {templatesOn && !ownerView && !readOnlyAgent && (
                 <button
                   type="button"
                   onClick={() => setLibraryOpen(true)}
@@ -2586,12 +2617,14 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                   Add from Library
                 </button>
               )}
+              {!readOnlyAgent && (
               <button
                 onClick={() => setShowUploadForm((prev) => !prev)}
                 className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg text-sm transition"
               >
                 {showUploadForm ? 'Cancel' : '+ Upload Document'}
               </button>
+              )}
             </div>
           </div>
 
@@ -3821,7 +3854,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               <div className="text-sm text-slate-400">
                 {pendingCoordinator ? (
                   <>
-                    <CoordinatorStatus accepted={null} pending={{ email: pendingCoordinator.email, createdAt: pendingCoordinator.created_at }} />
+                    <CoordinatorStatus accepted={null} pending={{ email: pendingCoordinator.email, createdAt: pendingCoordinator.created_at }} onResend={() => void handleResendCoordinator(pendingCoordinator.email)} resending={resendingCoordinator} resendNote={resendNote} />
                     <p className="mt-3">Your client conversations are below.</p>
                   </>
                 ) : (

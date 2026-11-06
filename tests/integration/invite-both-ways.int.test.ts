@@ -157,3 +157,28 @@ describe('messages and the client portal on the agent’s own deal', () => {
     expect((await call(h(clientMessages), otherTc, { method: 'GET', path: `/api/client-messages?transactionId=${dealId}&channel=board` })).status).toBe(403);
   });
 });
+
+describe('resending a coordinator invitation', () => {
+  const target = 'resend-target@example.test';
+
+  it('sends the same email again for an invitation that is still waiting, and changes nothing else', async () => {
+    const first = await invite(agentWs, target, { inviteeRole: 'tc' });
+    expect(first.status, JSON.stringify(first.json)).toBe(200);
+    const again = await invite(agentWs, target, { inviteeRole: 'tc', resend: true });
+    expect(again.status, JSON.stringify(again.json)).toBe(200);
+    expect((again.json as { status?: string }).status).toBe('resent');
+    const { data: rows } = await admin.from('agent_invites').select('status').eq('transaction_id', dealId).eq('email', target);
+    expect(rows).toHaveLength(1);
+    expect(rows![0].status).toBe('pending');
+  });
+
+  it('refuses to resend when no invitation is waiting for that address', async () => {
+    const res = await invite(agentWs, 'nobody-invited@example.test', { inviteeRole: 'tc', resend: true });
+    expect(res.status).toBe(404);
+  });
+
+  it('is not available to a coordinator or to someone who does not own the deal', async () => {
+    const asTc = await invite(otherTc, target, { inviteeRole: 'tc', resend: true });
+    expect([403, 404]).toContain(asTc.status);
+  });
+});

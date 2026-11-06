@@ -10,7 +10,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const { user } = await getUserFromRequest(request);
-    assertBrokerageOwner(user);
+    await assertBrokerageOwner(user);
     if (!(await canOverseeListing(user.id, id))) throw new AuthError('Not found', 404);
 
     const { data: listing, error } = await supabaseServer

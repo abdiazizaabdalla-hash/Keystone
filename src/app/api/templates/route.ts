@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
   try {
     const { user } = await requireTemplatesUser(request, 'custom_templates');
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    if (body.brokerageShared === true) assertBrokerageOwner(user);
+    if (body.brokerageShared === true) await assertBrokerageOwner(user);
     const fields = cleanTemplateInput(body, true);
     const { data, error } = await supabaseServer.from('doc_templates').insert({ ...fields, owner_user_id: user.id }).select('*').single();
     if (error) throw error;

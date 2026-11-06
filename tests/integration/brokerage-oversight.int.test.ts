@@ -23,6 +23,7 @@ let agentA: Actor; // invited, accepts
 let agentB: Actor; // never invited
 let agentC: Actor; // has a deal the broker must never reach
 let free: Actor; // free agent login
+let seat: Actor; // a seat on the broker's Team: carries the Team plan but is not the owner
 let dealA: Deal;
 let dealC: Deal;
 let linkId = '';
@@ -37,12 +38,22 @@ beforeAll(async () => {
   agentB = await createActor('bk-b', { role: 'agent', agent_workspace: true });
   agentC = await createActor('bk-c', { role: 'agent', agent_workspace: true });
   free = await createCollaborator('bk-free');
+  seat = await createActor('bk-seat', { plan: 'team' });
+  const { data: seatTeam } = await admin.from('teams').insert({ owner_id: broker.id }).select('id').single();
+  await admin.from('team_members').insert([{ team_id: seatTeam!.id, user_id: broker.id, role: 'owner' }, { team_id: seatTeam!.id, user_id: seat.id, role: 'member' }]);
   dealA = await seedDeal(agentA, 'BKA');
   dealC = await seedDeal(agentC, 'BKC');
 }, 60_000);
 afterAll(cleanup);
 
 describe('who may use it', () => {
+  it('refuses a Team seat that is not the owner, even though the seat carries the Team plan', async () => {
+    const res = await call(h(overview), seat, { method: 'GET', path: '/api/oversight' });
+    expect(res.status).toBe(403);
+    const inv = await call(h(invite), seat, { method: 'POST', path: '/api/oversight', body: { email: 'seat-invite@example.test' } });
+    expect(inv.status).toBe(403);
+  });
+
   it('answers 404 when the feature is off', async () => {
     const saved = process.env.RELAY_FEATURES;
     process.env.RELAY_FEATURES = 'agent_workspace,templates';

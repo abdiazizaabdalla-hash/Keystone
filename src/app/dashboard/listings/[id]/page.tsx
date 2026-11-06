@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { uploadIncoming } from '@/lib/incomingUploadClient';
 import LibraryPicker from '@/components/LibraryPicker';
+import { useAgentAccess } from '@/lib/useAgentAccess';
 import { isFeatureOnClient } from '@/lib/features';
 import { stateFromAddress } from '@/lib/usStates';
 import DragHandle from '@/components/DragHandle';
@@ -204,6 +205,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [docType, setDocType] = useState('General');
   const [uploading, setUploading] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const { readOnly: readOnlyAgent } = useAgentAccess();
   const [libraryNote, setLibraryNote] = useState('');
   // Which area an upload is going into, and which areas are folded away (same idea as a deal's Documents).
   const docInputRef = useRef<HTMLInputElement>(null);
@@ -1623,7 +1625,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             />
             <div className="flex items-start justify-between gap-3 mb-2">
               <h2 className="text-2xl font-bold text-slate-100">Documents</h2>
-              {isFeatureOnClient('templates') && (
+              {isFeatureOnClient('templates') && !readOnlyAgent && (
                 <button type="button" onClick={() => setLibraryOpen(true)} className="shrink-0 px-4 py-2 border border-slate-600 hover:border-blue-500 text-slate-200 hover:text-blue-300 font-semibold rounded-lg text-sm transition" title="Pick PDFs from your template library, by state">
                   Add from Library
                 </button>
@@ -1682,6 +1684,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                           </svg>
                         </span>
                       </button>
+                      {!readOnlyAgent && (
                       <button
                         type="button"
                         onClick={() => triggerDocUpload(type)}
@@ -1690,6 +1693,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                       >
                         {uploading && uploadTarget === type ? 'Uploading…' : '+ Upload'}
                       </button>
+                      )}
                     </div>
                     {!collapsedDocs[type] && (
                     <div className="px-4 pb-4">
