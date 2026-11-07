@@ -4,11 +4,14 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { isInvoiceRecipient, invoiceTotals } from '@/lib/workspaceInvoices';
 import { isStripePayAvailable } from '@/lib/stripeConnect';
+import { isFeatureOn } from '@/lib/features';
 
 // GET: invoices that agents sent to this coordinator (billed to their email, or sent on a deal they are the coordinator on).
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
+    // Agent-sent invoices only exist where the agent workspace is on; skip the lookups (and the tables) everywhere else.
+    if (!isFeatureOn('agent_workspace')) return NextResponse.json([]);
     if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     const email = (user.email || '').trim().toLowerCase();
 
