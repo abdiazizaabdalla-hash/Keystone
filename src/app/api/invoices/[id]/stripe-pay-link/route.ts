@@ -45,7 +45,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (!account || account.status !== 'approved') {
       return NextResponse.json(
-        { error: 'Connect and finish onboarding with Stripe in Settings before generating payment links.' },
+        { error: 'Connect and finish onboarding with Stripe before generating payment links.', code: 'stripe_not_connected' },
         { status: 400 }
       );
     }

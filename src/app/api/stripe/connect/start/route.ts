@@ -3,7 +3,7 @@ import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { mergeUserMetadata } from '@/lib/userMetadata';
-import { createStandardConnectedAccount, createOnboardingLink } from '@/lib/stripeConnect';
+import { createStandardConnectedAccount, createOnboardingLink, safeNextPath } from '@/lib/stripeConnect';
 
 // Starts (or resumes) Stripe Connect onboarding for the signed-in TC.
 // Reuses an existing connected account if one was already created (Account
@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
     assertNotCollaborator(user);
     const body = await request.json().catch(() => ({}));
     const from = body?.from === 'onboarding' ? 'onboarding' : 'settings';
+    // Optional: send the person back to the page they started from (e.g. an invoice). Only same-site paths are accepted.
+    const next = safeNextPath(body?.next);
 
     const { data: existing, error: fetchError } = await supabaseServer
       .from('payment_accounts')
@@ -54,11 +56,11 @@ export async function POST(request: NextRequest) {
     await mergeUserMetadata(user.id, { payment_preference: 'stripe' });
 
     const origin = new URL(request.url).origin;
-    const finalPage = from === 'onboarding' ? `${origin}/onboarding` : `${origin}/dashboard/settings`;
+    const finalPage = next ? `${origin}${next}` : from === 'onboarding' ? `${origin}/onboarding` : `${origin}/dashboard/settings`;
 
     const url = await createOnboardingLink(accountId, {
-      returnUrl: `${origin}/api/stripe/connect/return?account=${accountId}&from=${from}`,
-      refreshUrl: `${finalPage}?stripe=refresh`,
+      returnUrl: `${origin}/api/stripe/connect/return?account=${accountId}&from=${from}${next ? `&next=${encodeURIComponent(next)}` : ''}`,
+      refreshUrl: `${finalPage}${finalPage.includes('?') ? '&' : '?'}stripe=refresh`,
     });
 
     return NextResponse.json({ url });

@@ -1,5 +1,6 @@
 'use client';
 
+import { ConnectStripeButton, StripeConnectNotice } from '@/components/ConnectStripe';
 import { useEffect, useState } from 'react';
 import { use } from 'react';
 import Link from 'next/link';
@@ -588,9 +589,13 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               )
             )}
           </div>
+          {!invoice.paid && !stripePayUrl && !payLinkError && (
+            <StripeConnectNotice message="Connect Stripe to get a Pay Online link, so the agent can pay this invoice by card or bank transfer." />
+          )}
           {payLinkError && (
-            <div className="mt-4 bg-red-900/30 border border-red-700 rounded-lg p-4 text-sm text-red-200">
-              {payLinkError}
+            <div className="mt-4 bg-red-900/30 border border-red-700 rounded-lg p-4 text-sm text-red-200 flex flex-wrap items-center justify-between gap-3">
+              <span>{payLinkError}</span>
+              {/Connect and finish onboarding with Stripe/.test(payLinkError) && <ConnectStripeButton />}
             </div>
           )}
 

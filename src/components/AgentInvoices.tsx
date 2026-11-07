@@ -9,6 +9,7 @@ import { invoiceTotals } from '@/lib/workspaceInvoiceMath';
 import { INVOICE_TEMPLATES } from '@/lib/workspaceInvoiceTemplates';
 import AgentCommissionInvoiceForm from './AgentCommissionInvoiceForm';
 import CommissionInvoicePanel, { type PanelRow } from './CommissionInvoicePanel';
+import { StripeConnectNotice } from './ConnectStripe';
 import CoordinatorInvoiceList, { coordinatorOwed, type CoordinatorInvoice } from './CoordinatorInvoices';
 
 interface Line {
@@ -603,6 +604,9 @@ function InvoiceEditor({ invoice, onClose, onChanged }: { invoice: InvoiceRow; o
 
       {error && <p className="mt-4 text-sm text-red-300">{error}</p>}
       {note && <p className="mt-4 text-sm text-green-300">{note}</p>}
+      {invoice.status !== 'paid' && invoice.status !== 'void' && (
+        <StripeConnectNotice message="Connect Stripe to add a Pay online link to this invoice, so the payer can pay by card or bank transfer straight into your account." />
+      )}
 
       <div className="mt-6 flex flex-wrap gap-2">
         {editable && (

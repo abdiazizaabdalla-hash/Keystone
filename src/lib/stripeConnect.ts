@@ -469,3 +469,11 @@ export async function workspaceInvoiceTotal(invoiceId: string, taxPercent: numbe
   const subtotal = (data || []).reduce((sum, l) => sum + Number(l.quantity) * Number(l.unit_price), 0);
   return Math.round((subtotal + (subtotal * (taxPercent || 0)) / 100) * 100) / 100;
 }
+
+
+/** A same-site path to come back to after Stripe onboarding; anything else (other sites, protocol-relative URLs) is dropped. */
+export function safeNextPath(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\') || value.length > 300) return null;
+  return value;
+}
