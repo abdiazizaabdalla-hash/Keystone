@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { queueCalendarSync } from '@/lib/calendarSync';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { hasAgentRole, mergeAppMetadata } from '@/lib/privileged';
+import { addInvitingAgentForCoordinator } from '@/lib/coordinatorOnboarding';
 
 // POST: called from /agent/accept right after the agent's Supabase
 // session is established from their emailed link. Trusts the caller's
@@ -71,7 +72,12 @@ export async function POST(request: NextRequest) {
         .eq('id', invite.id);
     }
 
-    return NextResponse.json({ status: 'accepted', transactionId });
+    // A coordinator accepting an agent's invitation: the agent lands on their Agents list and Contacts.
+    const agentProfile = fromAgent && inviter.user
+      ? await addInvitingAgentForCoordinator({ coordinator: user, agent: inviter.user, transactionId })
+      : null;
+
+    return NextResponse.json({ status: 'accepted', transactionId, agentProfile });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

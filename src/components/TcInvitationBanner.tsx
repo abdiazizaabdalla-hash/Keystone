@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { isFeatureOnClient } from '@/lib/features';
 
@@ -20,6 +21,7 @@ export default function TcInvitationBanner({ onAccepted }: { onAccepted?: () => 
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [added, setAdded] = useState<Array<{ id: string; name: string; created: boolean }>>([]);
 
   useEffect(() => {
     if (!isFeatureOnClient('agent_workspace')) return;
@@ -45,7 +47,10 @@ export default function TcInvitationBanner({ onAccepted }: { onAccepted?: () => 
         body: JSON.stringify({ transactionId }),
       });
       if (!res.ok) throw new Error('Could not accept the invitation');
+      const body = await res.json().catch(() => ({}));
       setInvitations((prev) => prev.filter((i) => i.transactionId !== transactionId));
+      const profile = body?.agentProfile;
+      if (profile?.id) setAdded((prev) => [...prev.filter((a) => a.id !== profile.id), profile]);
       onAccepted?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not accept the invitation');
@@ -54,7 +59,7 @@ export default function TcInvitationBanner({ onAccepted }: { onAccepted?: () => 
     }
   };
 
-  if (invitations.length === 0) return null;
+  if (invitations.length === 0 && added.length === 0) return null;
 
   return (
     <div className="mb-6 space-y-2" aria-label="Invitations">
@@ -71,6 +76,18 @@ export default function TcInvitationBanner({ onAccepted }: { onAccepted?: () => 
           >
             {acceptingId === inv.transactionId ? 'Accepting…' : 'Accept'}
           </button>
+        </div>
+      ))}
+      {added.map((a) => (
+        <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 bg-emerald-500/10 border border-emerald-400/30 rounded-2xl px-4 py-3">
+          <p className="text-sm text-slate-200">
+            {a.created
+              ? <><span className="font-semibold">{a.name}</span> is now on your Agents list at your default fees. Confirm their pricing before you invoice.</>
+              : <><span className="font-semibold">{a.name}</span> is already on your Agents list. Check their pricing for this deal.</>}
+          </p>
+          <Link href={`/dashboard/agents/${a.id}`} className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold rounded-xl transition">
+            Set up pricing
+          </Link>
         </div>
       ))}
       {error && <p className="text-sm text-red-400">{error}</p>}
