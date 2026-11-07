@@ -35,6 +35,7 @@ import SignatureFieldPlacer from '@/components/SignatureFieldPlacer';
 import { addTemplatesToDeal, summarizeAdded } from '@/lib/addTemplatesClient';
 import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
 import ChatBubbles, { type ChatLine } from '@/components/chat/ChatBubbles';
+import { DealCoordinatorInvoices } from '@/components/CoordinatorInvoices';
 import { isClosedMessage, parseClosedMessage } from '@/lib/dealClosedMarker';
 
 interface Transaction {
@@ -3155,6 +3156,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           />
           </div>
           </div>
+
+          {isAgentAcct && !ownerView && !transaction.shared && <DealCoordinatorInvoices transactionId={transaction.id} />}
 
           {isAgentAcct && !ownerView && (
           isFeatureOnClient('brokerage') ? (

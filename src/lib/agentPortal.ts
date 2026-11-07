@@ -61,3 +61,24 @@ export async function getAgentTransactionIds(userId: string): Promise<string[]> 
   if (error) throw error;
   return (data || []).map((row) => row.transaction_id as string);
 }
+
+/**
+ * Deals this agent owns (a workspace agent's own deals). When a coordinator is added to one, the coordinator's invoices on it
+ * are the agent's to see, pay and download, same as on a deal they were invited onto.
+ */
+export async function getOwnedTransactionIds(userId: string): Promise<string[]> {
+  const { data: records } = await supabaseServer.from('agents').select('id').eq('tc_user_id', userId);
+  const recordIds = (records || []).map((r) => r.id as string);
+  if (recordIds.length === 0) return [];
+  const { data, error } = await supabaseServer.from('transactions').select('id').in('agent_id', recordIds);
+  if (error) throw error;
+  return (data || []).map((t) => t.id as string);
+}
+
+/** Like assertAgentOnTransaction, but a deal the agent owns counts too. */
+export async function assertAgentOnOrOwnsTransaction(transactionId: string, userId: string): Promise<void> {
+  const { data } = await supabaseServer.from('transaction_agents').select('transaction_id').eq('transaction_id', transactionId).eq('agent_user_id', userId).maybeSingle();
+  if (data) return;
+  if ((await getOwnedTransactionIds(userId)).includes(transactionId)) return;
+  throw new AuthError('You do not have access to this transaction', 403);
+}

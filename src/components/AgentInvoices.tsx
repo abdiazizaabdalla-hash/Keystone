@@ -8,6 +8,7 @@ import { invoiceTotals } from '@/lib/workspaceInvoiceMath';
 import { INVOICE_TEMPLATES } from '@/lib/workspaceInvoiceTemplates';
 import AgentCommissionInvoiceForm from './AgentCommissionInvoiceForm';
 import CommissionInvoicePanel, { type PanelRow } from './CommissionInvoicePanel';
+import CoordinatorInvoiceList, { coordinatorOwed, type CoordinatorInvoice } from './CoordinatorInvoices';
 
 interface Line {
   description: string;
@@ -71,9 +72,11 @@ const inputCls = 'w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 
 export default function AgentInvoices({ initialTransactionId, startNew, commissionTransactionId }: { initialTransactionId?: string; startNew?: boolean; commissionTransactionId?: string }) {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [commissions, setCommissions] = useState<CommissionInvoiceRow[]>([]);
+  // Invoices the agent's coordinator made on the agent's deals (what the agent owes them).
+  const [coordinatorInvoices, setCoordinatorInvoices] = useState<CoordinatorInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState<'all' | 'draft' | 'sent' | 'paid' | 'void'>('all');
+  const [filter, setFilter] = useState<'all' | 'draft' | 'sent' | 'paid' | 'void' | 'coordinator'>('all');
   const [picking, setPicking] = useState(Boolean(initialTransactionId) || Boolean(startNew));
   const { readOnly } = useAgentAccess();
   const [editing, setEditing] = useState<InvoiceRow | null>(null);
@@ -117,6 +120,20 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
         if (!res.ok) return;
         const data = (await res.json()) as { asAgent?: CommissionInvoiceRow[] };
         if (!cancelled) setCommissions((data.asAgent ?? []).filter((c) => c.status !== 'void'));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    authFetch('/api/agent/invoices')
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setCoordinatorInvoices(Array.isArray(data) ? data : []);
       })
       .catch(() => {});
     return () => {
@@ -175,6 +192,9 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
 
   const shown = invoices.filter((i) => filter === 'all' || i.status === filter);
   const shownCommissions = commissions.filter((c) => filter === 'all' || commissionState(c).bucket === filter);
+  // Invoices from the coordinator: everything under All and "From my TC", unpaid ones under Sent, paid ones under Paid.
+  const shownCoordinator = coordinatorInvoices.filter((i) => filter === 'all' || filter === 'coordinator' || (filter === 'sent' && !i.paid) || (filter === 'paid' && i.paid));
+  const owedToCoordinator = coordinatorOwed(coordinatorInvoices);
 
   if (editing) {
     return (
@@ -252,7 +272,7 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4 text-sm" role="tablist" aria-label="Filter invoices">
-        {(['all', 'draft', 'sent', 'paid', 'void'] as const).map((f) => (
+        {(['all', 'draft', 'sent', 'paid', 'void', ...(coordinatorInvoices.length > 0 ? (['coordinator'] as const) : [])] as const).map((f) => (
           <button
             key={f}
             type="button"
@@ -261,20 +281,29 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-full border capitalize transition ${filter === f ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}
           >
-            {f}
+            {f === 'coordinator' ? 'From my TC' : f}
           </button>
         ))}
       </div>
 
       {loading ? (
         <p className="text-slate-400">Loading…</p>
-      ) : shown.length === 0 && shownCommissions.length === 0 ? (
+      ) : shown.length === 0 && shownCommissions.length === 0 && shownCoordinator.length === 0 ? (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-          <p className="text-slate-300 mb-1">{invoices.length === 0 && commissions.length === 0 ? 'No invoices yet.' : 'Nothing matches that filter.'}</p>
-          {invoices.length === 0 && commissions.length === 0 && <p className="text-sm text-slate-500">Choose New invoice, pick a template, then pick who to bill from your contacts.</p>}
+          <p className="text-slate-300 mb-1">{invoices.length === 0 && commissions.length === 0 && coordinatorInvoices.length === 0 ? 'No invoices yet.' : 'Nothing matches that filter.'}</p>
+          {invoices.length === 0 && commissions.length === 0 && coordinatorInvoices.length === 0 && <p className="text-sm text-slate-500">Choose New invoice, pick a template, then pick who to bill from your contacts.</p>}
         </div>
       ) : (
         <div className="space-y-2">
+          {shownCoordinator.length > 0 && (
+            <div className="mb-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">From your coordinator</p>
+                <p className="text-xs text-slate-400">{owedToCoordinator > 0 ? `You owe ${money(owedToCoordinator)}` : 'All paid'}</p>
+              </div>
+              <CoordinatorInvoiceList invoices={shownCoordinator} dealHref={(id) => `/dashboard/transactions/${id}`} />
+            </div>
+          )}
           {shownCommissions.map((c) => {
             const state = commissionState(c);
             const isOpen = openCommission === c.id;

@@ -10,6 +10,7 @@ import { GET as listMessages } from '@/app/api/messages/route';
 import { POST as createInvoice, PATCH as patchInvoice } from '@/app/api/invoices/route';
 import { GET as invoicePdf } from '@/app/api/invoices/[id]/pdf/route';
 import { POST as addDealContact } from '@/app/api/transactions/[id]/contacts/route';
+import { GET as agentInvoices } from '@/app/api/agent/invoices/route';
 import { admin, call, cleanup, createActor, createCollaborator, type Actor } from './helpers';
 
 // Regression for the shared-deal flow: an agent invites a coordinator, the coordinator accepts (agent + deal contacts land in
@@ -107,5 +108,46 @@ describe('the coordinator invoices the agent on the shared deal', () => {
     const pdf = await invoicePdf(new NextRequest(`http://localhost/api/invoices/${invoiceId}/pdf`, { headers: { authorization: `Bearer ${tc.token}` } }), { params: Promise.resolve({ id: invoiceId }) });
     expect(pdf.status).toBe(200);
     expect((await pdf.arrayBuffer()).byteLength).toBeGreaterThan(1000);
+  });
+});
+
+describe('the agent sees what the coordinator billed', () => {
+  it('lists it under their invoices (with the coordinator named), and tells them in the bell', async () => {
+    const list = await call(h(agentInvoices), agentWs, { method: 'GET', path: '/api/agent/invoices' });
+    expect(list.status, JSON.stringify(list.json)).toBe(200);
+    const rows = list.json as Array<{ id: string; paid: boolean; transaction: { tcLabel: string } | null; agent_id?: string }>;
+    const mine = rows.find((r) => r.id === invoiceId);
+    expect(mine).toBeTruthy();
+    expect(mine!.transaction?.tcLabel).toBeTruthy();
+    expect(mine!.agent_id).toBeUndefined();
+    const { data: bell } = await admin.from('notifications').select('id').eq('recipient_user_id', agentWs.id).eq('event_type', 'invoice');
+    expect((bell ?? []).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows it on the deal too, and the agent can open the PDF; the coordinator’s own list is unaffected', async () => {
+    const onDeal = await call(h(agentInvoices), agentWs, { method: 'GET', path: `/api/agent/invoices?transactionId=${dealId}` });
+    expect(onDeal.status).toBe(200);
+    expect((onDeal.json as Array<{ id: string }>).map((r) => r.id)).toContain(invoiceId);
+    const pdf = await invoicePdf(new NextRequest(`http://localhost/api/invoices/${invoiceId}/pdf`, { headers: { authorization: `Bearer ${agentWs.token}` } }), { params: Promise.resolve({ id: invoiceId }) });
+    expect(pdf.status).toBe(200);
+    // The coordinator is not an agent login, so the agent-only list refuses them.
+    expect((await call(h(agentInvoices), tc, { method: 'GET', path: '/api/agent/invoices' })).status).toBe(403);
+  });
+
+  it('is invisible to other agents', async () => {
+    const stranger = await createCollaborator('sb-stranger');
+    const list = await call(h(agentInvoices), stranger, { method: 'GET', path: '/api/agent/invoices' });
+    expect((list.json as Array<{ id: string }>).map((r) => r.id)).not.toContain(invoiceId);
+    expect((await call(h(agentInvoices), stranger, { method: 'GET', path: `/api/agent/invoices?transactionId=${dealId}` })).status).toBe(403);
+    const pdf = await invoicePdf(new NextRequest(`http://localhost/api/invoices/${invoiceId}/pdf`, { headers: { authorization: `Bearer ${stranger.token}` } }), { params: Promise.resolve({ id: invoiceId }) });
+    expect(pdf.status).toBe(403);
+  });
+
+  it('marking it paid tells the agent and shows paid on their side', async () => {
+    expect((await call(h(patchInvoice), tc, { method: 'PATCH', path: '/api/invoices', body: { invoiceId, paid: true } })).status).toBeLessThan(300);
+    const list = await call(h(agentInvoices), agentWs, { method: 'GET', path: '/api/agent/invoices' });
+    expect((list.json as Array<{ id: string; paid: boolean }>).find((r) => r.id === invoiceId)?.paid).toBe(true);
+    const { data: bell } = await admin.from('notifications').select('title').eq('recipient_user_id', agentWs.id).eq('event_type', 'invoice');
+    expect((bell ?? []).some((b) => /marked invoice .* paid/.test(b.title as string))).toBe(true);
   });
 });

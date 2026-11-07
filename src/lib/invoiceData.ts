@@ -1,6 +1,6 @@
 import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
-import { assertAgentOnTransaction } from '@/lib/agentPortal';
+import { assertAgentOnOrOwnsTransaction } from '@/lib/agentPortal';
 import type { TcInfo } from '@/lib/invoicePdf';
 
 /**
@@ -39,7 +39,7 @@ export async function loadInvoiceBundle(
   // they were added to.
   const ownsInvoice = !!agent && agent.tc_user_id === userId;
   if (opts.allowAgent && opts.isAgent && !ownsInvoice) {
-    await assertAgentOnTransaction(invoice.transaction_id, userId);
+    await assertAgentOnOrOwnsTransaction(invoice.transaction_id, userId);
   } else if (!isAdmin) {
     if (!agent || agent.tc_user_id !== userId) {
       throw new AuthError('You do not have permission to access this invoice', 403);

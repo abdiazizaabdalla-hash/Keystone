@@ -1,3 +1,4 @@
+import { notifyDealOwnerOfInvoice } from '@/lib/coordinatorInvoiceNotify';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
@@ -226,6 +227,7 @@ export async function POST(request: NextRequest) {
     if (invoiceError) throw invoiceError;
 
     await logAudit(request, user, 'invoice.create', { entityType: 'invoice', entityId: invoice.id });
+    await notifyDealOwnerOfInvoice({ transactionId, actor: user, invoiceNumber: invoiceNumber, amount: totalAmount, kind: 'created' });
     queueQuickBooksSync(invoice.id); // no-op unless this TC connected QuickBooks
     return NextResponse.json(invoice, { status: 201 });
   } catch (error) {
@@ -297,6 +299,8 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
     }
 
+    const { data: before } = await supabaseServer.from('invoices').select('paid').eq('id', invoiceId).maybeSingle();
+
     const { data: updatedInvoice, error } = await supabaseServer
       .from('invoices')
       .update(updateData)
@@ -307,6 +311,9 @@ export async function PATCH(request: NextRequest) {
     if (error) throw error;
 
     if (paid === true) queueQuickBooksSync(updatedInvoice.id); // record the payment in QuickBooks, if connected
+    if (paid === true && before && !before.paid && updatedInvoice.transaction_id) {
+      await notifyDealOwnerOfInvoice({ transactionId: updatedInvoice.transaction_id, actor: user, invoiceNumber: updatedInvoice.invoice_number, amount: Number(updatedInvoice.amount_owed) || 0, kind: 'paid' });
+    }
 
     const [{ data: agentRow }, { data: transactionRow }] = await Promise.all([
       updatedInvoice.agent_id

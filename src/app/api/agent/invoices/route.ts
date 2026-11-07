@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser, assertAgentOnTransaction, getAgentTransactionIds } from '@/lib/agentPortal';
+import { isAgentUser, assertAgentOnOrOwnsTransaction, getAgentTransactionIds, getOwnedTransactionIds } from '@/lib/agentPortal';
 import { isStripePayAvailable } from '@/lib/stripeConnect';
 
 const INVOICE_FIELDS =
   'id, invoice_number, amount_owed, due_date, invoice_date, paid, paid_at, paid_amount, refunded, refunded_at, transaction_id';
+const INVOICE_FIELDS_WITH_AGENT = `${INVOICE_FIELDS}, agent_id`;
 
 // GET: the invoice(s) for this agent -- deliberately narrow fields (no
 // commission_percent/flat_fee, nothing about other agents or
@@ -38,65 +39,60 @@ export async function GET(request: NextRequest) {
     const transactionId = request.nextUrl.searchParams.get('transactionId');
 
     if (transactionId) {
-      await assertAgentOnTransaction(transactionId, user.id);
+      await assertAgentOnOrOwnsTransaction(transactionId, user.id);
 
       const { data: invoices, error } = await supabaseServer
         .from('invoices')
-        .select(INVOICE_FIELDS)
+        .select(INVOICE_FIELDS_WITH_AGENT)
         .eq('transaction_id', transactionId)
         .order('invoice_date', { ascending: false });
       if (error) throw error;
 
-      let payOnline = false;
-      if (invoices && invoices.length > 0) {
-        const { data: transaction } = await supabaseServer
-          .from('transactions')
-          .select('agent_id')
-          .eq('id', transactionId)
-          .maybeSingle();
-        if (transaction?.agent_id) {
-          const { data: agentRecord } = await supabaseServer
-            .from('agents')
-            .select('tc_user_id')
-            .eq('id', transaction.agent_id)
-            .maybeSingle();
-          if (agentRecord?.tc_user_id) {
-            payOnline = await isStripePayAvailable(agentRecord.tc_user_id);
-          }
-        }
+      // Online payment depends on the coordinator who made each invoice, not on whoever the deal's agent record belongs to.
+      const owners = await invoiceOwners((invoices || []).map((i) => i.agent_id as string));
+      const payByTc = new Map<string, boolean>();
+      for (const tcId of new Set(owners.values())) payByTc.set(tcId, await isStripePayAvailable(tcId));
+      const { data: tx } = await supabaseServer.from('transactions').select('id, file_number, property_address').eq('id', transactionId).maybeSingle();
+      const labels = new Map<string, string>();
+      for (const tcId of new Set(owners.values())) {
+        const { data } = await supabaseServer.auth.admin.getUserById(tcId);
+        labels.set(tcId, (data.user?.user_metadata?.full_name as string | undefined) || data.user?.email || 'Transaction coordinator');
       }
-
-      return NextResponse.json((invoices || []).map((inv) => ({ ...inv, payOnline })));
+      return NextResponse.json(
+        (invoices || []).map(({ agent_id, ...inv }) => {
+          const tcId = owners.get(agent_id as string) || '';
+          return {
+            ...inv,
+            payOnline: payByTc.get(tcId) || false,
+            transaction: tx ? { id: tx.id, fileNumber: tx.file_number, propertyAddress: tx.property_address, tcLabel: labels.get(tcId) || 'Transaction coordinator' } : null,
+          };
+        })
+      );
     }
 
-    const transactionIds = await getAgentTransactionIds(user.id);
+    // Deals the agent was added to, plus deals they own (a coordinator invoicing on one is billing them).
+    const transactionIds = [...new Set([...(await getAgentTransactionIds(user.id)), ...(await getOwnedTransactionIds(user.id))])];
     if (transactionIds.length === 0) {
       return NextResponse.json([]);
     }
 
-    const { data: invoices, error } = await supabaseServer
+    const { data: found, error } = await supabaseServer
       .from('invoices')
-      .select(INVOICE_FIELDS)
+      .select(INVOICE_FIELDS_WITH_AGENT)
       .in('transaction_id', transactionIds)
       .order('invoice_date', { ascending: false });
     if (error) throw error;
-    if (!invoices || invoices.length === 0) {
+    // The agent's own records of the deal's people are not coordinator invoices.
+    const owners = await invoiceOwners((found || []).map((i) => i.agent_id as string));
+    const invoices = (found || []).filter((i) => owners.get(i.agent_id as string) && owners.get(i.agent_id as string) !== user.id);
+    if (invoices.length === 0) {
       return NextResponse.json([]);
     }
 
     const invoiceTxIds = [...new Set(invoices.map((i) => i.transaction_id as string))];
-    const { data: transactions } = await supabaseServer
-      .from('transactions')
-      .select('id, file_number, property_address, agent_id')
-      .in('id', invoiceTxIds);
+    const { data: transactions } = await supabaseServer.from('transactions').select('id, file_number, property_address').in('id', invoiceTxIds);
 
-    const agentRecordIds = [...new Set((transactions || []).map((t) => t.agent_id).filter(Boolean))];
-    const { data: agentRecords } = agentRecordIds.length
-      ? await supabaseServer.from('agents').select('id, tc_user_id').in('id', agentRecordIds)
-      : { data: [] as { id: string; tc_user_id: string }[] };
-    const agentToTc = new Map((agentRecords || []).map((a) => [a.id, a.tc_user_id]));
-
-    const tcUserIds = [...new Set((agentRecords || []).map((a) => a.tc_user_id).filter(Boolean))];
+    const tcUserIds = [...new Set(invoices.map((i) => owners.get(i.agent_id as string) as string))];
     const tcLabels = new Map<string, string>();
     const tcPayOnline = new Map<string, boolean>();
     await Promise.all(
@@ -110,9 +106,9 @@ export async function GET(request: NextRequest) {
 
     const txById = new Map((transactions || []).map((t) => [t.id as string, t]));
 
-    const result = invoices.map((inv) => {
+    const result = invoices.map(({ agent_id, ...inv }) => {
       const tx = txById.get(inv.transaction_id as string);
-      const tcUserId = tx ? agentToTc.get(tx.agent_id) || '' : '';
+      const tcUserId = owners.get(agent_id as string) || '';
       return {
         ...inv,
         payOnline: tcPayOnline.get(tcUserId) || false,
@@ -135,4 +131,12 @@ export async function GET(request: NextRequest) {
     console.error('Error fetching agent invoices:', error);
     return NextResponse.json({ error: 'Failed to fetch invoices' }, { status: 500 });
   }
+}
+
+/** Which account owns each invoice: the coordinator whose Agents record it is billed to. */
+async function invoiceOwners(agentRecordIds: string[]): Promise<Map<string, string>> {
+  const ids = [...new Set(agentRecordIds.filter(Boolean))];
+  if (ids.length === 0) return new Map();
+  const { data } = await supabaseServer.from('agents').select('id, tc_user_id').in('id', ids);
+  return new Map((data || []).filter((a) => a.tc_user_id).map((a) => [a.id as string, a.tc_user_id as string]));
 }
