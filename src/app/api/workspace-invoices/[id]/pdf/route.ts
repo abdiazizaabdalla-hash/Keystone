@@ -1,3 +1,4 @@
+import { loadLogo } from '@/lib/brandLogo';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { generateWorkspaceInvoicePdf } from '@/lib/workspaceInvoicePdf';
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       billTo: { name: invoice.bill_to_name, email: invoice.bill_to_email, address: invoice.bill_to_address },
       from: { name: fromName, email: user.email ?? null },
       lines,
-    });
+    }, await loadLogo(user.id));
     return new NextResponse(new Uint8Array(pdf), {
       headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${invoice.invoice_number}.pdf"` },
     });

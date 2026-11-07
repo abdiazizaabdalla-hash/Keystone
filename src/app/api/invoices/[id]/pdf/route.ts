@@ -1,3 +1,4 @@
+import { loadLogo } from '@/lib/brandLogo';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { generateInvoicePdf } from '@/lib/invoicePdf';
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const tc = await loadTcInfo(agent.tc_user_id);
     const origin = new URL(request.url).origin;
     const payUrl = await getInvoicePayUrlForDocument({ invoice, tcUserId: agent.tc_user_id, origin });
-    const pdfBuffer = await generateInvoicePdf(invoice, agent, transaction, tc, payUrl);
+    const pdfBuffer = await generateInvoicePdf(invoice, agent, transaction, tc, payUrl, await loadLogo(agent.tc_user_id));
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,

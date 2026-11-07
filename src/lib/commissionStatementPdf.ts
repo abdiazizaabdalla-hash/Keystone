@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { drawLogo } from './pdfLetterhead';
 
 export interface StatementInput {
   statementNumber: string;
@@ -25,7 +26,7 @@ export interface StatementInput {
 
 const money = (n: number) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export function generateCommissionStatementPdf(s: StatementInput): Promise<Buffer> {
+export function generateCommissionStatementPdf(s: StatementInput, logo?: Buffer | null): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'LETTER', margin: 56 });
@@ -34,12 +35,13 @@ export function generateCommissionStatementPdf(s: StatementInput): Promise<Buffe
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      doc.fillColor('#08080b').fontSize(22).font('Helvetica-Bold').text(s.brokerage, 56, 56, { width: 330 });
-      doc.fontSize(20).font('Helvetica-Bold').text('COMMISSION STATEMENT', 300, 56, { align: 'right', width: 256 });
-      doc.fontSize(10).font('Helvetica').fillColor('#555555').text(s.statementNumber, 300, 84, { align: 'right', width: 256 });
-      doc.moveTo(56, 124).lineTo(556, 124).strokeColor('#dddddd').stroke();
+      const dy = drawLogo(doc, logo);
+      doc.fillColor('#08080b').fontSize(22).font('Helvetica-Bold').text(s.brokerage, 56, 56 + dy, { width: 330 });
+      doc.fontSize(20).font('Helvetica-Bold').text('COMMISSION STATEMENT', 300, 56 + dy, { align: 'right', width: 256 });
+      doc.fontSize(10).font('Helvetica').fillColor('#555555').text(s.statementNumber, 300, 84 + dy, { align: 'right', width: 256 });
+      doc.moveTo(56, 124 + dy).lineTo(556, 124 + dy).strokeColor('#dddddd').stroke();
 
-      let y = 142;
+      let y = 142 + dy;
       const label = (t: string, x: number) => doc.fontSize(9).font('Helvetica-Bold').fillColor('#888888').text(t, x, y);
       label('AGENT', 56);
       label('PROPERTY', 260);

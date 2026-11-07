@@ -1,3 +1,4 @@
+import { loadLogo } from '@/lib/brandLogo';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       brokerageNet: num(b.brokerageNet),
       paidOn: row.paid_on,
       paidNote: row.paid_note,
-    });
+    }, await loadLogo(row.owner_user_id));
     return new NextResponse(new Uint8Array(pdf), { status: 200, headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${row.statement_number}.pdf"`, 'Cache-Control': 'no-store' } });
   } catch (error) {
     return oversightError(error, 'create the statement');

@@ -1,3 +1,4 @@
+import { loadLogo } from '@/lib/brandLogo';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       billTo: { name: invoice.bill_to_name, email: invoice.bill_to_email, address: invoice.bill_to_address },
       from: { name: fromName, email: user.email ?? null },
       lines,
-    });
+    }, await loadLogo(user.id));
 
     const total = invoiceTotals(lines, invoice.tax_percent).total;
     const html = `<p>Hi ${escapeHtml(invoice.bill_to_name || 'there')},</p>

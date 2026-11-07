@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { formatPhoneNumber } from './formatPhone';
 import { formatDisplayDate } from './dueDates';
+import { drawLogo } from './pdfLetterhead';
 
 interface AgentInfo {
   name: string;
@@ -35,7 +36,8 @@ export function generateInvoicePdf(
   agent: AgentInfo,
   transaction: TransactionInfo,
   tc?: TcInfo | null,
-  payUrl?: string | null
+  payUrl?: string | null,
+  logo?: Buffer | null
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
@@ -54,32 +56,33 @@ export function generateInvoicePdf(
       // own branding, which left the agent unsure who they were actually
       // paying). Falls back to the "Relay TC" label only if the TC never
       // set a display name in Settings.
+      const dy = drawLogo(doc, logo);
       const billerName = tc?.name || 'Relay TC';
       doc
         .fillColor('#08080b')
         .fontSize(22)
         .font('Helvetica-Bold')
-        .text(billerName, 56, 56);
+        .text(billerName, 56, 56 + dy);
       doc
         .fontSize(10)
         .font('Helvetica')
         .fillColor('#555555')
-        .text(tc?.email || 'Transaction Coordination Services', 56, 82);
+        .text(tc?.email || 'Transaction Coordination Services', 56, 82 + dy);
 
       doc
         .fontSize(20)
         .font('Helvetica-Bold')
         .fillColor('#08080b')
-        .text('INVOICE', 0, 56, { align: 'right' });
+        .text('INVOICE', 0, 56 + dy, { align: 'right' });
       doc
         .fontSize(10)
         .font('Helvetica')
         .fillColor('#555555')
-        .text(invoice.invoice_number, 0, 82, { align: 'right' });
+        .text(invoice.invoice_number, 0, 82 + dy, { align: 'right' });
 
-      doc.moveTo(56, 116).lineTo(556, 116).strokeColor('#dddddd').stroke();
+      doc.moveTo(56, 116 + dy).lineTo(556, 116 + dy).strokeColor('#dddddd').stroke();
 
-      let y = 136;
+      let y = 136 + dy;
 
       // Bill To / dates
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#888888').text('BILL TO', 56, y);

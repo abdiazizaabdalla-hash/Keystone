@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { formatDisplayDate } from './dueDates';
 import { invoiceTotals } from './workspaceInvoiceMath';
+import { drawLogo } from './pdfLetterhead';
 
 export interface WorkspaceInvoicePdfInput {
   invoiceNumber: string;
@@ -17,7 +18,7 @@ export interface WorkspaceInvoicePdfInput {
 
 const money = (n: number) => `$${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export function generateWorkspaceInvoicePdf(inv: WorkspaceInvoicePdfInput): Promise<Buffer> {
+export function generateWorkspaceInvoicePdf(inv: WorkspaceInvoicePdfInput, logo?: Buffer | null): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'LETTER', margin: 56 });
@@ -26,13 +27,14 @@ export function generateWorkspaceInvoicePdf(inv: WorkspaceInvoicePdfInput): Prom
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      doc.fillColor('#08080b').fontSize(22).font('Helvetica-Bold').text(inv.from.name, 56, 56);
-      doc.fontSize(10).font('Helvetica').fillColor('#555555').text(inv.from.email || '', 56, 82);
-      doc.fontSize(20).font('Helvetica-Bold').fillColor('#08080b').text('INVOICE', 0, 56, { align: 'right' });
-      doc.fontSize(10).font('Helvetica').fillColor('#555555').text(inv.invoiceNumber, 0, 82, { align: 'right' });
-      doc.moveTo(56, 116).lineTo(556, 116).strokeColor('#dddddd').stroke();
+      const dy = drawLogo(doc, logo);
+      doc.fillColor('#08080b').fontSize(22).font('Helvetica-Bold').text(inv.from.name, 56, 56 + dy);
+      doc.fontSize(10).font('Helvetica').fillColor('#555555').text(inv.from.email || '', 56, 82 + dy);
+      doc.fontSize(20).font('Helvetica-Bold').fillColor('#08080b').text('INVOICE', 0, 56 + dy, { align: 'right' });
+      doc.fontSize(10).font('Helvetica').fillColor('#555555').text(inv.invoiceNumber, 0, 82 + dy, { align: 'right' });
+      doc.moveTo(56, 116 + dy).lineTo(556, 116 + dy).strokeColor('#dddddd').stroke();
 
-      let y = 136;
+      let y = 136 + dy;
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#888888').text('BILL TO', 56, y);
       doc.text('ISSUED', 340, y);
       doc.text('DUE', 460, y);

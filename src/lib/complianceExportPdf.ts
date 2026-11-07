@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { formatDisplayDate } from './dueDates';
+import { drawLogo } from './pdfLetterhead';
 
 // Full audit-trail export for a transaction -- a brokerage compliance
 // review or E&O dispute needs the whole paper trail (documents,
@@ -58,6 +59,8 @@ export interface ComplianceExportInput {
   tasks: ComplianceTaskRow[];
   generatedByName: string;
   generatedByEmail: string | null;
+  /** The sender's logo, printed at the top of the first page. */
+  logo?: Buffer | null;
 }
 
 const PAGE_MARGIN = 56;
@@ -102,6 +105,8 @@ export function generateComplianceExportPdf(input: ComplianceExportInput): Promi
       };
 
       // Header
+      const logoShift = drawLogo(doc, input.logo);
+      if (logoShift) doc.y = PAGE_MARGIN + logoShift;
       doc
         .fillColor('#08080b')
         .font('Helvetica-Bold')

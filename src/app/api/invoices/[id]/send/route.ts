@@ -1,3 +1,4 @@
+import { loadLogo } from '@/lib/brandLogo';
 import { NextRequest, NextResponse } from 'next/server';
 import JSZip from 'jszip';
 import { supabaseServer } from '@/lib/supabase';
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const tc = await loadTcInfo(agent.tc_user_id);
     const origin = new URL(request.url).origin;
     const payUrl = await getInvoicePayUrlForDocument({ invoice, tcUserId: agent.tc_user_id, origin });
-    const pdfBuffer = await generateInvoicePdf(invoice, agent, transaction, tc, payUrl);
+    const pdfBuffer = await generateInvoicePdf(invoice, agent, transaction, tc, payUrl, await loadLogo(agent.tc_user_id));
 
     // Build a zip of every document so far uploaded for this transaction.
     const zip = new JSZip();

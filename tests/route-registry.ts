@@ -173,6 +173,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/stripe/connect/webhook': { kind: 'webhook', methods: ['POST'], why: "Stripe Connect events; signature verified." },
   '/api/stripe/portal': { kind: 'session', methods: ['POST'] },
   '/api/stripe/webhook': { kind: 'webhook', methods: ['POST'], why: "Stripe events; signature verified." },
+  '/api/settings/logo': { kind: 'session', methods: ['GET', 'POST', 'DELETE'], why: 'Your own logo only: stored under your user id, so nobody can read or replace another account\'s logo.', collaboratorWrites: 'A free agent login may keep its own logo for the PDFs it sends; it touches only that login\'s file.' },
   '/api/tasks': { kind: 'session', methods: ['GET', 'PATCH'] },
   '/api/tasks/[id]': { kind: 'session', methods: ['PATCH'] },
   '/api/team': { kind: 'session', methods: ['DELETE', 'GET', 'PATCH', 'POST'] },

@@ -1,3 +1,4 @@
+import { loadLogo } from '@/lib/brandLogo';
 import { NextRequest, NextResponse } from 'next/server';
 import { isFullParticipant } from '@/lib/authorize';
 import { supabaseServer } from '@/lib/supabase';
@@ -93,6 +94,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       tasks: tasksRes.data || [],
       generatedByName: user.user_metadata?.full_name || user.email || 'Unknown',
       generatedByEmail: user.email || null,
+      logo: await loadLogo(user.id),
     });
 
     const safeFileNumber = transaction.file_number.replace(/[^a-zA-Z0-9._-]/g, '_');

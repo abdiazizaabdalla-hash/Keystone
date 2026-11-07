@@ -1,5 +1,6 @@
 'use client';
 
+import LogoSettingsCard from '@/components/LogoSettingsCard';
 import MoneyInput from '@/components/MoneyInput';
 import { readPersona } from '@/lib/persona';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
@@ -495,6 +496,8 @@ function SettingsContent() {
             />
           </div>
         </div>
+
+        <LogoSettingsCard />
 
         {!hideFeeBlocks && (
           <>
