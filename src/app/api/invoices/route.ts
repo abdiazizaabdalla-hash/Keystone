@@ -142,7 +142,13 @@ export async function POST(request: NextRequest) {
         .select('id, agent_id')
         .eq('id', transactionId)
         .maybeSingle();
-      if (!txRow || (!sharedDeal && txRow.agent_id !== agentId)) {
+      // A deal shared with this coordinator is billed to their own record for the deal's agent (not the record the deal points at).
+      let billsSharedDeal = sharedDeal;
+      if (txRow && !billsSharedDeal && txRow.agent_id !== effectiveAgentId && (await isFullParticipant(user.id, transactionId))) {
+        const mine = await agentProfileForSharedDeal(user, transactionId, { create: false });
+        billsSharedDeal = mine?.id === effectiveAgentId;
+      }
+      if (!txRow || (!billsSharedDeal && txRow.agent_id !== effectiveAgentId)) {
         return NextResponse.json({ error: 'Transaction not found or does not belong to this agent' }, { status: 403 });
       }
     }
