@@ -34,6 +34,8 @@ import { US_STATES, stateFromAddress } from '@/lib/usStates';
 import SignatureFieldPlacer from '@/components/SignatureFieldPlacer';
 import { addTemplatesToDeal, summarizeAdded } from '@/lib/addTemplatesClient';
 import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
+import ChatBubbles, { type ChatLine } from '@/components/chat/ChatBubbles';
+import { isClosedMessage, parseClosedMessage } from '@/lib/dealClosedMarker';
 
 interface Transaction {
   id: string;
@@ -423,6 +425,34 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
       attachment?: { id: string; fileName: string; url: string | null; contentType: string | null; fileSize: number | null } | null;
     }[]
   >([]);
+  const chatLines: ChatLine[] = messages.map((m) => {
+    const mine = m.sender_role === mySide;
+    if (isClosedMessage(m.body)) {
+      const { who, when } = parseClosedMessage(m.body);
+      return { id: m.id, senderKey: m.sender_id, senderName: who, mine, body: '', createdAt: m.created_at, system: { tone: 'success' as const, title: mine ? 'You closed this deal' : `${who} closed this deal`, detail: when ? `Closed ${when}. Every step is complete.` : 'Every step is complete.' } };
+    }
+    return {
+      id: m.id,
+      senderKey: m.sender_id,
+      senderName: mine ? 'You' : otherPartyName,
+      mine,
+      body: m.body || '',
+      createdAt: m.created_at,
+      tag: m.sender_role === 'agent' ? 'Agent' : 'Coordinator',
+      attachment: m.attachment ? { fileName: m.attachment.fileName, url: m.attachment.url } : null,
+    };
+  });
+  const closedNote = (() => {
+    const line = [...messages].reverse().find((m) => isClosedMessage(m.body));
+    if (!line) return null;
+    const { who, when } = parseClosedMessage(line.body);
+    return { byMe: line.sender_role === mySide, who, when };
+  })();
+  const chatListRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = chatListRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages.length, tab]);
   const [emails, setEmails] = useState<TransactionEmail[]>([]);
   const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null);
   const [deletingEmailId, setDeletingEmailId] = useState<string | null>(null);
@@ -3012,6 +3042,20 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
 
         </div>
 
+        {transaction.status === 'Closed' && (
+          <div role="status" data-testid="deal-closed-banner" className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-400/50 bg-emerald-500/15 px-5 py-4">
+            <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xl font-bold text-white">✓</span>
+            <div className="min-w-0">
+              <p className="text-lg font-semibold text-emerald-100">
+                {closedNote ? (closedNote.byMe ? 'You closed this deal' : `${closedNote.who} closed this deal`) : 'This deal is closed'}
+              </p>
+              <p className="text-sm text-emerald-200/80">
+                {closedNote?.when ? `Closed ${closedNote.when}. ` : ''}Every checklist step is complete{transaction.closing_date ? ` · closing date ${formatDisplayDate(transaction.closing_date)}` : ''}.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Tabs: one focused section at a time instead of one long page.
             Every panel stays mounted (just hidden) so drafts, uploads and
             polling keep their state when you switch tabs. */}
@@ -3284,13 +3328,13 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                 <p className="text-xs text-slate-500 mb-4">{transaction.checklist_template_name || 'Baseline (default)'}</p>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-medium text-slate-400">Progress</span>
-                  <span className="text-xs font-semibold text-blue-400">
-                    {tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0}%
+                  <span className={`text-xs font-semibold ${transaction.status === 'Closed' ? 'text-emerald-300' : 'text-blue-400'}`}>
+                    {transaction.status === 'Closed' ? '✓ Complete' : `${tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0}%`}
                   </span>
                 </div>
                 <div className="w-full h-2 bg-slate-600 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-blue-500 transition-all duration-300"
+                    className={`h-full ${transaction.status === 'Closed' ? 'bg-emerald-500' : 'bg-blue-500'} transition-all duration-300`}
                     style={{ width: `${tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0}%` }}
                   />
                 </div>
@@ -3459,11 +3503,11 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               <div className="flex-1">
                 <div className="flex justify-between items-center mb-1.5">
                   <span className="text-xs font-medium text-slate-400">Progress</span>
-                  <span className="text-xs font-semibold text-blue-400">{completionPercent}%</span>
+                  <span className={`text-xs font-semibold ${transaction.status === 'Closed' ? 'text-emerald-300' : 'text-blue-400'}`}>{transaction.status === 'Closed' ? '✓ Complete' : `${completionPercent}%`}</span>
                 </div>
                 <div className="w-full h-2 bg-slate-600 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-blue-500 transition-all duration-300"
+                    className={`h-full ${transaction.status === 'Closed' ? 'bg-emerald-500' : 'bg-blue-500'} transition-all duration-300`}
                     style={{ width: `${completionPercent}%` }}
                   />
                 </div>
@@ -3882,31 +3926,9 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                   <CoordinatorStatus accepted={acceptedAgentUsers[0]} pending={null} compact />
                 </div>
               )}
-              <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
+              <div ref={chatListRef} className="flex-1 overflow-y-auto mb-4 pr-1">
                 {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet -- say hello.</p>}
-                {messages.map((m) => (
-                  <div key={m.id} className={`flex ${m.sender_role === mySide ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className={`max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                        m.sender_role === mySide ? 'bg-blue-600 text-white' : 'bg-slate-800/70 text-slate-200'
-                      }`}
-                    >
-                      {m.body && <p>{m.body}</p>}
-                      {m.attachment && (
-                        <a
-                          href={m.attachment.url || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`flex items-center gap-1.5 text-xs underline underline-offset-2 ${
-                            m.sender_role === mySide ? 'text-blue-100' : 'text-blue-300'
-                          } ${m.body ? 'mt-1.5' : ''}`}
-                        >
-                          📎 {m.attachment.fileName}
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                <ChatBubbles lines={chatLines} />
               </div>
               <input
                 ref={messageFileInputRef}

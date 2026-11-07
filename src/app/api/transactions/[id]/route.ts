@@ -1,4 +1,5 @@
 import { notifyDealClosed } from '@/lib/dealClosed';
+import { announceDealClosed } from '@/lib/dealClosedAnnounce';
 import { NextRequest, NextResponse } from 'next/server';
 import { isFullParticipant } from '@/lib/authorize';
 import { supabaseServer } from '@/lib/supabase';
@@ -162,6 +163,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (closingNow) await notifyDealClosed(transactionId, user.id);
+    if (closingNow) await announceDealClosed(transactionId, user, request.nextUrl.origin);
 
     // Status or date changes can add, move, or remove calendar events
     // (no-op if nobody on the deal has connected a calendar).

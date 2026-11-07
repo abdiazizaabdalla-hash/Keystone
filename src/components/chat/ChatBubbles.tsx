@@ -16,6 +16,10 @@ export interface ChatLine {
   /** A small label such as Broker, Agent or TC. */
   tag?: string;
   canDelete?: boolean;
+  /** A file sent with the message. */
+  attachment?: { fileName: string; url: string | null } | null;
+  /** An announcement from the app (such as a deal closing): shown across the chat, not as a bubble. */
+  system?: { tone: 'success'; title: string; detail?: string } | null;
 }
 
 const PALETTE = [
@@ -58,6 +62,15 @@ export default function ChatBubbles({ lines, compact = false, onDelete }: { line
         </li>
       );
     }
+    if (m.system) {
+      out.push(
+        <li key={m.id} className="my-1 rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-3 text-center">
+          <p className="text-sm font-semibold text-emerald-200">{m.system.title}</p>
+          {m.system.detail && <p className="text-xs text-emerald-300/80 mt-0.5">{m.system.detail}</p>}
+        </li>
+      );
+      return;
+    }
     out.push(
       <li key={m.id} className={`group flex gap-2 ${m.mine ? 'justify-end' : 'justify-start'} ${grouped ? '-mt-2' : ''}`}>
         {!m.mine && (grouped ? <span className={compact ? 'w-6 shrink-0' : 'w-8 shrink-0'} /> : <Avatar name={m.senderName} id={m.senderKey} size={compact ? 'sm' : 'md'} />)}
@@ -85,7 +98,12 @@ export default function ChatBubbles({ lines, compact = false, onDelete }: { line
                 m.mine ? 'bg-blue-600 text-white rounded-br-md' : `border ${c.bubble} text-slate-100 rounded-bl-md`
               }`}
             >
-              {m.body}
+              {m.body && <p>{m.body}</p>}
+              {m.attachment && (
+                <a href={m.attachment.url || '#'} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-1.5 text-xs underline underline-offset-2 ${m.body ? 'mt-1.5' : ''} ${m.mine ? 'text-blue-100' : 'text-blue-300'}`}>
+                  📎 {m.attachment.fileName}
+                </a>
+              )}
             </div>
             {!m.mine && m.canDelete && onDelete && (
               <button type="button" onClick={() => onDelete(m.id)} aria-label="Delete message" className="text-[11px] text-slate-500 hover:text-red-400 md:opacity-0 md:group-hover:opacity-100 transition">Delete</button>

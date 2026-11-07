@@ -14,6 +14,7 @@ import AgentBrokerageStrip from '@/components/AgentBrokerageStrip';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 import { isFeatureOnClient } from '@/lib/features';
 import TcInvitationBanner from '@/components/TcInvitationBanner';
+import ClosedDealAlerts from '@/components/ClosedDealAlerts';
 import AttentionPanel, { type AttentionSummary } from '@/components/AttentionPanel';
 import { readPersona, type Persona } from '@/lib/persona';
 
@@ -571,6 +572,7 @@ export default function Dashboard() {
           /api/dashboard/attention) so the first thing a TC sees is what
           actually needs action. Renders nothing until the fetch resolves.
           Critical dates sits right under it as a thin full-width bar. */}
+      <ClosedDealAlerts />
       <TcInvitationBanner onAccepted={fetchData} />
       {attentionNote && <p className="mb-3 text-sm text-red-400">{attentionNote}</p>}
       <div className="mb-8 space-y-4">

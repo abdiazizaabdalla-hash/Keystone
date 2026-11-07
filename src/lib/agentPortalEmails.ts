@@ -359,3 +359,16 @@ export async function sendClientMessageEmail(params: {
     ...(senderEmail ? { replyTo: senderEmail } : {}),
   });
 }
+
+// Sent to everyone else on a deal when one person closes it.
+export async function sendDealClosedEmail(params: { toEmail: string; closedBy: string; propertyAddress: string | null; portalUrl: string }) {
+  const { toEmail, closedBy, propertyAddress, portalUrl } = params;
+  const dealLabel = propertyAddress || 'your deal';
+  const html = wrapper(
+    `${dealLabel} is closed`,
+    `<p><strong>${escapeHtml(closedBy)}</strong> marked <strong>${escapeHtml(dealLabel)}</strong> as closed on Relay TC.</p>
+     <p>Every step on the checklist is now complete. Open the deal if anything looks wrong.</p>
+     <p><a href="${portalUrl}" style="color: #b45309;">Open the deal</a></p>`
+  );
+  return deliverEmail({ source: 'sendDealClosedEmail', from: INVOICE_FROM_EMAIL, to: toEmail, subject: `${dealLabel} is closed`, html });
+}
