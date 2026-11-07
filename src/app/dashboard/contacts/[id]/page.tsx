@@ -8,6 +8,7 @@ import type { ContactRow, ContactActivityRow, ContactReminderRow, ActivityKind }
 import { dueLabel, shortDate, timeAgo, todayLocal } from '@/lib/contactDates';
 import ContactEditModal from '@/components/ContactEditModal';
 import AddContactToDealModal from '@/components/AddContactToDealModal';
+import AgentPricingCard from '@/components/AgentPricingCard';
 
 // A contact's profile: who they are, the deals and listings you share, your notes and recorded
 // interactions, and follow-up reminders. Private to your account; nothing here is shown to the contact.
@@ -336,6 +337,7 @@ export default function ContactProfilePage({ params }: { params: Promise<{ id: s
 
       <div className="grid lg:grid-cols-5 gap-5">
         <div className="lg:col-span-3 space-y-5">
+          {contact.agent_id && profile.isOwner && <AgentPricingCard agentId={contact.agent_id} className={cardCls} />}
           <section className={cardCls}>
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-1">Notes &amp; activity</h2>
             {contact.team_id && <p className="text-xs text-slate-500 mb-3">Private to you. Teammates keep their own notes, history and follow-ups on this shared contact.</p>}
