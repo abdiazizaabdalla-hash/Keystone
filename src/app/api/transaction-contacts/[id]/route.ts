@@ -4,6 +4,7 @@ import { isFullParticipant } from '@/lib/authorize';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getVisibleTcUserIds } from '@/lib/team';
+import { syncDealPartyToCoordinators } from '@/lib/coordinatorOnboarding';
 
 async function getOwnedContact(contactId: string, userId: string, isAdmin: boolean) {
   const { data: contact } = await supabaseServer
@@ -65,6 +66,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .single();
 
     if (error) throw error;
+    await syncDealPartyToCoordinators(data.transaction_id as string, { name: data.name, email: data.email, phone: data.phone, role: data.role });
     return NextResponse.json(data);
   } catch (error) {
     if (error instanceof AuthError) {

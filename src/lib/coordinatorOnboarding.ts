@@ -3,6 +3,8 @@ import { getVisibleTcUserIds } from './team';
 import { getPlanLimits } from './plans';
 import { getUserPlan } from './privileged';
 import { autoAddContact } from './contactsAuto';
+import { hasAgentRole } from './appMetadata';
+import { participantLevel } from './authorize';
 
 export interface InvitingAgentProfile {
   id: string;
@@ -43,7 +45,7 @@ export async function addInvitingAgentForCoordinator(params: {
       .select('name, email, phone, role')
       .eq('transaction_id', transactionId);
     for (const party of parties || []) {
-      await autoAddContact(coordinator.id, { name: party.name as string | null, email: party.email as string | null, phone: party.phone as string | null, role: party.role as string | null });
+      await autoAddContact(coordinator.id, { name: party.name as string | null, email: party.email as string | null, phone: party.phone as string | null, role: party.role as string | null }, { allowNameOnly: true });
     }
 
     // Agents list: reuse a profile for this email if the coordinator (or their team) already has one.
@@ -79,5 +81,33 @@ export async function addInvitingAgentForCoordinator(params: {
   } catch (error) {
     console.error('addInvitingAgentForCoordinator failed (ignored):', error);
     return null;
+  }
+}
+
+/** Coordinators (paid or on trial) who were given this deal by its agent. */
+async function coordinatorsOnDeal(transactionId: string): Promise<string[]> {
+  const { data: links } = await supabaseServer.from('transaction_agents').select('agent_user_id').eq('transaction_id', transactionId);
+  const ids: string[] = [];
+  for (const link of links || []) {
+    const { data } = await supabaseServer.auth.admin.getUserById(link.agent_user_id as string);
+    const u = data.user;
+    if (!u || hasAgentRole(u)) continue; // agent logins are collaborators, not coordinators
+    if ((await participantLevel(u as Parameters<typeof participantLevel>[0])) === 'full') ids.push(u.id);
+  }
+  return ids;
+}
+
+/**
+ * Someone was added to (or changed on) a deal: save them to the Contacts of every coordinator the deal was
+ * shared with. Existing contacts are never changed. Never throws.
+ */
+export async function syncDealPartyToCoordinators(
+  transactionId: string,
+  person: { name?: string | null; email?: string | null; phone?: string | null; role?: string | null }
+): Promise<void> {
+  try {
+    for (const id of await coordinatorsOnDeal(transactionId)) await autoAddContact(id, person, { allowNameOnly: true });
+  } catch (error) {
+    console.error('syncDealPartyToCoordinators failed (ignored):', error);
   }
 }

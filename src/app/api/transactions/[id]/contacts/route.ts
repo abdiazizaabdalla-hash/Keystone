@@ -6,6 +6,7 @@ import { getVisibleTcUserIds } from '@/lib/team';
 import { assertAgentOnTransaction } from '@/lib/agentPortal';
 import { actsAsCollaborator, isFullParticipant } from '@/lib/authorize';
 import { autoAddContact } from '@/lib/contactsAuto';
+import { syncDealPartyToCoordinators } from '@/lib/coordinatorOnboarding';
 
 // The "Deal Contacts" list shown right under the Checklist card on the
 // transaction detail page -- buyer, seller, lender, title/escrow, etc.
@@ -139,6 +140,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const ownerId = Array.isArray(agentRel) ? agentRel[0]?.tc_user_id : agentRel?.tc_user_id;
       if (ownerId) await autoAddContact(ownerId, { name, email, phone, role });
     }
+    await syncDealPartyToCoordinators(transactionId, { name, email, phone, role });
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

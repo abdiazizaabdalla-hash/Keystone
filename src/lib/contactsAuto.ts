@@ -10,14 +10,16 @@ import { EMAIL_RE } from '@/lib/stepEmailTemplates';
 // that triggered it.
 export async function autoAddContact(
   tcUserId: string,
-  person: { name?: string | null; email?: string | null; phone?: string | null; role?: string | null; company?: string | null }
+  person: { name?: string | null; email?: string | null; phone?: string | null; role?: string | null; company?: string | null },
+  // A coordinator on someone else's deal wants the whole cast, including people with no email yet.
+  options: { allowNameOnly?: boolean } = {}
 ): Promise<void> {
   try {
     const email = (person.email || '').trim().toLowerCase();
     const name = (person.name || '').trim();
     const hasEmail = !!email && email.length <= 254 && EMAIL_RE.test(email);
     // Everyone needs an email to be saved, except an agent, who is saved by name.
-    if (!hasEmail && !((person.role || '').trim() === 'Agent' && name)) return;
+    if (!hasEmail && !((person.role || '').trim() === 'Agent' && name) && !(options.allowNameOnly && name)) return;
 
     if (hasEmail) {
       const { data: existing } = await supabaseServer
