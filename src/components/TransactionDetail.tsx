@@ -52,6 +52,8 @@ interface Transaction {
   /** Someone else owns this deal and added you to it. */
   shared?: boolean;
   shared_agent?: Agent | null;
+  /** For a deal shared with you: your own record for that agent (your fees). */
+  tc_agent?: Agent | null;
 }
 
 interface TransactionEmailAttachment {
@@ -442,6 +444,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
       attachment: m.attachment ? { fileName: m.attachment.fileName, url: m.attachment.url } : null,
     };
   });
+  // The fees an invoice would use: on a deal shared with you, your own record for that agent, not theirs.
+  const feeAgent = transaction?.shared ? (transaction.tc_agent ?? null) : agent;
   const closedNote = (() => {
     const line = [...messages].reverse().find((m) => isClosedMessage(m.body));
     if (!line) return null;
@@ -1318,7 +1322,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
 
       const updated = await response.json();
       const { tasks: syncedTasks, ...transactionFields } = updated;
-      setTransaction(transactionFields);
+      setTransaction((prev) => ({ ...transactionFields, ...(prev?.shared ? { shared: prev.shared, shared_agent: prev.shared_agent, tc_agent: prev.tc_agent } : {}) }));
       // The checklist may have just been auto-checked/reopened to match —
       // apply the rows the server already computed instead of refetching.
       if (Array.isArray(syncedTasks)) {
@@ -1363,7 +1367,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
 
       const updated = await response.json();
       const { tasks: updatedTasks, ...transactionFields } = updated;
-      setTransaction(transactionFields);
+      setTransaction((prev) => ({ ...transactionFields, ...(prev?.shared ? { shared: prev.shared, shared_agent: prev.shared_agent, tc_agent: prev.tc_agent } : {}) }));
       if (Array.isArray(updatedTasks)) {
         setTasks(updatedTasks);
       }
@@ -1392,7 +1396,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
       const updated = await response.json();
       const { tasks: _ignored, ...transactionFields } = updated;
       void _ignored;
-      setTransaction(transactionFields);
+      setTransaction((prev) => ({ ...transactionFields, ...(prev?.shared ? { shared: prev.shared, shared_agent: prev.shared_agent, tc_agent: prev.tc_agent } : {}) }));
     } catch (error) {
       console.error('Error updating state:', error);
       alert('Failed to update the state.');
@@ -1444,7 +1448,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
       }
 
       const { tasks: newTasks, ...transactionFields } = result;
-      setTransaction(transactionFields);
+      setTransaction((prev) => ({ ...transactionFields, ...(prev?.shared ? { shared: prev.shared, shared_agent: prev.shared_agent, tc_agent: prev.tc_agent } : {}) }));
       if (Array.isArray(newTasks)) setTasks(newTasks);
       setIsChangingTemplate(false);
     } catch (error) {
@@ -1472,7 +1476,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agentId: transaction.agent_id,
+          agentId: transaction.tc_agent?.id ?? transaction.agent_id,
           transactionId: transaction.id,
           purchasePrice: transaction.purchase_price,
         }),
@@ -1521,7 +1525,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
       }
       const updatedTransaction = await statusResponse.json();
       const { tasks: syncedTasks, ...transactionFields } = updatedTransaction;
-      setTransaction(transactionFields);
+      setTransaction((prev) => ({ ...transactionFields, ...(prev?.shared ? { shared: prev.shared, shared_agent: prev.shared_agent, tc_agent: prev.tc_agent } : {}) }));
       if (Array.isArray(syncedTasks)) {
         setTasks(syncedTasks);
       }
@@ -1530,7 +1534,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agentId: transactionFields.agent_id,
+          agentId: transaction?.tc_agent?.id ?? transactionFields.agent_id,
           transactionId: transactionFields.id,
           purchasePrice: transactionFields.purchase_price,
         }),
@@ -3162,7 +3166,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           )
           )}
 
-          {!isAgentAcct && !transaction.shared && (
+          {!isAgentAcct && (
           <OverviewSection defaultOpen title="Invoice" summary={invoice ? `${invoice.invoice_number} · $${invoice.amount_owed.toLocaleString()} · ${invoice.paid ? 'Paid' : 'Unpaid'}` : 'Not created yet'}>
           {/* Invoice: no longer gated on the deal being manually walked to
               Closed via the checklist -- some TCs don't want to check off
@@ -3235,16 +3239,16 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                         : "Not using the checklist to track this deal? Close it and invoice the agent in one step."}
                     </p>
                     <p className="text-xs text-slate-500 mt-1">
-                      Flat fee ${(agent?.flat_fee ?? 0).toLocaleString()}
-                      {agent?.commission_percent ? (
-                        <> + {agent.commission_percent}% of ${Number(transaction.purchase_price ?? 0).toLocaleString()}</>
+                      Flat fee ${(feeAgent?.flat_fee ?? 0).toLocaleString()}
+                      {feeAgent?.commission_percent ? (
+                        <> + {feeAgent.commission_percent}% of ${Number(transaction.purchase_price ?? 0).toLocaleString()}</>
                       ) : null}{' '}
                       ={' '}
                       <span className="text-slate-300 font-semibold">
                         $
                         {(
-                          (agent?.flat_fee ?? 0) +
-                          (transaction.purchase_price * (agent?.commission_percent ?? 0)) / 100
+                          (feeAgent?.flat_fee ?? 0) +
+                          (transaction.purchase_price * (feeAgent?.commission_percent ?? 0)) / 100
                         ).toLocaleString()}
                       </span>
                       {' — set per-agent in '}

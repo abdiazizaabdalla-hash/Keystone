@@ -88,9 +88,25 @@ export async function GET(request: NextRequest) {
         .in('id', sharedAgentIds);
       (agentRows || []).forEach((a) => sharedAgents.set(a.id as string, a as never));
     }
+    // For a deal shared with this coordinator, their own Agents record for the agent who owns it (their fees, what they bill).
+    const myProfiles = new Map<string, { id: string; name: string | null; flat_fee: number | null; commission_percent: number | null; brokerage: string | null }>();
+    const sharedOwnerIds = Array.from(new Set((rawData || [])
+      .filter((t) => !isAdmin && sharedSet.has(t.id as string) && t.tc_user_id !== user.id)
+      .map((t) => t.tc_user_id as string)
+      .filter(Boolean)));
+    if (sharedOwnerIds.length > 0) {
+      const visibleIds = await getVisibleTcUserIds(user.id);
+      const { data: mine } = await supabaseServer.from('agents').select('id, name, email, flat_fee, commission_percent, brokerage').in('tc_user_id', visibleIds);
+      for (const ownerId of sharedOwnerIds) {
+        const { data: owner } = await supabaseServer.auth.admin.getUserById(ownerId);
+        const ownerEmail = (owner.user?.email || '').trim().toLowerCase();
+        const hit = ownerEmail ? (mine || []).find((m) => (m.email || '').trim().toLowerCase() === ownerEmail) : undefined;
+        if (hit) myProfiles.set(ownerId, hit as never);
+      }
+    }
     const data = (rawData || []).map((t) => {
       const shared = !isAdmin && sharedSet.has(t.id as string) && t.tc_user_id !== user.id;
-      return { ...t, shared, ...(shared ? { shared_agent: sharedAgents.get(t.agent_id as string) ?? null } : {}) };
+      return { ...t, shared, ...(shared ? { shared_agent: sharedAgents.get(t.agent_id as string) ?? null, tc_agent: myProfiles.get(t.tc_user_id as string) ?? null } : {}) };
     });
 
     if (!data || data.length === 0) {

@@ -4,6 +4,8 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { logAudit } from '@/lib/audit';
 import { queueQuickBooksSync } from '@/lib/quickbooksSync';
+import { isFullParticipant } from '@/lib/authorize';
+import { agentProfileForSharedDeal } from '@/lib/coordinatorOnboarding';
 
 export async function GET(request: NextRequest) {
   try {
@@ -106,11 +108,26 @@ export async function POST(request: NextRequest) {
     // Commission % always comes from the agent's own settings (Agents
     // page), never from the client -- invoices are always created this
     // way, by the TC's own click, on every plan.
-    const { data: agentRecord } = await supabaseServer
+    let effectiveAgentId = agentId;
+    let { data: agentRecord } = await supabaseServer
       .from('agents')
       .select('id, flat_fee, commission_percent, tc_user_id')
-      .eq('id', agentId)
+      .eq('id', effectiveAgentId)
       .single();
+
+    // A deal an agent shared with this coordinator: it is billed to the coordinator's own record for that agent, at their fees.
+    let sharedDeal = false;
+    if (!isAdmin && (!agentRecord || agentRecord.tc_user_id !== user.id) && (await isFullParticipant(user.id, transactionId))) {
+      const profile = await agentProfileForSharedDeal(user, transactionId, { create: true });
+      if (profile) {
+        const { data: own } = await supabaseServer.from('agents').select('id, flat_fee, commission_percent, tc_user_id').eq('id', profile.id).single();
+        if (own && own.tc_user_id === user.id) {
+          agentRecord = own;
+          effectiveAgentId = own.id as string;
+          sharedDeal = true;
+        }
+      }
+    }
 
     if (!isAdmin) {
       if (!agentRecord || agentRecord.tc_user_id !== user.id) {
@@ -125,7 +142,7 @@ export async function POST(request: NextRequest) {
         .select('id, agent_id')
         .eq('id', transactionId)
         .maybeSingle();
-      if (!txRow || txRow.agent_id !== agentId) {
+      if (!txRow || (!sharedDeal && txRow.agent_id !== agentId)) {
         return NextResponse.json({ error: 'Transaction not found or does not belong to this agent' }, { status: 403 });
       }
     }
@@ -136,6 +153,7 @@ export async function POST(request: NextRequest) {
       .from('invoices')
       .select('id')
       .eq('transaction_id', transactionId)
+      .eq('agent_id', effectiveAgentId)
       .maybeSingle();
 
     if (existingInvoice) {
@@ -181,7 +199,7 @@ export async function POST(request: NextRequest) {
     const { data: invoice, error: invoiceError } = await supabaseServer
       .from('invoices')
       .insert({
-        agent_id: agentId,
+        agent_id: effectiveAgentId,
         transaction_id: transactionId,
         amount_owed: totalAmount,
         invoice_number: invoiceNumber,

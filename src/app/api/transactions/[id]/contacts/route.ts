@@ -6,7 +6,7 @@ import { getVisibleTcUserIds } from '@/lib/team';
 import { assertAgentOnTransaction } from '@/lib/agentPortal';
 import { actsAsCollaborator, isFullParticipant } from '@/lib/authorize';
 import { autoAddContact } from '@/lib/contactsAuto';
-import { syncDealPartyToCoordinators } from '@/lib/coordinatorOnboarding';
+import { syncDealPartyToCoordinators, dealOwnerUserId } from '@/lib/coordinatorOnboarding';
 
 // The "Deal Contacts" list shown right under the Checklist card on the
 // transaction detail page -- buyer, seller, lender, title/escrow, etc.
@@ -131,13 +131,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Save the person to the deal owner's Contacts directory too (skips duplicates).
     if (email) {
-      const { data: owner } = await supabaseServer
-        .from('transactions')
-        .select('agents(tc_user_id)')
-        .eq('id', transactionId)
-        .maybeSingle();
-      const agentRel = (owner as { agents?: { tc_user_id?: string } | { tc_user_id?: string }[] | null } | null)?.agents;
-      const ownerId = Array.isArray(agentRel) ? agentRel[0]?.tc_user_id : agentRel?.tc_user_id;
+      const ownerId = await dealOwnerUserId(transactionId);
       if (ownerId) await autoAddContact(ownerId, { name, email, phone, role });
     }
     await syncDealPartyToCoordinators(transactionId, { name, email, phone, role });

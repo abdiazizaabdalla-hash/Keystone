@@ -39,9 +39,8 @@ export async function addInvitingAgentForCoordinator(params: {
     const phone = typeof agent.user_metadata?.phone === 'string' ? (agent.user_metadata.phone as string) : null;
 
     // The agent's brokerage, as the agent entered it on the deal, so brokerage-specific forms (IABS) can match.
-    const { data: dealRow } = await supabaseServer.from('transactions').select('agents(brokerage)').eq('id', transactionId).maybeSingle();
-    const rel = (dealRow as { agents?: { brokerage?: string | null } | { brokerage?: string | null }[] | null } | null)?.agents;
-    const brokerage = ((Array.isArray(rel) ? rel[0]?.brokerage : rel?.brokerage) || '').trim() || null;
+    const dealAgent = await dealAgentRow(transactionId);
+    const brokerage = (dealAgent?.brokerage || '').trim() || null;
 
     // Contacts: the agent, then the people on the deal.
     await autoAddContact(coordinator.id, { name: agentName, email: agentEmail, phone, company: brokerage, role: 'Agent' });
@@ -116,4 +115,41 @@ export async function syncDealPartyToCoordinators(
   } catch (error) {
     console.error('syncDealPartyToCoordinators failed (ignored):', error);
   }
+}
+
+/** The Agents record a deal points at (for a workspace deal: the workspace agent's own record of who the deal is for). */
+async function dealAgentRow(transactionId: string): Promise<{ tc_user_id: string | null; brokerage: string | null } | null> {
+  const { data: tx } = await supabaseServer.from('transactions').select('agent_id').eq('id', transactionId).maybeSingle();
+  if (!tx?.agent_id) return null;
+  const { data } = await supabaseServer.from('agents').select('tc_user_id, brokerage').eq('id', tx.agent_id as string).maybeSingle();
+  return (data as { tc_user_id: string | null; brokerage: string | null } | null) ?? null;
+}
+
+/** Who owns the deal (the account whose workspace holds it). */
+export async function dealOwnerUserId(transactionId: string): Promise<string | null> {
+  return (await dealAgentRow(transactionId))?.tc_user_id ?? null;
+}
+
+/** The account that owns a deal, if the deal was shared with a coordinator by it. */
+async function dealOwnerAccount(transactionId: string): Promise<Person | null> {
+  const row = await dealAgentRow(transactionId);
+  if (!row?.tc_user_id) return null;
+  const { data } = await supabaseServer.auth.admin.getUserById(row.tc_user_id);
+  return (data.user as Person | null) ?? null;
+}
+
+/**
+ * The coordinator's own Agents record for the agent who shared a deal with them: what they bill, at their fees. Made on accepting the
+ * invitation; made now if it isn't there (an older acceptance, or a plan limit that has since changed). Null when the deal wasn't
+ * shared with them by an agent account.
+ */
+export async function agentProfileForSharedDeal(coordinator: Person, transactionId: string, options: { create: boolean }): Promise<{ id: string } | null> {
+  const owner = await dealOwnerAccount(transactionId);
+  if (!owner || !owner.email) return null;
+  const visibleIds = await getVisibleTcUserIds(coordinator.id);
+  const { data: existing } = await supabaseServer.from('agents').select('id').in('tc_user_id', visibleIds).ilike('email', owner.email.trim().toLowerCase()).limit(1);
+  if (existing && existing.length > 0) return { id: existing[0].id as string };
+  if (!options.create) return null;
+  const made = await addInvitingAgentForCoordinator({ coordinator, agent: owner, transactionId });
+  return made ? { id: made.id } : null;
 }
