@@ -14,6 +14,8 @@ export interface WorkspaceInvoicePdfInput {
   billTo: { name: string; email: string | null; address: string | null };
   from: { name: string; email: string | null };
   lines: Array<{ description: string; quantity: number; unitPrice: number }>;
+  /** Stripe payment page, when the sender is connected to Stripe. */
+  payUrl?: string | null;
 }
 
 const money = (n: number) => `$${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -96,6 +98,13 @@ export function generateWorkspaceInvoicePdf(inv: WorkspaceInvoicePdfInput, logo?
       if (inv.status === 'paid') {
         doc.fontSize(14).font('Helvetica-Bold').fillColor('#15803d').text('PAID', 56, y + 4);
         y += 28;
+      }
+      if (inv.payUrl && inv.status !== 'paid') {
+        y += 8;
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#1d4ed8').text('PAY ONLINE', 56, y);
+        y += 13;
+        doc.fontSize(10).font('Helvetica').fillColor('#1d4ed8').text(inv.payUrl, 56, y, { width: 500, link: inv.payUrl, underline: true });
+        y = doc.y + 6;
       }
       if (inv.memo) {
         y += 12;

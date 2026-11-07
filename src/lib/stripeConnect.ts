@@ -115,7 +115,13 @@ export interface CreateInvoiceCheckoutSessionParams {
    * charge and moves it straight into Relay's own balance.
    */
   applicationFeeAmount?: number;
+  /** Which Relay record this payment is for. Default: a coordinator invoice. */
+  kind?: 'invoice' | 'workspace_invoice';
+  /** Product name on Stripe's payment page. */
+  productName?: string;
 }
+
+const METADATA_KEY = { invoice: 'relay_invoice_id', workspace_invoice: 'relay_workspace_invoice_id' } as const;
 
 /**
  * Creates a direct-charge Checkout Session for a single Relay invoice,
@@ -139,6 +145,7 @@ export async function createInvoiceCheckoutSession(
   params: CreateInvoiceCheckoutSessionParams
 ): Promise<Stripe.Checkout.Session> {
   const unitAmount = Math.round(params.amountOwed * 100);
+  const key = METADATA_KEY[params.kind ?? 'invoice'];
 
   return stripe.checkout.sessions.create(
     {
@@ -153,7 +160,7 @@ export async function createInvoiceCheckoutSession(
             currency: 'usd',
             unit_amount: unitAmount,
             product_data: {
-              name: `Transaction coordination fee — ${params.invoiceNumber}`,
+              name: params.productName ?? `Transaction coordination fee — ${params.invoiceNumber}`,
             },
           },
           quantity: 1,
@@ -161,9 +168,9 @@ export async function createInvoiceCheckoutSession(
       ],
       payment_intent_data: {
         ...(params.applicationFeeAmount ? { application_fee_amount: params.applicationFeeAmount } : {}),
-        metadata: { relay_invoice_id: params.invoiceId },
+        metadata: { [key]: params.invoiceId },
       },
-      metadata: { relay_invoice_id: params.invoiceId },
+      metadata: { [key]: params.invoiceId },
       success_url: params.successUrl,
       cancel_url: params.cancelUrl,
     },
@@ -267,8 +274,9 @@ export function constructConnectWebhookEvent(rawBody: string, signature: string)
  * literal Stripe placeholder it replaces with the real session id, which
  * lets the success page confirm the payment with Stripe directly instead
  * of depending only on the webhook arriving first. */
-export function successUrlFor(origin: string, invoiceId: string): string {
-  return `${origin}/pay/success?invoice=${encodeURIComponent(invoiceId)}&session_id={CHECKOUT_SESSION_ID}`;
+export function successUrlFor(origin: string, invoiceId: string, kind: 'invoice' | 'workspace_invoice' = 'invoice'): string {
+  const param = kind === 'workspace_invoice' ? 'wsinvoice' : 'invoice';
+  return `${origin}/pay/success?${param}=${encodeURIComponent(invoiceId)}&session_id={CHECKOUT_SESSION_ID}`;
 }
 
 /**
@@ -280,11 +288,12 @@ export function successUrlFor(origin: string, invoiceId: string): string {
  */
 export async function getInvoicePaymentState(
   connectedAccountId: string,
-  invoiceId: string
+  invoiceId: string,
+  kind: 'invoice' | 'workspace_invoice' = 'invoice'
 ): Promise<'paid' | 'processing' | 'none'> {
   try {
     const result = await stripe.paymentIntents.search(
-      { query: `metadata['relay_invoice_id']:'${invoiceId.replace(/[^a-zA-Z0-9-]/g, '')}'`, limit: 20 },
+      { query: `metadata['${METADATA_KEY[kind]}']:'${invoiceId.replace(/[^a-zA-Z0-9-]/g, '')}'`, limit: 20 },
       { stripeAccount: connectedAccountId }
     );
     if (result.data.some((pi) => pi.status === 'succeeded')) return 'paid';
@@ -357,4 +366,106 @@ export async function confirmInvoicePaymentFromSession(
     console.error('Error confirming invoice payment with Stripe:', error);
     return 'unknown';
   }
+}
+
+/**
+ * Payments for an invoice an agent sends from their workspace go to the agent's own connected Stripe account (the same
+ * Settings > Stripe connection a coordinator uses), and Relay marks it paid. The payer needs no Relay or Stripe account.
+ */
+export interface WorkspaceInvoiceForPayment {
+  id: string;
+  invoice_number: string;
+  owner_user_id: string;
+  status: string;
+  total: number;
+}
+
+export async function createWorkspaceInvoicePayUrl(invoice: WorkspaceInvoiceForPayment, origin: string): Promise<{ payUrl: string } | { error: string; status: number }> {
+  if (invoice.status === 'paid') return { error: 'This invoice is already paid.', status: 400 };
+  if (invoice.status === 'void') return { error: 'This invoice was voided.', status: 400 };
+  if (!(invoice.total > 0)) return { error: 'This invoice has nothing to pay.', status: 400 };
+  const { data: account } = await supabaseServer
+    .from('payment_accounts')
+    .select('status, connected_account_id')
+    .eq('tc_user_id', invoice.owner_user_id)
+    .eq('provider', 'stripe_connect')
+    .maybeSingle();
+  if (!account || account.status !== 'approved') return { error: 'The sender has not connected Stripe, so this cannot be paid online.', status: 400 };
+  const state = await getInvoicePaymentState(account.connected_account_id, invoice.id, 'workspace_invoice');
+  if (state === 'paid') {
+    await markWorkspaceInvoicePaid(invoice.id, invoice.total);
+    return { error: 'This invoice is already paid.', status: 400 };
+  }
+  if (state === 'processing') return { error: 'A payment for this invoice is already processing. It will be marked paid once it clears.', status: 409 };
+  const session = await createInvoiceCheckoutSession({
+    connectedAccountId: account.connected_account_id,
+    invoiceId: invoice.id,
+    invoiceNumber: invoice.invoice_number,
+    amountOwed: invoice.total,
+    successUrl: successUrlFor(origin, invoice.id, 'workspace_invoice'),
+    cancelUrl: `${origin}/pay/cancelled`,
+    kind: 'workspace_invoice',
+    productName: `Invoice ${invoice.invoice_number}`,
+  });
+  if (!session.url) throw new Error('Stripe did not return a checkout URL');
+  return { payUrl: session.url };
+}
+
+/** The pay link for a PDF or email, or null when the sender can't be paid online (never throws). */
+export async function workspaceInvoicePayUrlForDocument(invoice: WorkspaceInvoiceForPayment, origin: string): Promise<string | null> {
+  try {
+    const made = await createWorkspaceInvoicePayUrl(invoice, origin);
+    return 'payUrl' in made ? made.payUrl : null;
+  } catch (error) {
+    console.error('Error creating Stripe pay link for a workspace invoice:', error);
+    return null;
+  }
+}
+
+/** Marks an agent-sent invoice paid (once) and tells the sender. */
+export async function markWorkspaceInvoicePaid(invoiceId: string, amount: number): Promise<void> {
+  const { data } = await supabaseServer
+    .from('workspace_invoices')
+    .update({ status: 'paid', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', invoiceId)
+    .in('status', ['draft', 'sent'])
+    .select('owner_user_id, invoice_number, transaction_id')
+    .maybeSingle();
+  if (!data) return;
+  const { error } = await supabaseServer.from('notifications').insert({
+    recipient_user_id: data.owner_user_id,
+    actor_user_id: null,
+    transaction_id: data.transaction_id ?? null,
+    event_type: 'invoice',
+    title: `Invoice ${data.invoice_number} was paid ($${amount.toFixed(2)})`.slice(0, 200),
+    link: '/dashboard/invoices',
+  });
+  if (error) console.error('Could not add the paid notice to the bell (non-fatal):', error);
+}
+
+/** Like confirmInvoicePaymentFromSession, for an invoice an agent sent. Nothing in the URL is trusted. */
+export async function confirmWorkspaceInvoicePaymentFromSession(invoiceId: string, sessionId: string): Promise<'paid' | 'processing' | 'unknown'> {
+  try {
+    const { data: invoice } = await supabaseServer.from('workspace_invoices').select('id, owner_user_id, status, tax_percent').eq('id', invoiceId).maybeSingle();
+    if (!invoice) return 'unknown';
+    if (invoice.status === 'paid') return 'paid';
+    const { data: account } = await supabaseServer.from('payment_accounts').select('connected_account_id').eq('tc_user_id', invoice.owner_user_id).eq('provider', 'stripe_connect').maybeSingle();
+    if (!account) return 'unknown';
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {}, { stripeAccount: account.connected_account_id });
+    if (session.metadata?.relay_workspace_invoice_id !== invoice.id) return 'unknown';
+    if (session.payment_status === 'unpaid') return session.status === 'complete' ? 'processing' : 'unknown';
+    const total = await workspaceInvoiceTotal(invoice.id, Number(invoice.tax_percent));
+    if (typeof session.amount_total !== 'number' || session.amount_total / 100 < total - 0.01) return 'unknown';
+    await markWorkspaceInvoicePaid(invoice.id, session.amount_total / 100);
+    return 'paid';
+  } catch (error) {
+    console.error('Error confirming workspace invoice payment with Stripe:', error);
+    return 'unknown';
+  }
+}
+
+export async function workspaceInvoiceTotal(invoiceId: string, taxPercent: number): Promise<number> {
+  const { data } = await supabaseServer.from('workspace_invoice_lines').select('quantity, unit_price').eq('invoice_id', invoiceId);
+  const subtotal = (data || []).reduce((sum, l) => sum + Number(l.quantity) * Number(l.unit_price), 0);
+  return Math.round((subtotal + (subtotal * (taxPercent || 0)) / 100) * 100) / 100;
 }

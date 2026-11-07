@@ -133,3 +133,28 @@ export async function replaceLines(invoiceId: string, lines: InvoiceLineInput[])
     .insert(lines.map((l, i) => ({ invoice_id: invoiceId, position: i, description: l.description, quantity: l.quantity, unit_price: l.unitPrice })));
   if (error) throw error;
 }
+
+type Viewer = { id: string; email?: string | null };
+type InvoiceRow = { id: string; owner_user_id: string; status: string; bill_to_email: string | null; transaction_id: string | null; invoice_number: string; tax_percent: number };
+
+/** Whether this person is who an agent's invoice was sent to: the email it is billed to, or the coordinator on the linked deal. */
+export async function isInvoiceRecipient(invoice: InvoiceRow, viewer: Viewer): Promise<boolean> {
+  if (invoice.status !== 'sent' && invoice.status !== 'paid') return false;
+  const email = (viewer.email || '').trim().toLowerCase();
+  if (email && (invoice.bill_to_email || '').trim().toLowerCase() === email) return true;
+  if (invoice.transaction_id) {
+    const coordinator = await findDealCoordinator(invoice.transaction_id, invoice.owner_user_id);
+    if (coordinator?.userId === viewer.id) return true;
+  }
+  return false;
+}
+
+/** An agent's invoice, for its sender or for the person it was sent to. */
+export async function loadInvoiceForViewer(invoiceId: string, viewer: Viewer) {
+  const { data: invoice } = await supabaseServer.from('workspace_invoices').select('*').eq('id', invoiceId).maybeSingle();
+  if (!invoice) throw new AuthError('Invoice not found', 404);
+  const isOwner = invoice.owner_user_id === viewer.id;
+  if (!isOwner && !(await isInvoiceRecipient(invoice as InvoiceRow, viewer))) throw new AuthError('Invoice not found', 404);
+  const { lines } = await loadOwnInvoice(invoiceId, invoice.owner_user_id as string);
+  return { invoice, lines, isOwner };
+}

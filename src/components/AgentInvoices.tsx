@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useAgentAccess } from '@/lib/useAgentAccess';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
@@ -216,15 +217,23 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
           <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Invoices</h1>
           <p className="text-slate-400">Your brokerage commission statements, plus referral fees, splits, expenses and services billed from a template.</p>
         </div>
-        {!readOnly && (
-        <button
-          type="button"
-          onClick={() => setPicking(true)}
-          className="px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition whitespace-nowrap"
-        >
-          + New invoice
-        </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/dashboard/invoices/quickbooks"
+            className="px-4 py-2.5 border border-white/10 hover:bg-white/5 text-slate-300 hover:text-slate-100 text-sm rounded-xl transition whitespace-nowrap"
+          >
+            QuickBooks import / export
+          </Link>
+          {!readOnly && (
+          <button
+            type="button"
+            onClick={() => setPicking(true)}
+            className="px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition whitespace-nowrap"
+          >
+            + New invoice
+          </button>
+          )}
+        </div>
       </div>
 
       {error && <p className="mb-4 text-sm text-red-300">{error}</p>}
@@ -301,7 +310,7 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">From your coordinator</p>
                 <p className="text-xs text-slate-400">{owedToCoordinator > 0 ? `You owe ${money(owedToCoordinator)}` : 'All paid'}</p>
               </div>
-              <CoordinatorInvoiceList invoices={shownCoordinator} dealHref={(id) => `/dashboard/transactions/${id}`} />
+              <CoordinatorInvoiceList invoices={shownCoordinator} detailHref={(invoiceId) => `/dashboard/invoices/received/${invoiceId}`} />
             </div>
           )}
           {shownCommissions.map((c) => {

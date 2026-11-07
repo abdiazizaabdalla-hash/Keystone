@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import AgentQuickBooks from '@/components/AgentQuickBooks';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
@@ -95,7 +96,7 @@ const btnPrimary = 'px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm f
 const btnGhost = 'px-4 py-2 border border-slate-600 hover:border-slate-500 text-slate-300 hover:text-slate-100 text-sm rounded-lg transition disabled:opacity-50';
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function QuickBooksPage() {
+function TcQuickBooksPage() {
   const router = useRouter();
   const goAuth = (e: unknown) => {
     if (e instanceof AuthRequiredError) {
@@ -733,4 +734,23 @@ export default function QuickBooksPage() {
       </div>
     </div>
   );
+}
+
+// A coordinator moves their agents' invoices; an agent with a workspace moves their own. Same page, same address.
+export default function QuickBooksPage() {
+  const [who, setWho] = useState<'loading' | 'agent' | 'tc'>('loading');
+  useEffect(() => {
+    let live = true;
+    authFetch('/api/auth/me')
+      .then(async (res) => {
+        const data = res.ok ? ((await res.json()) as { agentWorkspace?: boolean }) : {};
+        if (live) setWho(data.agentWorkspace ? 'agent' : 'tc');
+      })
+      .catch(() => live && setWho('tc'));
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (who === 'loading') return <div className="min-h-screen px-6 py-12 text-slate-400">Loading…</div>;
+  return who === 'agent' ? <AgentQuickBooks /> : <TcQuickBooksPage />;
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
@@ -26,7 +27,8 @@ export function coordinatorOwed(list: CoordinatorInvoice[]): number {
   return list.filter((i) => !i.paid && !i.refunded).reduce((s, i) => s + (i.amount_owed || 0), 0);
 }
 
-export default function CoordinatorInvoiceList({ invoices, dealHref }: { invoices: CoordinatorInvoice[]; dealHref: (transactionId: string) => string }) {
+export default function CoordinatorInvoiceList({ invoices, detailHref }: { invoices: CoordinatorInvoice[]; detailHref?: (invoiceId: string) => string }) {
+  const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [payUrls, setPayUrls] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -73,15 +75,19 @@ export default function CoordinatorInvoiceList({ invoices, dealHref }: { invoice
       {invoices.map((inv) => {
         const tc = inv.transaction?.tcLabel || 'Your coordinator';
         return (
-          <div key={inv.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+          <div
+            key={inv.id}
+            onClick={detailHref ? () => router.push(detailHref(inv.id)) : undefined}
+            className={`bg-white/5 border border-white/10 rounded-2xl p-4 ${detailHref ? 'cursor-pointer hover:border-white/25 transition' : ''}`}
+          >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                {inv.transaction ? (
-                  <Link href={dealHref(inv.transaction.id)} className="font-semibold text-slate-100 hover:text-blue-300 transition truncate block">
-                    {inv.transaction.propertyAddress || inv.transaction.fileNumber}
+                {detailHref ? (
+                  <Link href={detailHref(inv.id)} className="font-semibold text-slate-100 hover:text-blue-300 transition truncate block">
+                    {inv.transaction?.propertyAddress || inv.transaction?.fileNumber || inv.invoice_number}
                   </Link>
                 ) : (
-                  <p className="font-semibold text-slate-100">Deal no longer accessible</p>
+                  <p className="font-semibold text-slate-100 truncate">{inv.transaction?.propertyAddress || inv.transaction?.fileNumber || inv.invoice_number}</p>
                 )}
                 <p className="text-xs text-slate-500 truncate">
                   {inv.invoice_number} · from {tc} ·{' '}
@@ -99,7 +105,7 @@ export default function CoordinatorInvoiceList({ invoices, dealHref }: { invoice
                 <span className="font-semibold text-slate-100">{money(inv.amount_owed)}</span>
               </div>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2 mt-3">
+            <div className="flex flex-wrap items-center justify-end gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
                 onClick={() => pdf(inv)}
@@ -108,6 +114,11 @@ export default function CoordinatorInvoiceList({ invoices, dealHref }: { invoice
               >
                 Download PDF
               </button>
+              {detailHref && (
+                <Link href={detailHref(inv.id)} className="px-3 py-1.5 border border-slate-500/50 text-slate-300 hover:text-slate-100 hover:border-slate-400 rounded-lg transition text-sm">
+                  View details
+                </Link>
+              )}
               {!inv.paid && inv.payOnline && (
                 <button
                   type="button"
@@ -148,7 +159,7 @@ export function DealCoordinatorInvoices({ transactionId }: { transactionId: stri
   return (
     <div className="mb-4">
       <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Invoice from your coordinator</p>
-      <CoordinatorInvoiceList invoices={invoices} dealHref={() => '#'} />
+      <CoordinatorInvoiceList invoices={invoices} detailHref={(invoiceId) => `/dashboard/invoices/received/${invoiceId}`} />
     </div>
   );
 }

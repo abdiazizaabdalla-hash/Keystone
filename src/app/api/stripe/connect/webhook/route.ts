@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
 import { supabaseServer } from '@/lib/supabase';
-import { constructConnectWebhookEvent, statusFromConnectedAccount } from '@/lib/stripeConnect';
+import { constructConnectWebhookEvent, markWorkspaceInvoicePaid, statusFromConnectedAccount, workspaceInvoiceTotal } from '@/lib/stripeConnect';
 
 // The metadata on a Stripe event is whatever the account that created the
 // Checkout Session put there, so an event is only trusted for an invoice if
@@ -113,6 +113,26 @@ export async function POST(request: NextRequest) {
       case 'checkout.session.async_payment_succeeded':
       case 'payment_intent.succeeded': {
         const object = event.data.object as Stripe.Checkout.Session | Stripe.PaymentIntent;
+        const workspaceInvoiceId = object.metadata?.relay_workspace_invoice_id;
+        if (workspaceInvoiceId) {
+          // An agent's own invoice (sent from their workspace): trusted only from that agent's connected account and only when it covers the total.
+          if ('payment_status' in object && object.payment_status === 'unpaid') break;
+          const paidCents = 'amount_total' in object && typeof object.amount_total === 'number' ? object.amount_total : 'amount' in object ? object.amount : null;
+          const { data: ws } = await supabaseServer.from('workspace_invoices').select('id, owner_user_id, tax_percent').eq('id', workspaceInvoiceId).maybeSingle();
+          if (!ws || !event.account) break;
+          const { data: acct } = await supabaseServer.from('payment_accounts').select('id').eq('tc_user_id', ws.owner_user_id).eq('provider', 'stripe_connect').eq('connected_account_id', event.account).maybeSingle();
+          if (!acct) {
+            console.error(`Ignoring ${event.type} for workspace invoice ${workspaceInvoiceId}: not from the sender's connected account`);
+            break;
+          }
+          const total = await workspaceInvoiceTotal(ws.id as string, Number(ws.tax_percent));
+          if (paidCents === null || paidCents / 100 < total - 0.01) {
+            console.error(`Ignoring ${event.type} for workspace invoice ${workspaceInvoiceId}: amount is less than the total`);
+            break;
+          }
+          await markWorkspaceInvoicePaid(ws.id as string, paidCents / 100);
+          break;
+        }
         const invoiceId = object.metadata?.relay_invoice_id;
         if (!invoiceId) break;
 

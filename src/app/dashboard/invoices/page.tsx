@@ -8,6 +8,7 @@ import { formatDisplayDate } from '@/lib/dueDates';
 import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 import { readPersona } from '@/lib/persona';
 import AgentInvoices from '@/components/AgentInvoices';
+import AgentBilledInvoices from '@/components/AgentBilledInvoices';
 import BrokerageInvoices from '@/components/BrokerageInvoices';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 
@@ -244,6 +245,8 @@ function CoordinatorInvoicesPage() {
             </Link>
           </div>
         </div>
+
+        <AgentBilledInvoices />
 
         {/* Stats Cards */}
         <div className="grid md:grid-cols-3 gap-6 mb-10">

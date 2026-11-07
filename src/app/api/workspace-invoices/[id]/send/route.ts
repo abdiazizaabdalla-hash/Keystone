@@ -8,6 +8,7 @@ import { escapeHtml } from '@/lib/escapeHtml';
 import { logAudit } from '@/lib/audit';
 import { generateWorkspaceInvoicePdf } from '@/lib/workspaceInvoicePdf';
 import { assertInvoiceSender, invoiceTotals, loadOwnInvoice } from '@/lib/workspaceInvoices';
+import { workspaceInvoicePayUrlForDocument } from '@/lib/stripeConnect';
 
 // POST: email the invoice (with the PDF attached) to its bill-to address and mark it sent. Replies go to the agent.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -32,6 +33,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const meta = user.user_metadata || {};
     const fromName = typeof meta.full_name === 'string' && meta.full_name.trim() ? meta.full_name.trim() : user.email || 'Agent';
+    const payUrl = await workspaceInvoicePayUrlForDocument(
+      { id: invoice.id as string, invoice_number: invoice.invoice_number as string, owner_user_id: user.id, status: invoice.status as string, total: invoiceTotals(lines, invoice.tax_percent).total },
+      new URL(request.url).origin
+    );
     const pdf = await generateWorkspaceInvoicePdf({
       invoiceNumber: invoice.invoice_number,
       title: invoice.title,
@@ -43,11 +48,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       billTo: { name: invoice.bill_to_name, email: invoice.bill_to_email, address: invoice.bill_to_address },
       from: { name: fromName, email: user.email ?? null },
       lines,
+      payUrl,
     }, await loadLogo(user.id));
 
     const total = invoiceTotals(lines, invoice.tax_percent).total;
     const html = `<p>Hi ${escapeHtml(invoice.bill_to_name || 'there')},</p>
       <p>${escapeHtml(fromName)} sent you invoice <strong>${escapeHtml(invoice.invoice_number)}</strong> for <strong>$${total.toFixed(2)}</strong>${invoice.due_date ? `, due ${escapeHtml(invoice.due_date)}` : ''}. The PDF is attached.</p>
+      ${payUrl ? `<p><a href="${payUrl}">Pay online</a> (card or bank transfer)</p>` : ''}
       ${message ? `<p>${escapeHtml(message).replace(/\n/g, '<br>')}</p>` : ''}
       <p style="font-size:12px;color:#777">Sent through Relay TC. Reply to this email to reach ${escapeHtml(fromName)}.</p>`;
 
