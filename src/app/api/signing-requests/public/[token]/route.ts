@@ -3,7 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { stampSignatureCertificate, stampSignatureFields, hashDocumentBytes } from '@/lib/signing';
 import { sendSigningRequestEmail } from '@/lib/signingEmails';
 import { parseSigningFields } from '@/lib/signingFields';
-import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { getResendClient, INVOICE_FROM_EMAIL, throwIfSendFailed } from '@/lib/resendClient';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { sendSignedCopies, parseRecipients } from '@/lib/signedCopies';
 
@@ -223,7 +223,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const tcEmail = tcUserData?.user?.email;
         if (tcEmail) {
           const resend = getResendClient();
-          await resend.emails.send({
+          throwIfSendFailed(await resend.emails.send({
             from: INVOICE_FROM_EMAIL,
             to: tcEmail,
             subject: `Signature declined: ${signingRequest.source_file_name}`,
@@ -235,7 +235,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 <p style="font-size: 13px; color: #666;">You can send a corrected request or reach out to them directly from Relay TC.</p>
               </div>
             `,
-          });
+          }));
         }
       } catch (emailError) {
         // The decline itself was recorded successfully -- a failed

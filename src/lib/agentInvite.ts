@@ -4,6 +4,7 @@ import { sendAgentInviteEmail, sendAgentListingInviteEmail, sendAgentAccessSumma
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { logListingActivity } from '@/lib/listings';
 import { queueCalendarSync } from '@/lib/calendarSync';
+import { getMutedTypes } from '@/lib/notifications';
 
 // Shared by the deal invite (POST /api/agent-invites) and the listing invite
 // (POST /api/listings/[id]/invite-agent): makes a one-time sign-in link for an agent's email,
@@ -210,7 +211,7 @@ export async function inviteTcToTransaction(params: {
     const agentLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'An agent';
     // Someone who already has an account also sees it in their bell (and on the dashboard banner).
     // Someone who doesn't yet sees the invitation when they sign up with this email.
-    if (holder) {
+    if (holder && !(await getMutedTypes(holder.id)).includes('invite')) {
       const address = (transaction.property_address as string | null) || null;
       const { error: bellError } = await supabaseServer.from('notifications').insert({
         recipient_user_id: holder.id,

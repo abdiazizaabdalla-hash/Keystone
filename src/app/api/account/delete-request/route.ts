@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { mergeAppMetadata } from '@/lib/privileged';
-import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { getResendClient, INVOICE_FROM_EMAIL, throwIfSendFailed } from '@/lib/resendClient';
 import { escapeHtml } from '@/lib/escapeHtml';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { logAudit } from '@/lib/audit';
@@ -32,21 +32,21 @@ export async function POST(request: NextRequest) {
 
       try {
         const resend = getResendClient();
-        await resend.emails.send({
+        throwIfSendFailed(await resend.emails.send({
           from: INVOICE_FROM_EMAIL,
           to: SUPPORT_EMAIL,
           subject: `Account deletion request: ${user.email}`,
           html: `<p><strong>${escapeHtml(user.email)}</strong> (user id ${escapeHtml(user.id)}) asked to delete their Relay TC account and data on ${escapeHtml(requestedAt)}.</p>
                  <p>Complete it within 30 days: cancel any subscription in Stripe, handle team ownership, then delete the user's data and auth account.</p>`,
-        });
+        }));
         if (user.email) {
-          await resend.emails.send({
+          throwIfSendFailed(await resend.emails.send({
             from: INVOICE_FROM_EMAIL,
             to: user.email,
             subject: 'We received your Relay TC deletion request',
             html: `<p>We received your request to delete your Relay TC account and data. We will complete it within 30 days and email you when it is done.</p>
                    <p>If you have an active subscription, cancel it from your Account page so you aren't billed again. If you didn't make this request, reply to this email right away.</p>`,
-          });
+          }));
         }
       } catch (emailError) {
         // The request is recorded either way (metadata + audit log).

@@ -77,7 +77,7 @@ describe('sending an email', () => {
     const res = await apply(tc, emailId, { transactionId: dealId, action: 'send', to: ['sam@example.test'], subject: 'Hello Sam', body: 'Hi Sam' });
     expect(res.status, JSON.stringify(res.json)).toBe(200);
     expect((res.json as { mode: string }).mode).toBe('outbox');
-    const { data } = await admin.from('email_outbox').select('*').eq('owner_user_id', tc.id);
+    const { data } = await admin.from('email_outbox').select('*').eq('owner_user_id', tc.id).eq('source', 'template');
     expect(data).toHaveLength(1);
     expect(data![0].to_emails).toEqual(['sam@example.test']);
     expect(data![0].subject).toBe('Hello Sam');

@@ -20,3 +20,13 @@ export function getResendClient(): Resend {
 
 export const INVOICE_FROM_EMAIL =
   process.env.INVOICE_FROM_EMAIL || 'Relay TC <onboarding@resend.dev>';
+
+/**
+ * Resend reports a rejected send as `{ error }` instead of throwing, so a bare
+ * `await resend.emails.send(...)` can silently lose the email. Call this on the
+ * result so callers' existing try/catch (and "email not sent" flags) actually fire.
+ */
+export function throwIfSendFailed<T extends { error?: { message?: string } | null }>(result: T): T {
+  if (result?.error) throw new Error(result.error.message || 'Email could not be sent');
+  return result;
+}

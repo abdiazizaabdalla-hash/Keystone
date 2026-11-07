@@ -25,8 +25,9 @@ const SETTINGS: { type: string; label: string }[] = [
   { type: 'document_added', label: 'New documents' },
   { type: 'client_viewed', label: 'Client opened their progress link' },
   { type: 'deal_started', label: 'New deals and listings in your brokerage' },
-  { type: 'deal_closed', label: 'Deals that close in your brokerage' },
+  { type: 'deal_closed', label: 'Deals that close (yours, shared with you, or in your brokerage)' },
   { type: 'commission', label: 'Commission invoices and reminders' },
+  { type: 'invite', label: 'Invitations to coordinate a deal' },
 ];
 
 const POLL_MS = 30_000;

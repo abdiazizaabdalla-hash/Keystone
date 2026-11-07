@@ -6,6 +6,8 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { sendClientProgressEmail } from '@/lib/agentPortalEmails';
+import { autoAddContact } from '@/lib/contactsAuto';
+import { dealOwnerUserId, syncDealPartyToCoordinators } from '@/lib/coordinatorOnboarding';
 import { generateExternalAccessToken, EXTERNAL_LINK_EXPIRY_DAYS, PROGRESS_LINK_EXPIRY_DAYS } from '@/lib/externalAccess';
 
 // Confirms the caller may manage external-access links on this
@@ -169,6 +171,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .single();
 
     if (error) throw error;
+
+    // A client you share progress with by email belongs in the Contacts of the owner and of any coordinator on the deal.
+    if (cleanClientEmail) {
+      const person = { name: cleanClientName || null, email: cleanClientEmail, role: 'Client' };
+      const ownerId = (await dealOwnerUserId(transactionId)) || user.id;
+      await autoAddContact(ownerId, person);
+      await syncDealPartyToCoordinators(transactionId, person);
+    }
 
     // A progress link with an email is also emailed to the client, same as when an agent shares one.
     let emailSent = false;

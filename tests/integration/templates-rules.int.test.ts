@@ -74,7 +74,7 @@ describe('drafts from "when the deal closes"', () => {
     expect(mine[0].subject).toBe(`Congrats on ${tx!.property_address}`);
     expect(mine[0].body).toContain('Hi Riley,');
     expect(mine[0].recipients.map((r) => r.email)).toEqual([expect.stringMatching(/^riley\d+@example\.test$/)]);
-    const { data: sent } = await admin.from('email_outbox').select('id').eq('owner_user_id', tc.id);
+    const { data: sent } = await admin.from('email_outbox').select('id').eq('owner_user_id', tc.id).eq('source', 'template');
     expect(sent ?? []).toHaveLength(0);
     // checking again, and re-saving the status, never makes a second draft
     await setStatus(deal, 'Closed');

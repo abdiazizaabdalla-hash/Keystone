@@ -180,7 +180,14 @@ export async function POST(request: NextRequest) {
 
     // Calculate total: flat fee + optional percentage-based fee (agent's
     // own commission_percent, not anything client-supplied -- see above).
-    const percentageFeeAmount = (purchasePrice * (agentRecord?.commission_percent || 0)) / 100;
+    // The price comes from the page when it sends one, otherwise from the deal itself (never NaN: a missing price would make the amount null).
+    let price = Number(purchasePrice);
+    if (purchasePrice === undefined || purchasePrice === null || purchasePrice === '' || !Number.isFinite(price)) {
+      const { data: priceRow } = await supabaseServer.from('transactions').select('purchase_price').eq('id', transactionId).maybeSingle();
+      price = Number(priceRow?.purchase_price);
+      if (!Number.isFinite(price)) price = 0;
+    }
+    const percentageFeeAmount = (price * (agentRecord?.commission_percent || 0)) / 100;
     const totalAmount = (agentRecord?.flat_fee || 0) + percentageFeeAmount;
 
     // Generate invoice number (RELAY-YYYYMMDD-XXXXX)
