@@ -86,6 +86,7 @@ interface Task {
 interface Agent {
   id: string;
   name: string;
+  brokerage?: string | null;
   commission_percent: number;
   flat_fee: number;
   email?: string | null;
@@ -3339,6 +3340,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               {tab === 'overview' && templatesOn && !ownerView && (
               <DealStateDocs
                 dealState={transaction?.property_state ?? stateFromAddress(transaction?.property_address)}
+                brokerage={agent?.brokerage ?? null}
                 transactionId={resolvedParams.id}
                 onAdded={() => { void fetchData(); setRecentKey((k) => k + 1); }}
                 onDropFiles={(files) => void handleDropFilesOnCategory(files, 'contract_disclosures')}
@@ -3670,6 +3672,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             {tab === 'documents' && templatesOn && !ownerView && (
               <DealStateDocs
                 dealState={transaction?.property_state ?? stateFromAddress(transaction?.property_address)}
+                brokerage={agent?.brokerage ?? null}
                 transactionId={resolvedParams.id}
                 onAdded={() => { void fetchData(); setRecentKey((k) => k + 1); }}
                 onDropFiles={(files) => void handleDropFilesOnCategory(files, 'contract_disclosures')}

@@ -3,6 +3,7 @@
 import { useEffect, useState, type DragEvent } from 'react';
 import { useAgentAccess } from '@/lib/useAgentAccess';
 import Link from 'next/link';
+import { IABS_RE, iabsForBrokerage } from '@/lib/iabsMatch';
 import { authFetch } from '@/lib/authClient';
 import { US_STATES } from '@/lib/usStates';
 import { addTemplatesToDeal, summarizeAdded } from '@/lib/addTemplatesClient';
@@ -21,13 +22,12 @@ export interface DealTemplate {
   from_brokerage?: boolean;
 }
 
-const IABS_RE = /iabs|information about brokerage|agency disclosure|consumer notice/i;
 const box = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 const card = 'bg-slate-800/40 border border-white/10 rounded-xl p-3';
 
 const OPEN_KEY = 'relay.stateDocsOpen';
 
-export default function DealStateDocs({ transactionId, dealState, onAdded, onDropFiles }: { transactionId: string; dealState: string | null; onAdded: () => void; onDropFiles?: (files: FileList) => void }) {
+export default function DealStateDocs({ transactionId, dealState, brokerage, onAdded, onDropFiles }: { transactionId: string; dealState: string | null; brokerage?: string | null; onAdded: () => void; onDropFiles?: (files: FileList) => void }) {
   const [mine, setMine] = useState<DealTemplate[] | null>(null);
   // The folder remembers whether you left it open. Closed by default so the page stays quiet.
   const [open, setOpen] = useState(false);
@@ -78,7 +78,11 @@ export default function DealStateDocs({ transactionId, dealState, onAdded, onDro
   const stateName = US_STATES.find((s) => s.code === dealState)?.name ?? dealState;
   const stateOnly = (mine ?? []).filter((t) => t.states.includes(dealState));
   const allState = (mine ?? []).filter((t) => t.states.length === 0);
-  const hasIabs = (mine ?? []).some((t) => t.kind === 'form' && IABS_RE.test(t.name));
+  const iabsForms = (mine ?? []).filter((t) => t.kind === 'form' && IABS_RE.test(t.name));
+  const hasIabs = iabsForms.length > 0;
+  // Agents on different brokerages use different disclosures: offer the one named for this deal's agent's brokerage.
+  const brokerageName = (brokerage || '').trim();
+  const brokerageIabs = iabsForBrokerage(iabsForms, brokerageName);
 
   // Choosing a letter or form puts it straight into this deal's Documents, filled in with the deal's details. No pop-up to click through.
   const add = async (list: DealTemplate[], all: boolean) => {
@@ -168,14 +172,29 @@ export default function DealStateDocs({ transactionId, dealState, onAdded, onDro
             <div className="flex flex-wrap gap-2">{allState.map(chip)}</div>
           </div>
         )}
-        {!hasIabs && (
+        {brokerageName ? (
+          <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/5 px-3 py-2.5">
+            <p className="text-xs text-slate-400 mb-1.5">Disclosure for this deal&rsquo;s agent&rsquo;s brokerage: <span className="text-slate-200 font-semibold">{brokerageName}</span></p>
+            {brokerageIabs.length > 0 ? (
+              <div className="flex flex-wrap gap-2">{brokerageIabs.map(chip)}</div>
+            ) : (
+              <Link
+                href={`/dashboard/templates?upload=pdf&state=${dealState}&name=${encodeURIComponent(`${brokerageName} IABS`)}`}
+                className="text-sm text-blue-300 hover:text-blue-200"
+              >
+                Add {brokerageName}&rsquo;s IABS{dealState === 'TX' ? ' (Information About Brokerage Services)' : ' or agency disclosure'} &rarr;
+                <span className="block text-xs text-slate-500">Upload it once; it is offered here on every {brokerageName} deal</span>
+              </Link>
+            )}
+          </div>
+        ) : !hasIabs && (
           <Link
             href={`/dashboard/templates?upload=pdf&state=${dealState}`}
             className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-dashed border-slate-600 hover:border-blue-500 px-3 py-2.5 text-sm text-slate-300 hover:text-blue-300 transition"
           >
             <span>
-              Add your brokerage&rsquo;s IABS{dealState === 'TX' ? ' (Information About Brokerage Services)' : ' or agency disclosure'}
-              <span className="block text-xs text-slate-500">Upload once, use on every {stateName} deal</span>
+              Add this agent&rsquo;s brokerage IABS{dealState === 'TX' ? ' (Information About Brokerage Services)' : ' or agency disclosure'}
+              <span className="block text-xs text-slate-500">Add the agent&rsquo;s brokerage on their profile and the matching disclosure shows up here by itself</span>
             </span>
           </Link>
         )}

@@ -84,7 +84,7 @@ export default function TemplatesPage() {
   const [editing, setEditing] = useState<Template | { new: Kind; name?: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // The PDF upload dialog (null = closed), and where the Library opens (from a link on a deal: ?tab=library&view=resources&state=TX).
-  const [uploading, setUploading] = useState<{ state: string | null } | null>(null);
+  const [uploading, setUploading] = useState<{ state: string | null; name?: string | null } | null>(null);
   const [libInit, setLibInit] = useState<{ mode: 'pdfs' | 'resources'; state: string | null; n: number }>({ mode: 'pdfs', state: null, n: 0 });
   const [installing, setInstalling] = useState(false);
   // A workspace the brokerage provides (Agent Basic) can use templates but not save its own; the server enforces it, this explains it.
@@ -124,7 +124,7 @@ export default function TemplatesPage() {
       const p = new URLSearchParams(window.location.search);
       const st = (p.get('state') || '').toUpperCase();
       const state = US_STATES.some((x) => x.code === st) ? st : null;
-      if (p.get('upload') === 'pdf' || p.get('upload') === 'iabs') setUploading({ state });
+      if (p.get('upload') === 'pdf' || p.get('upload') === 'iabs') setUploading({ state, name: (p.get('name') || '').slice(0, 140) || null });
       if (p.get('view') === 'resources') setLibInit((cur) => ({ mode: 'resources', state, n: cur.n + 1 }));
       else if (state && p.get('upload') !== 'pdf') setLibInit((cur) => ({ mode: 'pdfs', state, n: cur.n + 1 }));
     }, 0);
@@ -269,6 +269,7 @@ export default function TemplatesPage() {
       {uploading && (
         <UploadPdfDialog
           presetState={uploading.state}
+          presetName={uploading.name}
           onClose={() => setUploading(null)}
           onDone={(n) => {
             setUploading(null);

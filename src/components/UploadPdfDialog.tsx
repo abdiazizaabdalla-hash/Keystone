@@ -18,7 +18,7 @@ const labelCls = 'block text-xs font-semibold text-slate-400 uppercase tracking-
 const fileKey = (f: File) => `${f.name}:${f.size}:${f.lastModified}`;
 const isPdf = (f: File) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
 
-export default function UploadPdfDialog({ presetState, initialFiles, onClose, onDone }: { presetState?: string | null; initialFiles?: File[]; onClose: () => void; onDone: (saved: number) => void }) {
+export default function UploadPdfDialog({ presetState, presetName, initialFiles, onClose, onDone }: { presetState?: string | null; presetName?: string | null; initialFiles?: File[]; onClose: () => void; onDone: (saved: number) => void }) {
   const [rows, setRows] = useState<Row[]>(() => (initialFiles ?? []).filter(isPdf).map((f) => ({ key: fileKey(f), file: f, name: f.name.replace(/\.pdf$/i, '') })));
   const [scope, setScope] = useState<Scope | null>(presetState ? 'state' : null);
   const [state, setState] = useState(presetState ?? '');
@@ -55,7 +55,7 @@ export default function UploadPdfDialog({ presetState, initialFiles, onClose, on
     setNotice(pdfs.length < list.length ? 'Only PDF files can go in the library. Other files were left out.' : '');
     setRows((cur) => {
       const have = new Set(cur.map((r) => r.key));
-      return [...cur, ...pdfs.filter((f) => !have.has(fileKey(f))).map((f) => ({ key: fileKey(f), file: f, name: f.name.replace(/\.pdf$/i, '') }))];
+      return [...cur, ...pdfs.filter((f) => !have.has(fileKey(f))).map((f, i) => ({ key: fileKey(f), file: f, name: presetName && cur.length === 0 && i === 0 ? presetName : f.name.replace(/\.pdf$/i, '') }))];
     });
   };
 

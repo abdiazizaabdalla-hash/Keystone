@@ -883,8 +883,8 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
             {general.map((t) => templateCard(t))}
             {!hasDisclosure && (
               <button type="button" onClick={() => onUpload(null)} className="text-left rounded-2xl border border-dashed border-white/25 hover:border-blue-400 bg-white/[0.02] p-4 transition min-w-0">
-                <span className="block text-slate-100 font-semibold">+ Add your brokerage’s IABS</span>
-                <span className="block text-xs text-slate-400 mt-1">Upload the disclosure your brokerage gives clients (like an Information About Brokerage Services form) once, then add it to any deal.</span>
+                <span className="block text-slate-100 font-semibold">+ Add a brokerage’s IABS</span>
+                <span className="block text-xs text-slate-400 mt-1">You work with agents from different brokerages. Upload each brokerage’s disclosure (like an Information About Brokerage Services form) once, named for it, e.g. “Acme Realty IABS”. Relay offers the matching one on that agent’s deals.</span>
               </button>
             )}
             {all.length === 0 && (

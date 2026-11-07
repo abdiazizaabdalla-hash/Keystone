@@ -38,8 +38,13 @@ export async function addInvitingAgentForCoordinator(params: {
     const agentName = String(agent.user_metadata?.full_name || '').trim() || agentEmail;
     const phone = typeof agent.user_metadata?.phone === 'string' ? (agent.user_metadata.phone as string) : null;
 
+    // The agent's brokerage, as the agent entered it on the deal, so brokerage-specific forms (IABS) can match.
+    const { data: dealRow } = await supabaseServer.from('transactions').select('agents(brokerage)').eq('id', transactionId).maybeSingle();
+    const rel = (dealRow as { agents?: { brokerage?: string | null } | { brokerage?: string | null }[] | null } | null)?.agents;
+    const brokerage = ((Array.isArray(rel) ? rel[0]?.brokerage : rel?.brokerage) || '').trim() || null;
+
     // Contacts: the agent, then the people on the deal.
-    await autoAddContact(coordinator.id, { name: agentName, email: agentEmail, phone, role: 'Agent' });
+    await autoAddContact(coordinator.id, { name: agentName, email: agentEmail, phone, company: brokerage, role: 'Agent' });
     const { data: parties } = await supabaseServer
       .from('transaction_contacts')
       .select('name, email, phone, role')
@@ -71,6 +76,7 @@ export async function addInvitingAgentForCoordinator(params: {
         name: agentName,
         email: agentEmail,
         phone,
+        brokerage,
         flat_fee: num(coordinator.user_metadata?.default_flat_fee, 400),
         commission_percent: num(coordinator.user_metadata?.default_percent_fee, 0),
       })
