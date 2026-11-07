@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
 import { supabaseServer } from '@/lib/supabase';
-import { constructConnectWebhookEvent, markWorkspaceInvoicePaid, statusFromConnectedAccount, workspaceInvoiceTotal } from '@/lib/stripeConnect';
+import { constructConnectWebhookEvent, markWorkspaceInvoicePaid, markWorkspaceInvoiceRefunded, statusFromConnectedAccount, workspaceInvoiceTotal } from '@/lib/stripeConnect';
 
 // The metadata on a Stripe event is whatever the account that created the
 // Checkout Session put there, so an event is only trusted for an invoice if
@@ -198,8 +198,9 @@ export async function POST(request: NextRequest) {
       case 'charge.refunded': {
         const charge = event.data.object as Stripe.Charge;
         let invoiceId = charge.metadata?.relay_invoice_id;
+        let workspaceInvoiceId = charge.metadata?.relay_workspace_invoice_id;
 
-        if (!invoiceId && typeof charge.payment_intent === 'string' && event.account) {
+        if (!invoiceId && !workspaceInvoiceId && typeof charge.payment_intent === 'string' && event.account) {
           try {
             const paymentIntent = await stripe.paymentIntents.retrieve(
               charge.payment_intent,
@@ -207,9 +208,23 @@ export async function POST(request: NextRequest) {
               { stripeAccount: event.account }
             );
             invoiceId = paymentIntent.metadata?.relay_invoice_id;
+            workspaceInvoiceId = paymentIntent.metadata?.relay_workspace_invoice_id;
           } catch (piError) {
             console.error('Error retrieving PaymentIntent for charge.refunded fallback lookup:', piError);
           }
+        }
+
+        if (workspaceInvoiceId) {
+          // An agent's own invoice: only the sender's connected account may record a refund on it.
+          const { data: ws } = await supabaseServer.from('workspace_invoices').select('id, owner_user_id').eq('id', workspaceInvoiceId).maybeSingle();
+          if (!ws || !event.account) break;
+          const { data: acct } = await supabaseServer.from('payment_accounts').select('id').eq('tc_user_id', ws.owner_user_id).eq('provider', 'stripe_connect').eq('connected_account_id', event.account).maybeSingle();
+          if (!acct) {
+            console.error(`Ignoring charge.refunded for workspace invoice ${workspaceInvoiceId}: not from the sender's connected account`);
+            break;
+          }
+          await markWorkspaceInvoiceRefunded(ws.id as string, charge.amount_refunded / 100);
+          break;
         }
 
         if (!invoiceId) break;

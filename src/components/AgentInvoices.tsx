@@ -34,6 +34,7 @@ interface InvoiceRow {
   tax_percent: number;
   sent_at: string | null;
   paid_at: string | null;
+  refunded_amount?: number | null;
   subtotal: number;
   tax: number;
   total: number;
@@ -186,7 +187,7 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
     const now = new Date();
     const paidThisMonth = invoices
       .filter((i) => i.status === 'paid' && i.paid_at && new Date(i.paid_at).getMonth() === now.getMonth() && new Date(i.paid_at).getFullYear() === now.getFullYear())
-      .reduce((s, i) => s + i.total, 0) + commissions
+      .reduce((s, i) => s + Math.max(0, i.total - Number(i.refunded_amount || 0)), 0) + commissions
       .filter((c) => c.status === 'paid' && c.paidOn && new Date(`${c.paidOn.slice(0, 10)}T00:00:00`).getMonth() === now.getMonth() && new Date(`${c.paidOn.slice(0, 10)}T00:00:00`).getFullYear() === now.getFullYear())
       .reduce((s, c) => s + (c.agentNet ?? 0), 0);
     return { outstanding, draft, paidThisMonth };
@@ -360,6 +361,9 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
               </div>
               <div className="flex items-center gap-3">
                 <span className={`text-xs px-2 py-0.5 rounded-full border capitalize ${STATUS_STYLE[inv.status]}`}>{inv.status}</span>
+                {inv.status === 'paid' && Number(inv.refunded_amount || 0) > 0 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-300">{Number(inv.refunded_amount) >= inv.total - 0.01 ? 'Refunded' : `Refunded ${money(Number(inv.refunded_amount))}`}</span>
+                )}
                 <span className="font-semibold text-slate-100">{money(inv.total)}</span>
               </div>
             </button>

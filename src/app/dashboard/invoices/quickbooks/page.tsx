@@ -140,6 +140,33 @@ function TcQuickBooksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, from, to]);
 
+  // Invoices agents sent to this coordinator (payables). Only offered when there are some.
+  const [billCount, setBillCount] = useState(0);
+  const [billAccount, setBillAccount] = useState('Commissions and fees');
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const res = await authFetch('/api/workspace-invoices/received');
+        if (!res.ok || !live) return;
+        const data = await res.json();
+        if (Array.isArray(data)) setBillCount(data.length);
+      } catch {
+        /* the section just stays hidden */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+  const billQs = (type: 'bills' | 'vendors') => {
+    const p = new URLSearchParams({ type, status });
+    if (type === 'bills') p.set('account', billAccount.trim());
+    if (from) p.set('from', from);
+    if (to) p.set('to', to);
+    return `/api/quickbooks/export?${p.toString()}`;
+  };
+
   const download = async (key: string, url: string) => {
     setDownloading(key);
     setExportMsg('');
@@ -468,6 +495,28 @@ function TcQuickBooksPage() {
             </ol>
           </details>
         </section>
+
+        {billCount > 0 && (
+          <section className={card}>
+            <h2 className="text-lg font-bold text-slate-100 mb-1">Invoices agents sent you (bills)</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              What you owe agents is a payable, so it goes into QuickBooks as bills, not invoices. It uses the status and date range chosen above. {billCount} invoice{billCount === 1 ? '' : 's'} received.
+            </p>
+            <div className="flex flex-wrap items-end gap-3 mb-3">
+              <label className="text-xs text-slate-400">
+                QuickBooks expense account
+                <input value={billAccount} onChange={(e) => setBillAccount(e.target.value)} maxLength={100} className="mt-1 block bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100" />
+              </label>
+              <button type="button" disabled={downloading !== null} onClick={() => download('bills', billQs('bills'))} className={btnPrimary}>
+                {downloading === 'bills' ? 'Preparing…' : 'Download bills'}
+              </button>
+              <button type="button" disabled={downloading !== null} onClick={() => download('vendors', billQs('vendors'))} className={btnGhost}>
+                {downloading === 'vendors' ? 'Preparing…' : 'Agents as vendors'}
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">In QuickBooks Online: Settings → Import data → Vendors first (skip if they already exist), then Bills. The expense account must already exist in your chart of accounts.</p>
+          </section>
+        )}
 
         {/* ---------------- Import ---------------- */}
         <section className={card}>

@@ -12,6 +12,7 @@ interface Row {
   issue_date: string;
   due_date: string | null;
   paid_at: string | null;
+  refundedAmount?: number;
   propertyAddress: string | null;
   fromName: string;
   total: number;
@@ -97,7 +98,7 @@ export default function AgentBilledInvoices() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${r.status === 'paid' ? 'bg-green-500/10 text-green-300 border-green-500/40' : 'bg-amber-500/10 text-amber-300 border-amber-500/40'}`}>{r.status === 'paid' ? 'Paid' : 'Due'}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${r.status === 'paid' ? 'bg-green-500/10 text-green-300 border-green-500/40' : 'bg-amber-500/10 text-amber-300 border-amber-500/40'}`}>{r.status === 'paid' ? (r.refundedAmount ? (r.refundedAmount >= r.total - 0.01 ? 'Refunded' : 'Partly refunded') : 'Paid') : 'Due'}</span>
                 <span className="font-semibold text-slate-100">{money(r.total)}</span>
               </div>
             </div>

@@ -10,6 +10,7 @@ import { GET as receivedWs } from '@/app/api/workspace-invoices/received/route';
 import { GET as wsPdf } from '@/app/api/workspace-invoices/[id]/pdf/route';
 import { POST as wsPayLink } from '@/app/api/workspace-invoices/[id]/pay-link/route';
 import { GET as qbExport } from '@/app/api/agent-quickbooks/export/route';
+import { GET as tcQbExport } from '@/app/api/quickbooks/export/route';
 import { DELETE as qbUndo, POST as qbImport } from '@/app/api/agent-quickbooks/import/route';
 import { admin, call, cleanup, createActor, createCollaborator, type Actor } from './helpers';
 
@@ -127,6 +128,66 @@ describe('payment arrives from Stripe', () => {
     const seen = (await call(h(receivedWs), tc, { method: 'GET', path: '/api/workspace-invoices/received' })).json as Array<{ status: string }>;
     expect(seen[0].status).toBe('paid');
     expect((await call(h(wsPayLink), tc, { method: 'POST', path: '/x', params: { id: invoiceId } })).status).toBe(400);
+  });
+});
+
+const refundEvent = (id: string, cents: number, account = ACCOUNT) => ({
+  type: 'charge.refunded',
+  account,
+  data: { object: { object: 'charge', amount_refunded: cents, metadata: { relay_workspace_invoice_id: id } } },
+});
+
+describe('a payment is refunded in Stripe', () => {
+  const refundRow = async () => (await admin.from('workspace_invoices').select('status, refunded, refunded_amount').eq('id', invoiceId).single()).data!;
+  const paymentsCsv = async () => (await qbExport(new NextRequest('http://localhost/api/agent-quickbooks/export?type=payments&status=all', { headers: { authorization: `Bearer ${agentWs.token}` } }))).text();
+
+  it('ignores a refund from another account or with a bad signature', async () => {
+    await webhook(refundEvent(invoiceId, 10000, 'acct_someone_else'));
+    expect((await webhook(refundEvent(invoiceId, 10000), 'nope')).status).toBe(400);
+    expect((await refundRow()).refunded).toBe(false);
+  });
+
+  it('records a partial refund once, tells the agent, shows it to the coordinator, and nets it out of the QuickBooks payments file', async () => {
+    expect((await webhook(refundEvent(invoiceId, 10000))).status).toBe(200);
+    expect((await webhook(refundEvent(invoiceId, 10000))).status).toBe(200); // delivered twice
+    expect(await refundRow()).toMatchObject({ status: 'paid', refunded: true, refunded_amount: 100 });
+    const { data: bell } = await admin.from('notifications').select('title').eq('recipient_user_id', agentWs.id).eq('event_type', 'invoice');
+    expect((bell ?? []).filter((b) => /was refunded/.test(b.title as string))).toHaveLength(1);
+    const seen = (await call(h(receivedWs), tc, { method: 'GET', path: '/api/workspace-invoices/received' })).json as Array<{ refundedAmount: number }>;
+    expect(seen[0].refundedAmount).toBe(100);
+    const csv = await paymentsCsv();
+    expect(csv).toContain('150.00');
+    expect(csv).not.toContain('250.00');
+  });
+
+  it('a full refund leaves the invoice out of the payments file', async () => {
+    await webhook(refundEvent(invoiceId, 25000));
+    expect(await refundRow()).toMatchObject({ refunded: true, refunded_amount: 250 });
+    expect(await paymentsCsv()).not.toContain('WS-');
+    expect((await paymentsCsv()).trim().split('\n')).toHaveLength(1); // header only
+  });
+});
+
+describe('QuickBooks bills for a coordinator', () => {
+  const get = (actor: Actor, query: string) => tcQbExport(new NextRequest(`http://localhost/api/quickbooks/export?${query}`, { headers: { authorization: `Bearer ${actor.token}` } }));
+
+  it('exports what agents invoiced them as bills and vendors, and only to the people it was sent to', async () => {
+    const res = await get(tc, 'type=bills&status=all&account=Referral%20expense');
+    expect(res.status).toBe(200);
+    const csv = await res.text();
+    const [header, ...rows] = csv.trim().split('\n');
+    expect(header).toContain('Bill No.');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain('Referral expense');
+    expect(rows[0]).toContain('Referral fee');
+    expect(rows[0]).toContain('250.00');
+    const vendors = await (await get(tc, 'type=vendors')).text();
+    expect(vendors.trim().split('\n')).toHaveLength(2);
+    // Already paid, so the "unpaid only" file has nothing in it.
+    expect((await (await get(tc, 'type=bills&status=open')).text()).trim().split('\n')).toHaveLength(1);
+    // Someone it was not sent to gets an empty file, and a client-only account is turned away.
+    expect((await (await get(outsider, 'type=bills&status=all')).text()).trim().split('\n')).toHaveLength(1);
+    expect((await get(await createCollaborator('wp-bill-collab'), 'type=bills&status=all')).status).toBe(403);
   });
 });
 

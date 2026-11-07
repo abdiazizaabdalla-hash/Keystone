@@ -4,10 +4,15 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { toCsv } from '@/lib/contactsCrm';
 import { logAudit } from '@/lib/audit';
+import { loadReceivedInvoices } from '@/lib/receivedInvoices';
+import { isFeatureOn } from '@/lib/features';
 import {
   DEFAULT_ITEM_NAME,
   FEE_DESCRIPTION,
+  DEFAULT_BILL_ACCOUNT,
+  QB_BILL_HEADERS,
   QB_CUSTOMER_HEADERS,
+  QB_VENDOR_HEADERS,
   QB_INVOICE_HEADERS,
   QB_MAX_INVOICES_PER_FILE,
   QB_PAYMENT_HEADERS,
@@ -59,6 +64,38 @@ export async function GET(request: NextRequest) {
     const to = p.get('to') || '';
     if ((from && !DATE_RE.test(from)) || (to && !DATE_RE.test(to))) {
       return NextResponse.json({ error: 'Dates must look like 2026-10-21' }, { status: 400 });
+    }
+
+    // Invoices agents sent to this coordinator are payables, so they go to QuickBooks as bills (and their senders as vendors).
+    //   ?type=bills    &status=open|all  &account=<QuickBooks expense account>  &from= &to=
+    //   ?type=vendors  the agents who billed them
+    if (type === 'bills' || type === 'vendors') {
+      const received = isFeatureOn('agent_workspace') ? await loadReceivedInvoices(user, { withPayAvailability: false }) : [];
+      if (type === 'vendors') {
+        const vendors = new Map<string, string>();
+        for (const r of received) if (!vendors.has(r.fromName)) vendors.set(r.fromName, r.fromEmail);
+        await logAudit(request, user, 'quickbooks.export', { entityType: 'export', entityId: 'vendors' });
+        return csvResponse(toCsv(QB_VENDOR_HEADERS, [...vendors.entries()].map(([name, email]) => [name, email])), 'relay-vendors-for-quickbooks.csv');
+      }
+      const account = (p.get('account') || DEFAULT_BILL_ACCOUNT).trim().slice(0, 100) || DEFAULT_BILL_ACCOUNT;
+      const all = p.get('status') === 'all';
+      const wanted = received.filter((r) => r.total > 0 && (all || r.status !== 'paid') && (!from || r.issue_date >= from) && (!to || r.issue_date <= to));
+      const rows: string[][] = [];
+      for (const r of wanted) {
+        const head = [r.invoice_number, r.fromName, usDate(r.issue_date), usDate(r.due_date || r.issue_date), '', r.title || ''];
+        const lines = r.lines.length > 0 ? r.lines : [{ description: r.title || 'Services', quantity: 1, unitPrice: r.total }];
+        for (const l of lines) {
+          const amount = Math.round(l.quantity * l.unitPrice * 100) / 100;
+          if (amount !== 0) rows.push([...head, account, l.description || r.title || 'Services', money(amount)]);
+        }
+        if (r.taxPercent > 0) {
+          const sub = lines.reduce((s, l) => s + Math.round(l.quantity * l.unitPrice * 100) / 100, 0);
+          const tax = Math.round(sub * r.taxPercent) / 100;
+          if (tax !== 0) rows.push([...head, account, `Tax (${r.taxPercent}%)`, money(tax)]);
+        }
+      }
+      await logAudit(request, user, 'quickbooks.export', { entityType: 'export', entityId: 'bills' });
+      return csvResponse(toCsv(QB_BILL_HEADERS, rows), 'relay-bills-for-quickbooks.csv');
     }
 
     // Same scope as the Invoices page: a coordinator gets the invoices of their own agents; a platform admin

@@ -33,6 +33,7 @@ interface Inv {
   memo: string | null;
   tax_percent: number;
   paid_at: string | null;
+  refunded_amount?: number | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabaseServer
       .from('workspace_invoices')
-      .select('id, invoice_number, title, bill_to_name, bill_to_email, issue_date, due_date, status, memo, tax_percent, paid_at')
+      .select('id, invoice_number, title, bill_to_name, bill_to_email, issue_date, due_date, status, memo, tax_percent, paid_at, refunded_amount')
       .eq('owner_user_id', user.id)
       .neq('status', 'void')
       .order('issue_date', { ascending: true })
@@ -95,9 +96,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === 'payments') {
+      // A refunded payment is exported net of the refund (and left out when it was refunded in full).
+      const netOf = (i: Inv) => Math.max(0, totalOf(i) - Number(i.refunded_amount || 0));
       const csv = toCsv(
         QB_PAYMENT_HEADERS,
-        real.map((i) => [i.invoice_number, i.bill_to_name || 'Unknown customer', usDate(i.paid_at), money(totalOf(i)), money(0), money(totalOf(i)), money(totalOf(i)), i.title, '', 'Relay (marked paid)'])
+        real.filter((i) => netOf(i) > 0).map((i) => [i.invoice_number, i.bill_to_name || 'Unknown customer', usDate(i.paid_at), money(netOf(i)), money(0), money(netOf(i)), money(netOf(i)), i.title, '', 'Relay (marked paid)'])
       );
       await logAudit(request, user, 'quickbooks.export', { entityType: 'export', entityId: 'payments' });
       return csvResponse(csv, 'relay-payments-for-quickbooks.csv');

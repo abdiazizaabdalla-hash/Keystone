@@ -477,3 +477,33 @@ export function safeNextPath(value: unknown): string | null {
   if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\') || value.length > 300) return null;
   return value;
 }
+
+/** Records (or clears) a refund on an agent-sent invoice. `refundedTotal` is the charge's cumulative refunded amount in dollars. Tells the sender once. */
+export async function markWorkspaceInvoiceRefunded(invoiceId: string, refundedTotal: number): Promise<void> {
+  const { data: before } = await supabaseServer.from('workspace_invoices').select('refunded, refunded_amount, owner_user_id, invoice_number, transaction_id').eq('id', invoiceId).maybeSingle();
+  if (!before) return;
+  const { error } = await supabaseServer
+    .from('workspace_invoices')
+    .update({
+      refunded: refundedTotal > 0,
+      refunded_at: refundedTotal > 0 ? new Date().toISOString() : null,
+      refunded_amount: refundedTotal > 0 ? refundedTotal : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', invoiceId);
+  if (error) {
+    console.error(`Error recording a refund on invoice ${invoiceId}:`, error);
+    return;
+  }
+  if (refundedTotal > 0 && Number(before.refunded_amount || 0) !== refundedTotal) {
+    const { error: notifyError } = await supabaseServer.from('notifications').insert({
+      recipient_user_id: before.owner_user_id,
+      actor_user_id: null,
+      transaction_id: before.transaction_id ?? null,
+      event_type: 'invoice',
+      title: `Invoice ${before.invoice_number} was refunded ($${refundedTotal.toFixed(2)})`.slice(0, 200),
+      link: '/dashboard/invoices',
+    });
+    if (notifyError) console.error('Error notifying about an invoice refund:', notifyError);
+  }
+}
