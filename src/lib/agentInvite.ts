@@ -208,6 +208,20 @@ export async function inviteTcToTransaction(params: {
     if (insertError) throw insertError;
 
     const agentLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'An agent';
+    // Someone who already has an account also sees it in their bell (and on the dashboard banner).
+    // Someone who doesn't yet sees the invitation when they sign up with this email.
+    if (holder) {
+      const address = (transaction.property_address as string | null) || null;
+      const { error: bellError } = await supabaseServer.from('notifications').insert({
+        recipient_user_id: holder.id,
+        actor_user_id: user.id,
+        transaction_id: transaction.id,
+        event_type: 'invite',
+        title: `${agentLabel} invited you to coordinate ${address || 'a deal'}`.slice(0, 200),
+        link: '/dashboard/transactions',
+      });
+      if (bellError) console.error('Could not add the invitation to the bell (non-fatal):', bellError);
+    }
     try {
       await sendTcInviteEmail({ toEmail: email, agentLabel, propertyAddress: (transaction.property_address as string | null) || null, appUrl, usesRelay: params.usesRelay, ownerUserId: user.id });
     } catch (emailError) {
