@@ -69,6 +69,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error('Error starting Stripe Connect onboarding:', error);
+    if ((error as { type?: string })?.type === 'StripeAuthenticationError') {
+      return NextResponse.json(
+        { error: 'Stripe is not set up in this environment: the Stripe API key is missing or invalid.' },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: 'Failed to start Stripe Connect onboarding' }, { status: 500 });
   }
 }
