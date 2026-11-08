@@ -46,6 +46,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/oversight/deals/[id]/view': { kind: 'session', methods: ['GET'], why: 'Read-only copy of one deal for the brokerage owner; 404 unless the caller oversees the deal owner. No messages, fee terms or inbound email token.' },
   '/api/oversight/listings': { kind: 'session', methods: ['GET'], why: 'Only listings of agents with an active link to the caller; no seller details or offers.' },
   '/api/oversight/listings/[id]': { kind: 'session', methods: ['GET'], why: 'Read-only; 404 unless the caller oversees the listing owner.' },
+  '/api/oversight/listings/[id]/view': { kind: 'session', methods: ['GET'], why: 'Read-only copy of one listing for the brokerage owner; 404 unless the caller oversees the listing owner. No conversations.' },
   '/api/agent-invites': { kind: 'session', methods: ['GET', 'POST'] },
   '/api/agent-invites/accept': { kind: 'session', methods: ['POST'] },
   '/api/agent-onboarding': { kind: 'session', methods: ['POST'] },

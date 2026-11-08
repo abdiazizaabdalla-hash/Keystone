@@ -5,6 +5,7 @@ import { GET as roster } from '@/app/api/oversight/roster/route';
 import { GET as home } from '@/app/api/oversight/home/route';
 import { GET as listings } from '@/app/api/oversight/listings/route';
 import { GET as listingDetail } from '@/app/api/oversight/listings/[id]/route';
+import { GET as listingView } from '@/app/api/oversight/listings/[id]/view/route';
 import { GET as listInvoices, POST as createInvoice } from '@/app/api/workspace-invoices/route';
 import { GET as templatesList } from '@/app/api/templates/route';
 import { GET as runsList } from '@/app/api/template-runs/route';
@@ -116,6 +117,23 @@ describe('agents’ listings', () => {
     expect(j.tasks).toHaveLength(3);
     expect(j.offers).toEqual({ total: 1, open: 1 });
     expect(JSON.stringify(res.json)).not.toMatch(/Secret|secret-seller/);
+  });
+  it('opens the whole listing page read-only, like a deal, with the same shapes the agent’s page reads', async () => {
+    const view = (who: Actor | null, id: string) => call(h(listingView), who, { method: 'GET', path: '/x', params: { id } });
+    const res = await view(broker, listingA);
+    expect(res.status, JSON.stringify(res.json)).toBe(200);
+    const j = res.json as { listing: { property_address: string }; agent: { name: string } | null; tasks: unknown[]; offers: unknown[]; contacts: unknown[]; dates: unknown[]; documents: unknown[]; activity: unknown[] };
+    expect(j.listing.property_address).toBe('12 Listing Ln');
+    expect(j.tasks).toHaveLength(3);
+    expect(j.offers).toHaveLength(1);
+    expect(Array.isArray(j.documents) && Array.isArray(j.contacts) && Array.isArray(j.dates)).toBe(true);
+    expect(j.agent?.name).toBeTruthy();
+    expect(j.activity).toEqual([]);
+    expect((await view(broker, listingB)).status).toBe(404);
+    expect((await view(otherBroker, listingA)).status).toBe(404);
+    expect((await view(pro, listingA)).status).toBe(403);
+    expect((await view(agentA, listingA)).status).toBe(403);
+    expect((await view(null, listingA)).status).toBe(401);
   });
   it('is a 404 for another brokerage’s listing, 403 for non-owners, 401 without a login', async () => {
     expect((await get(broker, listingB)).status).toBe(404);
