@@ -16,6 +16,8 @@ const MAX_LENGTH = 2000;
 
 export default function TeamBoardCard({ onAvailable }: { onAvailable?: (available: boolean) => void }) {
   const [teamName, setTeamName] = useState('');
+  // A brokerage (its owner, or an agent who joined it) calls the shared group "brokerage"; a coordinator team says "team".
+  const [brokerage, setBrokerage] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<BoardMessage[]>([]);
   const [ready, setReady] = useState(false);
@@ -36,6 +38,7 @@ export default function TeamBoardCard({ onAvailable }: { onAvailable?: (availabl
       const team = await teamRes.json();
       if (!team.team) return availableRef.current?.(false);
       setTeamName(team.team.name || '');
+      setBrokerage(team.planId === 'brokerage' || team.viaBrokerage === true);
       setMembers(team.members || []);
       const msgRes = await authFetch('/api/team/messages?thread=board');
       if (msgRes.ok) {
@@ -92,6 +95,7 @@ export default function TeamBoardCard({ onAvailable }: { onAvailable?: (availabl
   };
 
   if (!ready) return null;
+  const W = brokerage ? 'brokerage' : 'team';
   const KIND = { broker: 'Broker', agent: 'Agent', tc: 'TC' } as const;
   const lines: ChatLine[] = messages.slice(-SHOWN).map((m) => {
     const who = members.find((x) => x.userId === m.senderId);
@@ -110,11 +114,11 @@ export default function TeamBoardCard({ onAvailable }: { onAvailable?: (availabl
     <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/10">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-slate-100">Team board</h2>
-          {teamName && <p className="text-[11px] text-slate-500 truncate">{teamName} · everyone on your team sees this</p>}
+          <h2 className="text-sm font-semibold text-slate-100">{brokerage ? 'Brokerage board' : 'Team board'}</h2>
+          <p className="text-[11px] text-slate-500 truncate">{teamName ? `${teamName} · ` : ''}everyone in your {W} sees this</p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <div className="hidden sm:flex -space-x-1.5" aria-label={`${members.length} on the team`}>
+          <div className="hidden sm:flex -space-x-1.5" aria-label={`${members.length} in the ${W}`}>
             {members.slice(0, 4).map((m) => (
               <span key={m.userId} className="rounded-full ring-2 ring-slate-900"><Avatar name={m.name || m.email} id={m.userId} size="sm" /></span>
             ))}
@@ -123,7 +127,7 @@ export default function TeamBoardCard({ onAvailable }: { onAvailable?: (availabl
         </div>
       </div>
       <div ref={listRef} className="px-4 py-3 max-h-80 overflow-y-auto bg-slate-900/30">
-        {lines.length === 0 ? <p className="text-xs text-slate-400 py-2">Nothing posted yet. Share an update with the team.</p> : <ChatBubbles lines={lines} compact />}
+        {lines.length === 0 ? <p className="text-xs text-slate-400 py-2">Nothing posted yet. Share an update with the {W}.</p> : <ChatBubbles lines={lines} compact />}
       </div>
       <div className="px-3 py-3 border-t border-white/10">
         {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
@@ -138,8 +142,8 @@ export default function TeamBoardCard({ onAvailable }: { onAvailable?: (availabl
               }
             }}
             rows={1}
-            placeholder="Post to the team…"
-            aria-label="Post to the team board"
+            placeholder={`Post to the ${W}…`}
+            aria-label={`Post to the ${W} board`}
             className="flex-1 min-w-0 px-3 py-2 bg-slate-900/60 border border-slate-600 rounded-xl text-slate-100 text-xs placeholder-slate-500 focus:outline-none focus:border-blue-400 resize-none"
           />
           <button type="button" onClick={post} disabled={sending || !draft.trim()} aria-label="Post" className="shrink-0 h-8 w-8 rounded-full bg-blue-500 hover:bg-blue-400 text-white flex items-center justify-center transition disabled:opacity-40">

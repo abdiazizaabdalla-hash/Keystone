@@ -190,8 +190,8 @@ export default function MessagesInbox({ members, isOwner, viewer = isOwner ? 'ow
   const open = (t: Thread) => { setActive(t); setShowChat(true); setDraft(''); };
   const badge = (n: number) => (n > 0 ? <span className="shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full bg-blue-500 text-white text-xs font-semibold flex items-center justify-center">{n > 99 ? '99+' : n}</span> : null);
   const agentName = active.kind === 'agent' ? agents.find((a) => a.id === active.id)?.name ?? (isAgentViewer ? 'Your broker' : 'Agent') : '';
-  const title = active.kind === 'board' ? 'Team board' : active.kind === 'agent' ? agentName : nameOfMember(active.id);
-  const subtitle = active.kind === 'board' ? (isAgentViewer ? 'Visible to everyone in the brokerage' : 'Visible to everyone on your team') : 'Private: only the two of you can read this';
+  const title = active.kind === 'board' ? 'Brokerage board' : active.kind === 'agent' ? agentName : nameOfMember(active.id);
+  const subtitle = active.kind === 'board' ? (isAgentViewer ? 'Visible to everyone in the brokerage' : 'Visible to everyone in your brokerage') : 'Private: only the two of you can read this';
   const boardUnread = teamUnread['board'] || 0;
 
   const row = (t: Thread, selected: boolean, left: React.ReactNode, name: string, preview: string, time: string | null, count: number) => (
@@ -216,12 +216,12 @@ export default function MessagesInbox({ members, isOwner, viewer = isOwner ? 'ow
     <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
       <div className="px-4 md:px-6 py-4 border-b border-slate-600">
         <h2 className="font-display font-semibold text-slate-100">Messages</h2>
-        <p className="text-xs text-slate-400 mt-0.5">{isAgentViewer ? 'The team board is seen by the whole brokerage. Messages with your broker are private between the two of you.' : 'The team board is seen by your whole team. Messages with an agent or teammate are private between the two of you.'}</p>
+        <p className="text-xs text-slate-400 mt-0.5">{isAgentViewer ? 'The brokerage board is seen by the whole brokerage. Messages with your broker are private between the two of you.' : 'The brokerage board is seen by your whole brokerage. Messages with an agent or teammate are private between the two of you.'}</p>
       </div>
 
       <div className="md:flex md:h-[36rem]">
         <div className={`${showChat ? 'hidden' : 'block'} md:block md:w-80 md:shrink-0 md:border-r border-slate-600 overflow-y-auto max-h-[32rem] md:max-h-none`}>
-          {row({ kind: 'board' }, active.kind === 'board', <span className="h-10 w-10 shrink-0 rounded-full bg-blue-500/20 text-blue-300 flex items-center justify-center" aria-hidden><svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V5Z" /></svg></span>, 'Team board', boardPreview ? `${boardPreview.who}: ${boardPreview.body}` : 'Posts for the whole team', boardPreview ? short(boardPreview.at) : null, boardUnread)}
+          {row({ kind: 'board' }, active.kind === 'board', <span className="h-10 w-10 shrink-0 rounded-full bg-blue-500/20 text-blue-300 flex items-center justify-center" aria-hidden><svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V5Z" /></svg></span>, 'Brokerage board', boardPreview ? `${boardPreview.who}: ${boardPreview.body}` : 'Posts for the whole brokerage', boardPreview ? short(boardPreview.at) : null, boardUnread)}
 
           {sectionLabel(isAgentViewer ? 'Private messages · your broker' : 'Private messages · agents')}
           {agents.length === 0 ? (
@@ -251,7 +251,7 @@ export default function MessagesInbox({ members, isOwner, viewer = isOwner ? 'ow
           <div ref={scrollRef} onScroll={() => { const el = scrollRef.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }} className="flex-1 overflow-y-auto px-4 md:px-5 py-4 h-72 md:h-auto bg-slate-900/20">
             {loading && <p className="text-sm text-slate-400">Loading…</p>}
             {!loading && lines.length === 0 && !error && (
-              <p className="text-sm text-slate-400">{active.kind === 'board' ? 'Nothing on the board yet. Post an update for the whole team.' : `No messages with ${title} yet. Say hello.`}</p>
+              <p className="text-sm text-slate-400">{active.kind === 'board' ? 'Nothing on the board yet. Post an update for the whole brokerage.' : `No messages with ${title} yet. Say hello.`}</p>
             )}
             {lines.length > 0 && <ChatBubbles lines={lines} onDelete={remove} />}
           </div>
@@ -264,7 +264,7 @@ export default function MessagesInbox({ members, isOwner, viewer = isOwner ? 'ow
                 onChange={(e) => setDraft(e.target.value.slice(0, MAX_LENGTH))}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
                 rows={2}
-                placeholder={active.kind === 'board' ? 'Post to the team board… (Enter to send)' : `Message ${title}… (Enter to send)`}
+                placeholder={active.kind === 'board' ? 'Post to the brokerage board… (Enter to send)' : `Message ${title}… (Enter to send)`}
                 aria-label="Write a message"
                 className="flex-1 min-w-0 px-3 py-2 bg-slate-900/60 border border-slate-600 rounded-xl text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:border-blue-400 resize-none"
               />
