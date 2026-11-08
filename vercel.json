@@ -20,6 +20,10 @@
       "schedule": "30 13 * * *"
     },
     {
+      "path": "/api/cron/team-reports",
+      "schedule": "45 12 * * *"
+    },
+    {
       "path": "/api/cron/cleanup",
       "schedule": "30 4 * * *"
     }

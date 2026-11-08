@@ -107,10 +107,15 @@ export async function PATCH(request: NextRequest) {
 
     // Toggle completed
     const nowCompleted = !task.completed;
-    const { error: updateError } = await supabaseServer
+    // completed_at feeds the team's activity report (add-team-reports.sql). Before that script is run the column does not exist,
+    // so fall back to the plain update rather than failing the checkbox.
+    let { error: updateError } = await supabaseServer
       .from('tasks')
-      .update({ completed: nowCompleted })
+      .update({ completed: nowCompleted, completed_at: nowCompleted ? new Date().toISOString() : null })
       .eq('id', taskId);
+    if (updateError && (updateError.code === '42703' || /completed_at/.test(updateError.message || ''))) {
+      ({ error: updateError } = await supabaseServer.from('tasks').update({ completed: nowCompleted }).eq('id', taskId));
+    }
 
     if (updateError) throw updateError;
 

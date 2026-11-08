@@ -17,6 +17,7 @@
     "@sentry/nextjs": "^11.1.0",
     "@supabase/supabase-js": "^2.116.0",
     "@vercel/analytics": "^2.0.1",
+    "exceljs": "^4.4.0",
     "jszip": "^3.10.2",
     "next": "^16.3.6",
     "pdf-lib": "^1.17.1",

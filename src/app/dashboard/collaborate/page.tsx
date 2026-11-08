@@ -14,6 +14,7 @@ import BrokerageAccountBanner from '@/components/BrokerageAccountBanner';
 import BrokerageFileReview from '@/components/BrokerageFileReview';
 import BrokerageRoster from '@/components/BrokerageRoster';
 import BrokerageTemplates from '@/components/BrokerageTemplates';
+import TeamReports from '@/components/TeamReports';
 import ComplianceReportMenu from '@/components/ComplianceReportMenu';
 import { isFeatureOnClient } from '@/lib/features';
 import type { ContactRow } from '@/lib/contactsCrm';
@@ -113,36 +114,6 @@ export default function CollaboratePage() {
   const [teamName, setTeamName] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState('');
-
-  // Owner-only team compliance report: a CSV of where every team member's open files stand right now.
-  const [downloadingReport, setDownloadingReport] = useState(false);
-  const [reportMessage, setReportMessage] = useState('');
-
-  const handleDownloadReport = async () => {
-    setDownloadingReport(true);
-    setReportMessage('');
-    try {
-      const res = await authFetch('/api/team/compliance-export');
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(json.error || 'Could not build the report');
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `team-compliance-report-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      setReportMessage('Downloaded.');
-    } catch (err) {
-      setReportMessage(err instanceof Error ? err.message : 'Could not build the report');
-    } finally {
-      setDownloadingReport(false);
-    }
-  };
 
   const load = async () => {
     try {
@@ -633,19 +604,7 @@ export default function CollaboratePage() {
             </form>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6">
-            <h2 className="font-display font-semibold text-slate-100 mb-1">Team compliance report</h2>
-            <p className="text-sm text-slate-400 mb-4">
-              A spreadsheet (CSV) of where every team member&rsquo;s open files stand right now: stage, checklist progress, closing date, next deadline and overdue deadlines. It is a status summary only &mdash; no prices,
-              client names, documents, messages or contacts. Only the team owner can download it.
-            </p>
-            <div className="flex items-center gap-3 flex-wrap">
-              <button type="button" onClick={handleDownloadReport} disabled={downloadingReport} className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-50">
-                {downloadingReport ? 'Building…' : 'Download team report (CSV)'}
-              </button>
-              {reportMessage && <span className="text-sm text-slate-300">{reportMessage}</span>}
-            </div>
-          </div>
+          <TeamReports />
         </div>
       )}
     </div>
