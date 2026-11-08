@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, FormEvent, ChangeEvent, type ComponentProps } from 'react';
 import { formatPhoneInput } from '@/lib/formatPhone';
 import Link from 'next/link';
+import InvoiceConfirmModal from '@/components/InvoiceConfirmModal';
 import { useRouter } from 'next/navigation';
 import ClientMessagesPanel from '@/components/ClientMessagesPanel';
 import ClientShareCard from '@/components/ClientShareCard';
@@ -340,6 +341,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const [createInvoiceError, setCreateInvoiceError] = useState<string | null>(null);
   const [isClosingAndInvoicing, setIsClosingAndInvoicing] = useState(false);
+  const [invoiceConfirm, setInvoiceConfirm] = useState<null | 'create' | 'close'>(null);
   const [isMarkingInvoicePaid, setIsMarkingInvoicePaid] = useState(false);
   const [markInvoicePaidError, setMarkInvoicePaidError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1467,98 +1469,33 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   // configured with in Agents settings. This is a single direct action
   // (no form, no controlled text input) so closing a deal doesn't leave a
   // typing field wired up in an already-large page.
-  const handleCreateInvoice = async () => {
+  const handleCreateInvoice = () => {
     if (!transaction) return;
-
-    try {
-      setIsCreatingInvoice(true);
-      setCreateInvoiceError(null);
-      const response = await authFetch('/api/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentId: transaction.tc_agent?.id ?? transaction.agent_id,
-          transactionId: transaction.id,
-          purchasePrice: transaction.purchase_price,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create invoice');
-      }
-      setInvoice(result);
-    } catch (error) {
-      if (error instanceof AuthRequiredError) {
-        router.push('/auth');
-        return;
-      }
-      setCreateInvoiceError(error instanceof Error ? error.message : 'Failed to create invoice');
-    } finally {
-      setIsCreatingInvoice(false);
-    }
+    setCreateInvoiceError(null);
+    setInvoiceConfirm('create');
   };
 
-  // Combined shortcut for TCs who don't want to check off every checklist
-  // item by hand: closes the transaction (server auto-checks every task to
-  // match, exactly like picking "Closed" from the Status dropdown) and then
-  // creates the invoice in the same click. If closing succeeds but invoice
-  // creation fails, the transaction is left Closed and the standalone
-  // "Create Invoice" button (rendered once status is Closed) picks up from
-  // there -- nothing is double-run or lost.
-  const handleCloseAndCreateInvoice = async () => {
+  // Closing first (when the deal is still open) runs inside the confirm screen, right before the invoice is made,
+  // so cancelling the screen leaves the deal untouched. If closing works but invoicing fails, the deal stays Closed
+  // and the plain "Create Invoice" button picks up from there.
+  const handleCloseAndCreateInvoice = () => {
     if (!transaction) return;
-    const confirmed = confirm(
-      "Mark this transaction as Closed? This checks off every checklist item and lets you invoice the agent right away."
-    );
-    if (!confirmed) return;
+    setCreateInvoiceError(null);
+    setInvoiceConfirm('close');
+  };
 
-    try {
-      setIsClosingAndInvoicing(true);
-      setCreateInvoiceError(null);
-
-      const statusResponse = await authFetch(`/api/transactions/[id]?id=${transaction.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'Closed' }),
-      });
-      if (!statusResponse.ok) {
-        throw new Error('Failed to mark the transaction as closed');
-      }
-      const updatedTransaction = await statusResponse.json();
-      const { tasks: syncedTasks, ...transactionFields } = updatedTransaction;
-      setTransaction((prev) => ({ ...transactionFields, ...(prev?.shared ? { shared: prev.shared, shared_agent: prev.shared_agent, tc_agent: prev.tc_agent } : {}) }));
-      if (Array.isArray(syncedTasks)) {
-        setTasks(syncedTasks);
-      }
-
-      const invoiceResponse = await authFetch('/api/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentId: transaction?.tc_agent?.id ?? transactionFields.agent_id,
-          transactionId: transactionFields.id,
-          purchasePrice: transactionFields.purchase_price,
-        }),
-      });
-      const invoiceResult = await invoiceResponse.json();
-      if (!invoiceResponse.ok) {
-        throw new Error(
-          invoiceResult.error ||
-            'Transaction was closed, but creating the invoice failed. Use Create Invoice below to try again.'
-        );
-      }
-      setInvoice(invoiceResult);
-    } catch (error) {
-      if (error instanceof AuthRequiredError) {
-        router.push('/auth');
-        return;
-      }
-      setCreateInvoiceError(
-        error instanceof Error ? error.message : 'Failed to close the transaction and create the invoice'
-      );
-    } finally {
-      setIsClosingAndInvoicing(false);
-    }
+  const closeDealBeforeInvoice = async () => {
+    if (!transaction) return;
+    const statusResponse = await authFetch(`/api/transactions/[id]?id=${transaction.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'Closed' }),
+    });
+    if (!statusResponse.ok) throw new Error('Failed to mark the transaction as closed');
+    const updatedTransaction = await statusResponse.json();
+    const { tasks: syncedTasks, ...transactionFields } = updatedTransaction;
+    setTransaction((prev) => ({ ...transactionFields, ...(prev?.shared ? { shared: prev.shared, shared_agent: prev.shared_agent, tc_agent: prev.tc_agent } : {}) }));
+    if (Array.isArray(syncedTasks)) setTasks(syncedTasks);
   };
 
   // Paid is all-or-nothing, same as the dedicated invoice page -- a
@@ -3280,6 +3217,22 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                   )}
                 </div>
                 {createInvoiceError && <p className="text-sm text-red-400">{createInvoiceError}</p>}
+                {invoiceConfirm && transaction && (
+                  <InvoiceConfirmModal
+                    target={{
+                      kind: 'transaction',
+                      agentId: transaction.tc_agent?.id ?? transaction.agent_id,
+                      transactionId: transaction.id,
+                      purchasePrice: transaction.purchase_price,
+                    }}
+                    beforeCreate={invoiceConfirm === 'close' ? closeDealBeforeInvoice : undefined}
+                    onClose={() => setInvoiceConfirm(null)}
+                    onCreated={(created) => {
+                      setInvoice(created);
+                      setInvoiceConfirm(null);
+                    }}
+                  />
+                )}
               </div>
             )}
           </div>

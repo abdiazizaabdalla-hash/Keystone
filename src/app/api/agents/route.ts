@@ -37,12 +37,21 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// The optional listing fee is only written when the page sent one (a number, or an empty value to clear it), so saving an agent
+// never touches a column that does not exist yet.
+function listingFeeColumn(value: unknown): { listing_fee?: number | null } {
+  if (value === undefined) return {};
+  if (value === null || value === '') return { listing_fee: null };
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 && n <= 10_000_000 ? { listing_fee: Math.round(n * 100) / 100 } : {};
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { name, brokerage, email, phone, flatFee, percentFee } = body;
+    const { name, brokerage, email, phone, flatFee, percentFee, listingFee } = body;
 
     // Plan-gated: Starter is capped at 3 agent profiles. Admins creating
     // agents for themselves are still subject to their own plan's limit —
@@ -77,6 +86,7 @@ export async function POST(request: NextRequest) {
         phone: phone || null,
         flat_fee: flatFee !== undefined ? parseFloat(String(flatFee)) : 400,
         commission_percent: percentFee !== undefined ? parseFloat(String(percentFee)) : 0,
+        ...listingFeeColumn(listingFee),
       })
       .select()
       .single();
@@ -112,7 +122,7 @@ export async function PATCH(request: NextRequest) {
     const { user, isAdmin } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { id, name, brokerage, email, phone, flatFee, percentFee } = body;
+    const { id, name, brokerage, email, phone, flatFee, percentFee, listingFee } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Agent ID is required' }, { status: 400 });
@@ -142,6 +152,7 @@ export async function PATCH(request: NextRequest) {
         phone: phone || null,
         flat_fee: flatFee !== undefined ? parseFloat(String(flatFee)) : 400,
         commission_percent: percentFee !== undefined ? parseFloat(String(percentFee)) : 0,
+        ...listingFeeColumn(listingFee),
       })
       .eq('id', id)
       .select()

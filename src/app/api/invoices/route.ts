@@ -7,6 +7,7 @@ import { logAudit } from '@/lib/audit';
 import { queueQuickBooksSync } from '@/lib/quickbooksSync';
 import { isFullParticipant } from '@/lib/authorize';
 import { agentProfileForSharedDeal } from '@/lib/coordinatorOnboarding';
+import { InvoiceEditError, resolveInvoiceAmounts, round2 } from '@/lib/invoiceBreakdown';
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,6 +68,13 @@ export async function GET(request: NextRequest) {
     const agentIds = [...new Set(invoiceList.map((i: any) => i.agent_id).filter(Boolean))];
     const transactionIds = [...new Set(invoiceList.map((i: any) => i.transaction_id).filter(Boolean))];
 
+    // Listing invoices have no transaction: show the listing in its place.
+    const listingIds = [...new Set(invoiceList.map((i: any) => i.listing_id).filter(Boolean))];
+    const listingsResult = listingIds.length
+      ? await supabaseServer.from('listings').select('id, property_address, list_price').in('id', listingIds)
+      : { data: [] as any[] };
+    const listingMap = new Map((listingsResult.data || []).map((l: any) => [l.id, l]));
+
     const [agentsResult, transactionsResult] = await Promise.all([
       agentIds.length
         ? supabaseServer.from('agents').select('id, name, brokerage, email, commission_percent, flat_fee').in('id', agentIds)
@@ -82,7 +90,17 @@ export async function GET(request: NextRequest) {
     const data = invoiceList.map((inv: any) => ({
       ...inv,
       agent: agentMap.get(inv.agent_id) || null,
-      transaction: transactionMap.get(inv.transaction_id) || null,
+      transaction:
+        transactionMap.get(inv.transaction_id) ||
+        (inv.listing_id && listingMap.get(inv.listing_id)
+          ? {
+              id: inv.listing_id,
+              file_number: 'Listing',
+              property_address: (listingMap.get(inv.listing_id) as any).property_address,
+              purchase_price: Number((listingMap.get(inv.listing_id) as any).list_price) || 0,
+              isListing: true,
+            }
+          : null),
     }));
 
     return NextResponse.json(data);
@@ -101,6 +119,10 @@ export async function POST(request: NextRequest) {
     await assertTrialActive(user);
     const body = await request.json();
     const { agentId, transactionId, purchasePrice } = body;
+
+    if (body.kind === 'listing') {
+      return await createListingInvoice(request, user, isAdmin, body);
+    }
 
     if (!transactionId) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
@@ -188,8 +210,36 @@ export async function POST(request: NextRequest) {
       price = Number(priceRow?.purchase_price);
       if (!Number.isFinite(price)) price = 0;
     }
-    const percentageFeeAmount = (price * (agentRecord?.commission_percent || 0)) / 100;
-    const totalAmount = (agentRecord?.flat_fee || 0) + percentageFeeAmount;
+    const percentageFeeAmount = round2((price * (agentRecord?.commission_percent || 0)) / 100);
+    const defaults = { flatFee: round2(Number(agentRecord?.flat_fee) || 0), percentFee: percentageFeeAmount };
+
+    // The screen that asks the coordinator to confirm the details before anything is created.
+    if (body.preview === true) {
+      const [{ data: pAgent }, { data: pTx }] = await Promise.all([
+        supabaseServer.from('agents').select('name, email, commission_percent').eq('id', effectiveAgentId).maybeSingle(),
+        supabaseServer.from('transactions').select('property_address, file_number').eq('id', transactionId).maybeSingle(),
+      ]);
+      return NextResponse.json({
+        preview: true,
+        kind: 'transaction',
+        agent: { name: pAgent?.name ?? '', email: pAgent?.email ?? null },
+        property: pTx?.property_address ?? '',
+        fileNumber: pTx?.file_number ?? null,
+        purchasePrice: price,
+        percentRate: Number(pAgent?.commission_percent) || 0,
+        defaults,
+        dueDays,
+      });
+    }
+
+    let amounts;
+    try {
+      amounts = resolveInvoiceAmounts(defaults, body.edits);
+    } catch (e) {
+      if (e instanceof InvoiceEditError) return NextResponse.json({ error: e.message }, { status: 400 });
+      throw e;
+    }
+    const totalAmount = amounts.total;
 
     // Generate invoice number (RELAY-YYYYMMDD-XXXXX)
     const today = new Date();
@@ -220,11 +270,24 @@ export async function POST(request: NextRequest) {
         invoice_date: today.toISOString(),
         due_date: dueDate.toISOString().split('T')[0],
         paid: false,
+        // Only remembered when the coordinator changed something, so a plain invoice needs nothing new in the database.
+        ...(amounts.edited
+          ? {
+              flat_fee: amounts.flatFee,
+              percent_fee: amounts.percentFee,
+              adjustment: amounts.discount > 0 ? -amounts.discount : null,
+              adjustment_note: amounts.discountNote || null,
+              description: amounts.description || null,
+            }
+          : {}),
       })
       .select()
       .single();
 
-    if (invoiceError) throw invoiceError;
+    if (invoiceError) {
+      if (amounts.edited && isMissingColumn(invoiceError)) return NextResponse.json({ error: UPDATE_NEEDED }, { status: 500 });
+      throw invoiceError;
+    }
 
     await logAudit(request, user, 'invoice.create', { entityType: 'invoice', entityId: invoice.id });
     await notifyDealOwnerOfInvoice({ transactionId, actor: user, invoiceNumber: invoiceNumber, amount: totalAmount, kind: 'created' });
@@ -243,6 +306,99 @@ export async function POST(request: NextRequest) {
     console.error('Error creating invoice:', error);
     return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
   }
+}
+
+const UPDATE_NEEDED = 'The database needs its latest update (add-listing-invoices.sql) before invoices can be edited or created for a listing.';
+function isMissingColumn(error: { code?: string; message?: string }): boolean {
+  return error.code === '42703' || error.code === 'PGRST204' || /column .* does not exist|could not find the .* column/i.test(error.message || '');
+}
+
+async function nextInvoiceNumber(today: Date): Promise<string> {
+  const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
+  const { data: todayInvoices, error } = await supabaseServer
+    .from('invoices')
+    .select('id')
+    .gte('invoice_date', today.toISOString().split('T')[0])
+    .lt('invoice_date', new Date(today.getTime() + 86400000).toISOString().split('T')[0]);
+  if (error) throw error;
+  return `RELAY-${dateStr}-${String((todayInvoices?.length || 0) + 1).padStart(5, '0')}`;
+}
+
+// An invoice for listing a property (no deal yet). The fee starts at the agent's listing fee and the coordinator confirms or changes it.
+async function createListingInvoice(request: NextRequest, user: { id: string }, isAdmin: boolean, body: Record<string, unknown>) {
+  const listingId = typeof body.listingId === 'string' ? body.listingId : '';
+  if (!listingId) return NextResponse.json({ error: 'listingId is required' }, { status: 400 });
+
+  const { data: listing } = await supabaseServer.from('listings').select('id, tc_user_id, agent_id, property_address, list_price').eq('id', listingId).maybeSingle();
+  if (!listing || (!isAdmin && listing.tc_user_id !== user.id)) return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
+  if (!listing.agent_id) return NextResponse.json({ error: 'Choose the agent for this listing before invoicing it.', code: 'no_agent' }, { status: 400 });
+
+  const { data: agent } = await supabaseServer.from('agents').select('*').eq('id', listing.agent_id).maybeSingle();
+  if (!agent || (!isAdmin && agent.tc_user_id !== user.id)) return NextResponse.json({ error: 'Agent not found or does not belong to you' }, { status: 403 });
+
+  const { data: existing, error: existingError } = await supabaseServer.from('invoices').select('id').eq('listing_id', listingId).eq('agent_id', agent.id).maybeSingle();
+  if (existingError && isMissingColumn(existingError)) return NextResponse.json({ error: UPDATE_NEEDED }, { status: 500 });
+  if (existing) return NextResponse.json({ error: 'This listing already has an invoice.', code: 'invoice_exists', invoiceId: existing.id }, { status: 409 });
+
+  let dueDays = 30;
+  const { data: tcUser } = await supabaseServer.auth.admin.getUserById(agent.tc_user_id as string);
+  const configured = tcUser?.user?.user_metadata?.invoice_due_days;
+  if (typeof configured === 'number' && Number.isFinite(configured) && configured > 0) dueDays = configured;
+
+  const defaults = { flatFee: round2(Number(agent.listing_fee) || 0), percentFee: 0 };
+  if (body.preview === true) {
+    return NextResponse.json({
+      preview: true,
+      kind: 'listing',
+      agent: { name: agent.name ?? '', email: agent.email ?? null },
+      property: listing.property_address ?? '',
+      fileNumber: null,
+      purchasePrice: Number(listing.list_price) || 0,
+      percentRate: 0,
+      defaults,
+      dueDays,
+    });
+  }
+
+  let amounts;
+  try {
+    amounts = resolveInvoiceAmounts(defaults, body.edits as never);
+  } catch (e) {
+    if (e instanceof InvoiceEditError) return NextResponse.json({ error: e.message }, { status: 400 });
+    throw e;
+  }
+  if (!(amounts.total > 0)) return NextResponse.json({ error: 'Enter the listing fee to charge before creating the invoice.' }, { status: 400 });
+
+  const today = new Date();
+  const invoiceNumber = await nextInvoiceNumber(today);
+  const dueDate = new Date(today.getTime() + dueDays * 24 * 60 * 60 * 1000);
+  const { data: invoice, error } = await supabaseServer
+    .from('invoices')
+    .insert({
+      agent_id: agent.id,
+      transaction_id: null,
+      kind: 'listing',
+      listing_id: listingId,
+      amount_owed: amounts.total,
+      invoice_number: invoiceNumber,
+      invoice_date: today.toISOString(),
+      due_date: dueDate.toISOString().split('T')[0],
+      paid: false,
+      flat_fee: amounts.flatFee,
+      percent_fee: 0,
+      adjustment: amounts.discount > 0 ? -amounts.discount : null,
+      adjustment_note: amounts.discountNote || null,
+      description: amounts.description || null,
+    })
+    .select()
+    .single();
+  if (error) {
+    if (isMissingColumn(error)) return NextResponse.json({ error: UPDATE_NEEDED }, { status: 500 });
+    throw error;
+  }
+  await logAudit(request, user as never, 'invoice.create', { entityType: 'invoice', entityId: invoice.id });
+  queueQuickBooksSync(invoice.id);
+  return NextResponse.json(invoice, { status: 201 });
 }
 
 export async function PATCH(request: NextRequest) {

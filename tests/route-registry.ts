@@ -127,6 +127,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/invoices': { kind: 'session', methods: ['DELETE', 'GET', 'PATCH', 'POST'] },
   '/api/invoices/[id]/pdf': { kind: 'session', methods: ['GET'] },
   '/api/invoices/[id]/send': { kind: 'session', methods: ['POST'] },
+  '/api/invoices/[id]/email-pay-link': { kind: 'session', methods: ['POST'] },
   '/api/invoices/[id]/stripe-pay-link': { kind: 'session', methods: ['POST'] },
   '/api/key-dates/[id]': { kind: 'session', methods: ['DELETE', 'PATCH'] },
   '/api/key-dates/upcoming': { kind: 'session', methods: ['GET'] },

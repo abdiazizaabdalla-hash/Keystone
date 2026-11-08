@@ -1,18 +1,58 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { STRIPE_CONNECTED_EVENT, showToast } from '@/lib/toast';
 
-// Takes the signed-in TC or agent straight to Stripe's hosted onboarding, and Stripe brings them back to this same page.
+async function stripeStatus(): Promise<{ connected: boolean; status: string | null } | null> {
+  try {
+    const res = await authFetch('/api/stripe/connect/account');
+    if (!res.ok) return null;
+    const data = await res.json();
+    return { connected: !!data.connected, status: data.status ?? null };
+  } catch {
+    return null;
+  }
+}
+
+// Opens Stripe's hosted setup in a NEW tab (this page stays put), then watches for the connection to finish so the page can
+// say so right away. Stripe's return page is this same page, so finishing in the other tab works too.
 export function ConnectStripeButton({ label = 'Connect Stripe', className }: { label?: string; className?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState('');
+  const poll = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopAt = useRef(0);
+
+  const stopPolling = () => {
+    if (poll.current) clearInterval(poll.current);
+    poll.current = null;
+    setWaiting(false);
+  };
+  useEffect(() => () => stopPolling(), []);
+
+  const startPolling = () => {
+    stopAt.current = Date.now() + 15 * 60_000;
+    setWaiting(true);
+    if (poll.current) clearInterval(poll.current);
+    poll.current = setInterval(async () => {
+      if (Date.now() > stopAt.current) return stopPolling();
+      const s = await stripeStatus();
+      if (s?.status === 'approved') {
+        stopPolling();
+        window.dispatchEvent(new CustomEvent(STRIPE_CONNECTED_EVENT));
+        showToast({ title: 'Stripe is connected', body: 'Pay online links and card or bank payments are now on for your invoices.', tone: 'success', durationMs: 10_000 });
+      }
+    }, 4000);
+  };
 
   const go = async () => {
     setBusy(true);
     setError('');
+    // Opened straight from the click so the browser allows it, then pointed at Stripe once we have the link.
+    const tab = window.open('about:blank', '_blank');
     try {
       const next = `${window.location.pathname}${window.location.search.replace(/[?&]stripe=[^&]*/g, '').replace(/^&/, '?')}`;
       const res = await authFetch('/api/stripe/connect/start', {
@@ -22,13 +62,17 @@ export function ConnectStripeButton({ label = 'Connect Stripe', className }: { l
       });
       const data = await res.json();
       if (!res.ok || !data.url) throw new Error(data.error || 'Could not start Stripe setup');
-      window.location.href = data.url;
+      if (tab) tab.location.href = data.url;
+      else window.open(data.url, '_blank', 'noopener,noreferrer'); // pop-up blocked: try once more
+      startPolling();
     } catch (e) {
+      tab?.close();
       if (e instanceof AuthRequiredError) {
         router.push('/auth');
         return;
       }
       setError(e instanceof Error ? e.message : 'Could not start Stripe setup');
+    } finally {
       setBusy(false);
     }
   };
@@ -43,12 +87,13 @@ export function ConnectStripeButton({ label = 'Connect Stripe', className }: { l
       >
         {busy ? 'Opening Stripe...' : label}
       </button>
+      {waiting && <span className="text-xs text-indigo-200">Finish setup in the Stripe tab. This page updates by itself when you are done.</span>}
       {error && <span className="text-xs text-red-300">{error}</span>}
     </span>
   );
 }
 
-// Shown only while the signed-in user has not finished connecting Stripe. Renders nothing once they have.
+// Shown only while the signed-in user has not finished connecting Stripe. Disappears (with a confirmation) once they have.
 export function StripeConnectNotice({ message }: { message: string }) {
   const [state, setState] = useState<'loading' | 'ready' | 'needs'>('loading');
   const [pending, setPending] = useState(false);
@@ -56,18 +101,17 @@ export function StripeConnectNotice({ message }: { message: string }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        const res = await authFetch('/api/stripe/connect/account');
-        const data = await res.json();
-        if (!alive) return;
-        setPending(!!data.connected);
-        setState(res.ok && data.status === 'approved' ? 'ready' : 'needs');
-      } catch {
-        if (alive) setState('ready');
-      }
+      const s = await stripeStatus();
+      if (!alive) return;
+      if (!s) return setState('ready');
+      setPending(s.connected);
+      setState(s.status === 'approved' ? 'ready' : 'needs');
     })();
+    const onConnected = () => setState('ready');
+    window.addEventListener(STRIPE_CONNECTED_EVENT, onConnected);
     return () => {
       alive = false;
+      window.removeEventListener(STRIPE_CONNECTED_EVENT, onConnected);
     };
   }, []);
 

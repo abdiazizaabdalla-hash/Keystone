@@ -39,11 +39,21 @@ export async function loadInvoiceBundle(
   // they were added to.
   const ownsInvoice = !!agent && agent.tc_user_id === userId;
   if (opts.allowAgent && opts.isAgent && !ownsInvoice) {
+    if (!invoice.transaction_id) throw new AuthError('You do not have permission to access this invoice', 403);
     await assertAgentOnOrOwnsTransaction(invoice.transaction_id, userId);
   } else if (!isAdmin) {
     if (!agent || agent.tc_user_id !== userId) {
       throw new AuthError('You do not have permission to access this invoice', 403);
     }
+  }
+
+  // An invoice for a listing has no deal: the listing stands in for it (its list price, no file number).
+  if (invoice.listing_id) {
+    const { data: listing } = await supabaseServer.from('listings').select('id, property_address, list_price').eq('id', invoice.listing_id).maybeSingle();
+    const transaction = listing
+      ? { id: listing.id as string, file_number: 'Listing', property_address: listing.property_address as string, purchase_price: Number(listing.list_price) || 0, isListing: true as boolean }
+      : null;
+    return { invoice, agent, transaction };
   }
 
   const { data: transaction } = await supabaseServer
@@ -52,7 +62,7 @@ export async function loadInvoiceBundle(
     .eq('id', invoice.transaction_id)
     .single();
 
-  return { invoice, agent, transaction };
+  return { invoice, agent, transaction: transaction ? { ...transaction, isListing: false as boolean } : null };
 }
 
 /**

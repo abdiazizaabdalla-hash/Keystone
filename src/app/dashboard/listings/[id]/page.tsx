@@ -1,6 +1,7 @@
 'use client';
 
 import MoneyInput from '@/components/MoneyInput';
+import InvoiceConfirmModal from '@/components/InvoiceConfirmModal';
 import PhoneInput from '@/components/PhoneInput';
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -206,6 +207,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [uploading, setUploading] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const { readOnly: readOnlyAgent } = useAgentAccess();
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [libraryNote, setLibraryNote] = useState('');
   // Which area an upload is going into, and which areas are folded away (same idea as a deal's Documents).
   const docInputRef = useRef<HTMLInputElement>(null);
@@ -996,6 +998,33 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
       <div className="space-y-6">
         <div className={tab === 'overview' ? 'space-y-3' : 'hidden'}>
+          {!readOnlyAgent && data.agent && (
+            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-100">Invoice {data.agent.name} for this listing</p>
+                  <p className="text-sm text-slate-400 mt-0.5">Charge your listing fee. You will see the price and can change it before anything is created.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInvoiceOpen(true)}
+                  className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition"
+                >
+                  Generate invoice
+                </button>
+              </div>
+            </div>
+          )}
+          {invoiceOpen && (
+            <InvoiceConfirmModal
+              target={{ kind: 'listing', listingId: id }}
+              onClose={() => setInvoiceOpen(false)}
+              onCreated={(inv) => {
+                setInvoiceOpen(false);
+                router.push(`/dashboard/invoices/${inv.id}`);
+              }}
+            />
+          )}
           <div data-tour="ls-portal" className={`rounded-2xl border p-5 ${portalStatus.ok ? 'bg-green-500/5 border-green-500/30' : 'bg-amber-500/5 border-amber-500/30'}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">

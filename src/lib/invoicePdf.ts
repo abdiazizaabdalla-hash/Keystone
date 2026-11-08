@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import { formatPhoneNumber } from './formatPhone';
 import { formatDisplayDate } from './dueDates';
 import { drawLogo } from './pdfLetterhead';
+import { invoiceBreakdown, type BreakdownInvoice } from './invoiceBreakdown';
 
 interface AgentInfo {
   name: string;
@@ -16,9 +17,11 @@ interface TransactionInfo {
   file_number: string;
   property_address: string;
   purchase_price: number;
+  /** A listing invoice: the property's list price is shown instead of a file number and purchase price. */
+  isListing?: boolean;
 }
 
-interface InvoiceInfo {
+interface InvoiceInfo extends Partial<BreakdownInvoice> {
   invoice_number: string;
   invoice_date: string;
   due_date: string;
@@ -117,11 +120,17 @@ export function generateInvoicePdf(
       y += 14;
       doc.fontSize(11).font('Helvetica').fillColor('#08080b').text(transaction.property_address, 56, y, { width: 500 });
       y += 20;
-      doc.fontSize(9).font('Helvetica-Bold').fillColor('#888888').text('FILE NUMBER', 56, y);
-      doc.fontSize(9).font('Helvetica-Bold').fillColor('#888888').text('PURCHASE PRICE', 340, y);
-      y += 14;
-      doc.fontSize(11).font('Helvetica').fillColor('#08080b').text(transaction.file_number, 56, y);
-      doc.fontSize(11).font('Helvetica').fillColor('#08080b').text(money(transaction.purchase_price), 340, y);
+      if (transaction.isListing) {
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#888888').text('LISTING PRICE', 56, y);
+        y += 14;
+        doc.fontSize(11).font('Helvetica').fillColor('#08080b').text(transaction.purchase_price ? money(transaction.purchase_price) : 'Not set', 56, y);
+      } else {
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#888888').text('FILE NUMBER', 56, y);
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#888888').text('PURCHASE PRICE', 340, y);
+        y += 14;
+        doc.fontSize(11).font('Helvetica').fillColor('#08080b').text(transaction.file_number, 56, y);
+        doc.fontSize(11).font('Helvetica').fillColor('#08080b').text(money(transaction.purchase_price), 340, y);
+      }
 
       y += 40;
       doc.moveTo(56, y).lineTo(556, y).strokeColor('#dddddd').stroke();
@@ -134,20 +143,10 @@ export function generateInvoicePdf(
       doc.moveTo(56, y).lineTo(556, y).strokeColor('#eeeeee').stroke();
       y += 12;
 
-      const flatFee = agent.flat_fee || 0;
-      const percentAmount = ((transaction.purchase_price || 0) * (agent.commission_percent || 0)) / 100;
-
-      doc.fontSize(10).font('Helvetica').fillColor('#333333').text('Transaction coordination fee (flat)', 56, y);
-      doc.fontSize(10).font('Helvetica').fillColor('#333333').text(money(flatFee), 460, y, { width: 96, align: 'right' });
-      y += 20;
-
-      if (agent.commission_percent) {
-        doc
-          .fontSize(10)
-          .font('Helvetica')
-          .fillColor('#333333')
-          .text(`Percentage fee (${agent.commission_percent}%)`, 56, y);
-        doc.fontSize(10).font('Helvetica').fillColor('#333333').text(money(percentAmount), 460, y, { width: 96, align: 'right' });
+      const breakdown = invoiceBreakdown({ ...invoice, kind: transaction.isListing ? 'listing' : invoice.kind }, agent, transaction.purchase_price);
+      for (const line of breakdown.lines) {
+        doc.fontSize(10).font('Helvetica').fillColor('#333333').text(line.label, 56, y, { width: 390 });
+        doc.fontSize(10).font('Helvetica').fillColor(line.amount < 0 ? '#1a7f37' : '#333333').text(line.amount < 0 ? `-${money(Math.abs(line.amount))}` : money(line.amount), 460, y, { width: 96, align: 'right' });
         y += 20;
       }
 

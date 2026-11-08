@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch } from '@/lib/authClient';
+import { NOTIFICATIONS_EVENT } from '@/lib/toast';
 
 interface NotificationItem {
   id: string;
@@ -86,6 +87,8 @@ export default function NotificationBell({
       if (!res.ok) return;
       const data = await res.json();
       setItems(Array.isArray(data.notifications) ? data.notifications : []);
+      // Lets the banner host show a big event (an invoice paid, a deal closed) the moment it arrives.
+      window.dispatchEvent(new CustomEvent(NOTIFICATIONS_EVENT, { detail: Array.isArray(data.notifications) ? data.notifications : [] }));
       setUnread(typeof data.unreadCount === 'number' ? data.unreadCount : 0);
       setMuted(Array.isArray(data.muted) ? data.muted : []);
       setLoaded(true);

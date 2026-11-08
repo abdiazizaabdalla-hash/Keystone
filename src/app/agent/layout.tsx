@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { clearSession, fetchHasWorkspace } from '@/lib/authClient';
 import NotificationBell from '@/components/NotificationBell';
+import ToastHost from '@/components/ToastHost';
 
 // Lightweight mirror of the TC sidebar (dashboard/layout.tsx) -- just
 // destinations an agent actually has (deals, messages, invoices, settings),
@@ -326,6 +327,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
 
       {/* Main Content */}
       <div className="flex-1 min-w-0 overflow-auto">{children}</div>
+      <ToastHost />
     </div>
   );
 }

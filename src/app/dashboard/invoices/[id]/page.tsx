@@ -1,5 +1,7 @@
 'use client';
 
+import { invoiceBreakdown } from '@/lib/invoiceBreakdown';
+import { showToast } from '@/lib/toast';
 import { ConnectStripeButton, StripeConnectNotice } from '@/components/ConnectStripe';
 import { useEffect, useState } from 'react';
 import { use } from 'react';
@@ -22,12 +24,20 @@ interface Transaction {
   file_number: string;
   property_address: string;
   purchase_price: number;
+  isListing?: boolean;
 }
 
 interface Invoice {
   id: string;
   agent_id: string;
-  transaction_id: string;
+  transaction_id: string | null;
+  listing_id?: string | null;
+  kind?: string | null;
+  description?: string | null;
+  flat_fee?: number | null;
+  percent_fee?: number | null;
+  adjustment?: number | null;
+  adjustment_note?: string | null;
   amount_owed: number;
   invoice_number: string;
   invoice_date: string;
@@ -64,6 +74,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [isGeneratingPayLink, setIsGeneratingPayLink] = useState(false);
   const [payLinkError, setPayLinkError] = useState<string | null>(null);
   const [stripePayUrl, setStripePayUrl] = useState<string | null>(null);
+  const [isEmailingPayLink, setIsEmailingPayLink] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     fetchInvoice();
@@ -214,6 +226,48 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
       setPayLinkError(error instanceof Error ? error.message : 'Error creating pay link');
     } finally {
       setIsGeneratingPayLink(false);
+    }
+  };
+
+  const handleCopyPayLink = async () => {
+    if (!stripePayUrl) return;
+    try {
+      await navigator.clipboard.writeText(stripePayUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    } catch {
+      setPayLinkError('Could not copy automatically. Use Open Pay Online Link and copy it from the address bar.');
+    }
+  };
+
+  // Emails the agent a pay link (works for agents with no Relay account). The server makes the link and sends it.
+  const handleEmailPayLink = async () => {
+    if (!invoice) return;
+    try {
+      setIsEmailingPayLink(true);
+      setPayLinkError(null);
+      setSendError(null);
+      const response = await authFetch(`/api/invoices/${invoice.id}/email-pay-link`, { method: 'POST' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (data.code === 'stripe_not_connected') {
+          setPayLinkError('Connect and finish onboarding with Stripe in Settings before generating payment links.');
+          return;
+        }
+        throw new Error(data.error || 'Failed to email the pay link');
+      }
+      const to = invoice.agent?.email || 'the agent';
+      setSendResult(`Pay link emailed to ${to}.`);
+      showToast({ title: 'Pay link sent', body: `Emailed to ${to}`, tone: 'success' });
+      setInvoice({ ...invoice, sent_at: new Date().toISOString(), sent_to: to });
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setSendError(error instanceof Error ? error.message : 'Failed to email the pay link');
+    } finally {
+      setIsEmailingPayLink(false);
     }
   };
 
@@ -490,24 +544,22 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
           <h3 className="text-xl font-bold text-slate-100 mb-6">Fee Calculation</h3>
           <div className="space-y-4">
-            <div className="flex justify-between items-center pb-4 border-b border-slate-600">
-              <span className="text-slate-400">Purchase Price</span>
-              <span className="text-lg font-semibold text-slate-100">
-                ${(invoice.transaction?.purchase_price ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div className="flex justify-between items-center pb-4 border-b border-slate-600">
-              <span className="text-slate-400">Flat Fee</span>
-              <span className="text-lg font-semibold text-slate-100">
-                ${(invoice.agent?.flat_fee ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div className="flex justify-between items-center pb-4 border-b border-slate-600">
-              <span className="text-slate-400">Percentage Fee ({invoice.agent?.commission_percent ?? 0}% of purchase price)</span>
-              <span className="text-lg font-semibold text-slate-100">
-                ${(((invoice.transaction?.purchase_price ?? 0) * (invoice.agent?.commission_percent ?? 0)) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-              </span>
-            </div>
+            {(invoice.transaction?.purchase_price ?? 0) > 0 && (
+              <div className="flex justify-between items-center pb-4 border-b border-slate-600">
+                <span className="text-slate-400">{invoice.transaction?.isListing ? 'List Price' : 'Purchase Price'}</span>
+                <span className="text-lg font-semibold text-slate-100">
+                  ${(invoice.transaction?.purchase_price ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
+            {invoiceBreakdown(invoice as never, invoice.agent, invoice.transaction?.purchase_price ?? 0).lines.map((line, i) => (
+              <div key={i} className="flex justify-between items-center pb-4 border-b border-slate-600">
+                <span className="text-slate-400">{line.label}</span>
+                <span className={`text-lg font-semibold ${line.amount < 0 ? 'text-emerald-400' : 'text-slate-100'}`}>
+                  {line.amount < 0 ? '−' : ''}${Math.abs(line.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            ))}
             <div className="flex justify-between items-center pt-4">
               <span className="text-slate-400 font-semibold">Total Amount Owed</span>
               <span className="text-2xl font-bold text-blue-400">
@@ -521,7 +573,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
           <h3 className="text-xl font-bold text-slate-100 mb-2">Send to Agent</h3>
           <p className="text-sm text-slate-400 mb-6">
-            Download the invoice as a PDF, or email it to the agent along with every document uploaded for this transaction.
+            Email the agent a link to pay online (no account needed), or send the full invoice with documents, or download the PDF.
           </p>
 
           {invoice.sent_at && (
@@ -561,30 +613,51 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             >
               {isDownloading ? 'Generating...' : 'Download PDF'}
             </button>
+            {!invoice.paid && (
+              <button
+                onClick={handleEmailPayLink}
+                disabled={!invoice.agent?.email || isEmailingPayLink}
+                className="px-4 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isEmailingPayLink ? 'Sending...' : 'Email pay link to agent'}
+              </button>
+            )}
             <button
               onClick={() => setShowSendForm((v) => !v)}
               disabled={!invoice.agent?.email}
-              className="px-4 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`px-4 py-3 rounded-lg transition font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
+                invoice.paid
+                  ? 'bg-blue-500 hover:bg-blue-400 text-white font-semibold'
+                  : 'border border-slate-600 hover:border-slate-500 text-slate-200 hover:text-slate-100'
+              }`}
             >
               Email Invoice &amp; Documents
             </button>
             {!invoice.paid && (
               stripePayUrl ? (
-                <a
-                  href={stripePayUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-3 border border-blue-500/50 text-blue-300 hover:text-blue-200 hover:border-blue-400 rounded-lg transition font-medium"
-                >
-                  Open Pay Online Link ↗
-                </a>
+                <>
+                  <button
+                    onClick={handleCopyPayLink}
+                    className="px-4 py-3 border border-blue-500/50 text-blue-300 hover:text-blue-200 hover:border-blue-400 rounded-lg transition font-medium"
+                  >
+                    {linkCopied ? 'Copied ✓' : 'Copy link'}
+                  </button>
+                  <a
+                    href={stripePayUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-3 border border-slate-600 text-slate-300 hover:text-slate-100 hover:border-slate-500 rounded-lg transition font-medium"
+                  >
+                    Open ↗
+                  </a>
+                </>
               ) : (
                 <button
                   onClick={handleGeneratePayLink}
                   disabled={isGeneratingPayLink}
                   className="px-4 py-3 border border-blue-500/50 text-blue-300 hover:text-blue-200 hover:border-blue-400 rounded-lg transition font-medium disabled:opacity-50"
                 >
-                  {isGeneratingPayLink ? 'Creating link...' : 'Get Pay Online Link'}
+                  {isGeneratingPayLink ? 'Creating link...' : 'Get link to copy'}
                 </button>
               )
             )}
@@ -633,7 +706,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
         {/* Transaction Link */}
         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 mb-8">
-          <h3 className="text-xl font-bold text-slate-100 mb-6">Related Transaction</h3>
+          <h3 className="text-xl font-bold text-slate-100 mb-6">{invoice.listing_id ? 'Related Listing' : 'Related Transaction'}</h3>
           <div className="space-y-4">
             <div>
               <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">File Number</p>
@@ -644,10 +717,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               <p className="text-slate-300">{invoice.transaction?.property_address || 'N/A'}</p>
             </div>
             <Link
-              href={`/dashboard/transactions/${invoice.transaction_id}`}
+              href={invoice.listing_id ? `/dashboard/listings/${invoice.listing_id}` : `/dashboard/transactions/${invoice.transaction_id}`}
               className="inline-block mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium"
             >
-              View Transaction
+              {invoice.listing_id ? 'View Listing' : 'View Transaction'}
             </Link>
           </div>
         </div>
