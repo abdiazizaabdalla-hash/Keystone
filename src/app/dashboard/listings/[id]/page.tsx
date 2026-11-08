@@ -21,6 +21,7 @@ import StepEmailModal from '@/components/StepEmailModal';
 import OfferIntakeModal from '@/components/OfferIntakeModal';
 import OfferHistory from '@/components/OfferHistory';
 import AddCoordinatorModal from '@/components/AddCoordinatorModal';
+import InvitePersonModal, { type PickedPerson } from '@/components/InvitePersonModal';
 import ListingThread, { type ListingThreadComment } from '@/components/ListingThread';
 import MessagePreview from '@/components/MessagePreview';
 import OverviewCard from '@/components/OverviewCard';
@@ -176,6 +177,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [data, setData] = useState<Detail | null>(null);
   const [coordInvites, setCoordInvites] = useState<Array<{ email: string; status: string }>>([]);
   const [showInvite, setShowInvite] = useState(false);
+  const [showPickAgent, setShowPickAgent] = useState(false);
   // Agent-only controls (who the listing agent is, sharing, portal, invoicing) stay hidden from agents and from invited coordinators.
   const agentHidden = isWorkspaceAgent || data?.coordinated === true;
   const loadCoordInvites = useCallback(async () => {
@@ -601,8 +603,20 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const nextTask = [...tasks.filter((t) => !t.completed)].sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999'))[0] || null;
   // Why a listing does or doesn't show in the agent's portal, in plain words, with the fix next to it.
   const resendAction = portal?.agentEmail ? { label: invitingPortal ? 'Sending…' : 'Resend invite', run: () => void invitePortal() } : undefined;
+  // The agent chosen in the popup: their saved profile (made from the name and email if they are new), set on the listing,
+  // shared with them, and their portal invite sent. No typing in Details.
+  const pickListingAgent = async (p: PickedPerson) => {
+    let agentId = p.agentId;
+    if (!agentId) {
+      const made = await call('POST', '/api/agents', { name: p.name || p.email, email: p.email });
+      agentId = made.id as string;
+    }
+    await call('PATCH', `/api/listings/${id}`, { agentId, shareWithAgent: true });
+    await call('POST', `/api/listings/${id}/invite-agent`);
+    await load();
+  };
   const portalStatus: { ok: boolean; text: string; action?: { label: string; run: () => void } } = !data.agent
-    ? { ok: false, text: "No listing agent is chosen, so this listing can't appear in anyone's agent portal.", action: { label: 'Choose an agent', run: () => selectTab('details') } }
+    ? { ok: false, text: "No listing agent is chosen, so this listing can't appear in anyone's agent portal.", action: { label: 'Add an agent', run: () => setShowPickAgent(true) } }
     : !portal
       ? { ok: false, text: 'Checking the agent portal…' }
       : !portal.agentEmail
@@ -1178,16 +1192,23 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 <p className="text-sm text-slate-400 mt-0.5">{portalStatus.text}</p>
                 {portalMsg && <p className="text-xs text-slate-400 mt-1">{portalMsg}</p>}
               </div>
-              {portalStatus.action && (
-                <button
-                  type="button"
-                  onClick={portalStatus.action.run}
-                  disabled={invitingPortal}
-                  className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
-                >
-                  {portalStatus.action.label}
-                </button>
-              )}
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {portalStatus.action && (
+                  <button
+                    type="button"
+                    onClick={portalStatus.action.run}
+                    disabled={invitingPortal}
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
+                  >
+                    {portalStatus.action.label}
+                  </button>
+                )}
+                {data.agent && (
+                  <button type="button" onClick={() => setShowPickAgent(true)} className="px-4 py-2 border border-white/10 hover:bg-white/5 text-slate-200 text-sm font-semibold rounded-xl transition">
+                    Change agent
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           )}
@@ -2595,6 +2616,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
       </div>
+      {showPickAgent && <InvitePersonModal role="agent" listingId={id} onClose={() => setShowPickAgent(false)} onPick={pickListingAgent} />}
       {showInvite && <AddCoordinatorModal listingId={id} onClose={() => setShowInvite(false)} onInvited={() => void loadCoordInvites()} />}
     </div>
   );

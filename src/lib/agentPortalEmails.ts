@@ -101,10 +101,12 @@ export async function sendAgentInviteEmail(params: {
   propertyAddress: string | null;
   loginUrl: string;
   fromListing?: boolean;
+  /** The agent already has a Relay TC login: the email says sign in instead of set up. */
+  usesRelay?: boolean;
   /** Whose test outbox it lands in when RELAY_OUTBOX_ONLY=1: the person sending the invitation. */
   ownerUserId?: string;
 }) {
-  const { toEmail, tcLabel, propertyAddress, loginUrl, fromListing, ownerUserId } = params;
+  const { toEmail, tcLabel, propertyAddress, loginUrl, fromListing, usesRelay, ownerUserId } = params;
   const dealLabel = propertyAddress ? `for ${propertyAddress}` : 'on Relay TC';
   const where = propertyAddress ? `at ${propertyAddress}` : '';
   const html = wrapper(
@@ -114,7 +116,7 @@ export async function sendAgentInviteEmail(params: {
      and it is already on your dashboard.</p>`
       : `<p><strong>${escapeHtml(tcLabel)}</strong> added you ${escapeHtml(dealLabel)} on Relay TC, a transaction coordination
      workspace.</p>
-     <p><a href="${loginUrl}" style="color: #b45309;">Set up your Relay TC account</a></p>
+     <p><a href="${loginUrl}" style="color: #b45309;">${usesRelay ? 'Sign in to your Relay TC account' : 'Set up your Relay TC account'}</a></p>
      <p style="font-size: 13px; color: #555;">This link doesn't expire. It takes you to a page that emails you a fresh sign-in link when you ask for one.</p>
      <p>Once in, you'll be able to see the deal's checklist, upload and download documents, and
      message ${tcLabel} right from the page.</p>`

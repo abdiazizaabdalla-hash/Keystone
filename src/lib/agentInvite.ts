@@ -123,6 +123,8 @@ export async function inviteAgentToTransaction(params: {
   fromListing?: boolean;
   /** Give the access without sending the per-deal email (the caller sends one summary email instead). */
   silent?: boolean;
+  /** The agent says they already have a Relay TC login (only changes the email's wording). */
+  usesRelay?: boolean;
 }): Promise<TxInviteOutcome> {
   try {
     const { transaction, user, appUrl } = params;
@@ -164,7 +166,7 @@ export async function inviteAgentToTransaction(params: {
     const tcLabel = (user.user_metadata?.full_name as string | undefined) || user.email || 'Your transaction coordinator';
     if (!params.silent) {
       try {
-        await sendAgentInviteEmail({ toEmail: email, tcLabel, propertyAddress: (transaction.property_address as string | null) || null, loginUrl: agentSetupUrl(appUrl, email), fromListing: params.fromListing === true, ownerUserId: user.id });
+        await sendAgentInviteEmail({ toEmail: email, tcLabel, propertyAddress: (transaction.property_address as string | null) || null, loginUrl: agentSetupUrl(appUrl, email), fromListing: params.fromListing === true, usesRelay: params.usesRelay === true, ownerUserId: user.id });
       } catch (emailError) {
         console.error('The deal invitation email was not sent (the invitation is saved):', emailError);
         return 'email_failed';

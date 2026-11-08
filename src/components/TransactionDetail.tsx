@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import ClientMessagesPanel from '@/components/ClientMessagesPanel';
 import ClientShareCard from '@/components/ClientShareCard';
 import AddCoordinatorModal from '@/components/AddCoordinatorModal';
+import InvitePersonModal from '@/components/InvitePersonModal';
 import CoordinatorStatus from '@/components/CoordinatorStatus';
 import UseTemplateModal from '@/components/UseTemplateModal';
 import DealStateDocs from '@/components/DealStateDocs';
@@ -388,6 +389,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   // An agent with their own workspace: their deals talk to clients and a coordinator, not to "an agent on the portal".
   const [isAgentAcct, setIsAgentAcct] = useState(false);
   const [showAddCoordinator, setShowAddCoordinator] = useState(false);
+  const [showInviteAgent, setShowInviteAgent] = useState(false);
   const [useTemplate, setUseTemplate] = useState<{ mode: 'all' | 'documents'; initial?: { id: string; kind: 'email' | 'letter' | 'form'; name: string; description: string | null; states: string[] } } | null>(null);
   const [recentNote, setRecentNote] = useState('');
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -2769,6 +2771,15 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           Back to Transactions
         </Link>
 
+        {showInviteAgent && transaction && (
+          <InvitePersonModal
+            role="agent"
+            transactionId={transaction.id}
+            onClose={() => setShowInviteAgent(false)}
+            onInvited={() => void fetchAgentAccess()}
+            excludeEmails={[...acceptedAgentUsers.map((a) => a.email), ...agentInvites.map((i) => i.email)]}
+          />
+        )}
         {showAddCoordinator && (
           <AddCoordinatorModal
             transactionId={resolvedParams.id}
@@ -4220,59 +4231,13 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               </div>
             )}
 
-            {!isAgentAcct && allAgents.length > 0 && (() => {
-              // Emails that already have access or a pending invite --
-              // shown but not selectable, so nobody is invited twice.
-              const alreadyHave = new Set([
-                ...acceptedAgentUsers.map((a) => a.email.toLowerCase()),
-                ...agentInvites.map((i) => i.email.toLowerCase()),
-              ]);
-              // This deal's own agent first, then the rest alphabetically.
-              const sortedAgents = [...allAgents].sort((a, b) => {
-                if (a.id === transaction.agent_id) return -1;
-                if (b.id === transaction.agent_id) return 1;
-                return a.name.localeCompare(b.name);
-              });
-              return (
-                <select
-                  value=""
-                  onChange={(e) => {
-                    const picked = allAgents.find((a) => a.id === e.target.value);
-                    if (picked?.email) setInviteEmailDraft(picked.email);
-                  }}
-                  className="w-full mb-2 bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 text-sm focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">Choose from your agents…</option>
-                  {sortedAgents.map((a) => {
-                    const email = a.email?.trim();
-                    const invited = !!email && alreadyHave.has(email.toLowerCase());
-                    return (
-                      <option key={a.id} value={a.id} disabled={!email || invited}>
-                        {a.name}
-                        {a.id === transaction.agent_id ? ' (this deal)' : ''}
-                        {!email ? ' — no email on file' : invited ? ' — already invited' : ` — ${email}`}
-                      </option>
-                    );
-                  })}
-                </select>
-              );
-            })()}
-            <div className="flex flex-wrap gap-2">
-              <input
-                type="email"
-                value={inviteEmailDraft}
-                onChange={(e) => setInviteEmailDraft(e.target.value)}
-                placeholder={isAgentAcct ? 'Coordinator’s email address' : 'or type any email address'}
-                className="flex-1 min-w-[12rem] bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-500 text-sm focus:border-blue-500 focus:outline-none"
-              />
-              <button
-                onClick={() => handleInviteAgent()}
-                disabled={isInvitingAgent || !inviteEmailDraft.trim()}
-                className="px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-100 text-sm font-semibold rounded-lg transition disabled:opacity-50"
-              >
-                {isInvitingAgent ? 'Sending…' : isAgentAcct ? 'Invite coordinator' : 'Invite'}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => (isAgentAcct ? setShowAddCoordinator(true) : setShowInviteAgent(true))}
+              className="px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-100 text-sm font-semibold rounded-lg transition"
+            >
+              {isAgentAcct ? 'Invite your coordinator' : 'Invite an agent'}
+            </button>
             {inviteMessage && <p className="text-xs text-slate-400 mt-2">{inviteMessage}</p>}
           </div>
 

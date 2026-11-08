@@ -201,7 +201,7 @@ export async function POST(request: NextRequest) {
     // The row, the agent's login and the email are handled together (see inviteAgentToTransaction); the email links to a
     // fixed page that never expires. An email that already belongs to a non-agent account (a TC, say) is still invited:
     // that account is only made an agent when its owner accepts (api/agent-invites/accept).
-    const outcome = await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, email });
+    const outcome = await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, email, usesRelay: body.usesRelay === true });
     const inviteEmailSent = outcome === 'sent';
 
     return NextResponse.json({ status: 'invited', email, inviteEmailSent });

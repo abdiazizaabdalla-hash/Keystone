@@ -13,6 +13,7 @@ import { useListingsImport } from '@/components/useListingsImport';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 import { useAgentAccess } from '@/lib/useAgentAccess';
 import { readPersona } from '@/lib/persona';
+import InvitePersonModal, { type PickedPerson } from '@/components/InvitePersonModal';
 import AgentListingsList from '@/components/AgentListingsList';
 
 interface ListingRow {
@@ -70,6 +71,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
   const router = useRouter();
   const [listings, setListings] = useState<ListingRow[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [pickingAgent, setPickingAgent] = useState(false);
   // An agent listing their own property is the listing agent: nothing to choose.
   const [isAgentAcct, setIsAgentAcct] = useState(false);
   useEffect(() => {
@@ -118,6 +120,17 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
     [router]
   );
 
+  const addPickedAgent = async (p: PickedPerson) => {
+    let id = p.agentId;
+    if (!id) {
+      const res = await authFetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: p.name || p.email, email: p.email }) });
+      const made = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(made.error || 'Could not add the agent');
+      id = made.id as string;
+      setAgents((prev) => [...prev, { id: id as string, name: p.name || p.email, email: p.email }]);
+    }
+    setForm((prev) => ({ ...prev, agentId: id as string }));
+  };
   const load = useCallback(async () => {
     try {
       const [lRes, aRes, xRes, tRes] = await Promise.all([
@@ -431,6 +444,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
                   </option>
                 ))}
               </select>
+              <button type="button" onClick={() => setPickingAgent(true)} className="mt-1 text-xs text-blue-300 hover:text-blue-200">＋ Add an agent from your contacts or recent deals</button>
               <p className="text-xs text-slate-500 mt-1">The agent the listing belongs to. They are also the agent on the deal if you convert it.</p>
               {(() => {
                 const picked = agents.find((a) => a.id === form.agentId);
@@ -538,6 +552,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
           </form>
         </div>
       )}
+      {pickingAgent && <InvitePersonModal role="agent" pickOnly onClose={() => setPickingAgent(false)} onPick={addPickedAgent} />}
     </div>
   );
 }

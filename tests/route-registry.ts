@@ -137,6 +137,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/listings/[id]/[kind]': { kind: 'session', methods: ['POST'] },
   '/api/listings/[id]/[kind]/[childId]': { kind: 'session', methods: ['DELETE', 'PATCH'] },
   '/api/listings/[id]/checklist': { kind: 'session', methods: ['POST'] },
+  '/api/invite-suggestions': { kind: 'session', methods: ['GET'], why: 'Read-only: the caller’s own recent invitees, agents and contacts; nothing from other accounts.', collaboratorWrites: 'Read-only (GET).' },
   '/api/listings/[id]/coordinator': { kind: 'session', methods: ['GET', 'POST'], why: 'Only the agent who owns the listing (and has a workspace) invites a coordinator or reads who accepted; anyone else gets 403.', collaboratorWrites: 'A free agent login has no workspace, so the workspace check refuses it (403); proven in listing-coordinator-invite.int.test.ts.' },
   '/api/listings/[id]/comments': { kind: 'session', methods: ['GET', 'POST'] },
   '/api/listings/[id]/copy-documents': { kind: 'session', methods: ['POST'] },

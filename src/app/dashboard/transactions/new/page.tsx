@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { DueDateSpec } from '@/lib/dueDates';
 import { readPersona } from '@/lib/persona';
+import InvitePersonModal, { type PickedPerson } from '@/components/InvitePersonModal';
 
 interface Agent {
   id: string;
@@ -28,6 +29,7 @@ const BASELINE_TEMPLATE_ID = 'baseline';
 export default function NewTransactionPage() {
   const router = useRouter();
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [pickingAgent, setPickingAgent] = useState(false);
   // An agent running their own deals is the agent on every deal: nothing to choose.
   const [isAgentAcct, setIsAgentAcct] = useState(false);
   useEffect(() => {
@@ -146,6 +148,18 @@ export default function NewTransactionPage() {
     } catch {
       // Silently unavailable -- the manual form still works fine.
     }
+  };
+
+  const addPickedAgent = async (p: PickedPerson) => {
+    let id = p.agentId;
+    if (!id) {
+      const res = await authFetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: p.name || p.email, email: p.email }) });
+      const made = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(made.error || 'Could not add the agent');
+      id = made.id as string;
+    }
+    await fetchAgents();
+    setFormData((prev) => ({ ...prev, agentId: id as string }));
   };
 
   const fetchAgents = async () => {
@@ -633,6 +647,7 @@ export default function NewTransactionPage() {
                 <option disabled>No agents available</option>
               )}
             </select>
+            <button type="button" onClick={() => setPickingAgent(true)} className="mt-2 text-xs text-blue-300 hover:text-blue-200">＋ Add an agent from your contacts or recent deals</button>
             <p className="text-xs text-slate-400 mt-2">Choose which agent this transaction belongs to</p>
             {(() => {
               const picked = agents.find((a) => a.id === formData.agentId);
@@ -846,6 +861,7 @@ export default function NewTransactionPage() {
           </div>
         </div>
       </div>
+      {pickingAgent && <InvitePersonModal role="agent" pickOnly onClose={() => setPickingAgent(false)} onPick={addPickedAgent} />}
     </div>
   );
 }
