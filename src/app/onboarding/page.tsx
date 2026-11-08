@@ -421,21 +421,16 @@ function OnboardingContent() {
 
   const handleSaveFeesAndInvoicing = () => {
     const flat = parseFloat(defaultFlatFee);
-    const pct = parseFloat(defaultPercentFee);
     const days = parseInt(invoiceDueDays, 10);
     if (defaultFlatFee.trim() !== '' && (Number.isNaN(flat) || flat < 0)) {
       setStepError('Flat fee must be 0 or more.');
-      return;
-    }
-    if (defaultPercentFee.trim() !== '' && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
-      setStepError('Percentage fee must be between 0 and 100.');
       return;
     }
     if (!Number.isInteger(days) || days < 1 || days > 365) {
       setStepError('Enter a number of days between 1 and 365.');
       return;
     }
-    savePatch({ defaultFlatFee: flat || 0, defaultPercentFee: pct || 0, invoiceDueDays: days }, 4);
+    savePatch({ defaultFlatFee: flat || 0, defaultPercentFee: 0, invoiceDueDays: days }, 4);
   };
 
   const handleSaveDueDateWorkflow = () => savePatch({ dueDateWorkflowEnabled, dueDateWorkflowSteps }, 5);
@@ -732,10 +727,10 @@ function OnboardingContent() {
             onBack={() => goTo(2)}
             onContinue={handleSaveFeesAndInvoicing}
           >
-            <div className="grid sm:grid-cols-2 gap-5">
+            <div className="grid gap-5">
               <div>
                 <label htmlFor="ob-flat" className="text-sm text-slate-400 block mb-2">
-                  Flat fee per deal ($)
+                  Transaction coordination fee
                 </label>
                 <MoneyInput
                   id="ob-flat"
@@ -746,25 +741,8 @@ function OnboardingContent() {
                   className={inputClass}
                 />
               </div>
-              <div>
-                <label htmlFor="ob-pct" className="text-sm text-slate-400 block mb-2">
-                  Percentage fee (%)
-                </label>
-                <input
-                  id="ob-pct"
-                  type="number"
-                  value={defaultPercentFee}
-                  onChange={handleNumberChange(setDefaultPercentFee)}
-                  onWheel={blurOnWheel}
-                  placeholder="0"
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  className={inputClass}
-                />
-              </div>
             </div>
-            <p className="text-xs text-slate-500 mt-2">Leave the percentage at 0 if you only charge a flat fee.</p>
+            <p className="text-xs text-slate-500 mt-2">You can add a listing fee and other charges for each agent later.</p>
 
             <div className="border-t border-white/10 mt-6 pt-6">
               <label htmlFor="ob-due" className="text-sm text-slate-400 block mb-2">

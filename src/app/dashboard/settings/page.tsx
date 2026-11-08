@@ -25,7 +25,6 @@ function SettingsContent() {
   const [message, setMessage] = useState('');
   const [fullName, setFullName] = useState('');
   const [defaultFlatFee, setDefaultFlatFee] = useState('400');
-  const [defaultPercentFee, setDefaultPercentFee] = useState('0');
   const [invoiceDueDays, setInvoiceDueDays] = useState('30');
 
   // Due-date workflow: whether new transactions get auto-calculated
@@ -343,7 +342,6 @@ function SettingsContent() {
       const data = await response.json();
       setFullName(data.fullName ?? '');
       setDefaultFlatFee(String(data.defaultFlatFee ?? 400));
-      setDefaultPercentFee(String(data.defaultPercentFee ?? 0));
       setInvoiceDueDays(String(data.invoiceDueDays ?? 30));
       setDueDateWorkflowEnabled(data.dueDateWorkflowEnabled === true);
       if (Array.isArray(data.dueDateWorkflowSteps)) {
@@ -414,7 +412,7 @@ function SettingsContent() {
         body: JSON.stringify({
           fullName,
           defaultFlatFee: parseFloat(defaultFlatFee) || 0,
-          defaultPercentFee: parseFloat(defaultPercentFee) || 0,
+          defaultPercentFee: 0,
           invoiceDueDays: parseInt(invoiceDueDays, 10) || 30,
         }),
       });
@@ -424,7 +422,6 @@ function SettingsContent() {
 
       setFullName(data.fullName ?? '');
       setDefaultFlatFee(String(data.defaultFlatFee));
-      setDefaultPercentFee(String(data.defaultPercentFee));
       setInvoiceDueDays(String(data.invoiceDueDays));
       setMessage('Settings saved.');
     } catch (error) {
@@ -507,9 +504,9 @@ function SettingsContent() {
             Pre-fills the fee fields whenever you add a new agent. You can still change these per agent.
           </p>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid gap-6">
             <div>
-              <label className="text-sm text-slate-400 block mb-2">Default Flat Fee per Deal ($)</label>
+              <label className="text-sm text-slate-400 block mb-2">Default transaction coordination fee</label>
               <MoneyInput
                 value={defaultFlatFee}
                 onValueChange={setDefaultFlatFee}
@@ -519,20 +516,6 @@ function SettingsContent() {
               />
             </div>
 
-            <div>
-              <label className="text-sm text-slate-400 block mb-2">Default Percentage Fee (%)</label>
-              <input
-                type="number"
-                value={defaultPercentFee}
-                onChange={handleNumberChange(setDefaultPercentFee)}
-                onWheel={blurOnWheel}
-                placeholder="0"
-                step="0.01"
-                min="0"
-                max="100"
-                className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-              />
-            </div>
           </div>
         </div>
 

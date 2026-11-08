@@ -177,7 +177,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [data, setData] = useState<Detail | null>(null);
   const [coordInvites, setCoordInvites] = useState<Array<{ email: string; status: string }>>([]);
   const [showInvite, setShowInvite] = useState(false);
-  const [showPickAgent, setShowPickAgent] = useState(false);
+  // 'primary' sets the listing's agent (and invites them); 'contact' adds one more agent (a buyer's or co-listing agent) as a person on the listing.
+  const [pickAgent, setPickAgent] = useState<null | 'primary' | 'contact'>(null);
   // Agent-only controls (who the listing agent is, sharing, portal, invoicing) stay hidden from agents and from invited coordinators.
   const agentHidden = isWorkspaceAgent || data?.coordinated === true;
   const loadCoordInvites = useCallback(async () => {
@@ -201,7 +202,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const [det, setDet] = useState({ propertyAddress: '', agentId: '', sellerName: '', sellerEmail: '', sellerPhone: '', listPrice: '', plannedListDate: '', expirationDate: '', mlsNumber: '', mlsUrl: '', notes: '', shareWithAgent: true, notifyAgent: false, listedOn: '', tcUserId: '' });
   const [savingDetails, setSavingDetails] = useState(false);
   // Has the listing's agent been given a portal login? (the listing only shows in their portal once they can sign in)
-  const [portal, setPortal] = useState<{ hasAgent: boolean; agentName: string | null; agentEmail: string | null; shared: boolean; invitedAt: string | null; visibleToAgent?: boolean; lookupError?: string | null; login?: 'none' | 'agent' | 'other' | 'unknown'; listingStatus?: string | null } | null>(null);
+  const [portal, setPortal] = useState<{ hasAgent: boolean; agentName: string | null; agentEmail: string | null; shared: boolean; invitedAt: string | null; visibleToAgent?: boolean; lookupError?: string | null; login?: 'none' | 'agent' | 'other' | 'unknown'; workspace?: boolean; listingStatus?: string | null } | null>(null);
   const [invitingPortal, setInvitingPortal] = useState(false);
   const [portalMsg, setPortalMsg] = useState('');
 
@@ -615,8 +616,13 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     await call('POST', `/api/listings/${id}/invite-agent`);
     await load();
   };
+  // One more agent on the listing (a buyer's or co-listing agent): saved as a person on it, not given a portal login.
+  const addAgentContact = async (p: PickedPerson) => {
+    await call('POST', `/api/listings/${id}/contacts`, { role: 'Agent', name: p.name || p.email, email: p.email });
+    await load();
+  };
   const portalStatus: { ok: boolean; text: string; action?: { label: string; run: () => void } } = !data.agent
-    ? { ok: false, text: "No listing agent is chosen, so this listing can't appear in anyone's agent portal.", action: { label: 'Add an agent', run: () => setShowPickAgent(true) } }
+    ? { ok: false, text: "No listing agent is chosen, so this listing can't appear in anyone's agent portal.", action: { label: 'Add an agent', run: () => setPickAgent('primary') } }
     : !portal
       ? { ok: false, text: 'Checking the agent portal…' }
       : !portal.agentEmail
@@ -1184,7 +1190,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               }}
             />
           )}
-          {!agentHidden && (
+          {!agentHidden && !portal?.workspace && (
           <div data-tour="ls-portal" className={`rounded-2xl border p-5 ${portalStatus.ok ? 'bg-green-500/5 border-green-500/30' : 'bg-amber-500/5 border-amber-500/30'}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
@@ -1201,11 +1207,6 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                     className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
                   >
                     {portalStatus.action.label}
-                  </button>
-                )}
-                {data.agent && (
-                  <button type="button" onClick={() => setShowPickAgent(true)} className="px-4 py-2 border border-white/10 hover:bg-white/5 text-slate-200 text-sm font-semibold rounded-xl transition">
-                    Change agent
                   </button>
                 )}
               </div>
@@ -1315,6 +1316,13 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             summary={contacts.length === 0 ? 'None yet' : `${contacts.length} on this listing`}
             action={{ label: 'Open details', onClick: () => selectTab('details') }}
           >
+            <button
+              type="button"
+              onClick={() => setPickAgent(!agentHidden && !data.agent ? 'primary' : 'contact')}
+              className="mb-3 px-3 py-1.5 border border-white/10 hover:bg-white/5 text-slate-200 text-xs font-semibold rounded-lg transition"
+            >
+              ＋ Add an agent
+            </button>
             {contacts.length === 0 ? (
               <p className="text-sm text-slate-400">Sellers and other people you add show here.</p>
             ) : (
@@ -2616,7 +2624,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
       </div>
-      {showPickAgent && <InvitePersonModal role="agent" listingId={id} onClose={() => setShowPickAgent(false)} onPick={pickListingAgent} />}
+      {pickAgent && <InvitePersonModal role="agent" pickOnly={pickAgent === 'contact'} listingId={id} onClose={() => setPickAgent(null)} onPick={pickAgent === 'primary' ? pickListingAgent : addAgentContact} />}
       {showInvite && <AddCoordinatorModal listingId={id} onClose={() => setShowInvite(false)} onInvited={() => void loadCoordInvites()} />}
     </div>
   );

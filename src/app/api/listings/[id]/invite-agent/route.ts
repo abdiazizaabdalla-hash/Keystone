@@ -4,6 +4,7 @@ import { AuthError } from '@/lib/auth';
 import { requireListingAccess } from '@/lib/listings';
 import { getAgentListingRowsDetailed } from '@/lib/agentListings';
 import { hasAgentRole } from '@/lib/privileged';
+import { getEntitlements } from '@/lib/entitlements';
 import { sendListingPortalInvite, type ListingInviteOutcome } from '@/lib/agentInvite';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { logAudit } from '@/lib/audit';
@@ -37,6 +38,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     let visible = false;
     let lookupError: string | null = null;
     let login: 'none' | 'agent' | 'other' | 'unknown' = 'unknown';
+    // The agent has their own workspace: the listing opens inside it, so there is no separate portal to invite them to.
+    let workspace = false;
     if (email.includes('@')) {
       const res = await getAgentListingRowsDetailed(email);
       lookupError = res.error;
@@ -48,6 +51,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           const match = list.find((u) => (u.email || '').trim().toLowerCase() === email);
           if (match) {
             login = hasAgentRole(match) ? 'agent' : 'other';
+            workspace = getEntitlements(match as never).kind === 'agent_workspace';
             break;
           }
           if (list.length < 1000) {
@@ -68,6 +72,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       visibleToAgent: visible,
       lookupError,
       login,
+      workspace,
       listingStatus: listing.status ?? null,
     });
   } catch (error) {

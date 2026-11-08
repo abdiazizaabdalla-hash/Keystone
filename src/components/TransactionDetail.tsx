@@ -390,6 +390,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   const [isAgentAcct, setIsAgentAcct] = useState(false);
   const [showAddCoordinator, setShowAddCoordinator] = useState(false);
   const [showInviteAgent, setShowInviteAgent] = useState(false);
+  // One more agent on the deal (a buyer's or co-listing agent), saved as a person on it.
+  const [showAddAgentPerson, setShowAddAgentPerson] = useState(false);
   const [useTemplate, setUseTemplate] = useState<{ mode: 'all' | 'documents'; initial?: { id: string; kind: 'email' | 'letter' | 'form'; name: string; description: string | null; states: string[] } } | null>(null);
   const [recentNote, setRecentNote] = useState('');
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -2771,6 +2773,23 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           Back to Transactions
         </Link>
 
+        {showAddAgentPerson && transaction && (
+          <InvitePersonModal
+            role="agent"
+            pickOnly
+            onClose={() => setShowAddAgentPerson(false)}
+            onPick={async (p) => {
+              const res = await authFetch(`/api/transactions/${transaction.id}/contacts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: 'Agent', name: p.name || p.email, email: p.email }),
+              });
+              const made = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(made.error || 'Could not add the agent');
+              setContacts((prev) => [...prev, made]);
+            }}
+          />
+        )}
         {showInviteAgent && transaction && (
           <InvitePersonModal
             role="agent"
@@ -4237,6 +4256,13 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               className="px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-600 text-slate-100 text-sm font-semibold rounded-lg transition"
             >
               {isAgentAcct ? 'Invite your coordinator' : 'Invite an agent'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAddAgentPerson(true)}
+              className="ml-2 px-4 py-2 border border-white/10 hover:bg-white/5 text-slate-200 text-sm font-semibold rounded-lg transition"
+            >
+              ＋ Add an agent
             </button>
             {inviteMessage && <p className="text-xs text-slate-400 mt-2">{inviteMessage}</p>}
           </div>

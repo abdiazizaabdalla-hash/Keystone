@@ -1,5 +1,6 @@
 'use client';
 
+import AgentPriceList, { cleanPriceRows, type PriceRow } from '@/components/AgentPriceList';
 import MoneyInput from '@/components/MoneyInput';
 import PhoneInput from '@/components/PhoneInput';
 import { useEffect, useMemo, useState } from 'react';
@@ -18,6 +19,7 @@ interface Agent {
   phone: string;
   flat_fee: number;
   commission_percent: number;
+  services?: Array<{ id: string; name: string; amount: number }> | null;
   /** Optional flat fee for a listing invoice. */
   listing_fee?: number | null;
   /** 'quickbooks' when the agent was created by a QuickBooks import. */
@@ -90,6 +92,7 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
     });
   }, [agents, query, source]);
 
+  const [priceRows, setPriceRows] = useState<PriceRow[]>([]);
   const [formData, setFormData] = useState<FormData>({
     name: '',
     brokerage: '',
@@ -190,6 +193,7 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
       percentFee: defaultFees.percentFee,
       listingFee: '',
     });
+    setPriceRows([]);
     setSelectedDirectoryId('');
     setEditingId(null);
     setShowForm(false);
@@ -228,8 +232,17 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
         email: formData.email?.trim() || null,
         phone: formData.phone?.trim() || null,
         flatFee: parseFloat(String(formData.flatFee)) || 0,
-        percentFee: parseFloat(String(formData.percentFee)) || 0,
+        percentFee: 0,
       };
+      // Other charges are only sent when there are some (or some to clear), so agents who never use them don't touch the column.
+      const hadServices = editingId ? (agents.find((a) => a.id === editingId)?.services || []).length > 0 : false;
+      const cleaned = cleanPriceRows(priceRows);
+      if (!cleaned.ok) {
+        setMessage(cleaned.error);
+        setIsSubmitting(false);
+        return;
+      }
+      if (cleaned.services.length > 0 || hadServices) payload.services = cleaned.services;
       // Only send the listing fee when there is one to save (or one to clear) so
       // agents who never use it don't touch the column.
       const hadListingFee = editingId ? agents.find((a) => a.id === editingId)?.listing_fee != null : false;
@@ -322,6 +335,7 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
       percentFee: String(agent.commission_percent ?? 0),
       listingFee: agent.listing_fee != null ? String(agent.listing_fee) : '',
     });
+    setPriceRows((agent.services || []).map((x) => ({ id: x.id, name: x.name, amount: String(x.amount) })));
     setEditingId(agent.id);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -454,53 +468,15 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
                 />
               </div>
 
-              <div>
-                <label className="text-sm text-slate-400 block mb-2">
-                  Coordination fee per deal ($)
-                </label>
-                <MoneyInput
-                  name="flatFee"
-                  value={formData.flatFee}
-                  onValueChange={(v) => setFormData((prev) => ({ ...prev, flatFee: v }))}
-                  placeholder="400"
-                  aria-label="Flat fee per deal"
-                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              <div className="md:col-span-2">
+                <AgentPriceList
+                  transactionFee={formData.flatFee}
+                  listingFee={formData.listingFee}
+                  services={priceRows}
+                  onTransactionFee={(v) => setFormData((prev) => ({ ...prev, flatFee: v }))}
+                  onListingFee={(v) => setFormData((prev) => ({ ...prev, listingFee: v }))}
+                  onServices={setPriceRows}
                 />
-                <p className="text-xs text-slate-500 mt-1">Fixed fee per transaction closed</p>
-              </div>
-
-              <div>
-                <label className="text-sm text-slate-400 block mb-2">
-                  Percentage Fee (%)
-                </label>
-                <input
-                  type="number"
-                  name="percentFee"
-                  value={formData.percentFee}
-                  onChange={handleInputChange}
-                  onWheel={blurOnWheel}
-                  placeholder="0"
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                />
-                <p className="text-xs text-slate-500 mt-1">Percentage of purchase price (optional)</p>
-              </div>
-
-              <div>
-                <label className="text-sm text-slate-400 block mb-2">
-                  Listing fee ($) <span className="text-slate-500">— optional</span>
-                </label>
-                <MoneyInput
-                  name="listingFee"
-                  value={formData.listingFee}
-                  onValueChange={(v) => setFormData((prev) => ({ ...prev, listingFee: v }))}
-                  placeholder="e.g. 250"
-                  aria-label="Listing fee"
-                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                />
-                <p className="text-xs text-slate-500 mt-1">Charged when you invoice this agent for a listing. You can change it per invoice.</p>
               </div>
             </div>
 
@@ -609,7 +585,6 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
                       </span>
                       <span className="hidden sm:inline text-sm text-slate-400">
                         ${Number(agent.flat_fee ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        {Number(agent.commission_percent) > 0 ? ` + ${agent.commission_percent}%` : ''}
                       </span>
                       <svg className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -644,23 +619,25 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-xs uppercase tracking-wider text-slate-500">Coordination fee per deal (flat)</dt>
+                            <dt className="text-xs uppercase tracking-wider text-slate-500">Transaction coordination fee</dt>
                             <dd className="mt-0.5 font-semibold text-blue-400">
                               ${Number(agent.flat_fee ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                             </dd>
                           </div>
-                          <div>
-                            <dt className="text-xs uppercase tracking-wider text-slate-500">Coordination fee (% of price)</dt>
-                            <dd className="mt-0.5 font-semibold text-blue-400">{agent.commission_percent ?? 0}%</dd>
-                          </div>
                           {agent.listing_fee != null && (
                             <div>
-                              <dt className="text-xs uppercase tracking-wider text-slate-500">Listing fee</dt>
+                              <dt className="text-xs uppercase tracking-wider text-slate-500">Listing coordination fee</dt>
                               <dd className="mt-0.5 font-semibold text-blue-400">
                                 ${Number(agent.listing_fee).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                               </dd>
                             </div>
                           )}
+                          {(agent.services || []).map((sv) => (
+                            <div key={sv.id}>
+                              <dt className="text-xs uppercase tracking-wider text-slate-500">{sv.name}</dt>
+                              <dd className="mt-0.5 font-semibold text-blue-400">${Number(sv.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</dd>
+                            </div>
+                          ))}
                         </dl>
                         <div className="mt-4 flex flex-wrap gap-2">
                           <Link
