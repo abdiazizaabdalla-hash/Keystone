@@ -3029,6 +3029,9 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           </div>
         )}
 
+        {/* The brokerage owner sees the commission up top, where they act on it, on every tab. */}
+        {ownerView && isFeatureOnClient('brokerage') && transaction?.id && <CommissionBox transactionId={transaction.id} banner />}
+
         {/* Tabs: one focused section at a time instead of one long page.
             Every panel stays mounted (just hidden) so drafts, uploads and
             polling keep their state when you switch tabs. */}
@@ -3384,7 +3387,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                 </fieldset>
               </section>
 
-              {tab === 'overview' && isFeatureOnClient('brokerage') && transaction?.id && !(isAgentAcct && !ownerView) && <CommissionBox transactionId={transaction.id} />}
+              {tab === 'overview' && isFeatureOnClient('brokerage') && transaction?.id && !(isAgentAcct && !ownerView) && !ownerView && <CommissionBox transactionId={transaction.id} />}
 
               {tab === 'overview' && templatesOn && !ownerView && (
               <DealStateDocs

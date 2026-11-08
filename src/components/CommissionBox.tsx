@@ -58,7 +58,7 @@ const STATUS: Record<View['status'], { label: string; cls: string }> = {
 const field = 'px-2 py-1.5 rounded-lg bg-slate-900/60 border border-white/10 text-sm text-slate-100 w-full';
 const btn = 'px-3 py-1.5 rounded-lg text-sm font-semibold transition disabled:opacity-50';
 
-export default function CommissionBox({ transactionId, embedded = false }: { transactionId: string; embedded?: boolean }) {
+export default function CommissionBox({ transactionId, embedded = false, banner = false }: { transactionId: string; embedded?: boolean; banner?: boolean }) {
   const router = useRouter();
   const [confirmStripe, setConfirmStripe] = useState(false);
   const [data, setData] = useState<Data | null>(null);
@@ -94,7 +94,7 @@ export default function CommissionBox({ transactionId, embedded = false }: { tra
   }, [load]);
 
   const startForm = (c: View | null, d: Data) => {
-    setGross(c && c.gross !== null ? String(c.gross) : '');
+    setGross(c && c.gross !== null ? String(c.gross) : c?.status === 'estimate' && c.estimate?.gross ? String(Math.round(c.estimate.gross * 100) / 100) : '');
     const rate = c?.rate ?? d.terms?.commission ?? null;
     setRateType(rate?.type ?? 'percent');
     setRateValue(rate ? String(rate.value) : '');
@@ -130,6 +130,13 @@ export default function CommissionBox({ transactionId, embedded = false }: { tra
   const action = (a: string, extra: Record<string, unknown> = {}, after?: () => void) => call(`/api/commissions/${c!.id}`, 'PATCH', { action: a, ...extra }, after);
   const isEstimate = c?.status === 'estimate';
   const you = !isOwner;
+  // One click: the estimate becomes the confirmed amount (same terms), and goes to the agent to review.
+  const estimateGross = c?.estimate?.gross && c.estimate.gross > 0 ? Math.round(c.estimate.gross * 100) / 100 : null;
+  const confirmEstimate = () => {
+    if (!c || estimateGross === null) return;
+    void call('/api/commissions', 'POST', { transactionId, gross: estimateGross, splitType: c.splitType, splitValue: c.splitValue, deductions: c.deductions.map((f) => ({ label: f.label, amount: f.amount })) });
+  };
+  const needsConfirm = isOwner && isEstimate && Boolean(data.dealClosed) && Boolean(data.canPropose);
 
   // What the commission would be at an amount typed in. A preview only: it is not saved and it is not a statement.
   const preview = (() => {
@@ -145,7 +152,7 @@ export default function CommissionBox({ transactionId, embedded = false }: { tra
   })();
 
   return (
-    <section className={embedded ? 'border-t border-white/10 pt-4' : 'bg-white/5 border border-white/10 rounded-2xl p-5'}>
+    <section className={embedded ? 'border-t border-white/10 pt-4' : `${banner && needsConfirm ? 'bg-amber-500/5 border border-amber-500/40' : 'bg-white/5 border border-white/10'} rounded-2xl p-5${banner ? ' mb-6' : ''}`}>
       <div className="flex items-start justify-between gap-2 mb-3">
         <div>
           <h2 className={embedded ? 'text-base font-bold text-slate-100' : 'text-lg font-bold text-slate-100'}>Commission</h2>
@@ -161,14 +168,16 @@ export default function CommissionBox({ transactionId, embedded = false }: { tra
       {c && isEstimate && !editing && (
         <>
           <div className="rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 p-3">
-            <p className="text-sm text-amber-200 font-medium">Estimate. No amount is confirmed yet.</p>
+            <p className="text-sm text-amber-200 font-medium">{needsConfirm ? (estimateGross !== null ? `Ready to confirm: about ${money(estimateGross)} gross commission` : 'Enter the gross commission to confirm') : 'Estimate. No amount is confirmed yet.'}</p>
             <p className="text-xs text-slate-300 mt-1">
               {!data.dealClosed
                 ? isOwner
                   ? 'The agent sent this commission invoice before closing. The figures below are estimated from the terms you set. When the deal closes, confirm the commission your brokerage actually received, from the closing documents.'
                   : 'You sent this commission invoice before closing. Your brokerage confirms the actual commission from the closing documents when the deal closes. Until then, no amount counts as real.'
                 : isOwner
-                ? 'This deal has closed. Confirm the gross commission your brokerage actually received, from the closing documents, so the agent can review it.'
+                ? estimateGross !== null
+                  ? 'This deal has closed. The amount below is filled in from the sale price and the agent’s commission rate. If it matches what your brokerage received, confirm it in one click and the agent reviews it. If the closing documents say otherwise, change the amount first.'
+                  : 'This deal has closed. Enter the gross commission your brokerage received, from the closing documents, and send it to the agent to review.'
                 : 'This deal has closed. Your brokerage will confirm the commission it received from the closing documents, and then you can review it here. Until then, no amount counts as real.'}
             </p>
           </div>
@@ -205,7 +214,8 @@ export default function CommissionBox({ transactionId, embedded = false }: { tra
 
           {isOwner && (
             <div className="flex gap-2 flex-wrap mt-3">
-              {data.canPropose && <button type="button" onClick={() => startForm(c, data)} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Confirm actual commission</button>}
+              {data.canPropose && needsConfirm && estimateGross !== null && <button type="button" disabled={busy} onClick={confirmEstimate} className={`${btn} bg-blue-500 hover:bg-blue-400 text-white`}>Confirm {money(estimateGross)} and send to agent</button>}
+              {data.canPropose && <button type="button" onClick={() => startForm(c, data)} className={`${btn} ${needsConfirm && estimateGross !== null ? 'border border-slate-600 text-slate-200 hover:border-slate-500' : 'bg-blue-500 hover:bg-blue-400 text-white'}`}>{needsConfirm && estimateGross !== null ? 'Change the amount' : 'Confirm actual commission'}</button>}
               {data.canPropose && <button type="button" onClick={() => { startForm(c, data); setGross(''); }} className={`${btn} border border-slate-600 text-slate-200 hover:border-slate-500`}>Edit terms for this deal</button>}
               <button type="button" disabled={busy} onClick={() => window.confirm('Void this commission statement? The agent will be told.') && action('void')} className={`${btn} text-slate-400 hover:text-red-300`}>Void</button>
             </div>
