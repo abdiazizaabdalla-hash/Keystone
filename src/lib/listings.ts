@@ -3,23 +3,34 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
+import { getAgentListingRows } from '@/lib/agentListings';
+import { hasAgentRole } from '@/lib/privileged';
 
 // Shared pieces of the Listings feature (see add-listings.sql).
 
 export * from './listingsShared';
 import { DEFAULT_LISTING_STEPS, DEFAULT_TEMPLATE_NAME, type TemplateStep } from './listingsShared';
 
-/** A TC (or their team) is signed in and may see this listing. Agents never reach these routes. */
+/**
+ * A TC (or their team) is signed in and may see this listing. A workspace agent may also open a listing their coordinator
+ * shared with them (the same way shared deals open inline); `shared` is true then, and the routes that move or delete a
+ * listing refuse it. Free agents never reach these routes.
+ */
 export async function requireListingAccess(request: NextRequest, listingId: string) {
   const { user, isAdmin } = await getUserFromRequest(request);
   if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
   const { data: listing } = await supabaseServer.from('listings').select('*').eq('id', listingId).maybeSingle();
   if (!listing) throw new AuthError('Listing not found', 404);
+  let shared = false;
   if (!isAdmin) {
     const visible = await getVisibleTcUserIds(user.id);
-    if (!visible.includes(listing.tc_user_id as string)) throw new AuthError('You do not have permission to view this listing', 403);
+    if (!visible.includes(listing.tc_user_id as string)) {
+      const sharedWithMe = hasAgentRole(user) ? (await getAgentListingRows(user.email)).some((l) => l.id === listingId) : false;
+      if (!sharedWithMe) throw new AuthError('You do not have permission to view this listing', 403);
+      shared = true;
+    }
   }
-  return { user, isAdmin, listing };
+  return { user, isAdmin, listing, shared };
 }
 
 /** The checklist a new listing starts with: this TC's saved template of that name, else (for "Standard") the starter set. */

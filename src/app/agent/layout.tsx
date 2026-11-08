@@ -56,7 +56,11 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     let cancelled = false;
     fetchHasWorkspace().then((has) => {
-      if (!cancelled) setHasWorkspace(has);
+      if (cancelled) return;
+      setHasWorkspace(has);
+      // An agent with a workspace works on listings inside their own workspace, not in this read-only view.
+      const m = window.location.pathname.match(/^\/agent\/listings(?:\/([^/]+))?/);
+      if (has && m) router.replace(m[1] ? `/dashboard/listings/${m[1]}` : '/dashboard/listings');
     });
     return () => {
       cancelled = true;

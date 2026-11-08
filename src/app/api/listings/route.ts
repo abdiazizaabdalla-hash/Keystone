@@ -8,6 +8,8 @@ import { logAudit } from '@/lib/audit';
 import { queueBrokerageNewFile } from '@/lib/notifications';
 import { autoAddContact } from '@/lib/contactsAuto';
 import { queueListingCalendarSync } from '@/lib/calendarSync';
+import { getAgentListingRows } from '@/lib/agentListings';
+import { hasAgentRole } from '@/lib/privileged';
 import { sendListingPortalInvite } from '@/lib/agentInvite';
 import { findOpenListingDuplicate } from '@/lib/duplicates';
 import { logListingActivity, cleanMoney, cleanTemplateName, cleanText, dueFromOffset, isIsoDate, loadTemplateSteps } from '@/lib/listings';
@@ -27,8 +29,20 @@ export async function GET(request: NextRequest) {
     const visible = await getVisibleTcUserIds(user.id);
     let q = supabaseServer.from('listings').select('*').order('created_at', { ascending: false }).limit(500);
     if (!isAdmin) q = q.in('tc_user_id', visible);
-    const { data: listings, error } = await q;
+    const { data: own, error } = await q;
     if (error) throw error;
+    // An agent with a workspace also sees the listings their coordinator shared with them, in the same list.
+    let listings = own || [];
+    const sharedIds = new Set<string>();
+    if (!isAdmin && hasAgentRole(user)) {
+      const have = new Set(listings.map((l) => l.id as string));
+      for (const l of await getAgentListingRows(user.email)) {
+        if (!have.has(l.id as string)) {
+          listings = [...listings, l];
+          sharedIds.add(l.id as string);
+        }
+      }
+    }
     const ids = (listings || []).map((l) => l.id as string);
     const agentIds = [...new Set((listings || []).map((l) => l.agent_id as string | null).filter(Boolean) as string[])];
 
@@ -46,6 +60,7 @@ export async function GET(request: NextRequest) {
       const dueDates = open.map((t) => t.due_date as string | null).filter(Boolean) as string[];
       return {
         ...l,
+        shared: sharedIds.has(l.id as string),
         agent_name: l.agent_id ? agentName.get(l.agent_id as string) || null : null,
         tasks_total: mine.length,
         tasks_done: mine.length - open.length,

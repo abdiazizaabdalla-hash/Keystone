@@ -75,8 +75,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user, isAdmin, listing } = await requireListingAccess(request, id);
+    const { user, isAdmin, listing, shared } = await requireListingAccess(request, id);
     await assertTrialActive(user);
+    // A listing shared with an agent is edited like any other, except who owns it and who the agent is.
+    if (shared && ('tcUserId' in (await request.clone().json().catch(() => ({}))) || 'agentId' in (await request.clone().json().catch(() => ({}))))) {
+      return NextResponse.json({ error: 'Your coordinator manages who this listing belongs to.' }, { status: 403 });
+    }
     const body = await request.json().catch(() => ({}));
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
