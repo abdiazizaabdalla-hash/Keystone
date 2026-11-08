@@ -8,11 +8,9 @@ import { formatDisplayDate } from '@/lib/dueDates';
 import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 import CriticalDatesCard from '@/components/CriticalDatesCard';
 import ListingsOverviewCard from '@/components/ListingsOverviewCard';
-import TeamBoardCard from '@/components/TeamBoardCard';
 import BrokerageHome from '@/components/BrokerageHome';
 import AgentBrokerageStrip from '@/components/AgentBrokerageStrip';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
-import { isFeatureOnClient } from '@/lib/features';
 import TcInvitationBanner from '@/components/TcInvitationBanner';
 import ClosedDealAlerts from '@/components/ClosedDealAlerts';
 import AttentionPanel, { type AttentionSummary } from '@/components/AttentionPanel';
@@ -138,9 +136,6 @@ export default function Dashboard() {
   // Wording only: an agent running their own deals sees agent-focused copy. See lib/accountType.ts.
   const [persona, setPersona] = useState<Persona>({ accountType: 'tc', coordinationMode: null });
   // The Team board card (Team/Brokerage plans, behind the brokerage flag). It tells us whether this person has a team, so the right column only exists then.
-  const boardOn = isFeatureOnClient('brokerage');
-  const [teamBoard, setTeamBoard] = useState(false);
-  const [boardCollapsed, setBoardCollapsed] = useState(true);
   const brokerageOwner = useBrokerageOwner();
   useEffect(() => { setPersona(readPersona()); }, []);
   const [search, setSearch] = useState('');
@@ -412,8 +407,8 @@ export default function Dashboard() {
   }
   if (transactions.length === 0 && brokerageOwner) {
     return (
-      <div className={`p-4 md:p-10 ${teamBoard ? 'max-w-none' : 'mx-auto max-w-6xl'}`}>
-        <div className={teamBoard ? `lg:grid ${boardCollapsed ? 'lg:grid-cols-[minmax(0,1fr)_auto]' : 'lg:grid-cols-[minmax(0,1fr)_21rem]'} lg:gap-6 lg:items-start` : ''}>
+      <div className={"p-4 md:p-10 mx-auto max-w-6xl"}>
+        <div>
           <div className="min-w-0">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
               <div>
@@ -427,9 +422,6 @@ export default function Dashboard() {
             </div>
             <BrokerageHome />
           </div>
-          <aside className={teamBoard ? 'mt-6 lg:mt-0 lg:sticky lg:top-6' : 'hidden'}>
-            <TeamBoardCard onAvailable={setTeamBoard} onCollapsedChange={setBoardCollapsed} />
-          </aside>
         </div>
       </div>
     );
@@ -444,8 +436,8 @@ export default function Dashboard() {
           ? 'Upload an executed contract. Relay reads it, builds the deal, the checklist and the deadlines, and reminds you before each one.'
           : 'Upload an executed contract and Relay builds the deal, the checklist and the deadlines for you.';
     return (
-      <div className={`p-4 md:p-8 ${teamBoard ? 'max-w-none' : 'mx-auto'}`}>
-        <div className={teamBoard ? `lg:grid ${boardCollapsed ? 'lg:grid-cols-[minmax(0,1fr)_auto]' : 'lg:grid-cols-[minmax(0,1fr)_21rem]'} lg:gap-6 lg:items-start` : ''}>
+      <div className={"p-4 md:p-8 mx-auto"}>
+        <div>
         <div className="min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
@@ -470,18 +462,15 @@ export default function Dashboard() {
           </Link>
         </div>
         </div>
-        <aside className={teamBoard ? 'mt-6 lg:mt-0 lg:sticky lg:top-6' : 'hidden'}>
-          <TeamBoardCard onAvailable={setTeamBoard} onCollapsedChange={setBoardCollapsed} />
-        </aside>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`p-4 md:p-10 ${teamBoard ? 'max-w-none' : 'mx-auto max-w-6xl'}`}>
+    <div className={"p-4 md:p-10 mx-auto max-w-6xl"}>
       {/* With a team, a small Team board card sits in a narrow column on the right; otherwise the page is exactly as before. */}
-      <div className={teamBoard ? `lg:grid ${boardCollapsed ? 'lg:grid-cols-[minmax(0,1fr)_auto]' : 'lg:grid-cols-[minmax(0,1fr)_21rem]'} lg:gap-6 lg:items-start` : ''}>
+      <div>
       <div className="min-w-0">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -781,11 +770,6 @@ export default function Dashboard() {
         </div>
       )}
       </div>
-      {boardOn && (
-        <aside className={teamBoard ? 'mt-6 lg:mt-0 lg:sticky lg:top-6' : 'hidden'}>
-          <TeamBoardCard onAvailable={setTeamBoard} onCollapsedChange={setBoardCollapsed} />
-        </aside>
-      )}
       </div>
     </div>
   );
