@@ -12,6 +12,7 @@ import { LISTING_STATUS_LABEL, daysOnMarket, type ListingStatus } from '@/lib/li
 import { useListingsImport } from '@/components/useListingsImport';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 import { useAgentAccess } from '@/lib/useAgentAccess';
+import AgentListingCard, { type AgentListingSummary } from '@/components/AgentListingCard';
 import { readPersona } from '@/lib/persona';
 import AgentListingsList from '@/components/AgentListingsList';
 
@@ -68,6 +69,8 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
   const [agents, setAgents] = useState<AgentOption[]>([]);
   // An agent listing their own property is the listing agent: nothing to choose.
   const [isAgentAcct, setIsAgentAcct] = useState(false);
+  // Listings a coordinator runs for this agent and shared with them (empty, and ignored, for coordinators).
+  const [sharedWithMe, setSharedWithMe] = useState<AgentListingSummary[]>([]);
   useEffect(() => {
     const t = setTimeout(() => setIsAgentAcct(readPersona().workspace === true), 0);
     return () => clearTimeout(t);
@@ -122,6 +125,15 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
         authFetch('/api/listings/extract-agreement').catch(() => null),
         authFetch('/api/listing-template').catch(() => null),
       ]);
+      try {
+        const sRes = await authFetch('/api/agent/listings');
+        if (sRes.ok) {
+          const sj = await sRes.json();
+          setSharedWithMe(Array.isArray(sj) ? sj : []);
+        }
+      } catch {
+        /* not an agent login, or not available: nothing to show */
+      }
       if (tRes && tRes.ok) {
         const t = await tRes.json().catch(() => ({}));
         if (Array.isArray(t.names) && t.names.length) setTemplateNames(t.names);
@@ -337,7 +349,19 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
         ))}
       </div>
 
-      {visible.length === 0 ? (
+      {sharedWithMe.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-slate-100">Shared with you by your coordinator</h2>
+          <p className="text-sm text-slate-400 mb-3">Listings your coordinator is running for you. Open one to see offers, showings and messages.</p>
+          <div className="grid gap-3">
+            {sharedWithMe.map((l) => (
+              <AgentListingCard key={l.id} listing={l} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {visible.length === 0 && sharedWithMe.length > 0 && listings.length === 0 ? null : visible.length === 0 ? (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <p className="text-slate-300 mb-1">{listings.length === 0 ? 'No listings yet.' : 'No open listings.'}</p>
           <p className="text-sm text-slate-500">Start one when a listing agreement is signed. Relay adds the prep checklist and counts the days to your list date. Already have a list? Use Import CSV (columns like Address, Seller, List price, List date, MLS #).</p>
