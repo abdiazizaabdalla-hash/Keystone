@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { getPlan } from '@/lib/plans';
+import AdminActivity from '@/components/AdminActivity';
 import AdminBrokeragePilots from '@/components/AdminBrokeragePilots';
 import { isFeatureOnClient } from '@/lib/features';
 
@@ -31,6 +32,8 @@ interface TCUser {
   plan?: string;
   created_at: string;
   last_sign_in_at?: string | null;
+  last_active_at?: string | null;
+  last_active_what?: string | null;
   suspended?: boolean;
   trial?: { applies: boolean; expired: boolean; trialEndsAt: string | null } | null;
   subscription_status?: string | null;
@@ -66,6 +69,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<TCUser[]>([]);
   const [unlinkedAgents, setUnlinkedAgents] = useState<AgentAccount[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState<'users' | 'activity'>('users');
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -324,6 +328,18 @@ export default function AdminPage() {
         <p className="text-slate-400">Manage all TC users and accounts</p>
       </div>
 
+      <div className="flex gap-2 mb-6 border-b border-slate-700">
+        {(['users', 'activity'] as const).map((t) => (
+          <button key={t} type="button" onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 transition ${tab === t ? 'border-blue-400 text-blue-300' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+            {t === 'users' ? 'Users' : 'Activity'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'activity' ? (
+        <AdminActivity />
+      ) : (
+        <>
       {isFeatureOnClient('brokerage') && <AdminBrokeragePilots />}
 
       {/* Stats */}
@@ -478,7 +494,8 @@ export default function AdminPage() {
                     {new Date(user.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-slate-400 text-sm">
-                    {user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleDateString() : 'Never'}
+                    {user.last_active_at || user.last_sign_in_at ? new Date((user.last_active_at || user.last_sign_in_at) as string).toLocaleDateString() : 'Never'}
+                    {user.last_active_what && <span className="block text-xs text-slate-500">{user.last_active_what}</span>}
                   </td>
                   <td className="px-6 py-4 text-slate-300">{user.agents_count || 0}</td>
                   <td className="px-6 py-4 text-slate-300">{user.active_transactions || 0}</td>
@@ -605,6 +622,8 @@ export default function AdminPage() {
             ))}
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

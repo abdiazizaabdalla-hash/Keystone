@@ -6,6 +6,7 @@ import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getTrialStatus } from '@/lib/trial';
 import { getUserPlan, isPlatformAdmin, hasAgentRole } from '@/lib/privileged';
 import { hasAgentWorkspace } from '@/lib/entitlements';
+import { loadActivity } from '@/lib/adminActivity';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -193,6 +194,11 @@ export async function GET(request: NextRequest) {
     );
     const trialByUser = new Map(trialEntries);
 
+    // "Last active" is the latest real action (a deal, a step, an upload, a message...), not the last fresh sign-in: people stay logged in for weeks.
+    const activity = await loadActivity(new Map(tcAuthUsers.map((u) => [u.id, u.last_sign_in_at || null]))).catch((err) => {
+      console.error('admin users: activity failed:', err);
+      return new Map<string, { lastActiveAt: string | null; lastActiveWhat: string | null }>();
+    });
     const users = tcAuthUsers.map((u) => {
       const stats = statsByTcUser.get(u.id);
       const plan = (getUserPlan(u) as string | undefined) || DEFAULT_PLAN;
@@ -211,6 +217,8 @@ export async function GET(request: NextRequest) {
         plan,
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at || null,
+        last_active_at: activity.get(u.id)?.lastActiveAt || u.last_sign_in_at || null,
+        last_active_what: activity.get(u.id)?.lastActiveWhat || null,
         suspended,
         trial: trial
           ? { applies: trial.applies, expired: trial.expired, trialEndsAt: trial.trialEndsAt }
