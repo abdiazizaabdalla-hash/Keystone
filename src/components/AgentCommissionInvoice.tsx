@@ -18,7 +18,7 @@ const money = (n: number | null) => `$${(n || 0).toLocaleString('en-US', { minim
 interface View { id: string; statementNumber: string; status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void'; submitted?: boolean; gross: number | null; agentNet: number | null; brokerageNet: number | null; paidOn: string | null; splitType: SplitType; splitValue: number; estimate?: { gross: number | null; agentNet: number | null } | null }
 interface Data { role: 'agent' | 'owner' | null; awaitingTerms?: boolean; canInvoice?: boolean; brokerage?: { name: string; email: string | null }; dealClosed?: boolean; commission: View | null }
 
-export default function AgentCommissionInvoice({ transactionId, hasCoordinator }: { transactionId: string; purchasePrice?: number | null; hasCoordinator: boolean }) {
+export default function AgentCommissionInvoice({ transactionId, hasCoordinator, onOpenDetails, onNeedsAction }: { transactionId: string; purchasePrice?: number | null; hasCoordinator: boolean; onOpenDetails?: () => void; onNeedsAction?: () => void }) {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState('');
   // The confirm screen opens right here on the deal; sending never leaves the page.
@@ -38,6 +38,12 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator }
     return () => clearTimeout(t);
   }, [load]);
 
+  // When the brokerage has confirmed an amount, the agent has something to answer: open the details for them.
+  const needsReply = data?.commission?.status === 'proposed';
+  useEffect(() => {
+    if (needsReply) onNeedsAction?.();
+  }, [needsReply, onNeedsAction]);
+
   const other = (
     <p className="text-xs text-slate-500 mt-4">
       Billing someone else for this deal, like a coordinator or a client? That is a separate invoice:{' '}
@@ -54,7 +60,7 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator }
       estimate ? { text: data.dealClosed ? 'Estimate. This deal closed, and your brokerage will confirm the actual commission from the closing documents. No amount counts until then.' : 'Sent. Your brokerage confirms the actual commission from the closing documents when the deal closes. No amount counts until then.', cls: 'text-amber-300' }
       : c.status === 'paid' ? { text: `Your brokerage paid you${c.paidOn ? ` on ${c.paidOn}` : ''}.`, cls: 'text-emerald-300' }
       : c.status === 'accepted' ? { text: 'You agreed. Your brokerage pays you, then records it as paid here.', cls: 'text-emerald-300' }
-      : c.status === 'proposed' ? { text: 'Your brokerage confirmed the commission. Review it in the Commission box and agree or ask for a change.', cls: 'text-amber-300' }
+      : c.status === 'proposed' ? { text: 'Your brokerage confirmed the commission. Review the details below and agree or ask for a change.', cls: 'text-amber-300' }
       : c.submitted ? { text: 'Sent. Waiting for your brokerage to approve it.', cls: 'text-blue-300' }
       : { text: 'You asked for a change. Waiting for your brokerage.', cls: 'text-orange-300' };
     return (
@@ -67,6 +73,7 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator }
             {!estimate && <p className="text-xs text-slate-400 mt-0.5">Your brokerage received {money(c.gross)} in commission on this deal. The rest is its share and any fees.</p>}
             <p className={`text-sm mt-0.5 ${state.cls}`}>{state.text}</p>
           </div>
+          {c.status === 'proposed' && onOpenDetails && <button type="button" onClick={onOpenDetails} className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">Review and respond</button>}
           {(c.status === 'accepted' || c.status === 'paid') && <button type="button" onClick={() => openStatement(c.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="shrink-0 px-3 py-1.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg">View statement</button>}
         </div>
         {error && <p className="text-xs text-red-300 mt-2">{error}</p>}

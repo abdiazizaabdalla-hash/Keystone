@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import AgentCommissionInvoice from '@/components/AgentCommissionInvoice';
 import CommissionBox from '@/components/CommissionBox';
 
@@ -17,6 +17,13 @@ export default function CommissionAndInvoices({ transactionId, purchasePrice, ha
     }, 0);
     return () => clearTimeout(t);
   }, []);
+  const detailsRef = useRef<HTMLDivElement>(null);
+  // The brokerage is waiting on an answer: open the details (without remembering it as the preference) and bring them into view.
+  const showDetails = useCallback(() => {
+    setOpen(true);
+    window.setTimeout(() => detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  }, []);
+  const openQuietly = useCallback(() => setOpen(true), []);
   const toggle = () => {
     setOpen((v) => {
       try { localStorage.setItem(KEY, v ? '0' : '1'); } catch { /* storage unavailable */ }
@@ -33,8 +40,8 @@ export default function CommissionAndInvoices({ transactionId, purchasePrice, ha
         </svg>
       </button>
       <div className="px-5 pb-5">
-        <AgentCommissionInvoice transactionId={transactionId} purchasePrice={purchasePrice} hasCoordinator={hasCoordinator} />
-        <div className={open ? 'mt-4' : 'hidden'}>
+        <AgentCommissionInvoice transactionId={transactionId} purchasePrice={purchasePrice} hasCoordinator={hasCoordinator} onOpenDetails={showDetails} onNeedsAction={openQuietly} />
+        <div ref={detailsRef} className={open ? 'mt-4' : 'hidden'}>
           <CommissionBox transactionId={transactionId} embedded />
         </div>
       </div>
