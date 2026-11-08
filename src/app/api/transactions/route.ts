@@ -16,6 +16,7 @@ import { computeDueDates, NO_DUE_DATE, DueDateSpec } from '@/lib/dueDates';
 import crypto from 'crypto';
 import { getUserPlan } from '@/lib/privileged';
 import { isFeatureOn } from '@/lib/features';
+import { getEntitlements } from '@/lib/entitlements';
 import { queueCalendarSync, removeTransactionCalendarEvents } from '@/lib/calendarSync';
 import { logAudit } from '@/lib/audit';
 import { queueBrokerageNewFile } from '@/lib/notifications';
@@ -48,6 +49,7 @@ export async function GET(request: NextRequest) {
     // participant sees them inline with their own deals; a free
     // collaborator uses the limited /agent portal instead, so gets none.
     let sharedIds: string[] = [];
+    let limitedParticipant = false;
 
     if (!isAdmin) {
       // transactions.tc_user_id is the explicit, reassignable "who's
@@ -57,7 +59,11 @@ export async function GET(request: NextRequest) {
       // can be reassigned to a TC other than whoever owns its agent
       // contact.
       const visibleIds = await getVisibleTcUserIds(user.id);
-      if (isFeatureOn('agent_workspace') && (await participantLevel(user)) === 'full') {
+      // A coordinator whose trial ended unpaid still sees the deals they were added to (read-mostly, flagged limited);
+      // a free agent login uses the /agent portal instead.
+      const level = isFeatureOn('agent_workspace') ? await participantLevel(user) : null;
+      limitedParticipant = level === 'limited' && !getEntitlements(user).isCollaborator;
+      if (level === 'full' || limitedParticipant) {
         const { data: links } = await supabaseServer
           .from('transaction_agents')
           .select('transaction_id')
@@ -106,7 +112,7 @@ export async function GET(request: NextRequest) {
     }
     const data = (rawData || []).map((t) => {
       const shared = !isAdmin && sharedSet.has(t.id as string) && t.tc_user_id !== user.id;
-      return { ...t, shared, ...(shared ? { shared_agent: sharedAgents.get(t.agent_id as string) ?? null, tc_agent: myProfiles.get(t.tc_user_id as string) ?? null } : {}) };
+      return { ...t, shared, ...(shared && limitedParticipant ? { limited: true } : {}), ...(shared ? { shared_agent: sharedAgents.get(t.agent_id as string) ?? null, tc_agent: myProfiles.get(t.tc_user_id as string) ?? null } : {}) };
     });
 
     if (!data || data.length === 0) {

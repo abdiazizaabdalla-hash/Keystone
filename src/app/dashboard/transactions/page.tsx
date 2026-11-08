@@ -32,6 +32,7 @@ interface Transaction {
   source?: string | null;
   /** True when someone else owns this deal and added you to it. */
   shared?: boolean;
+  limited?: boolean;
   shared_agent?: { name: string | null } | null;
 }
 
@@ -313,7 +314,7 @@ function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
                       <div className="min-w-0">
                         <p className={`font-semibold break-words ${closed ? 'text-slate-400' : 'text-slate-100'}`}>
                           {tx.property_address || 'No address'}
-                          {tx.shared && <span className="ml-2 align-middle text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border border-sky-400/40 bg-sky-500/10 text-sky-300">Shared</span>}
+                          {tx.shared && <span className="ml-2 align-middle text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border border-sky-400/40 bg-sky-500/10 text-sky-300">{tx.limited ? 'Shared · view only' : 'Shared'}</span>}
                         </p>
                         <p className="text-xs text-slate-500">
                           {[!isWorkspaceAgent && agentName && `Agent: ${agentName}`, tx.file_number && `File ${tx.file_number}`, price].filter(Boolean).join(' · ')}

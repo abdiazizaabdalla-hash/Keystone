@@ -75,14 +75,18 @@ const EMPTY: AttentionSummary = {
   byTc: [],
 };
 
-async function computeDealAttention(tcUserIds: string[]): Promise<AttentionSummary> {
-  if (tcUserIds.length === 0) return EMPTY;
+async function computeDealAttention(tcUserIds: string[], extraTransactionIds: string[] = []): Promise<AttentionSummary> {
+  if (tcUserIds.length === 0 && extraTransactionIds.length === 0) return EMPTY;
 
-  const { data: transactions, error: txError } = await supabaseServer
+  // Deals the person owns (or their team's), plus deals they were added to by someone else.
+  let dealQuery = supabaseServer
     .from('transactions')
     .select('id, file_number, property_address, closing_date, tc_user_id')
-    .neq('status', 'Closed')
-    .in('tc_user_id', tcUserIds);
+    .neq('status', 'Closed');
+  if (extraTransactionIds.length && tcUserIds.length) dealQuery = dealQuery.or(`tc_user_id.in.(${tcUserIds.join(',')}),id.in.(${extraTransactionIds.join(',')})`);
+  else if (extraTransactionIds.length) dealQuery = dealQuery.in('id', extraTransactionIds);
+  else dealQuery = dealQuery.in('tc_user_id', tcUserIds);
+  const { data: transactions, error: txError } = await dealQuery;
   if (txError) throw txError;
 
   if (!transactions || transactions.length === 0) {
@@ -248,8 +252,8 @@ async function computeListingAttention(tcUserIds: string[]) {
   return { overdue, dueToday, dueSoon };
 }
 
-export async function computeAttentionSummary(tcUserIds: string[]): Promise<AttentionSummary> {
-  const [deals, listings] = await Promise.all([computeDealAttention(tcUserIds), tcUserIds.length ? computeListingAttention(tcUserIds) : Promise.resolve(null)]);
+export async function computeAttentionSummary(tcUserIds: string[], extraTransactionIds: string[] = []): Promise<AttentionSummary> {
+  const [deals, listings] = await Promise.all([computeDealAttention(tcUserIds, extraTransactionIds), tcUserIds.length ? computeListingAttention(tcUserIds) : Promise.resolve(null)]);
   if (!listings) return deals;
   const overdue = [...deals.overdue, ...listings.overdue].sort((a, b) => b.daysOverdue - a.daysOverdue);
   const dueToday = [...deals.dueToday, ...listings.dueToday];

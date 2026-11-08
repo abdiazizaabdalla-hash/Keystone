@@ -55,6 +55,8 @@ interface Transaction {
   inbound_token?: string | null;
   /** Someone else owns this deal and added you to it. */
   shared?: boolean;
+  /** A shared deal seen by a coordinator whose trial ended: view and light updates only until they subscribe. */
+  limited?: boolean;
   shared_agent?: Agent | null;
   /** For a deal shared with you: your own record for that agent (your fees). */
   tc_agent?: Agent | null;
@@ -417,6 +419,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   const [clientFormSignal, setClientFormSignal] = useState(0);
   // The direct conversation with the other professional on the deal exists once someone else is on it.
   const hasThread = Boolean(transaction?.shared) || acceptedAgentUsers.length > 0;
+  // The page is read-only for a brokerage owner looking at an agent's deal, and for a coordinator whose trial ended on a deal shared with them.
+  const locked = ownerView || Boolean(transaction?.limited);
   // The coordinator an agent invited who has not accepted yet (an agent's invites on a deal are only ever to a coordinator).
   const pendingCoordinator = agentInvites.find((i) => i.status !== 'accepted') ?? null;
   // Which side your own message bubbles are on.
@@ -2909,6 +2913,11 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             </div>
             <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2 break-words">{transaction.file_number}</h1>
             <p className="text-slate-400 break-words">{transaction.property_address}</p>
+            {transaction.limited && (
+              <p className="text-sm text-amber-300 bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2 mt-2">
+                Your trial has ended, so this shared deal is view-only. You can still read it and message the agent; choose a plan in Settings to edit it again.
+              </p>
+            )}
             {ownerView && (
               <p className="text-sm text-slate-500 mt-1">
                 Agent: <span className="text-slate-300">{agentName}</span> · You are viewing this deal as the brokerage owner. You can add documents and handle the commission; everything else is read-only.
@@ -3000,7 +3009,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               <select
                 value={transaction.status}
                 onChange={(e) => handleStatusChange(e.target.value)}
-                disabled={isUpdatingStatus || ownerView}
+                disabled={isUpdatingStatus || locked}
                 className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50 cursor-pointer"
               >
                 {stagesForTaskNames(tasks.map((t) => t.name)).map((status) => (
@@ -3078,7 +3087,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                     handleDateFieldChange('acceptanceDate', e.target.value);
                   }
                 }}
-                disabled={savingDateField === 'acceptanceDate' || ownerView}
+                disabled={savingDateField === 'acceptanceDate' || locked}
                 className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
               />
             </div>
@@ -3092,7 +3101,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                     handleDateFieldChange('closingDate', e.target.value);
                   }
                 }}
-                disabled={savingDateField === 'closingDate' || ownerView}
+                disabled={savingDateField === 'closingDate' || locked}
                 className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
               />
             </div>
@@ -3102,7 +3111,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                 <select
                   value={transaction.property_state ?? stateFromAddress(transaction.property_address) ?? ''}
                   onChange={(e) => handleStateChange(e.target.value)}
-                  disabled={savingDateField === 'propertyState' || ownerView}
+                  disabled={savingDateField === 'propertyState' || locked}
                   className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
                 >
                   <option value="">Not set</option>
@@ -3121,7 +3130,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             transactionId={transaction.id}
             propertyAddress={transaction.property_address}
             closingDate={transaction.closing_date ?? null}
-            canEdit={!ownerView}
+            canEdit={!locked}
             manageCalendar={!ownerView}
             readOnlyDates={ownerView ? ownerKeyDates : undefined}
           />
@@ -3350,7 +3359,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                   <span className="font-semibold text-slate-300">{completedCount}</span> of{' '}
                   <span className="font-semibold text-slate-300">{tasks.length}</span> completed
                 </p>
-                <fieldset disabled={ownerView} className="space-y-2 min-w-0 border-0 p-0 m-0">
+                <fieldset disabled={locked} className="space-y-2 min-w-0 border-0 p-0 m-0">
                   {tasks.map((task) => {
                     const todayStr = new Date().toISOString().split('T')[0];
                     return (
@@ -3446,7 +3455,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
 
         </div>
 
-        <fieldset disabled={ownerView} className={tab === 'checklist' ? 'min-w-0 border-0 p-0 m-0' : 'hidden'}>
+        <fieldset disabled={locked} className={tab === 'checklist' ? 'min-w-0 border-0 p-0 m-0' : 'hidden'}>
         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-6">
           <div className="mb-5">
             <div className="flex items-start justify-between gap-3">

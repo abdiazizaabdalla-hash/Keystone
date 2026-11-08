@@ -4,6 +4,7 @@ import { getEntitlements } from './entitlements';
 import { getVisibleTcUserIds } from './team';
 import type { WithAppMetadata } from './appMetadata';
 import { assertTrialActive, TrialExpiredError } from './trial';
+import { isFeatureOn } from './features';
 
 // The one place that answers "may this person touch this deal?".
 //
@@ -55,6 +56,17 @@ export async function participantLevel(user: { id: string; created_at: string } 
     if (error instanceof TrialExpiredError) return 'limited';
     throw error;
   }
+}
+
+/**
+ * Deals this person was added to by someone else, for the screens that roll deals up (the attention panel, the calendar).
+ * Only a paid or in-trial participant gets them inline; a limited one uses the limited views instead.
+ */
+export async function sharedDealIdsFor(user: { id: string; created_at: string } & WithAppMetadata, opts: { includeLimited?: boolean } = {}): Promise<string[]> {
+  if (!isFeatureOn('agent_workspace')) return [];
+  if (!opts.includeLimited && (await participantLevel(user)) !== 'full') return [];
+  const { data } = await supabaseServer.from('transaction_agents').select('transaction_id').eq('agent_user_id', user.id).limit(1000);
+  return (data || []).map((r) => r.transaction_id as string);
 }
 
 async function hasParticipantLink(userId: string, transactionId: string): Promise<boolean> {
