@@ -140,22 +140,135 @@ export async function loadActivity(authLastSignIn: Map<string, string | null>): 
   return result;
 }
 
-/** One account in detail: recent actions, deals (no client names or prices), documents (file names only). */
-export async function loadActivityDetail(userId: string) {
-  const [audit, deals, agents] = await Promise.all([
-    supabaseServer.from('audit_log').select('action, created_at').eq('actor_id', userId).order('created_at', { ascending: false }).limit(25),
-    supabaseServer.from('transactions').select('id, file_number, property_address, status, acceptance_date, closing_date, created_at, updated_at').eq('tc_user_id', userId).order('created_at', { ascending: false }).limit(100),
-    supabaseServer.from('agents').select('name, brokerage, created_at').eq('tc_user_id', userId).order('created_at', { ascending: false }).limit(100),
+type Row = Record<string, unknown>;
+/** A query that may hit a table or column from an update not run yet: that section is just empty. */
+async function safe(run: () => PromiseLike<{ data: unknown; error: { code?: string } | null }>): Promise<Row[]> {
+  try {
+    const { data, error } = await run();
+    if (error) return [];
+    return (Array.isArray(data) ? data : data ? [data] : []) as Row[];
+  } catch { return []; }
+}
+const pick = (row: Row | undefined, keys: string[]) => Object.fromEntries(keys.filter((k) => row && row[k] !== undefined && row[k] !== null).map((k) => [k, row![k]]));
+const cents = (n: unknown) => (typeof n === 'number' ? Math.round(n) / 100 : null);
+
+/**
+ * Everything the admin can see about one account: sign-in and settings, billing, team, agents, deals, listings, documents (file names),
+ * invoices and commissions (amounts, no client names), usage counts, and the recent audit trail with IP addresses.
+ * Never message text, document contents, client names or contact details.
+ */
+export async function loadAccountProfile(userId: string) {
+  const { data: au } = await supabaseServer.auth.admin.getUserById(userId);
+  const u = au.user;
+  const meta = (u?.user_metadata || {}) as Row;
+  const app = (u?.app_metadata || {}) as Row;
+  const wf = Array.isArray(meta.due_date_workflow_steps) ? (meta.due_date_workflow_steps as { name?: string }[]).map((x) => x.name).filter(Boolean) : [];
+  const account = {
+    email: u?.email || null,
+    name: (meta.full_name as string) || null,
+    phone: u?.phone || (meta.phone as string) || null,
+    createdAt: u?.created_at || null,
+    emailConfirmedAt: u?.email_confirmed_at || null,
+    lastSignInAt: u?.last_sign_in_at || null,
+    providers: (u?.identities || []).map((i) => i.provider),
+    twoStep: (u?.factors || []).some((f) => f.status === 'verified'),
+    bannedUntil: (u as unknown as { banned_until?: string | null })?.banned_until || null,
+    plan: app.plan || null,
+    role: app.role || null,
+    isAdmin: app.is_admin === true,
+    agentWorkspace: app.agent_workspace === true,
+    trialEndsAt: app.trial_ends_at || null,
+    termsAcceptedAt: app.terms_accepted_at || null,
+    termsVersion: app.terms_version || null,
+    settings: {
+      'Default flat fee': meta.default_flat_fee, 'Default percent fee': meta.default_percent_fee, 'Invoice due (days)': meta.invoice_due_days,
+      'Payment preference': meta.payment_preference, 'Onboarding done': meta.onboarding_completed, 'First-run guide done': meta.first_run_guide_done,
+      'Due-date workflow': meta.due_date_workflow_enabled ? `On (${wf.length} steps: ${wf.join(', ')})` : meta.due_date_workflow_enabled === false ? 'Off' : undefined,
+      'States worked in': Array.isArray(meta.states) ? (meta.states as string[]).join(', ') : undefined,
+      'Hints seen': Array.isArray(meta.seen_hints) ? (meta.seen_hints as string[]).join(', ') : undefined,
+    },
+  };
+
+  const deals = await safe(() => supabaseServer.from('transactions').select('id, file_number, property_address, status, acceptance_date, closing_date, created_at, updated_at, agent_id').eq('tc_user_id', userId).order('created_at', { ascending: false }).limit(200));
+  const ids = deals.map((d) => d.id as string);
+  const inTx = (table: string, cols: string) => (ids.length ? safe(() => supabaseServer.from(table).select(cols).in('transaction_id', ids).limit(5000)) : Promise.resolve([] as Row[]));
+
+  const [agents, listings, stripe, membership, linksAsOwner, linksAsAgent, tasks, keyDates, docs, msgs, clientMsgs, emails, signing, shares, contactsRows, templates, feed, notifs, ai, audit, commissions, txAgents, invites] = await Promise.all([
+    safe(() => supabaseServer.from('agents').select('id, name, brokerage, email, phone, flat_fee, commission_percent, listing_fee, payment_method, source, created_at').eq('tc_user_id', userId).order('created_at', { ascending: false }).limit(200)),
+    safe(() => supabaseServer.from('listings').select('id, property_address, status, listed_on, expiration_date, created_at, updated_at, agent_id').eq('tc_user_id', userId).order('created_at', { ascending: false }).limit(200)),
+    safe(() => supabaseServer.from('stripe_customers').select('plan, subscription_status, current_period_end, stripe_customer_id, stripe_subscription_id, updated_at').eq('user_id', userId).limit(1)),
+    safe(() => supabaseServer.from('team_members').select('team_id, role, joined_at').eq('user_id', userId).limit(5)),
+    safe(() => supabaseServer.from('brokerage_links').select('agent_user_id, invited_email, status, invited_at, responded_at, ended_at').eq('owner_user_id', userId).limit(200)),
+    safe(() => supabaseServer.from('brokerage_links').select('owner_user_id, status, invited_at, responded_at, ended_at').eq('agent_user_id', userId).limit(20)),
+    inTx('tasks', 'transaction_id, completed'),
+    inTx('transaction_key_dates', 'transaction_id, label, due_date, completed'),
+    inTx('documents', 'transaction_id, file_name, category, file_size, created_at, uploaded_by'),
+    inTx('messages', 'transaction_id, sender_id, created_at'),
+    inTx('client_messages', 'transaction_id, sender_type, created_at'),
+    inTx('transaction_emails', 'transaction_id, received_at, created_at'),
+    inTx('signing_requests', 'transaction_id, status, created_at'),
+    inTx('external_access_links', 'transaction_id, scope, access_count, last_accessed_at, revoked_at, created_at'),
+    safe(() => supabaseServer.from('contacts').select('contact_type, source, created_at').eq('tc_user_id', userId).limit(5000)),
+    safe(() => supabaseServer.from('doc_templates').select('kind, archived, use_count').eq('owner_user_id', userId).limit(1000)),
+    safe(() => supabaseServer.from('calendar_feed_tokens').select('created_at').eq('user_id', userId).limit(1)),
+    safe(() => supabaseServer.from('notifications').select('read_at, created_at').eq('recipient_user_id', userId).limit(2000)),
+    safe(() => supabaseServer.from('ai_usage').select('feature, input_tokens, output_tokens, created_at').eq('user_id', userId).limit(5000)),
+    safe(() => supabaseServer.from('audit_log').select('action, created_at, ip, user_agent').eq('actor_id', userId).order('created_at', { ascending: false }).limit(60)),
+    safe(() => supabaseServer.from('deal_commissions').select('transaction_id, statement_number, status, gross_cents, agent_net_cents, brokerage_net_cents, accepted_at, paid_on, updated_at').eq('owner_user_id', userId).limit(500)),
+    inTx('transaction_agents', 'transaction_id, agent_user_id'),
+    inTx('agent_invites', 'transaction_id, status, created_at, accepted_at'),
   ]);
-  const ids = (deals.data || []).map((d) => d.id as string);
-  const docs = ids.length ? await supabaseServer.from('documents').select('transaction_id, file_name, category, file_size, created_at').in('transaction_id', ids).order('created_at', { ascending: false }).limit(200) : { data: [] };
-  const tasks = ids.length ? await supabaseServer.from('tasks').select('transaction_id, completed').in('transaction_id', ids).limit(5000) : { data: [] };
-  const progress = new Map<string, { done: number; total: number }>();
-  for (const t of tasks.data || []) { const p = progress.get(t.transaction_id as string) || { done: 0, total: 0 }; p.total += 1; if (t.completed) p.done += 1; progress.set(t.transaction_id as string, p); }
+
+  const agentIds = agents.map((a) => a.id as string);
+  const invoices = agentIds.length ? await safe(() => supabaseServer.from('invoices').select('agent_id, transaction_id, listing_id, kind, invoice_number, invoice_date, amount_owed, paid, paid_amount, paid_at, sent_at, refunded_amount, created_at').in('agent_id', agentIds).order('created_at', { ascending: false }).limit(500)) : [];
+  const teamRow = membership[0];
+  const team = teamRow ? (await safe(() => supabaseServer.from('teams').select('id, name, owner_id, created_at').eq('id', teamRow.team_id as string).limit(1)))[0] : undefined;
+  const teamMembers = team ? (await safe(() => supabaseServer.from('team_members').select('user_id, role').eq('team_id', team.id as string).limit(50))).length : 0;
+  const agentName = new Map(agents.map((a) => [a.id as string, (a.name as string) || '']));
+  const by = (rows: Row[]) => { const m = new Map<string, Row[]>(); for (const r of rows) { const k = r.transaction_id as string; (m.get(k) || m.set(k, []).get(k)!).push(r); } return m; };
+  const tasksBy = by(tasks), docsBy = by(docs), msgsBy = by(msgs), keyBy = by(keyDates);
+  const sum = (rows: Row[], k: string) => rows.reduce((n, r) => n + (typeof r[k] === 'number' ? (r[k] as number) : 0), 0);
+  const aiByFeature = new Map<string, { calls: number; tokens: number }>();
+  for (const r of ai) { const f = (r.feature as string) || 'other'; const x = aiByFeature.get(f) || { calls: 0, tokens: 0 }; x.calls += 1; x.tokens += ((r.input_tokens as number) || 0) + ((r.output_tokens as number) || 0); aiByFeature.set(f, x); }
+  const count = (rows: Row[], key: string) => { const m: Record<string, number> = {}; for (const r of rows) { const k = String(r[key] ?? 'unknown'); m[k] = (m[k] || 0) + 1; } return m; };
+
   return {
-    recentActions: audit.data || [],
-    deals: (deals.data || []).map((d) => ({ ...d, steps: progress.get(d.id as string) || { done: 0, total: 0 } })),
-    documents: docs.data || [],
-    agents: agents.data || [],
+    account,
+    billing: { ...pick(stripe[0], ['plan', 'subscription_status', 'current_period_end', 'updated_at']), hasStripeCustomer: !!stripe[0]?.stripe_customer_id, hasSubscription: !!stripe[0]?.stripe_subscription_id },
+    team: team ? { name: team.name, role: teamRow.role, joinedAt: teamRow.joined_at, members: teamMembers, isOwner: team.owner_id === userId } : null,
+    brokerage: { asOwner: count(linksAsOwner, 'status'), asAgent: linksAsAgent.map((l) => pick(l, ['status', 'invited_at', 'responded_at', 'ended_at'])) },
+    agents: agents.map((a) => ({ ...pick(a, ['name', 'brokerage', 'email', 'phone', 'flat_fee', 'commission_percent', 'listing_fee', 'payment_method', 'source', 'created_at']) })),
+    deals: deals.map((d) => {
+      const t = tasksBy.get(d.id as string) || [];
+      const dk = keyBy.get(d.id as string) || [];
+      return {
+        ...pick(d, ['file_number', 'property_address', 'status', 'acceptance_date', 'closing_date', 'created_at', 'updated_at']),
+        agent: agentName.get(d.agent_id as string) || null,
+        steps: { done: t.filter((x) => x.completed).length, total: t.length },
+        keyDates: { done: dk.filter((x) => x.completed).length, total: dk.length },
+        documents: (docsBy.get(d.id as string) || []).length,
+        messages: (msgsBy.get(d.id as string) || []).length,
+      };
+    }),
+    listings: listings.map((l) => ({ ...pick(l, ['property_address', 'status', 'listed_on', 'expiration_date', 'created_at', 'updated_at']), agent: agentName.get(l.agent_id as string) || null })),
+    documents: docs.map((d) => pick(d, ['file_name', 'category', 'file_size', 'created_at'])).slice(0, 200),
+    invoices: {
+      count: invoices.length, sent: invoices.filter((i) => i.sent_at).length, paid: invoices.filter((i) => i.paid).length,
+      owed: sum(invoices, 'amount_owed'), collected: sum(invoices, 'paid_amount'), refunded: sum(invoices, 'refunded_amount'),
+      recent: invoices.slice(0, 15).map((i) => ({ ...pick(i, ['invoice_number', 'kind', 'invoice_date', 'amount_owed', 'paid', 'sent_at']), agent: agentName.get(i.agent_id as string) || null })),
+    },
+    commissions: { count: commissions.length, byStatus: count(commissions, 'status'), grossDollars: cents(sum(commissions, 'gross_cents')), brokerageNetDollars: cents(sum(commissions, 'brokerage_net_cents')) },
+    usage: {
+      contacts: contactsRows.length, contactsByType: count(contactsRows, 'contact_type'),
+      templates: templates.filter((t) => !t.archived).length, templateUses: sum(templates, 'use_count'),
+      emailsReceived: emails.length, lastEmailAt: emails.map((e) => (e.received_at || e.created_at) as string).sort().pop() || null,
+      messagesSent: msgs.filter((m) => m.sender_id === userId).length, messagesFromOthers: msgs.filter((m) => m.sender_id !== userId).length,
+      clientMessages: clientMsgs.length, signingByStatus: count(signing, 'status'),
+      shareLinks: shares.length, shareLinkViews: sum(shares, 'access_count'), lastShareViewAt: shares.map((x) => x.last_accessed_at as string).filter(Boolean).sort().pop() || null,
+      calendarFeed: feed.length > 0, notifications: notifs.length, unreadNotifications: notifs.filter((n) => !n.read_at).length,
+      agentLoginsOnDeals: new Set(txAgents.map((a) => a.agent_user_id as string)).size, agentInvites: count(invites, 'status'),
+      ai: [...aiByFeature.entries()].map(([feature, v]) => ({ feature, ...v })),
+    },
+    audit: audit.map((a) => ({ action: a.action, at: a.created_at, ip: a.ip, device: String(a.user_agent || '').replace(/^Mozilla\/5\.0 /, '').slice(0, 70) })),
   };
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest } from '@/lib/auth';
 import { hasAgentRole } from '@/lib/privileged';
-import { loadActivity, loadActivityDetail } from '@/lib/adminActivity';
+import { loadActivity, loadAccountProfile } from '@/lib/adminActivity';
 
 // GET /api/admin/activity            -> every coordinator with when they last used Relay and how much of each feature they use.
 // GET /api/admin/activity?userId=ID  -> one account in detail (recent actions, deals, document file names).
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     if (!isAdmin) return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
 
     const userId = request.nextUrl.searchParams.get('userId');
-    if (userId) return NextResponse.json(await loadActivityDetail(userId));
+    if (userId) return NextResponse.json(await loadAccountProfile(userId));
 
     const { data, error } = await supabaseServer.auth.admin.listUsers({ perPage: 1000 });
     if (error) throw error;

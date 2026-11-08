@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { getPlan } from '@/lib/plans';
+import AdminUserProfile from '@/components/AdminUserProfile';
 import AdminActivity from '@/components/AdminActivity';
 import AdminBrokeragePilots from '@/components/AdminBrokeragePilots';
 import { isFeatureOnClient } from '@/lib/features';
@@ -69,6 +70,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<TCUser[]>([]);
   const [unlinkedAgents, setUnlinkedAgents] = useState<AgentAccount[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [profileOpen, setProfileOpen] = useState<string | null>(null);
   const [tab, setTab] = useState<'users' | 'activity'>('users');
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -423,7 +425,7 @@ export default function AdminPage() {
                       ) : (
                         <span className="w-5 shrink-0" />
                       )}
-                      <span>{user.email}</span>
+                      <button type="button" onClick={() => setProfileOpen(profileOpen === user.id ? null : user.id)} className="text-left text-blue-300 hover:text-blue-200 underline-offset-2 hover:underline" title="Show everything about this account">{user.email}</button>
                     </div>
                     {user.suspended && (
                       <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/30 text-red-300">
@@ -596,6 +598,9 @@ export default function AdminPage() {
                       </div>
                     </td>
                   </tr>
+                )}
+                {profileOpen === user.id && (
+                  <tr className="bg-slate-900/40 border-b border-slate-600"><td colSpan={14} className="px-6 py-5"><AdminUserProfile userId={user.id} /></td></tr>
                 )}
                 </Fragment>
                 );
