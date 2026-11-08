@@ -14,7 +14,7 @@ interface Home {
   attentionDeals: Item[];
   attentionListings: Item[];
   closingSoon: Item[];
-  commissions: { changeRequested: number; needsConfirm: number; needsApproval: number; awaitingAgent: number; readyToPay: number; unpaidCount: number; unpaidAgentCents: number; closedWithoutStatement: number };
+  commissions: { changeRequested: number; needsConfirm: number; needsApproval: number; awaitingAgent: number; readyToPay: number; unpaidCount: number; unpaidAgentCents: number; paidCount: number; paidAgentCents: number; confirmedGrossCents: number; closedWithoutStatement: number };
   unreadMessages: number;
   agents: { id: string; name: string; openDeals: number; openListings: number; needsAttention: number; closedThisYear: number; baseCommission: { type: 'percent' | 'flat_agent' | 'flat_brokerage'; value: number } | null }[];
 }
@@ -189,12 +189,16 @@ export default function BrokerageHome({ compact = false }: { compact?: boolean }
           <Link href="/dashboard/invoices" className="text-sm text-blue-400 hover:text-blue-300">Open agent commissions</Link>
         </div>
         <div className="grid sm:grid-cols-5 gap-3 text-sm">
-          <div><p className="text-xs text-slate-400">Confirm actual commission</p><p className={`text-xl font-semibold ${c.needsConfirm + c.needsApproval ? 'text-amber-300' : 'text-slate-100'}`}>{c.needsConfirm + c.needsApproval}</p><p className="text-[11px] text-slate-500">closed deals still on an estimate</p></div>
+          <div><p className="text-xs text-slate-400">Confirm actual commission</p><p className={`text-xl font-semibold ${c.needsConfirm + c.needsApproval ? 'text-amber-300' : 'text-slate-100'}`}>{c.needsConfirm + c.needsApproval}</p><p className="text-[11px] text-slate-500">closed deals waiting on you</p></div>
           <div><p className="text-xs text-slate-400">Not paid yet</p><p className="text-xl font-semibold text-slate-100">{c.unpaidCount}</p><p className="text-[11px] text-slate-500">{money(c.unpaidAgentCents / 100)} owed to agents</p></div>
           <div><p className="text-xs text-slate-400">Waiting for the agent</p><p className="text-xl font-semibold text-slate-100">{c.awaitingAgent}</p></div>
           <div><p className="text-xs text-slate-400">Ready to mark paid</p><p className="text-xl font-semibold text-emerald-300">{c.readyToPay}</p></div>
           <div><p className="text-xs text-slate-400">Change requested</p><p className={`text-xl font-semibold ${c.changeRequested ? 'text-red-300' : 'text-slate-100'}`}>{c.changeRequested}</p></div>
         </div>
+        <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-white/10">
+          Paid so far: <span className="text-slate-200">{c.paidCount}</span> statement{c.paidCount === 1 ? '' : 's'}, <span className="text-emerald-300">{money(c.paidAgentCents / 100)}</span> to agents · Gross commission confirmed: <span className="text-slate-200">{money(c.confirmedGrossCents / 100)}</span>
+          {c.closedWithoutStatement > 0 && <> · <span className="text-amber-300">{c.closedWithoutStatement} closed deal{c.closedWithoutStatement === 1 ? '' : 's'} with no commission statement yet</span></>}
+        </p>
       </div>
 
       <div className={card}>

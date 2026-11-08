@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       agentLabels(ids),
       loadOversightDeals(ids, today),
       loadOversightListings(ids, today),
-      supabaseServer.from('deal_commissions').select('transaction_id, status, change_note, agent_net_cents').eq('owner_user_id', user.id).limit(2000),
+      supabaseServer.from('deal_commissions').select('transaction_id, status, change_note, agent_net_cents, gross_cents').eq('owner_user_id', user.id).limit(2000),
       supabaseServer.from('brokerage_messages').select('id', { count: 'exact', head: true }).eq('owner_user_id', user.id).neq('sender_id', user.id).is('read_at', null),
     ]);
 
@@ -42,6 +42,10 @@ export async function GET(request: NextRequest) {
       readyToPay: live.filter((r) => r.status === 'accepted').length,
       unpaidCount: unpaid.length,
       unpaidAgentCents: unpaid.reduce((n, r) => n + Number(r.agent_net_cents ?? 0), 0),
+      // What is already settled, so a brokerage that has paid everyone sees that instead of a row of zeros.
+      paidCount: live.filter((r) => r.status === 'paid').length,
+      paidAgentCents: live.filter((r) => r.status === 'paid').reduce((n, r) => n + Number(r.agent_net_cents ?? 0), 0),
+      confirmedGrossCents: live.filter((r) => r.status !== 'estimate').reduce((n, r) => n + Number(r.gross_cents ?? 0), 0),
       closedWithoutStatement: closedWithoutCommission(deals, withCommission, today).length,
     };
 
