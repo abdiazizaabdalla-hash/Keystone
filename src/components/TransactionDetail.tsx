@@ -3267,11 +3267,16 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                     {hasThread
                       ? 'No messages yet.'
                       : isAgentAcct
-                        ? 'No coordinator on this deal. Message your clients below, or add a coordinator from the top of the page.'
+                        ? 'No coordinator on this deal yet. Invite yours to message them here. Your client messages are right below.'
                         : 'Invite your agent on the Contacts tab to start a conversation.'}
                   </p>
                 ) : (
                   <MessagePreview messages={messages} agentName={otherPartyName} selfRole={mySide} limit={4} onAttachmentDragStart={startDocDrag} />
+                )}
+                {isAgentAcct && !hasThread && !transaction.shared && (
+                  <button type="button" onClick={() => setShowAddCoordinator(true)} className="mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">
+                    {pendingCoordinator ? 'Coordinator invited · manage' : 'Invite your coordinator'}
+                  </button>
                 )}
                 {hasThread && (
                   <QuickMessageComposer

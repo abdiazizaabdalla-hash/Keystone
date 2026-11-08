@@ -1164,11 +1164,33 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                         action={{ label: 'Open messages', onClick: () => selectTab('messages') }}
           >
             {previewMessages.length === 0 ? (
-              <p className="text-sm text-slate-400">{canMessage ? 'No messages yet.' : 'Choose a listing agent and turn on sharing in Details to start a conversation.'}</p>
+              <p className="text-sm text-slate-400">
+                {canMessage
+                  ? 'No messages yet.'
+                  : isWorkspaceAgent
+                    ? 'No coordinator is running this listing for you yet. When a coordinator shares a listing with you, you can message them here.'
+                    : 'Choose a listing agent and turn on sharing in Details to start a conversation.'}
+              </p>
             ) : (
               <MessagePreview messages={previewMessages} agentName={data.agent?.name || ''} limit={3} />
             )}
             {canMessage && <QuickMessageComposer value={quickDraft} onChange={setQuickDraft} onSend={() => void sendQuickMessage()} sending={quickSending} placeholder={data.shared ? `Message ${data.coordinator || 'your coordinator'}…` : `Message ${data.agent?.name || 'the agent'}…`} />}
+          </OverviewCard>
+
+<OverviewCard
+            title="Seller messages"
+            summary={listing.seller_name || listing.seller_email || 'No seller on this listing yet'}
+          >
+            {listing.seller_email ? (
+              <>
+                <p className="text-sm text-slate-400">Your seller is not part of the thread above. Send them an update by email: price changes, showings, offers.</p>
+                <button type="button" onClick={openSellerUpdate} className="mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">
+                  Write to {listing.seller_name || 'the seller'}
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-slate-400">Add the seller&apos;s email under Details to send them updates from here.</p>
+            )}
           </OverviewCard>
 <OverviewCard
             title="Checklist"
@@ -1299,18 +1321,35 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
 <OverviewCard
             title="Documents"
-            summary={`${docs.length} file${docs.length === 1 ? '' : 's'}`}
+            summary={`${docs.length} file${docs.length === 1 ? '' : 's'}, organized by area`}
             action={{ label: 'Open documents', onClick: () => selectTab('documents') }}
           >
-            {docs.length === 0 ? (
-              <p className="text-sm text-slate-400">No documents yet.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {docs.slice(0, 5).map((d) => (
-                  <li key={d.id} className="py-2.5 text-sm text-slate-200 truncate">📄 {d.file_name}</li>
-                ))}
-              </ul>
-            )}
+            <div className="space-y-3">
+              {LISTING_DOC_TYPES.map((type) => {
+                const inType = docs.filter((d) => d.document_type === type);
+                return (
+                  <div key={type} className="rounded-xl border border-white/10 bg-slate-800/40">
+                    <div className="flex items-center justify-between px-4 py-2.5">
+                      <span className="text-sm font-semibold text-slate-100">{type}</span>
+                      <span className="text-xs text-slate-400">{inType.length} document{inType.length === 1 ? '' : 's'}</span>
+                    </div>
+                    {inType.length > 0 && (
+                      <ul className="divide-y divide-white/10 border-t border-white/10">
+                        {inType.map((d) => (
+                          <li key={d.id} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+                            <span className="min-w-0 truncate text-slate-200">📄 {d.file_name}</span>
+                            <span className="shrink-0 text-xs text-slate-500">
+                              {d.file_size ? `${Math.max(1, Math.round(d.file_size / 1024))} KB · ` : ''}
+                              {formatDisplayDate(d.created_at, { month: 'numeric', day: 'numeric', year: 'numeric' })}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </OverviewCard>
             </div>
           </div>
