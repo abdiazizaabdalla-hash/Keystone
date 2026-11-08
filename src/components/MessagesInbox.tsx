@@ -36,12 +36,25 @@ export default function MessagesInbox({ members, isOwner, viewer = isOwner ? 'ow
   const meId = members.find((m) => m.isYou)?.userId;
   // An agent talks to their broker in private; everyone else on the board is reached by posting there.
   const teammates = useMemo(() => (isAgentViewer ? [] : members.filter((m) => !m.isYou)), [members, isAgentViewer]);
+  // The roster has the team; the brokerage's agents (or the broker, for an agent) are in the conversation list instead, so look there too.
+  const [agents, setAgents] = useState<AgentConv[]>([]);
+  // Only changes when who is in the list changes, not on every poll, so a refresh does not reload the open conversation.
+  const agentKey = agents.map((a) => `${a.id}|${a.name}|${a.email ?? ''}|${a.role}`).join(';');
+  const agentInfo = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agentKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const nameOfMember = useCallback((id: string) => {
     const m = members.find((x) => x.userId === id);
-    return m ? m.name || m.email.split('@')[0] : 'Former teammate';
-  }, [members]);
+    if (m) return m.name || m.email.split('@')[0];
+    const a = agentInfo.get(id);
+    if (a) return a.name || a.email?.split('@')[0] || (a.role === 'owner' ? 'Broker' : 'Agent');
+    return 'Former teammate';
+  }, [members, agentInfo]);
+  const kindOf = useCallback((id: string): Member['kind'] => {
+    const m = members.find((x) => x.userId === id);
+    if (m?.kind) return m.kind;
+    const a = agentInfo.get(id);
+    return a ? (a.role === 'owner' ? 'broker' : 'agent') : undefined;
+  }, [members, agentInfo]);
 
-  const [agents, setAgents] = useState<AgentConv[]>([]);
   const [teamUnread, setTeamUnread] = useState<Record<string, number>>({});
   // /dashboard/collaborate?with=<agent id>#messages opens that agent's conversation.
   const [active, setActive] = useState<Thread>(() => {
@@ -81,7 +94,7 @@ export default function MessagesInbox({ members, isOwner, viewer = isOwner ? 'ow
   }, [isAgentViewer]);
 
   const toTeamLines = useCallback((list: TeamMsg[], thread: Thread): ChatLine[] => list.map((m) => {
-    const who = members.find((x) => x.userId === m.senderId);
+    const kind = kindOf(m.senderId);
     return {
       id: m.id,
       senderKey: m.senderId,
@@ -89,10 +102,10 @@ export default function MessagesInbox({ members, isOwner, viewer = isOwner ? 'ow
       mine: m.senderId === meId,
       body: m.body,
       createdAt: m.createdAt,
-      tag: thread.kind === 'board' && who?.kind ? KIND[who.kind] : undefined,
+      tag: thread.kind === 'board' && kind ? KIND[kind] : undefined,
       canDelete: m.senderId === meId || (isOwner && m.recipientId === null),
     };
-  }), [members, meId, nameOfMember, isOwner]);
+  }), [kindOf, meId, nameOfMember, isOwner]);
 
   const toAgentLines = useCallback((list: BrokerageMsg[], otherId: string, otherName: string): ChatLine[] => list.map((m) => ({
     id: m.id,
