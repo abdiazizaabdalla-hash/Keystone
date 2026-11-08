@@ -14,7 +14,27 @@ const POLL_MS = 20000;
 const SHOWN = 8;
 const MAX_LENGTH = 2000;
 
-export default function TeamBoardCard({ onAvailable }: { onAvailable?: (available: boolean) => void }) {
+const COLLAPSED_KEY = 'relay.teamBoard.collapsed';
+
+export default function TeamBoardCard({ onAvailable, onCollapsedChange }: { onAvailable?: (available: boolean) => void; onCollapsedChange?: (collapsed: boolean) => void }) {
+  // Hidden until opened; the choice is remembered on this device.
+  const [collapsed, setCollapsed] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      let value = true;
+      try { value = window.localStorage.getItem(COLLAPSED_KEY) !== '0'; } catch { /* stays collapsed */ }
+      setCollapsed(value);
+      onCollapsedChange?.(value);
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const toggle = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    onCollapsedChange?.(next);
+    try { window.localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0'); } catch { /* the toggle still works */ }
+  };
   const [teamName, setTeamName] = useState('');
   // A brokerage (its owner, or an agent who joined it) calls the shared group "brokerage"; a coordinator team says "team".
   const [brokerage, setBrokerage] = useState(false);
@@ -110,6 +130,16 @@ export default function TeamBoardCard({ onAvailable }: { onAvailable?: (availabl
     };
   });
 
+  if (collapsed) {
+    return (
+      <button type="button" onClick={toggle} aria-expanded={false} className="w-full lg:w-auto flex items-center gap-2 bg-white/5 border border-white/10 hover:border-white/25 rounded-2xl px-4 py-3 text-left transition">
+        <span className="text-sm font-semibold text-slate-100">{brokerage ? 'Brokerage board' : 'Team board'}</span>
+        {messages.length > 0 && <span className="text-[11px] text-slate-500">{messages.length}</span>}
+        <svg className="w-4 h-4 ml-auto text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+      </button>
+    );
+  }
+
   return (
     <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/10">
@@ -123,7 +153,10 @@ export default function TeamBoardCard({ onAvailable }: { onAvailable?: (availabl
               <span key={m.userId} className="rounded-full ring-2 ring-slate-900"><Avatar name={m.name || m.email} id={m.userId} size="sm" /></span>
             ))}
           </div>
-          <Link href="/dashboard/collaborate#messages" className="text-xs text-blue-400 hover:text-blue-300 font-medium">Open →</Link>
+          <Link href={brokerage ? '/dashboard/messages' : '/dashboard/collaborate#messages'} className="text-xs text-blue-400 hover:text-blue-300 font-medium">Open →</Link>
+          <button type="button" onClick={toggle} aria-expanded={true} aria-label={`Hide the ${W} board`} className="text-slate-400 hover:text-slate-200">
+            <svg className="w-4 h-4 rotate-180" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+          </button>
         </div>
       </div>
       <div ref={listRef} className="px-4 py-3 max-h-80 overflow-y-auto bg-slate-900/30">
