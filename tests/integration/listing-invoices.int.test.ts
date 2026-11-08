@@ -131,3 +131,43 @@ describe('emailing the pay link', () => {
     expect([403, 404]).toContain(res.status);
   });
 });
+
+describe('other charges and the service list', () => {
+  let svcListing: string;
+  beforeAll(async () => {
+    const l = await admin.from('listings').insert({ tc_user_id: tc.id, agent_id: agentId, property_address: '9 Services Ln', list_price: 400000 }).select('id').single();
+    svcListing = l.data!.id;
+  });
+  afterAll(async () => {
+    await admin.from('invoices').delete().eq('listing_id', svcListing);
+    await admin.from('listings').delete().eq('id', svcListing);
+  });
+
+  it('saves the agent’s extra charges and drops bad rows', async () => {
+    const up = await call(h(patchAgent), tc, {
+      method: 'PATCH',
+      path: '/api/agents',
+      body: { id: agentId, name: 'Lister', listingFee: 250, services: [{ name: 'Rush file', amount: 75 }, { name: '', amount: 10 }, { name: 'Bad', amount: -5 }] },
+    });
+    expect(up.status, JSON.stringify(up.json)).toBeLessThan(300);
+    const rows = (await admin.from('agents').select('services').eq('id', agentId).single()).data!.services as { name: string; amount: number }[];
+    expect(rows.map((r) => r.name)).toEqual(['Rush file']);
+    expect(rows[0].amount).toBe(75);
+  });
+  it('the confirm screen offers the standard fees and the saved charges', async () => {
+    const res = await post(tc, { kind: 'listing', listingId: svcListing, preview: true });
+    expect(res.status).toBe(200);
+    const j = res.json as { defaults: { flatFee: number }; services: { name: string; amount: number }[]; otherFee: number | null };
+    expect(j.defaults.flatFee).toBe(250);
+    expect(j.otherFee).toBe(400);
+    expect(j.services[0].name).toBe('Rush file');
+  });
+  it('bills a chosen service under its own name', async () => {
+    const res = await post(tc, { kind: 'listing', listingId: svcListing, edits: { flatFee: 75, percentFee: 0, description: 'Rush file' } });
+    expect(res.status, JSON.stringify(res.json)).toBeLessThan(300);
+    const inv = res.json as { id: string; amount_owed: number; description: string };
+    invoiceIds.push(inv.id);
+    expect(Number(inv.amount_owed)).toBe(75);
+    expect(inv.description).toBe('Rush file');
+  });
+});

@@ -23,6 +23,10 @@ interface Preview {
   purchasePrice: number;
   percentRate: number;
   defaults: { flatFee: number; percentFee: number };
+  /** The agent's other saved charges. */
+  services?: Array<{ id: string; name: string; amount: number }>;
+  /** The other kind of standard fee (the listing fee on a deal, the deal fee on a listing), when set. */
+  otherFee?: number | null;
   dueDays: number;
 }
 
@@ -56,6 +60,9 @@ export default function InvoiceConfirmModal({ target, onClose, onCreated, before
   const [pct, setPct] = useState('');
   const [discount, setDiscount] = useState('');
   const [note, setNote] = useState('');
+  // What is being billed: the standard fee for this screen, the other standard fee, a saved charge, or anything else.
+  const [service, setService] = useState('default');
+  const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -88,6 +95,31 @@ export default function InvoiceConfirmModal({ target, onClose, onCreated, before
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const chooseService = (value: string) => {
+    if (!preview) return;
+    setService(value);
+    if (value === 'default') {
+      setFlat(String(preview.defaults.flatFee ?? 0));
+      setPct(String(preview.defaults.percentFee ?? 0));
+      setDescription('');
+    } else if (value === 'other') {
+      setFlat(String(preview.otherFee ?? 0));
+      setPct('0');
+      setDescription(isListing ? 'Transaction coordination fee' : 'Listing coordination fee');
+    } else if (value === 'custom') {
+      setFlat('');
+      setPct('0');
+      setDescription('');
+    } else {
+      const s = (preview.services || []).find((x) => x.id === value);
+      if (s) {
+        setFlat(String(s.amount));
+        setPct('0');
+        setDescription(s.name);
+      }
+    }
+  };
+
   const subtotal = num(flat) + num(pct);
   const total = Math.max(0, subtotal - num(discount));
   const changed = useMemo(
@@ -98,6 +130,10 @@ export default function InvoiceConfirmModal({ target, onClose, onCreated, before
   const create = async () => {
     if (!preview) return;
     setError('');
+    if (service === 'custom' && !description.trim()) {
+      setError('Name the charge so the agent knows what it is for.');
+      return;
+    }
     if (total <= 0) {
       setError('The total must be more than $0.');
       return;
@@ -114,7 +150,7 @@ export default function InvoiceConfirmModal({ target, onClose, onCreated, before
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           bodyFor(target, {
-            edits: { flatFee: num(flat), percentFee: num(pct), discount: num(discount), discountNote: note.trim() },
+            edits: { flatFee: num(flat), percentFee: num(pct), discount: num(discount), discountNote: note.trim(), description: service === 'default' ? '' : description.trim() },
           })
         ),
       });
@@ -168,10 +204,24 @@ export default function InvoiceConfirmModal({ target, onClose, onCreated, before
 
             <div className="mt-5 space-y-4">
               <div>
-                <label className="text-sm text-slate-300 block mb-1.5">{isListing ? 'Listing fee' : 'Coordination fee'}</label>
+                <label className="text-sm text-slate-300 block mb-1.5">Service</label>
+                <select value={service} onChange={(e) => chooseService(e.target.value)} className={inputCls} aria-label="Service">
+                  <option value="default">{isListing ? 'Listing coordination fee' : 'Transaction coordination fee'}</option>
+                  {preview.otherFee ? <option value="other">{isListing ? 'Transaction coordination fee' : 'Listing coordination fee'} · {money(preview.otherFee)}</option> : null}
+                  {(preview.services || []).map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} · {money(s.amount)}</option>
+                  ))}
+                  <option value="custom">Custom charge…</option>
+                </select>
+                {service !== 'default' && (
+                  <input value={description} maxLength={140} onChange={(e) => setDescription(e.target.value)} placeholder="What is this charge for?" className={`${inputCls} mt-2`} aria-label="Charge name" />
+                )}
+              </div>
+              <div>
+                <label className="text-sm text-slate-300 block mb-1.5">{service === 'default' ? (isListing ? 'Listing fee' : 'Coordination fee') : 'Amount'}</label>
                 <MoneyInput value={flat} onValueChange={setFlat} aria-label="Flat fee" className={inputCls} />
               </div>
-              {!isListing && (preview.percentRate > 0 || preview.defaults.percentFee > 0 || num(pct) > 0) && (
+              {!isListing && service === 'default' && (preview.percentRate > 0 || preview.defaults.percentFee > 0 || num(pct) > 0) && (
                 <div>
                   <label className="text-sm text-slate-300 block mb-1.5">
                     Percentage fee <span className="text-slate-500">({preview.percentRate}% of price)</span>

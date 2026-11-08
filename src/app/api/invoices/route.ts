@@ -1,3 +1,4 @@
+import { cleanServices } from '@/lib/agentServices';
 import { notifyDealOwnerOfInvoice } from '@/lib/coordinatorInvoiceNotify';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
@@ -216,7 +217,7 @@ export async function POST(request: NextRequest) {
     // The screen that asks the coordinator to confirm the details before anything is created.
     if (body.preview === true) {
       const [{ data: pAgent }, { data: pTx }] = await Promise.all([
-        supabaseServer.from('agents').select('name, email, commission_percent').eq('id', effectiveAgentId).maybeSingle(),
+        supabaseServer.from('agents').select('*').eq('id', effectiveAgentId).maybeSingle(),
         supabaseServer.from('transactions').select('property_address, file_number').eq('id', transactionId).maybeSingle(),
       ]);
       return NextResponse.json({
@@ -228,6 +229,8 @@ export async function POST(request: NextRequest) {
         purchasePrice: price,
         percentRate: Number(pAgent?.commission_percent) || 0,
         defaults,
+        services: cleanServices(pAgent?.services),
+        otherFee: Number(pAgent?.listing_fee) > 0 ? round2(Number(pAgent?.listing_fee)) : null,
         dueDays,
       });
     }
@@ -356,6 +359,8 @@ async function createListingInvoice(request: NextRequest, user: { id: string }, 
       purchasePrice: Number(listing.list_price) || 0,
       percentRate: 0,
       defaults,
+      services: cleanServices(agent.services),
+      otherFee: Number(agent.flat_fee) > 0 ? round2(Number(agent.flat_fee)) : null,
       dueDays,
     });
   }
