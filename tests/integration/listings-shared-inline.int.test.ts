@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PATCH as adminPatch } from '@/app/api/admin/users/[id]/route';
 import { GET as listListings } from '@/app/api/listings/route';
+import { POST as postComment, GET as getComments } from '@/app/api/listings/[id]/comments/route';
 import { GET as getListing, PATCH as patchListing, DELETE as deleteListing } from '@/app/api/listings/[id]/route';
 import { admin, call, cleanup, createActor, createCollaborator, type Actor } from './helpers';
 
@@ -50,7 +51,27 @@ describe('shared listings inside the workspace', () => {
   });
   it('cannot be deleted, handed over or re-assigned by the agent', async () => {
     expect((await call(h(deleteListing), paid, { method: 'DELETE', path: '/x', params: { id: listingId } })).status).toBe(403);
-    expect((await call(h(patchListing), paid, { method: 'PATCH', path: '/x', params: { id: listingId }, body: { agentId: null } })).status).toBe(403);
+    for (const body of [{ agentId: null }, { shareWithAgent: false }, { notifyAgent: true }]) {
+      expect((await call(h(patchListing), paid, { method: 'PATCH', path: '/x', params: { id: listingId }, body })).status).toBe(403);
+    }
+  });
+  it('hide the coordinator’s private notes and keep the agent from overwriting them', async () => {
+    await admin.from('listings').update({ notes: 'TC private' }).eq('id', listingId);
+    const g = (await call(h(getListing), paid, { method: 'GET', path: '/x', params: { id: listingId } })).json as { shared: boolean; listing: { notes: string | null }; activity: unknown[] };
+    expect(g.shared).toBe(true);
+    expect(g.listing.notes).toBeNull();
+    expect(g.activity).toEqual([]);
+    await call(h(patchListing), paid, { method: 'PATCH', path: '/x', params: { id: listingId }, body: { notes: 'overwrite' } });
+    expect((await admin.from('listings').select('notes').eq('id', listingId).single()).data!.notes).toBe('TC private');
+    const own = (await call(h(getListing), tc, { method: 'GET', path: '/x', params: { id: listingId } })).json as { shared: boolean; listing: { notes: string } };
+    expect(own.shared).toBe(false);
+    expect(own.listing.notes).toBe('TC private');
+  });
+  it('a message from the agent in the workspace is posted as the agent', async () => {
+    const r = await call(h(postComment), paid, { method: 'POST', path: '/x', params: { id: listingId }, body: { body: 'hello coordinator' } });
+    expect(r.status, JSON.stringify(r.json)).toBe(201);
+    const list = (await call(h(getComments), tc, { method: 'GET', path: '/x', params: { id: listingId } })).json as { comments: { author_role?: string; body: string }[] };
+    expect(list.comments.find((c) => c.body === 'hello coordinator')?.author_role).toBe('agent');
   });
   it('stay closed to an unshared listing, another agent and a free agent', async () => {
     for (const [who, id] of [[paid, hiddenId], [stranger, listingId], [free, listingId]] as [Actor, string][]) {

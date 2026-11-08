@@ -37,7 +37,7 @@ async function userLabel(userId: string): Promise<string> {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user, isAdmin, listing } = await requireListingAccess(request, id);
+    const { user, isAdmin, listing, shared } = await requireListingAccess(request, id);
     const [tasks, offers, contacts, dates, agent, showings, priceChanges, activity] = await Promise.all([
       supabaseServer.from('listing_tasks').select('*').eq('listing_id', id).order('sort_order', { ascending: true }),
       supabaseServer.from('listing_offers').select('*').eq('listing_id', id).order('created_at', { ascending: false }),
@@ -54,8 +54,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const visible = await getVisibleTcUserIds(user.id);
       if (visible.length > 1) assignees = await Promise.all(visible.map(async (uid) => ({ id: uid, label: await userLabel(uid) })));
     }
+    // An agent opening a shared listing never gets the coordinator's private notes or internal history.
     return NextResponse.json({
-      listing,
+      listing: shared ? { ...listing, notes: null } : listing,
+      shared,
+      coordinator: shared ? await userLabel(listing.tc_user_id as string) : null,
       assignees,
       agent: agent.data,
       tasks: tasks.data || [],
@@ -65,7 +68,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // These come from add-listing-extras.sql; before it is run they are simply empty.
       showings: showings.data || [],
       priceChanges: priceChanges.data || [],
-      activity: activity.data || [],
+      activity: shared ? [] : activity.data || [],
     });
   } catch (error) {
     return fail(error, 'load');
@@ -77,11 +80,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params;
     const { user, isAdmin, listing, shared } = await requireListingAccess(request, id);
     await assertTrialActive(user);
-    // A listing shared with an agent is edited like any other, except who owns it and who the agent is.
-    if (shared && ('tcUserId' in (await request.clone().json().catch(() => ({}))) || 'agentId' in (await request.clone().json().catch(() => ({}))))) {
-      return NextResponse.json({ error: 'Your coordinator manages who this listing belongs to.' }, { status: 403 });
-    }
     const body = await request.json().catch(() => ({}));
+    // A listing shared with an agent is edited like any other, except who owns it, who the agent is, who it is shared with,
+    // and the coordinator's private notes. Those stay with the coordinator.
+    if (shared) {
+      if (['tcUserId', 'agentId', 'shareWithAgent', 'notifyAgent'].some((k) => k in body)) {
+        return NextResponse.json({ error: 'Your coordinator manages who this listing belongs to and who it is shared with.' }, { status: 403 });
+      }
+      delete body.notes;
+    }
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     if ('propertyAddress' in body) {

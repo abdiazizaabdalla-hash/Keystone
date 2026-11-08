@@ -99,6 +99,9 @@ interface InboundItem {
 }
 interface Detail {
   listing: Listing;
+  /** An agent is looking at a listing their coordinator runs and shared with them. */
+  shared?: boolean;
+  coordinator?: string | null;
   assignees?: { id: string; label: string }[];
   agent: { id: string; name: string; email?: string | null } | null;
   tasks: Task[];
@@ -629,7 +632,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       () =>
         call('PATCH', `/api/listings/${id}`, {
           propertyAddress: det.propertyAddress,
-          agentId: det.agentId || null,
+          ...(isWorkspaceAgent ? {} : { agentId: det.agentId || null }),
           sellerName: det.sellerName,
           sellerEmail: det.sellerEmail,
           sellerPhone: det.sellerPhone,
@@ -638,9 +641,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           expirationDate: det.expirationDate || null,
           mlsNumber: det.mlsNumber,
           mlsUrl: det.mlsUrl,
-          notes: det.notes,
-          shareWithAgent: det.shareWithAgent,
-          notifyAgent: det.notifyAgent,
+          ...(data?.shared ? {} : { notes: det.notes }),
+          ...(isWorkspaceAgent ? {} : { shareWithAgent: det.shareWithAgent, notifyAgent: det.notifyAgent }),
           listedOn: det.listedOn || null,
           ...(det.tcUserId && det.tcUserId !== listing.tc_user_id ? { tcUserId: det.tcUserId } : {}),
         }),
@@ -898,6 +900,11 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           </p>
         </div>
 
+        {data.shared && (
+          <p className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-200">
+            {data.coordinator || 'Your coordinator'} runs this listing for you. They keep the checklist, dates and documents up to date and you can add to them. Message them from the Messages tab.
+          </p>
+        )}
         <div className={`grid grid-cols-1 ${isWorkspaceAgent ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-4 md:gap-8 pt-6 border-t border-white/10`}>
           {!isWorkspaceAgent && (
           <>
@@ -998,7 +1005,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
       <div className="space-y-6">
         <div className={tab === 'overview' ? 'space-y-3' : 'hidden'}>
-          {!readOnlyAgent && data.agent && (
+          {!readOnlyAgent && !isWorkspaceAgent && data.agent && (
             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -1015,7 +1022,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           )}
-          {invoiceOpen && (
+          {invoiceOpen && !isWorkspaceAgent && (
             <InvoiceConfirmModal
               target={{ kind: 'listing', listingId: id }}
               onClose={() => setInvoiceOpen(false)}
@@ -1025,6 +1032,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               }}
             />
           )}
+          {!isWorkspaceAgent && (
           <div data-tour="ls-portal" className={`rounded-2xl border p-5 ${portalStatus.ok ? 'bg-green-500/5 border-green-500/30' : 'bg-amber-500/5 border-amber-500/30'}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
@@ -1044,6 +1052,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               )}
             </div>
           </div>
+          )}
 
           <OverviewSection title="Key dates" defaultOpen summary={[listing.planned_list_date ? `List ${formatDisplayDate(listing.planned_list_date, { month: 'short', day: 'numeric' })}` : null, listing.expiration_date ? `Expires ${formatDisplayDate(listing.expiration_date, { month: 'short', day: 'numeric' })}` : null].filter(Boolean).join(' · ')}>
             <ul className="space-y-1 text-sm mb-3">
@@ -1206,7 +1215,14 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         <div className={tab === 'messages' ? '' : 'hidden'}>
-          {data.agent && listing.share_with_agent !== false ? (
+          {data.shared ? (
+            <ListingThread endpoint={`/api/listings/${id}/comments`} self="agent" otherLabel={data.coordinator || 'your coordinator'} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
+          ) : isWorkspaceAgent ? (
+            <div className={cardCls}>
+              <h2 className="text-lg font-bold text-slate-100 mb-1">Messages</h2>
+              <p className="text-sm text-slate-400">This is your own listing, so there is nobody to message. Messages with a coordinator appear here when they share a listing with you.</p>
+            </div>
+          ) : data.agent && listing.share_with_agent !== false ? (
             <ListingThread endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
           ) : (
             <div className={cardCls}>
@@ -1860,6 +1876,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             <label className={labelCls}>Address</label>
             <input form="listing-details" className={inputCls} value={det.propertyAddress} onChange={(e) => setDet({ ...det, propertyAddress: e.target.value })} required />
           </div>
+          {!isWorkspaceAgent && (
           <div>
             <label className={labelCls}>Listing agent</label>
             <select form="listing-details" className={inputCls} value={det.agentId} onChange={(e) => setDet({ ...det, agentId: e.target.value })}>
@@ -1871,6 +1888,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               ))}
             </select>
           </div>
+          )}
           <div>
             <label className={labelCls}>List price</label>
             <MoneyInput form="listing-details" className={inputCls} aria-label="List price" value={det.listPrice} onValueChange={(v) => setDet({ ...det, listPrice: v })} />
@@ -1928,6 +1946,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <label className={labelCls}>Notes</label>
               <textarea className={inputCls} rows={3} value={det.notes} onChange={(e) => setDet({ ...det, notes: e.target.value })} />
             </div>
+            {!isWorkspaceAgent && (
+              <>
             <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
               <input type="checkbox" checked={det.shareWithAgent} onChange={(e) => setDet({ ...det, shareWithAgent: e.target.checked })} className="accent-blue-500 mt-1" />
               <span>
@@ -1965,6 +1985,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 <span className="block text-xs text-slate-500">The email only says something new is waiting and links to their portal. It never contains offer terms. Needs the agent to have an email and the setting above on.</span>
               </span>
             </label>
+              </>
+            )}
             {(data.assignees?.length ?? 0) > 1 && (
               <div>
                 <label className={labelCls}>Handled by</label>
@@ -2114,9 +2136,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             )}
           </div>
 
-          <button type="button" onClick={deleteListing} className="text-sm text-slate-500 hover:text-red-300">
+          {!data?.shared && <button type="button" onClick={deleteListing} className="text-sm text-slate-500 hover:text-red-300">
             Delete this listing
-          </button>
+          </button>}
         </div>
       </div>
 
