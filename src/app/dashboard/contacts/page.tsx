@@ -136,6 +136,9 @@ export default function ContactsPage() {
   const [showDupes, setShowDupes] = useState(false);
   const [showSync, setShowSync] = useState(false);
   const [hasTeam, setHasTeam] = useState(false);
+  // An agent in a brokerage shares with the brokerage (the broker and the other agents); everyone else with their team.
+  const [teamKind, setTeamKind] = useState<'team' | 'brokerage'>('team');
+  const W = teamKind === 'brokerage' ? 'brokerage' : 'team';
   // Personal = everything I own; Team = what has been shared with my team (mine and teammates').
   const [scope, setScopeState] = useState<'personal' | 'team'>('personal');
   const setScope = (next: 'personal' | 'team') => {
@@ -206,6 +209,7 @@ export default function ContactsPage() {
         const data = await res.json();
         if (res.ok) {
           setHasTeam(Boolean(data.hasTeam));
+          setTeamKind(data.teamKind === 'brokerage' ? 'brokerage' : 'team');
           try {
             if (data.hasTeam && window.localStorage.getItem('relay.contacts.scope') === 'team') setScopeState('team');
           } catch {
@@ -416,7 +420,7 @@ export default function ContactsPage() {
       const note = theirs > 0 ? ` ${theirs} shared by teammates will only be taken off the team list; they stay with whoever shared them.` : '';
       if (!confirm(`Delete ${selected.size - theirs} contact${selected.size - theirs === 1 ? '' : 's'}? This cannot be undone.${note}`)) return;
     }
-    if (action === 'share_team' && !confirm(`Share ${selected.size} contact${selected.size === 1 ? '' : 's'} with your team? Everyone on the team will be able to see and edit their details.`)) return;
+    if (action === 'share_team' && !confirm(`Share ${selected.size} contact${selected.size === 1 ? '' : 's'} with your ${W}? Everyone in the ${W} will be able to see and edit their details.`)) return;
     setWorking(true);
     try {
       const res = await authFetch('/api/contacts/bulk', {
@@ -429,7 +433,7 @@ export default function ContactsPage() {
       if (action === 'delete') setSelected(new Set());
       if (action === 'add_tag' || action === 'remove_tag') setBulkTag('');
       await load();
-      if (action === 'share_team') flash(`Shared ${data.shared} with your team${data.skippedDuplicate ? `. ${data.skippedDuplicate} were already on the team list` : ''}.`);
+      if (action === 'share_team') flash(`Shared ${data.shared} with your ${W}${data.skippedDuplicate ? `. ${data.skippedDuplicate} were already on the shared list` : ''}.`);
       else flash('Done.');
     } catch (err) {
       if (handleAuth(err)) return;
@@ -512,7 +516,7 @@ export default function ContactsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Contacts</h1>
           <p className="text-slate-400">
-            {teamMode ? 'Contacts your team shares. Everyone on the team can see and edit these.' : 'The people and organizations in your business, with history and follow-ups.'}
+            {teamMode ? `Contacts your ${W} shares. Everyone in the ${W} can see and edit these.` : 'The people and organizations in your business, with history and follow-ups.'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -585,7 +589,7 @@ export default function ContactsPage() {
           {(
             [
               { id: 'personal', label: 'Personal', sub: 'Only you', count: contacts.filter((c) => c.is_mine !== false).length },
-              { id: 'team', label: 'Team', sub: 'Shared with your team', count: contacts.filter((c) => !!c.team_id).length },
+              { id: 'team', label: W === 'brokerage' ? 'Brokerage' : 'Team', sub: `Shared with your ${W}`, count: contacts.filter((c) => !!c.team_id).length },
             ] as const
           ).map((t) => (
             <button
@@ -747,7 +751,7 @@ export default function ContactsPage() {
             <>
               <span className="text-slate-600">|</span>
               <button type="button" disabled={working} onClick={() => runBulk('share_team')} className="text-blue-400 hover:text-blue-300 disabled:opacity-40">
-                Share with team
+                Share with {W}
               </button>
               <button type="button" disabled={working} onClick={() => runBulk('unshare_team')} className="text-slate-300 hover:text-slate-100 disabled:opacity-40">
                 Stop sharing
@@ -762,8 +766,8 @@ export default function ContactsPage() {
 
       {scoped.length === 0 && teamMode ? (
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 text-center">
-          <p className="text-slate-200 font-semibold mb-1">Nothing shared with your team yet</p>
-          <p className="text-slate-400 text-sm mb-5">Share the contacts your whole team works with, like preferred lenders and title companies. Use Sync to share many at once, or add a shared contact.</p>
+          <p className="text-slate-200 font-semibold mb-1">Nothing shared with your {W} yet</p>
+          <p className="text-slate-400 text-sm mb-5">Share the contacts your whole {W} works with, like preferred lenders and title companies. Use Sync to share many at once, or add a shared contact.</p>
           <button type="button" onClick={() => setShowSync(true)} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg">
             Sync contacts
           </button>
@@ -891,6 +895,7 @@ export default function ContactsPage() {
           contact={editing === 'new' ? null : editing}
           organizations={contacts.filter((c) => c.contact_type === 'organization')}
           hasTeam={hasTeam}
+          teamWord={W}
           defaults={editing === 'new' && teamMode ? { shared: true } : undefined}
           isOwner={editing === 'new' || editing.is_mine !== false}
           onClose={() => setEditing(null)}
@@ -904,6 +909,7 @@ export default function ContactsPage() {
 
       {showSync && (
         <SyncContactsModal
+          teamWord={W}
           tags={[...new Set(contacts.filter((c) => c.is_mine !== false).flatMap((c) => c.tags || []))].sort()}
           onClose={() => setShowSync(false)}
           onDone={async () => {

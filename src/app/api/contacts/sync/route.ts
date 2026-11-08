@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
-import { requireContactsUser, contactsFail, getUserTeamId } from '@/lib/contactGuard';
+import { requireContactsUser, contactsFail, getUserTeamId, getContactsTeam } from '@/lib/contactGuard';
 import { cleanTags } from '@/lib/contactsCrm';
 import { shareContactsToTeam, copyTeamContactsToMine } from '@/lib/contactSync';
 
@@ -11,7 +11,8 @@ const keyOf = (c: Keyed) => (c.email ? `e:${c.email.toLowerCase()}` : `n:${(c.na
 export async function GET(request: NextRequest) {
   try {
     const user = await requireContactsUser(request);
-    const teamId = await getUserTeamId(user.id);
+    const found = await getContactsTeam(user.id);
+    const teamId = found?.teamId ?? null;
     if (!teamId) return NextResponse.json({ hasTeam: false, canShare: 0, canCopy: 0, sharedByMe: 0 });
 
     const [{ data: mine, error: e1 }, { data: theirs, error: e2 }, { data: teamAll, error: e3 }] = await Promise.all([
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
     const mineKeys = new Set((mine || []).map((c) => keyOf(c as Keyed)));
     return NextResponse.json({
       hasTeam: true,
+      teamKind: found!.kind,
       canShare: (mine || []).filter((c) => !c.team_id && !onTeam.has(keyOf(c as Keyed))).length,
       canCopy: (theirs || []).filter((c) => !mineKeys.has(keyOf(c as Keyed))).length,
       sharedByMe: (mine || []).filter((c) => c.team_id).length,

@@ -4,7 +4,8 @@ import { isFullParticipant } from '@/lib/authorize';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getVisibleTcUserIds } from '@/lib/team';
-import { syncDealPartyToCoordinators } from '@/lib/coordinatorOnboarding';
+import { syncDealPartyToCoordinators, dealOwnerUserId } from '@/lib/coordinatorOnboarding';
+import { autoAddContact } from '@/lib/contactsAuto';
 
 async function getOwnedContact(contactId: string, userId: string, isAdmin: boolean) {
   const { data: contact } = await supabaseServer
@@ -66,6 +67,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .single();
 
     if (error) throw error;
+    // An email added or a person renamed on the deal also lands in the owner's Contacts (existing contacts are never changed).
+    const ownerId = await dealOwnerUserId(data.transaction_id as string);
+    if (ownerId) await autoAddContact(ownerId, { name: data.name, email: data.email, phone: data.phone, role: data.role }, { allowNameOnly: true });
     await syncDealPartyToCoordinators(data.transaction_id as string, { name: data.name, email: data.email, phone: data.phone, role: data.role });
     return NextResponse.json(data);
   } catch (error) {

@@ -130,9 +130,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (error) throw error;
 
     // Save the person to the deal owner's Contacts directory too (skips duplicates).
-    if (email) {
+    // Everyone on the deal goes in, with or without an email yet (a buyer's name from the contract, say).
+    {
       const ownerId = await dealOwnerUserId(transactionId);
-      if (ownerId) await autoAddContact(ownerId, { name, email, phone, role });
+      if (ownerId) await autoAddContact(ownerId, { name, email, phone, role }, { allowNameOnly: true });
     }
     await syncDealPartyToCoordinators(transactionId, { name, email, phone, role });
     return NextResponse.json(data, { status: 201 });

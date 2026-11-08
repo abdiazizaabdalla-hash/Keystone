@@ -17,6 +17,7 @@ export default function ContactEditModal({
   onAuthError,
   defaults,
   hasTeam = false,
+  teamWord = 'team',
   isOwner = true,
 }: {
   /** null to add a new contact */
@@ -30,6 +31,8 @@ export default function ContactEditModal({
   defaults?: { organizationId?: string; company?: string; shared?: boolean };
   /** the TC is on a team, so the contact can be shared with it */
   hasTeam?: boolean;
+  /** what the shared list is called: 'team', or 'brokerage' for an agent who joined one */
+  teamWord?: string;
   /** false when editing a contact a teammate shared: the newsletter flag and sharing stay with its owner */
   isOwner?: boolean;
 }) {
@@ -137,12 +140,12 @@ export default function ContactEditModal({
           <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
             <input type="checkbox" checked={form.shared} onChange={(e) => setForm({ ...form, shared: e.target.checked })} className="mt-0.5 accent-blue-500" />
             <span>
-              Share with my team
-              <span className="block text-xs text-slate-500">Everyone on your team can see and edit these details. Your own notes and follow-ups stay private.</span>
+              Share with my {teamWord}
+              <span className="block text-xs text-slate-500">Everyone in your {teamWord} can see and edit these details. Your own notes and follow-ups stay private.</span>
             </span>
           </label>
         )}
-        {!isOwner && <p className="text-xs text-slate-500">Shared by a teammate. Your changes to these details are visible to the whole team.</p>}
+        {!isOwner && <p className="text-xs text-slate-500">Shared by a teammate. Your changes to these details are visible to the whole {teamWord}.</p>}
         {isOwner && (
         <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
           <input
