@@ -60,6 +60,17 @@ export function dealHealth(deal: Pick<OversightDeal, 'status' | 'acceptance_date
   return { openTasks: open.length, overdueTasks: overdue, nextDue, flags };
 }
 
+/**
+ * The day a closed deal counts as closed: its closing date, unless that date is still ahead (the deal was closed early or the
+ * date was a plan), in which case the day it was marked closed. Every closed-deal number uses this one rule, so the tiles,
+ * the lists and the exports agree.
+ */
+export function closedOnDate(d: Pick<OversightDeal, 'closing_date' | 'updated_at'>, today: string): string {
+  const closing = (d.closing_date || '').slice(0, 10);
+  if (closing && closing <= today) return closing;
+  return (d.updated_at || '').slice(0, 10) || closing;
+}
+
 export interface Production {
   closedThisYear: number;
   volumeThisYear: number;
@@ -73,14 +84,14 @@ const money = (v: number | string | null | undefined) => {
   return typeof n === 'number' && Number.isFinite(n) ? n : 0;
 };
 
-/** Production for a set of deals. A closed deal counts on its closing date (or the day it was last updated if none). */
+/** Production for a set of deals. A closed deal counts on its closed date (see closedOnDate). */
 export function productionFor(deals: OversightDeal[], today: string): Production {
   const year = today.slice(0, 4);
   const since = addDays(today, -30);
   const out: Production = { closedThisYear: 0, volumeThisYear: 0, closedLast30Days: 0, activeDeals: 0, pipelineVolume: 0 };
   for (const d of deals) {
     if (d.status === CLOSED_STAGE) {
-      const closedOn = (d.closing_date || d.updated_at || '').slice(0, 10);
+      const closedOn = closedOnDate(d, today);
       if (closedOn.startsWith(year)) {
         out.closedThisYear += 1;
         out.volumeThisYear += money(d.purchase_price);
@@ -162,7 +173,7 @@ export function closingSoon<T extends { status: string | null; closing_date: str
 /** Closed deals (closed within `days` days) that have no commission statement yet. */
 export function closedWithoutCommission<T extends { id: string; status: string | null; closing_date: string | null; updated_at: string | null }>(deals: T[], withCommission: Set<string>, today: string, days = 120): T[] {
   const since = addDays(today, -days);
-  return deals.filter((d) => d.status === CLOSED_STAGE && !withCommission.has(d.id) && (d.closing_date || d.updated_at || '').slice(0, 10) >= since);
+  return deals.filter((d) => d.status === CLOSED_STAGE && !withCommission.has(d.id) && closedOnDate(d, today) >= since);
 }
 
 
@@ -212,11 +223,11 @@ export interface MonthlyProductionRow {
  * last updated if it has none), the same rule as productionFor. `year` limits it to one calendar year. Newest month first,
  * then the agent with the most volume.
  */
-export function productionByMonth(deals: OversightDeal[], year?: string): MonthlyProductionRow[] {
+export function productionByMonth(deals: OversightDeal[], year?: string, today: string = new Date().toISOString().slice(0, 10)): MonthlyProductionRow[] {
   const rows = new Map<string, MonthlyProductionRow>();
   for (const d of deals) {
     if (d.status !== CLOSED_STAGE) continue;
-    const month = (d.closing_date || d.updated_at || '').slice(0, 7);
+    const month = closedOnDate(d, today).slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(month) || (year && !month.startsWith(year))) continue;
     const key = `${month}|${d.tc_user_id}`;
     const row = rows.get(key) ?? { month, agentId: d.tc_user_id, closedDeals: 0, volume: 0 };

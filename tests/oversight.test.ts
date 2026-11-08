@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normaliseEmail, dealHealth, productionFor, nextStepFor, listingHealth, isOpenListing, closingSoon, closedWithoutCommission, type OversightDeal } from '@/lib/oversightMath';
+import { closedOnDate, productionByMonth, normaliseEmail, dealHealth, productionFor, nextStepFor, listingHealth, isOpenListing, closingSoon, closedWithoutCommission, type OversightDeal } from '@/lib/oversightMath';
 import { isFeatureOn } from '@/lib/features';
 
 const today = '2026-11-03';
@@ -37,6 +37,20 @@ describe('productionFor', () => {
       deal({ status: 'Clear to Close', purchase_price: null }),
     ], today);
     expect(p).toEqual({ closedThisYear: 3, volumeThisYear: 800000, closedLast30Days: 2, activeDeals: 2, pipelineVolume: 250000 });
+  });
+});
+
+describe('when a closed deal counts as closed', () => {
+  it('uses the closing date, or the day it was marked closed when the closing date is still ahead or missing', () => {
+    expect(closedOnDate({ closing_date: '2026-10-20', updated_at: '2026-11-01T00:00:00Z' }, today)).toBe('2026-10-20');
+    expect(closedOnDate({ closing_date: '2026-11-20', updated_at: '2026-11-02T10:00:00Z' }, today)).toBe('2026-11-02');
+    expect(closedOnDate({ closing_date: '2031-02-12', updated_at: '2026-11-01T10:00:00Z' }, today)).toBe('2026-11-01');
+    expect(closedOnDate({ closing_date: null, updated_at: '2026-11-01T10:00:00Z' }, today)).toBe('2026-11-01');
+  });
+  it('the tiles and the monthly export agree for a deal closed early', () => {
+    const early = deal({ status: 'Closed', closing_date: '2031-02-12', updated_at: '2026-11-01T10:00:00Z', purchase_price: 685000 });
+    expect(productionFor([early], today)).toMatchObject({ closedThisYear: 1, volumeThisYear: 685000, closedLast30Days: 1 });
+    expect(productionByMonth([early], '2026', today)).toEqual([{ month: '2026-11', agentId: 'u', closedDeals: 1, volume: 685000 }]);
   });
 });
 

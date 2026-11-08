@@ -10,7 +10,7 @@ import { isMissingTable, loadCommissionFor, notifyCommission, viewOf, type Commi
 
 // PATCH { action }
 //   agent:  'edit' (extraFees, note: the agent's own lines and note on an estimate) | 'accept' | 'request_change' (note, extraFees?) | 'set_preference' (preference: 'relay' | 'outside')
-//   owner:  'approve' (an invoice the agent generated before this was an estimate) | 'mark_paid' (paidOn, note) | 'void'
+//   owner:  'approve' (an invoice the agent generated before this was an estimate) | 'mark_paid' (paidOn, note; override: true to pay one the agent has not agreed to yet) | 'mark_unpaid' | 'edit_payment' (paidOn, note) | 'void'
 // An ESTIMATE has no figures yet, so nothing can be accepted, approved or paid on it. The agent can still leave a note on it,
 // which tells the brokerage what to fix before they confirm the actual commission (see POST /api/commissions).
 // Each action checks the caller is that side of this commission and that the commission is in a state that allows it.
@@ -96,7 +96,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         notify = { recipientId: row.agent_user_id, title: `${row.statement_number}: your brokerage approved your commission invoice`, link, email: { source: 'commission_approved', subject: 'Your commission invoice was approved', paragraphs: [`Your brokerage approved commission invoice ${row.statement_number}.`, 'It is waiting to be paid. You will get another email when it is marked paid.'], linkLabel: 'Open the deal' } };
       } else if (action === 'mark_paid') {
         if (row.status === 'estimate') return bad('This is still an estimate. Confirm the actual commission, and let the agent review it, before marking it paid.', 409);
-        if (row.status !== 'accepted') return bad('The agent has to agree to the split before it can be marked paid.', 409);
+        // The brokerage owns the money, so it can record a payment before the agent has agreed (override); the agent is told it was paid.
+        const override = body.override === true && row.status === 'proposed';
+        if (row.status !== 'accepted' && !override) return bad('The agent has to agree to the split before it can be marked paid.', 409);
         const paidOn = typeof body.paidOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.paidOn) ? body.paidOn : today();
         if (paidOn > today()) return bad('The paid date cannot be in the future.');
         const note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) : '';
@@ -104,6 +106,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         update.paid_on = paidOn;
         update.paid_note = note || null;
         notify = { recipientId: row.agent_user_id, title: `${row.statement_number}: your commission was marked paid`, link, email: { source: 'commission_paid', subject: 'Your commission was marked paid', paragraphs: [`Your brokerage marked commission ${row.statement_number} as paid${paidOn ? ` on ${paidOn}` : ''}.`, note ? `Note from your brokerage: ${note}` : 'Check your account for the payment.'].filter(Boolean), linkLabel: 'Open the deal' } };
+      } else if (action === 'mark_unpaid') {
+        // A payment recorded by mistake (or one that bounced): back to agreed and waiting to be paid.
+        if (row.status !== 'paid') return bad('Only a paid commission can be marked unpaid.', 409);
+        update.status = 'accepted';
+        update.paid_on = null;
+        update.paid_note = null;
+        notify = { recipientId: row.agent_user_id, title: `${row.statement_number}: your brokerage reopened this commission as not paid yet`, link };
+      } else if (action === 'edit_payment') {
+        if (row.status !== 'paid') return bad('Only a paid commission has a payment to change.', 409);
+        const paidOn = typeof body.paidOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.paidOn) ? body.paidOn : String(row.paid_on || today()).slice(0, 10);
+        if (paidOn > today()) return bad('The paid date cannot be in the future.');
+        update.paid_on = paidOn;
+        update.paid_note = typeof body.note === 'string' ? body.note.trim().slice(0, 500) || null : row.paid_note;
       } else if (action === 'void') {
         if (row.status === 'paid') return bad('A paid commission cannot be voided.', 409);
         update.status = 'void';

@@ -171,6 +171,41 @@ describe('older agent invoices still work: approving and paying', () => {
   });
 });
 
+describe('the owner takes control of payment', () => {
+  let id = '';
+  it('can pay a statement the agent has not agreed to yet, only by saying so', async () => {
+    id = await legacyInvoice(d3, 20000);
+    await admin.from('deal_commissions').update({ status: 'proposed' }).eq('id', id);
+    expect((await act(broker, id, { action: 'mark_paid' })).status).toBe(409);
+    const ok = await act(broker, id, { action: 'mark_paid', override: true, paidOn: '2026-11-01', note: 'check 114' });
+    expect(ok.status, JSON.stringify(ok.json)).toBe(200);
+    expect(v(ok)).toMatchObject({ status: 'paid' });
+  });
+  it('can fix the payment date and note, and the agent cannot', async () => {
+    expect((await act(agent, id, { action: 'edit_payment', paidOn: '2026-11-02' })).status).toBe(400);
+    expect((await act(broker, id, { action: 'edit_payment', paidOn: '2026-11-02', note: 'wire' })).status).toBe(200);
+    const { data } = await admin.from('deal_commissions').select('paid_on, paid_note').eq('id', id).single();
+    expect(data).toMatchObject({ paid_on: '2026-11-02', paid_note: 'wire' });
+  });
+  it('can mark it unpaid again, which clears the payment', async () => {
+    expect((await act(agent, id, { action: 'mark_unpaid' })).status).toBe(400);
+    expect(v(await act(broker, id, { action: 'mark_unpaid' }))).toMatchObject({ status: 'accepted' });
+    const { data } = await admin.from('deal_commissions').select('paid_on, paid_note').eq('id', id).single();
+    expect(data).toMatchObject({ paid_on: null, paid_note: null });
+    expect((await act(broker, id, { action: 'mark_unpaid' })).status).toBe(409);
+  });
+  it('exports agreed commissions to QuickBooks as bills and the agents as vendors, owner only', async () => {
+    const get = (who: Actor, q: string) => call(h(GET), who, { method: 'GET', path: `/api/commissions?${q}` });
+    const bills = await get(broker, 'format=quickbooks-bills&status=open&account=Agent%20commissions');
+    expect(bills.status).toBe(200);
+    expect(JSON.stringify(bills.json ?? bills)).toBeDefined();
+    expect((await get(agent, 'format=quickbooks-bills')).status).not.toBe(200);
+    const vendors = await get(broker, 'format=quickbooks-vendors');
+    expect(vendors.status).toBe(200);
+    await admin.from('deal_commissions').delete().eq('id', id); // frees the deal for the next block
+  });
+});
+
 describe('editing instead', () => {
   it('an edit goes back to the agent to agree, and cannot be approved', async () => {
     const created = await legacyInvoice(d3, 9000);

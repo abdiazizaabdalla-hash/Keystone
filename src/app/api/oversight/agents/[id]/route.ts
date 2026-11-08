@@ -6,6 +6,7 @@ import { CLOSED_STAGE, assertBrokerageOwner, isOpenListing, loadOversightDeals, 
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { capInfoFor, termsFromLink, viewOf, type CommissionRow } from '@/lib/commissions';
 import type { SplitType } from '@/lib/commissionMath';
+import { getAgentListingRows } from '@/lib/agentListings';
 
 // One agent in the brokerage, in full: who they are, their base commission, production, open and closed deals with the next
 // step on each, and their commissions. [id] is the agent's user id. Only for an owner whose active link is with that agent.
@@ -38,6 +39,37 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const closed = deals.filter((d) => d.status === CLOSED_STAGE).slice(0, 15);
     const production = productionFor(deals, today);
 
+    // Listings are counted on their own (never inside the deal numbers): what is on the market and at what list price.
+    const openListings = listings.filter((l) => isOpenListing(l.status));
+    const listingProduction = {
+      activeListings: openListings.length,
+      listedVolume: openListings.reduce((n, l) => n + (Number(l.list_price) || 0), 0),
+    };
+
+    // What the agent also works on that a coordinator runs for them (shared into their workspace). Shown apart from their own
+    // work and not counted in the numbers above, because those belong to the coordinator's account.
+    const coordinatorRun: { kind: 'deal' | 'listing'; id: string; property: string | null; status: string | null; price: number | null; coordinator: string }[] = [];
+    try {
+      const nameOf = async (uid: string) => {
+        const { data: cu } = await supabaseServer.auth.admin.getUserById(uid);
+        return (cu.user?.user_metadata?.full_name as string | undefined)?.trim() || cu.user?.email || 'A coordinator';
+      };
+      for (const l of await getAgentListingRows(u?.email)) {
+        if (l.tc_user_id === id || l.status === 'converted') continue;
+        coordinatorRun.push({ kind: 'listing', id: l.id as string, property: (l.property_address as string | null) ?? null, status: (l.status as string | null) ?? null, price: l.list_price ? Number(l.list_price) : null, coordinator: await nameOf(l.tc_user_id as string) });
+      }
+      const { data: shared } = await supabaseServer.from('transaction_agents').select('transaction_id').eq('agent_user_id', id).limit(200);
+      const sharedIds = (shared ?? []).map((r) => r.transaction_id as string);
+      if (sharedIds.length) {
+        const { data: txs } = await supabaseServer.from('transactions').select('id, tc_user_id, property_address, status, purchase_price').in('id', sharedIds).neq('tc_user_id', id);
+        for (const t of txs ?? []) {
+          coordinatorRun.push({ kind: 'deal', id: t.id as string, property: (t.property_address as string | null) ?? null, status: (t.status as string | null) ?? null, price: t.purchase_price ? Number(t.purchase_price) : null, coordinator: await nameOf(t.tc_user_id as string) });
+        }
+      }
+    } catch (e) {
+      console.error('coordinator-run work unavailable (ignored):', e);
+    }
+
     const terms = termsFromLink(link);
     const cap = terms.cap ? await capInfoFor(user.id, id, terms, today) : null;
     const rows = ((commissionRows ?? []) as CommissionRow[]);
@@ -65,6 +97,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         baseCommission: link?.default_split_type && link.default_split_value !== null ? { type: link.default_split_type as SplitType, value: Number(link.default_split_value) } : null,
       },
       production,
+      listingProduction,
+      coordinatorRun,
       openDeals: open,
       closedDeals: closed,
       openListings: listings.filter((l) => isOpenListing(l.status)),

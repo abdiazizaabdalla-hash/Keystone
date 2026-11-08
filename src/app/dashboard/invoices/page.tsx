@@ -530,6 +530,11 @@ export default function InvoicesPage() {
             </button>
           ))}
         </div>
+        <p className="text-xs text-slate-500 mt-3 max-w-3xl">
+          {tab === 'commissions' && 'Money you pay your agents: each closed deal’s commission statement. Mark them paid here, and add them to QuickBooks as bills.'}
+          {tab === 'fees' && 'Money your agents pay you: coordination invoices (transaction fee, listing fee, other charges) you bill an agent for work done on their deals and listings. Nothing shows until you create one from a deal or listing.'}
+          {tab === 'custom' && 'One-off invoices to anyone, not tied to a deal or an agent.'}
+        </p>
       </div>
       {tab === 'commissions' && <div className="px-4 py-6 md:px-6 max-w-7xl mx-auto"><BrokerageInvoices onCreateInvoice={() => setTab('custom')} /></div>}
       {tab === 'fees' && <CoordinatorInvoicesPage />}

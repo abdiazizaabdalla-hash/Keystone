@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import AgentCommissionTerms, { type BaseTerms } from './AgentCommissionTerms';
+import CommissionQuickPay from './CommissionQuickPay';
 import CommissionInvoicePanel, { type PanelRow } from './CommissionInvoicePanel';
 
 // The brokerage owner's view of money by agent: a banner per agent (base commission, what has been paid, what is still open) and,
@@ -39,6 +40,8 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
   const [openAgents, setOpenAgents] = useState<Set<string>>(new Set());
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [showQb, setShowQb] = useState(false);
+  const [qbAccount, setQbAccount] = useState('Commissions and fees');
 
   const load = useCallback(async () => {
     try {
@@ -78,14 +81,14 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
   const open = live.filter((r) => r.status !== 'paid');
   const sum = (list: Row[], key: 'gross' | 'agentNet' | 'brokerageNet') => list.reduce((n, r) => n + (r[key] ?? 0), 0);
 
-  const downloadCsv = async () => {
+  const downloadCsv = async (query = 'format=csv', filename = `commissions-${new Date().toISOString().slice(0, 10)}.csv`) => {
     try {
-      const res = await authFetch('/api/commissions?format=csv');
+      const res = await authFetch(`/api/commissions?${query}`);
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not download the ledger');
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement('a');
       a.href = url;
-      a.download = `commissions-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = filename;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (e) {
@@ -105,10 +108,27 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-slate-400">Commission statements by agent. Propose a split from a deal’s page; set the base commission on the agent’s profile.</p>
         <div className="flex gap-2">
-          {rows.length > 0 && <button type="button" onClick={downloadCsv} className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-slate-600 text-slate-200 hover:border-slate-500">Download CSV</button>}
+          <button type="button" onClick={() => setShowQb((v) => !v)} aria-expanded={showQb} className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-slate-600 text-slate-200 hover:border-slate-500">Add to QuickBooks</button>
+          {rows.length > 0 && <button type="button" onClick={() => downloadCsv()} className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-slate-600 text-slate-200 hover:border-slate-500">Download CSV</button>}
           <button type="button" onClick={onCreateInvoice} className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-blue-500 hover:bg-blue-400 text-white">New invoice</button>
         </div>
       </div>
+
+      {showQb && (
+        <div className={card}>
+          <h3 className="text-sm font-semibold text-slate-100">Add commissions to QuickBooks</h3>
+          <p className="text-xs text-slate-400 mt-1">What you owe agents is a payable, so it goes into QuickBooks Online as bills, not invoices. Each bill is one agreed commission statement (the amount to the agent). Nothing is sent for you: download the files and use QuickBooks’ Import data screen.</p>
+          <label className="block text-xs text-slate-400 mt-3 max-w-sm">Expense account in QuickBooks
+            <input value={qbAccount} onChange={(e) => setQbAccount(e.target.value.slice(0, 100))} className="mt-1 w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none" />
+          </label>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={() => downloadCsv(`format=quickbooks-vendors`, 'relay-agents-for-quickbooks.csv')} className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-slate-600 text-slate-200 hover:border-slate-500">1. Download agents (vendors)</button>
+            <button type="button" onClick={() => downloadCsv(`format=quickbooks-bills&status=open&account=${encodeURIComponent(qbAccount)}`, 'relay-commission-bills-for-quickbooks.csv')} className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-blue-500 hover:bg-blue-400 text-white">2. Download unpaid bills</button>
+            <button type="button" onClick={() => downloadCsv(`format=quickbooks-bills&status=all&account=${encodeURIComponent(qbAccount)}`, 'relay-commission-bills-all-for-quickbooks.csv')} className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-slate-600 text-slate-200 hover:border-slate-500">Bills incl. paid</button>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2">In QuickBooks Online: Settings → Import data → Vendors first (skip if they already exist), then Bills. The expense account must already exist in your chart of accounts. <Link href="/dashboard/invoices/quickbooks" className="text-blue-400 hover:text-blue-300">More QuickBooks options</Link></p>
+        </div>
+      )}
 
       {groups.length === 0 ? (
         <div className={`${card} text-sm text-slate-300`}>Agents show up here once they join your brokerage.</div>
@@ -162,6 +182,9 @@ export default function BrokerageInvoices({ onCreateInvoice }: { onCreateInvoice
                               <span aria-hidden className={`text-slate-400 transition-transform ${rowOpen ? 'rotate-180' : ''}`}><svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4 fill-current"><path d="M5.5 7.5 10 12l4.5-4.5 1 1L10 14 4.5 8.5z" /></svg></span>
                             </div>
                           </button>
+                          {!rowOpen && ['accepted', 'proposed', 'paid'].includes(r.status) && (
+                            <div className="px-4 pb-3 -mt-1"><CommissionQuickPay id={r.id} status={r.status} paidOn={r.paidOn} paidNote={r.paidNote} agentName={g.name} onChanged={load} /></div>
+                          )}
                           {rowOpen && (
                             <div className="px-4 pb-4">
                               <CommissionInvoicePanel role="owner" row={r} counterpart={g.name} onChanged={load} />

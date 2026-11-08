@@ -7,6 +7,7 @@ import { openStatement } from '@/lib/commissionClient';
 import AgentDealRows, { type AgentDeal } from '@/components/AgentDealRows';
 import AgentListingRows, { type AgentListing } from '@/components/AgentListingRows';
 import { type CapView } from '@/components/CapNotice';
+import CommissionQuickPay from '@/components/CommissionQuickPay';
 import AgentCommissionTerms, { type SplitType } from '@/components/AgentCommissionTerms';
 
 // One agent in your brokerage, in full. Read-only apart from their base commission.
@@ -14,11 +15,13 @@ import AgentCommissionTerms, { type SplitType } from '@/components/AgentCommissi
 interface Profile {
   agent: { id: string; linkId: string | null; name: string; email: string | null; phone: string | null; license: string | null; focus: string[]; dealsPerYear: string | null; states: string[]; joinedAt: string | null; baseRate: { type: 'percent' | 'flat'; value: number } | null; baseCommission: { type: SplitType; value: number } | null; baseFees: { label: string; amount: number }[]; baseCap: { amount: number; reset: 'calendar_year' | 'anniversary'; start: string | null } | null; cap: CapView | null };
   production: { closedThisYear: number; volumeThisYear: number; closedLast30Days: number; activeDeals: number; pipelineVolume: number };
+  listingProduction: { activeListings: number; listedVolume: number };
+  coordinatorRun: { kind: 'deal' | 'listing'; id: string; property: string | null; status: string | null; price: number | null; coordinator: string }[];
   openDeals: AgentDeal[];
   closedDeals: AgentDeal[];
   openListings: AgentListing[];
   closedListings: AgentListing[];
-  commissions: { id: string; statementNumber: string; property: string | null; splitType: SplitType; splitValue: number; gross: number | null; agentNet: number | null; status: string; paidOn: string | null; transactionId: string }[];
+  commissions: { id: string; statementNumber: string; property: string | null; splitType: SplitType; splitValue: number; gross: number | null; agentNet: number | null; status: string; paidOn: string | null; paidNote?: string | null; transactionId: string }[];
   commissionTotals: { gross: number; agentNet: number; brokerageNet: number; unpaidCount: number; paidThisYear: number };
 }
 
@@ -84,12 +87,22 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
         <AgentCommissionTerms terms={{ linkId: agent.linkId, baseRate: agent.baseRate, baseCommission: agent.baseCommission, baseFees: agent.baseFees, baseCap: agent.baseCap, cap: agent.cap }} onSaved={load} />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {tile('Active deals', p.activeDeals)}
-        {tile('Pipeline', money(p.pipelineVolume))}
-        {tile('Closed (30 days)', p.closedLast30Days)}
-        {tile('Closed (this year)', p.closedThisYear)}
-        {tile('Volume (this year)', money(p.volumeThisYear))}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Transactions</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {tile('Active deals', p.activeDeals)}
+          {tile('Pipeline', money(p.pipelineVolume), 'Purchase price of open deals')}
+          {tile('Closed (30 days)', p.closedLast30Days)}
+          {tile('Closed (this year)', p.closedThisYear)}
+          {tile('Volume (this year)', money(p.volumeThisYear), 'Closed deals only')}
+        </div>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Listings</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {tile('Active listings', data.listingProduction.activeListings)}
+          {tile('Listed volume', money(data.listingProduction.listedVolume), 'List price of open listings')}
+        </div>
       </div>
 
       <div>
@@ -101,6 +114,24 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
         <h2 className="text-lg font-semibold text-slate-100 mb-3">Active listings ({data.openListings.length})</h2>
         {data.openListings.length === 0 ? <p className={`${card} text-sm text-slate-400`}>No open listings.</p> : <AgentListingRows listings={data.openListings} showAgent={false} />}
       </div>
+
+      {data.coordinatorRun.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold text-slate-100 mb-1">Run by a coordinator ({data.coordinatorRun.length})</h2>
+          <p className="text-xs text-slate-500 mb-3">Also on this agent’s workspace, kept up by their transaction coordinator. Not counted in the numbers above.</p>
+          <ul className={`${card} divide-y divide-white/5 text-sm`}>
+            {data.coordinatorRun.map((r) => (
+              <li key={`${r.kind}-${r.id}`} className="py-2 first:pt-0 last:pb-0 flex flex-wrap items-center justify-between gap-2">
+                <span className="min-w-0">
+                  <span className="text-slate-100">{r.property || 'Untitled'}</span>
+                  <span className="block text-[11px] text-slate-500">{r.kind === 'listing' ? 'Listing' : 'Transaction'} · {r.coordinator}</span>
+                </span>
+                <span className="text-xs text-slate-400">{[r.status, r.price ? money(r.price) : null].filter(Boolean).join(' · ')}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className={card}>
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
@@ -115,6 +146,7 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
                 <span className="text-slate-300">{c.gross === null ? '—' : money(c.gross)}</span>
                 <span className="text-emerald-300">{c.agentNet === null ? '—' : money(c.agentNet)}</span>
                 <span className="text-xs text-slate-400 w-28">{c.status === 'paid' ? `Paid ${c.paidOn ?? ''}` : c.status === 'estimate' ? 'Estimate' : c.status.replace('_', ' ')}</span>
+                <div className="basis-full"><CommissionQuickPay id={c.id} status={c.status} paidOn={c.paidOn} paidNote={c.paidNote} agentName={agent.name} onChanged={load} /></div>
                 {c.status !== 'estimate' && <button type="button" onClick={() => openStatement(c.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="text-xs text-blue-400 hover:text-blue-300">Statement</button>}
               </li>
             ))}

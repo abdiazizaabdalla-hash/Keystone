@@ -63,7 +63,7 @@ export default function CommissionInvoicePanel({ role, row, counterpart, onChang
   const confirmed = row.status !== 'estimate';
   const agreed = row.status === 'accepted' || row.status === 'paid';
   const awaitingAgent = row.status === 'proposed';
-  const [mode, setMode] = useState<'view' | 'edit' | 'pay'>('view');
+  const [mode, setMode] = useState<'view' | 'edit' | 'pay' | 'editpay'>('view');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
@@ -141,7 +141,15 @@ export default function CommissionInvoicePanel({ role, row, counterpart, onChang
 
       {mode === 'edit' && (isOwner ? <OwnerEditor row={row} closed={closed} busy={busy} onCancel={() => setMode('view')} onSave={(body, ok) => run('/api/commissions', 'POST', { transactionId: row.transactionId, ...body }, ok)} /> : <AgentEditor row={row} counterpart={counterpart} busy={busy} onCancel={() => setMode('view')} onSave={(action, body, ok) => patch(action, body, ok)} />)}
 
-      {mode === 'pay' && <PayForm busy={busy} onCancel={() => setMode('view')} onSave={(paidOn, note) => patch('mark_paid', { paidOn, note }, 'Marked paid.')} />}
+      {mode === 'pay' && (
+        <PayForm
+          busy={busy}
+          warning={row.status === 'proposed' ? `${counterpart} has not agreed to this split yet. They are told it was paid.` : undefined}
+          onCancel={() => setMode('view')}
+          onSave={(paidOn, note) => patch('mark_paid', { paidOn, note, ...(row.status === 'proposed' ? { override: true } : {}) }, 'Marked paid.')}
+        />
+      )}
+      {mode === 'editpay' && <PayForm busy={busy} title="Change the payment" initialDate={row.paidOn?.slice(0, 10)} initialNote={row.paidNote ?? ''} onCancel={() => setMode('view')} onSave={(paidOn, note) => patch('edit_payment', { paidOn, note }, 'Payment updated.')} />}
 
       {error && <p className="text-sm text-red-300">{error}</p>}
       {done && <p className="text-sm text-green-300">{done}</p>}
@@ -157,6 +165,9 @@ export default function CommissionInvoicePanel({ role, row, counterpart, onChang
           {isOwner && row.status === 'estimate' && closed && <button type="button" onClick={() => { setError(''); setDone(''); setMode('edit'); }} className={primary}>Confirm actual commission</button>}
           {isOwner && row.status === 'change_requested' && !row.submitted && <button type="button" onClick={() => { setError(''); setDone(''); setMode('edit'); }} className={primary}>Edit and send back</button>}
           {isOwner && row.status === 'accepted' && <button type="button" onClick={() => { setError(''); setDone(''); setMode('pay'); }} className={primary}>Mark paid</button>}
+          {isOwner && row.status === 'proposed' && <button type="button" onClick={() => { setError(''); setDone(''); setMode('pay'); }} className={ghost}>Mark paid anyway</button>}
+          {isOwner && row.status === 'paid' && <button type="button" onClick={() => { setError(''); setDone(''); setMode('editpay'); }} className={ghost}>Change payment</button>}
+          {isOwner && row.status === 'paid' && <button type="button" disabled={busy} onClick={() => window.confirm('Mark this as not paid? The agent will be told.') && patch('mark_unpaid', {}, 'Marked not paid.')} className={`${btn} text-slate-400 hover:text-amber-300`}>Mark unpaid</button>}
           {isOwner && row.status !== 'paid' && (
             <button type="button" onClick={() => { setError(''); setDone(''); setMode('edit'); }} className={ghost}>{row.status === 'accepted' ? 'Revise (agent agrees again)' : row.submitted ? 'Edit before approving' : row.status === 'estimate' ? 'Edit invoice' : 'Edit'}</button>
           )}
@@ -306,13 +317,14 @@ function OwnerEditor({ row, closed, busy, onCancel, onSave }: { row: PanelRow; c
   );
 }
 
-function PayForm({ busy, onCancel, onSave }: { busy: boolean; onCancel: () => void; onSave: (paidOn: string, note: string) => void }) {
+export function PayForm({ busy, onCancel, onSave, title = 'Record the payment', warning, initialDate, initialNote }: { busy: boolean; onCancel: () => void; onSave: (paidOn: string, note: string) => void; title?: string; warning?: string; initialDate?: string; initialNote?: string }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [paidOn, setPaidOn] = useState(today);
-  const [note, setNote] = useState('');
+  const [paidOn, setPaidOn] = useState(initialDate || today);
+  const [note, setNote] = useState(initialNote || '');
   return (
     <div className="rounded-xl border border-white/10 bg-slate-800/40 p-4 space-y-3">
-      <p className="text-sm font-semibold text-slate-100">Record the payment</p>
+      <p className="text-sm font-semibold text-slate-100">{title}</p>
+      {warning && <p className="text-xs text-amber-300">{warning}</p>}
       <label className="block text-xs text-slate-400">Agent paid on<input type="date" value={paidOn} max={today} onChange={(e) => setPaidOn(e.target.value)} className={`${field} mt-1`} /></label>
       <input value={note} onChange={(e) => setNote(e.target.value.slice(0, 500))} placeholder="Note (check number, ACH...)" className={field} />
       <div className="flex gap-2">

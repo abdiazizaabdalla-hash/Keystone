@@ -5,6 +5,8 @@ import { logAudit } from '@/lib/audit';
 import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { activeLinkForAgent, agentLabels, assertBrokerageOwner, brokerageOn, canOverseeDeal, listOwnerLinks, overseesAgent } from '@/lib/oversight';
 import { CLOSED_STAGE } from '@/lib/oversightMath';
+import { toCsv } from '@/lib/contactsCrm';
+import { DEFAULT_BILL_ACCOUNT, QB_BILL_HEADERS, QB_VENDOR_HEADERS, usDate, money as qbMoney } from '@/lib/quickbooks';
 import { oversightError } from '@/lib/oversightServer';
 import { cleanDeductions, cleanRate, grossPercentOfPrice, computeSplit, expectedGrossCents, isRateType, isSplitType, SplitError, splitLabel, toCents, type SplitType } from '@/lib/commissionMath';
 import { capInfoFor, commissionForTransaction, ensureEstimateStatement, isMissingTable, nextStatementNumber, notifyCommission, termsFromLink, viewOf, breakdown, type BaseTerms, type CommissionRow } from '@/lib/commissions';
@@ -126,6 +128,32 @@ export async function GET(request: NextRequest) {
       for (const c of asOwner) lines.push([c.statementNumber, c.agent.name, c.agent.email, c.property, c.fileNumber, c.dealStatus, money(c.gross), splitLabel(c.splitType, c.splitValue), money(c.deductionsTotal), money(c.agentNet), money(c.brokerageNet), c.grossStatus === 'estimate' ? 'estimate' : c.status, c.paidOn].map(csvCell).join(','));
       await logAudit(request, user, 'commission.export', { entityType: 'commission', metadata: { rows: asOwner.length } });
       return new NextResponse(`﻿${lines.join('\r\n')}\r\n`, { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="commissions-${new Date().toISOString().slice(0, 10)}.csv"`, 'Cache-Control': 'no-store' } });
+    }
+
+    // QuickBooks Online: what the brokerage owes agents is a payable, so it goes in as bills (Import data -> Bills) and vendors.
+    //   ?format=quickbooks-bills&status=open|all&account=<expense account>   ?format=quickbooks-vendors
+    const qb = params.get('format');
+    if (qb === 'quickbooks-bills' || qb === 'quickbooks-vendors') {
+      if (ownerRows.length === 0 && !(await listOwnerLinks(user.id)).length) throw new AuthError('Not found', 404);
+      const csvResp = (csv: string, name: string) => new NextResponse(`﻿${csv}`, { status: 200, headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store' } });
+      if (qb === 'quickbooks-vendors') {
+        const vendors = new Map<string, string>();
+        for (const c of asOwner) if (c.status !== 'void' && c.status !== 'estimate' && !vendors.has(c.agent.name)) vendors.set(c.agent.name, c.agent.email ?? '');
+        await logAudit(request, user, 'quickbooks.export', { entityType: 'export', entityId: 'commission-vendors' });
+        return csvResp(toCsv(QB_VENDOR_HEADERS, [...vendors.entries()].map(([n, e]) => [n, e])), 'relay-agents-for-quickbooks.csv');
+      }
+      const account = (params.get('account') || DEFAULT_BILL_ACCOUNT).trim().slice(0, 100) || DEFAULT_BILL_ACCOUNT;
+      const all = params.get('status') === 'all';
+      const bills: string[][] = [];
+      for (const c of asOwner) {
+        // Only amounts that are real: confirmed and agreed. Paid ones only when asked for.
+        if (c.status === 'void' || c.status === 'estimate' || !(c.agentNet && c.agentNet > 0)) continue;
+        if (!(c.status === 'accepted' || (all && c.status === 'paid'))) continue;
+        const date = String(c.acceptedAt || c.proposedAt || new Date().toISOString()).slice(0, 10);
+        bills.push([c.statementNumber, c.agent.name, usDate(date), usDate(date), '', c.property ?? '', account, `Commission${c.property ? ` · ${c.property}` : ''}`, qbMoney(c.agentNet)]);
+      }
+      await logAudit(request, user, 'quickbooks.export', { entityType: 'export', entityId: 'commission-bills', metadata: { rows: bills.length } });
+      return csvResp(toCsv(QB_BILL_HEADERS, bills), 'relay-commission-bills-for-quickbooks.csv');
     }
 
     // The owner also gets the roster of agents with their default split, so it can be edited on the same screen.
