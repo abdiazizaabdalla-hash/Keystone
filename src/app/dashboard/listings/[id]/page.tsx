@@ -545,6 +545,9 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
   const { listing, tasks, offers, contacts, dates } = data;
   const showings = data.showings || [];
+  const overdueTasks = tasks.filter((t) => !t.completed && t.due_date && t.due_date < new Date().toISOString().slice(0, 10)).length;
+  const openOfferCount = offers.filter((o) => o.status === 'received' || o.status === 'countered').length;
+  const nextTask = [...tasks.filter((t) => !t.completed)].sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999'))[0] || null;
   // Why a listing does or doesn't show in the agent's portal, in plain words, with the fix next to it.
   const resendAction = portal?.agentEmail ? { label: invitingPortal ? 'Sending…' : 'Resend invite', run: () => void invitePortal() } : undefined;
   const portalStatus: { ok: boolean; text: string; action?: { label: string; run: () => void } } = !data.agent
@@ -900,11 +903,6 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           </p>
         </div>
 
-        {data.shared && (
-          <p className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-200">
-            {data.coordinator || 'Your coordinator'} runs this listing for you. They keep the checklist, dates and documents up to date and you can add to them. Message them from the Messages tab.
-          </p>
-        )}
         <div className={`grid grid-cols-1 ${isWorkspaceAgent ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-4 md:gap-8 pt-6 border-t border-white/10`}>
           {!isWorkspaceAgent && (
           <>
@@ -955,7 +953,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           {/* List Price */}
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">List Price</p>
-            <p className="text-2xl font-bold text-blue-400">{money(listing.list_price) || '—'}</p>
+            <p className={`text-2xl font-bold ${listing.list_price ? 'text-blue-400' : 'text-slate-500'}`}>{money(listing.list_price) || 'Not set'}</p>
           </div>
 
           {/* Status */}
@@ -981,6 +979,18 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {data.shared && (
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-blue-500/30 bg-blue-500/10 px-5 py-4">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-300" aria-hidden="true">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+          </span>
+          <div>
+            <p className="font-semibold text-blue-100">{data.coordinator || 'Your coordinator'} runs this listing for you</p>
+            <p className="text-sm text-blue-200/80">They keep the checklist, dates and documents up to date. You can add to them and message your coordinator from the Messages tab.</p>
+          </div>
+        </div>
+      )}
+
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
       {notice && <p className="mb-4 text-sm text-green-400">{notice}</p>}
 
@@ -999,12 +1009,82 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             }`}
           >
             {t.label}
+            {t.id === 'checklist' && tasks.length > 0 && (
+              <span className={`ml-2 text-xs font-medium ${tab === 'checklist' ? 'text-blue-100' : 'text-slate-400'}`}>{tasks.filter((x) => x.completed).length}/{tasks.length}</span>
+            )}
           </button>
         ))}
       </div>
 
       <div className="space-y-6">
         <div className={tab === 'overview' ? 'space-y-3' : 'hidden'}>
+          {/* Snapshot: the facts that matter at a glance, laid out like the top of a deal's Overview. */}
+          <div className={`${cardCls} mb-3`} data-testid="listing-snapshot">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
+              {([
+                ['List price', money(listing.list_price) || 'Not set'],
+                ['Planned list date', listing.planned_list_date ? formatDisplayDate(listing.planned_list_date) : 'Not set'],
+                ['Listing expires', listing.expiration_date ? formatDisplayDate(listing.expiration_date) : 'Not set'],
+                ['Listed on', listing.listed_on ? formatDisplayDate(listing.listed_on) : 'Not live yet'],
+              ] as [string, string][]).map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+                  <p className={`text-base font-semibold ${/^Not /.test(value) ? 'text-slate-500' : 'text-slate-100'}`}>{value}</p>
+                </div>
+              ))}
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Seller</p>
+                <p className={`text-base font-semibold break-words ${listing.seller_name || listing.seller_email || listing.seller_phone ? 'text-slate-100' : 'text-slate-500'}`}>{listing.seller_name || listing.seller_email || listing.seller_phone || 'Not added'}</p>
+                {listing.seller_name && (listing.seller_email || listing.seller_phone) && <p className="text-xs text-slate-400 break-words">{[listing.seller_email, listing.seller_phone].filter(Boolean).join(' · ')}</p>}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{data.shared ? 'Coordinator' : isWorkspaceAgent ? 'Handled by' : 'Listing agent'}</p>
+                <p className={`text-base font-semibold ${(data.shared ? data.coordinator : data.agent?.name) ? 'text-slate-100' : 'text-slate-500'}`}>{(data.shared ? data.coordinator : isWorkspaceAgent ? 'You' : data.agent?.name) || 'None chosen yet'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">MLS #</p>
+                {listing.mls_number || listing.mls_url ? (
+                  listing.mls_url ? (
+                    <a href={listing.mls_url} target="_blank" rel="noopener noreferrer" className="text-base font-semibold text-blue-400 hover:text-blue-300">{listing.mls_number || 'View listing'} ↗</a>
+                  ) : (
+                    <p className="text-base font-semibold text-slate-100">{listing.mls_number}</p>
+                  )
+                ) : (
+                  <p className="text-base font-semibold text-slate-500">Not added</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{daysToGoLive !== null && listing.status === 'preparing' ? 'Go live' : 'Days on market'}</p>
+                <p className="text-base font-semibold text-slate-100">
+                  {listing.status === 'preparing' && daysToGoLive !== null
+                    ? daysToGoLive >= 0 ? `In ${daysToGoLive} day${daysToGoLive === 1 ? '' : 's'}` : `${-daysToGoLive} day${daysToGoLive === -1 ? '' : 's'} late`
+                    : daysOnMarket(listing.listed_on) !== null ? String(daysOnMarket(listing.listed_on)) : '—'}
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 pt-5 border-t border-white/10 grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {([
+                ['Checklist', tasks.length ? `${tasks.filter((t) => t.completed).length} of ${tasks.length}` : '—', overdueTasks > 0 ? `${overdueTasks} overdue` : tasks.length && tasks.every((t) => t.completed) ? 'All done' : '', 'checklist', overdueTasks > 0],
+                ['Offers', String(offers.length), openOfferCount > 0 ? `${openOfferCount} open` : '', 'offers', false],
+                ['Showings', String(showings.length), hotCount > 0 ? `${hotCount} hot` : '', 'offers', false],
+                ['Documents', String(docs.length), '', 'documents', false],
+              ] as [string, string, string, ListingTab, boolean][]).map(([label, value, note, target, warn]) => (
+                <button key={label} type="button" onClick={() => selectTab(target)} className="text-left rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-white/5 px-4 py-3 transition">
+                  <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</span>
+                  <span className="block text-xl font-bold text-slate-100">{value}</span>
+                  {note && <span className={`block text-xs ${warn ? 'text-red-300' : 'text-slate-400'}`}>{note}</span>}
+                </button>
+              ))}
+            </div>
+            {nextTask && (
+              <p className="mt-4 text-sm text-slate-300">
+                <span className="text-slate-400">Next step: </span>
+                {nextTask.name}
+                {nextTask.due_date && <span className="text-slate-400"> · due {formatDisplayDate(nextTask.due_date, { month: 'short', day: 'numeric' })}</span>}
+              </p>
+            )}
+          </div>
+
           {!readOnlyAgent && !isWorkspaceAgent && data.agent && (
             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
