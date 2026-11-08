@@ -7,7 +7,9 @@ import { isFeatureOnClient } from '@/lib/features';
 
 interface Invitation {
   inviteId: string;
-  transactionId: string;
+  transactionId?: string;
+  listingId?: string;
+  kind?: 'listing';
   propertyAddress: string | null;
   agentLabel: string;
 }
@@ -37,18 +39,19 @@ export default function TcInvitationBanner({ onAccepted }: { onAccepted?: () => 
     })();
   }, []);
 
-  const accept = async (transactionId: string) => {
+  const accept = async (inv: Invitation) => {
+    const key = inv.inviteId;
     try {
       setError('');
-      setAcceptingId(transactionId);
+      setAcceptingId(key);
       const res = await authFetch('/api/agent-invites/accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactionId }),
+        body: JSON.stringify(inv.kind === 'listing' ? { listingId: inv.listingId } : { transactionId: inv.transactionId }),
       });
-      if (!res.ok) throw new Error('Could not accept the invitation');
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not accept the invitation');
       const body = await res.json().catch(() => ({}));
-      setInvitations((prev) => prev.filter((i) => i.transactionId !== transactionId));
+      setInvitations((prev) => prev.filter((i) => i.inviteId !== key));
       const profile = body?.agentProfile;
       if (profile?.id) setAdded((prev) => [...prev.filter((a) => a.id !== profile.id), profile]);
       onAccepted?.();
@@ -66,15 +69,15 @@ export default function TcInvitationBanner({ onAccepted }: { onAccepted?: () => 
       {invitations.map((inv) => (
         <div key={inv.inviteId} className="flex flex-wrap items-center justify-between gap-3 bg-sky-500/10 border border-sky-400/30 rounded-2xl px-4 py-3">
           <p className="text-sm text-slate-200">
-            <span className="font-semibold">{inv.agentLabel}</span> invited you to coordinate {inv.propertyAddress ? <span className="font-semibold">{inv.propertyAddress}</span> : 'a deal'}.
+            <span className="font-semibold">{inv.agentLabel}</span> invited you to coordinate {inv.propertyAddress ? <span className="font-semibold">{inv.propertyAddress}</span> : inv.kind === 'listing' ? 'a listing' : 'a deal'}.
           </p>
           <button
             type="button"
-            onClick={() => accept(inv.transactionId)}
-            disabled={acceptingId === inv.transactionId}
+            onClick={() => accept(inv)}
+            disabled={acceptingId === inv.inviteId}
             className="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
           >
-            {acceptingId === inv.transactionId ? 'Accepting…' : 'Accept'}
+            {acceptingId === inv.inviteId ? 'Accepting…' : 'Accept'}
           </button>
         </div>
       ))}

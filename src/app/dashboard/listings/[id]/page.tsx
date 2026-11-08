@@ -20,6 +20,7 @@ import ContactPicker from '@/components/ContactPicker';
 import StepEmailModal from '@/components/StepEmailModal';
 import OfferIntakeModal from '@/components/OfferIntakeModal';
 import OfferHistory from '@/components/OfferHistory';
+import AddCoordinatorModal from '@/components/AddCoordinatorModal';
 import ListingThread, { type ListingThreadComment } from '@/components/ListingThread';
 import MessagePreview from '@/components/MessagePreview';
 import OverviewCard from '@/components/OverviewCard';
@@ -102,7 +103,12 @@ interface Detail {
   listing: Listing;
   /** An agent is looking at a listing their coordinator runs and shared with them. */
   shared?: boolean;
+  /** A coordinator is looking at a listing an agent invited them onto. */
+  coordinated?: boolean;
+  /** Who the label in `coordinator` is: the coordinator (shared), or the owning agent (coordinated). */
   coordinator?: string | null;
+  /** The coordinator an agent invited onto their own listing, once they accepted. */
+  invitedCoordinator?: { userId: string; email: string; label: string } | null;
   assignees?: { id: string; label: string }[];
   agent: { id: string; name: string; email?: string | null } | null;
   tasks: Task[];
@@ -168,6 +174,22 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     if (LISTING_TABS.some((t) => t.id === h)) setTab(h as ListingTab);
   }, []);
   const [data, setData] = useState<Detail | null>(null);
+  const [coordInvites, setCoordInvites] = useState<Array<{ email: string; status: string }>>([]);
+  const [showInvite, setShowInvite] = useState(false);
+  // Agent-only controls (who the listing agent is, sharing, portal, invoicing) stay hidden from agents and from invited coordinators.
+  const agentHidden = isWorkspaceAgent || data?.coordinated === true;
+  const loadCoordInvites = useCallback(async () => {
+    try {
+      const res = await authFetch(`/api/listings/${id}/coordinator`);
+      if (res.ok) setCoordInvites(((await res.json()).invites || []).filter((i: { status: string }) => i.status === 'pending'));
+    } catch {
+      /* non-fatal */
+    }
+  }, [id]);
+  const isOwnerAgent = isWorkspaceAgent && data !== null && !data.shared && !data.coordinated;
+  useEffect(() => {
+    if (isOwnerAgent) void loadCoordInvites();
+  }, [isOwnerAgent, loadCoordInvites]);
   const [agents, setAgents] = useState<{ id: string; name: string; email?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -566,7 +588,14 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
   const { listing, tasks, offers, contacts, dates } = data;
   const showings = data.showings || [];
   // A thread exists when the listing is shared with an agent (TC side) or an agent is looking at a shared listing.
-  const canMessage = data.shared === true || (!isWorkspaceAgent && Boolean(data.agent) && listing.share_with_agent !== false);
+  // Who is on the other end of this listing's thread: the coordinator who shared it (agent's view), the agent who owns it (an invited
+  // coordinator's view), the coordinator this agent invited, or the TC's own listing agent.
+  const ownerAgent = isWorkspaceAgent && !data.shared && !data.coordinated;
+  const invited = data.invitedCoordinator || null;
+  const hasCoordinator = data.shared === true || data.coordinated === true || (ownerAgent && Boolean(invited));
+  const otherName = data.shared || data.coordinated ? data.coordinator || (data.shared ? 'your coordinator' : 'the agent') : ownerAgent ? invited?.label || 'your coordinator' : data.agent?.name || 'the agent';
+  const speaksAsAgent = data.shared === true || ownerAgent;
+  const canMessage = hasCoordinator || (!agentHidden && Boolean(data.agent) && listing.share_with_agent !== false);
   const overdueTasks = tasks.filter((t) => !t.completed && t.due_date && t.due_date < new Date().toISOString().slice(0, 10)).length;
   const openOfferCount = offers.filter((o) => o.status === 'received' || o.status === 'countered').length;
   const nextTask = [...tasks.filter((t) => !t.completed)].sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999'))[0] || null;
@@ -657,7 +686,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
       () =>
         call('PATCH', `/api/listings/${id}`, {
           propertyAddress: det.propertyAddress,
-          ...(isWorkspaceAgent ? {} : { agentId: det.agentId || null }),
+          ...(agentHidden ? {} : { agentId: det.agentId || null }),
           sellerName: det.sellerName,
           sellerEmail: det.sellerEmail,
           sellerPhone: det.sellerPhone,
@@ -667,7 +696,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           mlsNumber: det.mlsNumber,
           mlsUrl: det.mlsUrl,
           ...(data?.shared ? {} : { notes: det.notes }),
-          ...(isWorkspaceAgent ? {} : { shareWithAgent: det.shareWithAgent, notifyAgent: det.notifyAgent }),
+          ...(agentHidden ? {} : { shareWithAgent: det.shareWithAgent, notifyAgent: det.notifyAgent }),
           listedOn: det.listedOn || null,
           ...(det.tcUserId && det.tcUserId !== listing.tc_user_id ? { tcUserId: det.tcUserId } : {}),
         }),
@@ -706,7 +735,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     setDealCreated(null);
     const agentEmail = agents.find((a) => a.id === listing.agent_id)?.email;
     // Agents run their own deals: the "put it on the agent's portal" invite is a coordinator step only.
-    setInviteAgent(!isWorkspaceAgent && Boolean(agentEmail));
+    setInviteAgent(!agentHidden && Boolean(agentEmail));
     setConv({
       fileNumber: suggestFileNumber(new Date(), []),
       acceptanceDate: todayIso(),
@@ -780,7 +809,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         closingDate: conv.closingDate || null,
         fromListingId: id,
         // The agent portal invite is sent with the deal (the server skips it when the agent has no email).
-        inviteAgent: !isWorkspaceAgent && inviteAgent && Boolean(agents.find((a) => a.id === listing.agent_id)?.email),
+        inviteAgent: !agentHidden && inviteAgent && Boolean(agents.find((a) => a.id === listing.agent_id)?.email),
       });
       txId = tx.id as string;
       const notes: string[] = [];
@@ -927,7 +956,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         <div className={`grid grid-cols-1 ${isWorkspaceAgent ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-4 md:gap-8 pt-6 border-t border-white/10`}>
-          {!isWorkspaceAgent && (
+          {!agentHidden && (
           <>
           {/* Agent */}
           <div data-tour="ls-agent-card">
@@ -1002,6 +1031,12 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {data.coordinated && (
+        <div className="mb-6 rounded-2xl border border-blue-500/30 bg-blue-500/10 px-5 py-4">
+          <p className="font-semibold text-blue-100">{data.coordinator || 'An agent'} invited you to coordinate this listing</p>
+          <p className="text-sm text-blue-200/80">It stays {data.coordinator ? `${data.coordinator}’s` : 'the agent’s'} listing. You run the checklist, dates and documents and can message them from the Messages tab.</p>
+        </div>
+      )}
       {data.shared && (
         <div className="mb-6 flex items-start gap-3 rounded-2xl border border-blue-500/30 bg-blue-500/10 px-5 py-4">
           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-300" aria-hidden="true">
@@ -1061,8 +1096,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 {listing.seller_name && (listing.seller_email || listing.seller_phone) && <p className="text-xs text-slate-400 break-words">{[listing.seller_email, listing.seller_phone].filter(Boolean).join(' · ')}</p>}
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{data.shared ? 'Coordinator' : isWorkspaceAgent ? 'Handled by' : 'Listing agent'}</p>
-                <p className={`text-base font-semibold ${(data.shared ? data.coordinator : data.agent?.name) ? 'text-slate-100' : 'text-slate-500'}`}>{(data.shared ? data.coordinator : isWorkspaceAgent ? 'You' : data.agent?.name) || 'None chosen yet'}</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{data.shared || ownerAgent ? 'Coordinator' : 'Listing agent'}</p>
+                <p className={`text-base font-semibold ${(data.shared || data.coordinated ? data.coordinator : ownerAgent ? invited?.label : data.agent?.name) ? 'text-slate-100' : 'text-slate-500'}`}>{(data.shared || data.coordinated ? data.coordinator : ownerAgent ? invited?.label : data.agent?.name) || (ownerAgent ? 'No coordinator yet' : 'None chosen yet')}</p>
               </div>
               <div>
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">MLS #</p>
@@ -1108,7 +1143,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             )}
           </div>
 
-          {!readOnlyAgent && !isWorkspaceAgent && data.agent && (
+          {!readOnlyAgent && !agentHidden && data.agent && (
             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -1125,7 +1160,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           )}
-          {invoiceOpen && !isWorkspaceAgent && (
+          {invoiceOpen && !agentHidden && (
             <InvoiceConfirmModal
               target={{ kind: 'listing', listingId: id }}
               onClose={() => setInvoiceOpen(false)}
@@ -1135,7 +1170,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               }}
             />
           )}
-          {!isWorkspaceAgent && (
+          {!agentHidden && (
           <div data-tour="ls-portal" className={`rounded-2xl border p-5 ${portalStatus.ok ? 'bg-green-500/5 border-green-500/30' : 'bg-amber-500/5 border-amber-500/30'}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
@@ -1167,14 +1202,22 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <p className="text-sm text-slate-400">
                 {canMessage
                   ? 'No messages yet.'
-                  : isWorkspaceAgent
-                    ? 'No coordinator is running this listing for you yet. When a coordinator shares a listing with you, you can message them here.'
+                  : ownerAgent
+                    ? 'No coordinator is on this listing yet.'
                     : 'Choose a listing agent and turn on sharing in Details to start a conversation.'}
               </p>
             ) : (
               <MessagePreview messages={previewMessages} agentName={data.agent?.name || ''} limit={3} />
             )}
-            {canMessage && <QuickMessageComposer value={quickDraft} onChange={setQuickDraft} onSend={() => void sendQuickMessage()} sending={quickSending} placeholder={data.shared ? `Message ${data.coordinator || 'your coordinator'}…` : `Message ${data.agent?.name || 'the agent'}…`} />}
+            {ownerAgent && !hasCoordinator && (
+              <div className="mt-3">
+                {coordInvites.length > 0 && <p className="text-xs text-slate-400 mb-2">Invitation sent to {coordInvites[0].email}. They show up here once they accept.</p>}
+                <button type="button" onClick={() => setShowInvite(true)} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl">
+                  {coordInvites.length > 0 ? 'Invite someone else / resend' : 'Invite your coordinator'}
+                </button>
+              </div>
+            )}
+            {canMessage && <QuickMessageComposer value={quickDraft} onChange={setQuickDraft} onSend={() => void sendQuickMessage()} sending={quickSending} placeholder={`Message ${otherName}…`} />}
           </OverviewCard>
 
 <OverviewCard
@@ -1356,12 +1399,15 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         <div className={tab === 'messages' ? '' : 'hidden'}>
-          {data.shared ? (
-            <ListingThread key={threadKey} endpoint={`/api/listings/${id}/comments`} self="agent" otherLabel={data.coordinator || 'your coordinator'} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
-          ) : isWorkspaceAgent ? (
+          {hasCoordinator ? (
+            <ListingThread key={threadKey} endpoint={`/api/listings/${id}/comments`} self={speaksAsAgent ? 'agent' : 'tc'} otherLabel={otherName} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
+          ) : ownerAgent ? (
             <div className={cardCls}>
               <h2 className="text-lg font-bold text-slate-100 mb-1">Messages</h2>
-              <p className="text-sm text-slate-400">This is your own listing, so there is nobody to message. Messages with a coordinator appear here when they share a listing with you.</p>
+              <p className="text-sm text-slate-400 mb-3">{coordInvites.length > 0 ? `Invitation sent to ${coordInvites[0].email}. You can message each other here once they accept.` : 'Invite your coordinator to run this listing with you and message them here.'}</p>
+              <button type="button" onClick={() => setShowInvite(true)} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl">
+                {coordInvites.length > 0 ? 'Invite someone else / resend' : 'Invite your coordinator'}
+              </button>
             </div>
           ) : data.agent && listing.share_with_agent !== false ? (
             <ListingThread key={threadKey} endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
@@ -1975,7 +2021,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               ) : (
                 <MessagePreview messages={previewMessages} agentName={data.agent?.name || ''} limit={4} onAttachmentDragStart={startDocDrag} />
               )}
-              {canMessage && <QuickMessageComposer value={quickDraft} onChange={setQuickDraft} onSend={() => void sendQuickMessage()} sending={quickSending} placeholder={data.shared ? `Message ${data.coordinator || 'your coordinator'}…` : `Message ${data.agent?.name || 'the agent'}…`} />}
+              {canMessage && <QuickMessageComposer value={quickDraft} onChange={setQuickDraft} onSend={() => void sendQuickMessage()} sending={quickSending} placeholder={`Message ${otherName}…`} />}
             </div>
           {/* Communication -- offer emails forwarded to this listing's own address wait for review in the Offers card;
               the address itself lives down here, like the deal page. Hidden until the inbound domain is configured. */}
@@ -2018,7 +2064,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             <label className={labelCls}>Address</label>
             <input form="listing-details" className={inputCls} value={det.propertyAddress} onChange={(e) => setDet({ ...det, propertyAddress: e.target.value })} required />
           </div>
-          {!isWorkspaceAgent && (
+          {!agentHidden && (
           <div>
             <label className={labelCls}>Listing agent</label>
             <select form="listing-details" className={inputCls} value={det.agentId} onChange={(e) => setDet({ ...det, agentId: e.target.value })}>
@@ -2088,7 +2134,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <label className={labelCls}>Notes</label>
               <textarea className={inputCls} rows={3} value={det.notes} onChange={(e) => setDet({ ...det, notes: e.target.value })} />
             </div>
-            {!isWorkspaceAgent && (
+            {!agentHidden && (
               <>
             <label className="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
               <input type="checkbox" checked={det.shareWithAgent} onChange={(e) => setDet({ ...det, shareWithAgent: e.target.checked })} className="accent-blue-500 mt-1" />
@@ -2278,7 +2324,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             )}
           </div>
 
-          {!data?.shared && <button type="button" onClick={deleteListing} className="text-sm text-slate-500 hover:text-red-300">
+          {!data?.shared && !data?.coordinated && <button type="button" onClick={deleteListing} className="text-sm text-slate-500 hover:text-red-300">
             Delete this listing
           </button>}
         </div>
@@ -2518,7 +2564,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <label className={labelCls}>Sale price</label>
               <MoneyInput className={inputCls} aria-label="Sale price" value={conv.price} onValueChange={(v) => setConv({ ...conv, price: v })} />
             </div>
-            {!isWorkspaceAgent && (() => {
+            {!agentHidden && (() => {
               const agentRow = agents.find((a) => a.id === listing.agent_id);
               return (
                 <label className={`flex items-start gap-2 text-sm ${agentRow?.email ? 'text-slate-300 cursor-pointer' : 'text-slate-500'}`}>
@@ -2549,6 +2595,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
       </div>
+      {showInvite && <AddCoordinatorModal listingId={id} onClose={() => setShowInvite(false)} onInvited={() => void loadCoordInvites()} />}
     </div>
   );
 }

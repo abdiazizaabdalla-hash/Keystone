@@ -8,10 +8,13 @@ import { authFetch } from '@/lib/authClient';
 // their list once they accept.
 export default function AddCoordinatorModal({
   transactionId,
+  listingId,
   onClose,
   onInvited,
 }: {
-  transactionId: string;
+  transactionId?: string;
+  /** Invite onto a listing instead of a deal. */
+  listingId?: string;
   onClose: () => void;
   onInvited: () => void;
 }) {
@@ -32,10 +35,10 @@ export default function AddCoordinatorModal({
     setSending(true);
     setError('');
     try {
-      const res = await authFetch('/api/agent-invites', {
+      const res = await authFetch(listingId ? `/api/listings/${listingId}/coordinator` : '/api/agent-invites', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactionId, email: address, inviteeRole: 'tc', usesRelay: usesRelay !== false }),
+        body: JSON.stringify(listingId ? { email: address, usesRelay: usesRelay !== false } : { transactionId, email: address, inviteeRole: 'tc', usesRelay: usesRelay !== false }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not send the invitation');
@@ -49,6 +52,7 @@ export default function AddCoordinatorModal({
     }
   };
 
+  const noun = listingId ? 'listing' : 'deal';
   const choice = 'w-full text-left bg-slate-800/60 hover:bg-slate-800 border border-white/10 hover:border-blue-500/50 rounded-xl p-4 transition';
 
   return (
@@ -65,15 +69,15 @@ export default function AddCoordinatorModal({
           <div>
             {emailFailed ? (
               <p className="text-amber-300 mb-2" role="alert">
-                The invitation for {sentTo} is saved, but the email could not be sent. Use Resend invitation on the deal page to try again.
+                The invitation for {sentTo} is saved, but the email could not be sent. Use Resend invitation on the {noun} page to try again.
               </p>
             ) : (
               <p className="text-slate-200 mb-2">Invitation sent to {sentTo}.</p>
             )}
             <p className="text-sm text-slate-400 mb-5">
               {usesRelay === false
-                ? 'The email explains Relay TC and how to create an account. Once they accept, the deal appears in their list and you can message each other here.'
-                : 'Once they accept from their Transactions page, the deal appears in their list and you can message each other here.'}
+                ? `The email explains Relay TC and how to create an account. Once they accept, the ${noun} appears in their list and you can message each other here.`
+                : `Once they accept, the ${noun} appears in their list and you can message each other here.`}
             </p>
             <button type="button" onClick={onClose} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl">
               Done

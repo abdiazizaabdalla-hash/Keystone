@@ -160,6 +160,34 @@ export async function sendTcInviteEmail(params: {
   });
 }
 
+export async function sendTcListingInviteEmail(params: {
+  toEmail: string;
+  agentLabel: string;
+  propertyAddress: string | null;
+  appUrl: string;
+  usesRelay?: boolean;
+  ownerUserId?: string;
+}) {
+  const { toEmail, agentLabel, propertyAddress, appUrl, usesRelay = true, ownerUserId } = params;
+  const label = propertyAddress ? `their listing at ${propertyAddress}` : 'their listing';
+  const html = wrapper(
+    "You've been invited to coordinate a listing",
+    usesRelay
+      ? `<p><strong>${escapeHtml(agentLabel)}</strong> invited you to coordinate ${escapeHtml(label)} on Relay TC.</p>
+     <p><a href="${appUrl}/auth" style="color: #b45309;">Sign in to Relay TC</a> with this email address, then accept the invitation at the top of your dashboard.</p>
+     <p style="font-size: 13px; color: #555;">Once you accept, the listing shows up in your Listings and you work it with the agent: checklist, documents, offers, showings and messages.</p>`
+      : `<p><strong>${escapeHtml(agentLabel)}</strong> would like you to coordinate ${escapeHtml(label)} and invited you to do it on Relay TC, a workspace for transaction coordinators: checklist, documents, messages and key dates in one place, shared with the agent.</p>
+     <p><a href="${appUrl}/auth" style="color: #b45309;">Create your Relay TC account</a> with this email address, then accept the invitation at the top of your dashboard.</p>
+     <p style="font-size: 13px; color: #555;">If you were not expecting this, you can ignore the email. Nothing is shared with you until you accept.</p>`
+  );
+  return deliverEmail({ source: 'sendTcListingInviteEmail', ownerUserId,
+    from: INVOICE_FROM_EMAIL,
+    to: toEmail,
+    subject: `${agentLabel} invited you to coordinate a listing on Relay TC`,
+    html,
+  });
+}
+
 // The sign-in link an agent asks for on /agent/login. Works for `minutes` minutes and can be opened more than once,
 // so a mail app or security scanner opening it first does not use it up.
 export async function sendAgentLoginLinkEmail(params: { toEmail: string; loginUrl: string; minutes: number }) {

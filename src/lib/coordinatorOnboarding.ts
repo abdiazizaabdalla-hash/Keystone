@@ -89,6 +89,43 @@ export async function addInvitingAgentForCoordinator(params: {
   }
 }
 
+/**
+ * Runs when a coordinator accepts a listing an agent invited them onto: the agent goes on their Agents list (default fees, to be
+ * confirmed) and Contacts, along with the people on the listing. Safe to run again. Never throws.
+ */
+export async function addInvitingAgentForListing(params: { coordinator: Person; agent: Person; listingId: string }): Promise<InvitingAgentProfile | null> {
+  try {
+    const { coordinator, agent, listingId } = params;
+    const agentEmail = (agent.email || '').trim().toLowerCase();
+    if (!agentEmail) return null;
+    const agentName = String(agent.user_metadata?.full_name || '').trim() || agentEmail;
+    const phone = typeof agent.user_metadata?.phone === 'string' ? (agent.user_metadata.phone as string) : null;
+    await autoAddContact(coordinator.id, { name: agentName, email: agentEmail, phone, role: 'Agent' });
+    const { data: parties } = await supabaseServer.from('listing_contacts').select('name, email, phone, role').eq('listing_id', listingId);
+    for (const party of parties || []) {
+      await autoAddContact(coordinator.id, { name: party.name as string | null, email: party.email as string | null, phone: party.phone as string | null, role: party.role as string | null }, { allowNameOnly: true });
+    }
+    const visibleIds = await getVisibleTcUserIds(coordinator.id);
+    const { data: existing } = await supabaseServer.from('agents').select('id, name').in('tc_user_id', visibleIds).ilike('email', agentEmail).limit(1);
+    if (existing && existing.length > 0) return { id: existing[0].id as string, name: existing[0].name as string, created: false };
+    const { maxAgents } = getPlanLimits(getUserPlan(coordinator as Parameters<typeof getUserPlan>[0]));
+    if (maxAgents !== null) {
+      const { count } = await supabaseServer.from('agents').select('id', { count: 'exact', head: true }).eq('tc_user_id', coordinator.id);
+      if ((count || 0) >= maxAgents) return null;
+    }
+    const { data: created, error } = await supabaseServer
+      .from('agents')
+      .insert({ tc_user_id: coordinator.id, name: agentName, email: agentEmail, phone, flat_fee: num(coordinator.user_metadata?.default_flat_fee, 400), commission_percent: num(coordinator.user_metadata?.default_percent_fee, 0) })
+      .select('id, name')
+      .single();
+    if (error || !created) throw error || new Error('no row');
+    return { id: created.id as string, name: created.name as string, created: true };
+  } catch (error) {
+    console.error('addInvitingAgentForListing failed (ignored):', error);
+    return null;
+  }
+}
+
 /** Coordinators (paid or on trial) who were given this deal by its agent. */
 async function coordinatorsOnDeal(transactionId: string): Promise<string[]> {
   const { data: links } = await supabaseServer.from('transaction_agents').select('agent_user_id').eq('transaction_id', transactionId);

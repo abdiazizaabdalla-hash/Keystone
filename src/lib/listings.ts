@@ -5,6 +5,7 @@ import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { getAgentListingRows } from '@/lib/agentListings';
 import { hasAgentRole } from '@/lib/privileged';
+import { isListingCoordinator } from '@/lib/listingCoordinators';
 
 // Shared pieces of the Listings feature (see add-listings.sql).
 
@@ -12,7 +13,7 @@ export * from './listingsShared';
 import { DEFAULT_LISTING_STEPS, DEFAULT_TEMPLATE_NAME, type TemplateStep } from './listingsShared';
 
 /**
- * A TC (or their team) is signed in and may see this listing. A workspace agent may also open a listing their coordinator
+ * A TC (or their team) is signed in and may see this listing; so may a coordinator an agent invited onto it (`coordinated`). A workspace agent may also open a listing their coordinator
  * shared with them (the same way shared deals open inline); `shared` is true then, and the routes that move or delete a
  * listing refuse it. Free agents never reach these routes.
  */
@@ -22,15 +23,22 @@ export async function requireListingAccess(request: NextRequest, listingId: stri
   const { data: listing } = await supabaseServer.from('listings').select('*').eq('id', listingId).maybeSingle();
   if (!listing) throw new AuthError('Listing not found', 404);
   let shared = false;
+  let coordinated = false;
   if (!isAdmin) {
     const visible = await getVisibleTcUserIds(user.id);
     if (!visible.includes(listing.tc_user_id as string)) {
-      const sharedWithMe = hasAgentRole(user) ? (await getAgentListingRows(user.email)).some((l) => l.id === listingId) : false;
-      if (!sharedWithMe) throw new AuthError('You do not have permission to view this listing', 403);
-      shared = true;
+      if (hasAgentRole(user)) {
+        if (!(await getAgentListingRows(user.email)).some((l) => l.id === listingId)) throw new AuthError('You do not have permission to view this listing', 403);
+        shared = true;
+      } else if (await isListingCoordinator(listingId, user.id)) {
+        // A coordinator an agent invited onto their own listing works it like their own, except who owns it.
+        coordinated = true;
+      } else {
+        throw new AuthError('You do not have permission to view this listing', 403);
+      }
     }
   }
-  return { user, isAdmin, listing, shared };
+  return { user, isAdmin, listing, shared, coordinated };
 }
 
 /** The checklist a new listing starts with: this TC's saved template of that name, else (for "Standard") the starter set. */

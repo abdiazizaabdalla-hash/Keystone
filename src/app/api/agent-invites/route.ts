@@ -6,6 +6,7 @@ import { inviteAgentToTransaction, inviteTcToTransaction, resendTcInvite } from 
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getEntitlements } from '@/lib/entitlements';
 import { hasAgentRole } from '@/lib/privileged';
+import { pendingListingInvites } from '@/lib/listingCoordinators';
 
 // Confirms the caller (a TC) owns `transactionId`, the same ownership
 // check src/app/api/documents/route.ts uses -- direct-owner only, not the
@@ -73,7 +74,8 @@ export async function GET(request: NextRequest) {
     if (!transactionId) {
       // No deal named: the invitations waiting for this person. Only a coordinator account is invited by an agent
       // (agents are invited by coordinators and answer on their own portal), so anyone else just gets an empty list.
-      return NextResponse.json(await pendingInvitesFromAgents(user));
+      const [dealInvites, listingInvites] = await Promise.all([pendingInvitesFromAgents(user), hasAgentRole(user) ? [] : pendingListingInvites(user)]);
+      return NextResponse.json([...dealInvites, ...listingInvites]);
     }
 
     await assertOwnsTransaction(transactionId, user.id, isAdmin);

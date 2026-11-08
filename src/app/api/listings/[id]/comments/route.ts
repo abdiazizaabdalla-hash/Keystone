@@ -4,6 +4,8 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { logListingActivity, requireListingAccess } from '@/lib/listings';
 import { addComment, loadComments } from '@/lib/listingComments';
+import { supabaseServer } from '@/lib/supabase';
+import { getEntitlements } from '@/lib/entitlements';
 import { queueAgentNotice, queueTcCommentNotice } from '@/lib/listingNotify';
 
 function fail(error: unknown, what: string) {
@@ -26,19 +28,34 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user, listing, shared } = await requireListingAccess(request, id);
+    const { user, listing, shared, coordinated } = await requireListingAccess(request, id);
     await assertTrialActive(user);
     if (!(await checkRateLimit(`listing-comment:${user.id}`, 60, 60 * 60))) {
       return NextResponse.json({ error: 'You have sent a lot of messages. Try again a bit later.' }, { status: 429 });
     }
     const body = await request.json().catch(() => ({}));
+    // The agent side of the thread: an agent a coordinator shared this with, or the agent who owns the listing and has their own coordinator on it.
+    const ownerAgent = !shared && !coordinated && getEntitlements(user).kind === 'agent_workspace' && listing.tc_user_id === user.id;
+    const speaksAsAgent = shared || ownerAgent;
     const label = (user.user_metadata?.full_name as string | undefined)?.trim() || user.email || 'Coordinator';
-    const result = await addComment({ listingId: id, userId: user.id, role: shared ? 'agent' : 'tc', label, body: body.body, attachmentDocumentId: body.attachmentDocumentId });
+    const result = await addComment({ listingId: id, userId: user.id, role: speaksAsAgent ? 'agent' : 'tc', label, body: body.body, attachmentDocumentId: body.attachmentDocumentId });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
     // The agent gets a plain "you have a message" email, only when the listing is shared with them.
-    if (shared) queueTcCommentNotice({ listingId: id, appUrl: request.nextUrl.origin, fromLabel: label });
+    if (ownerAgent || coordinated) {
+      const { data: link } = await supabaseServer.from('listing_coordinators').select('coordinator_user_id').eq('listing_id', id).eq('status', 'accepted').maybeSingle();
+      const to = ownerAgent ? (link?.coordinator_user_id as string | null) : (listing.tc_user_id as string);
+      if (to) {
+        await supabaseServer.from('notifications').insert({
+          recipient_user_id: to,
+          actor_user_id: user.id,
+          event_type: 'listing_message',
+          title: `${label} sent a message on ${listing.property_address || 'a listing'}`.slice(0, 200),
+          link: `/dashboard/listings/${id}`,
+        });
+      }
+    } else if (shared) queueTcCommentNotice({ listingId: id, appUrl: request.nextUrl.origin, fromLabel: label });
     else if (listing.share_with_agent === true && listing.agent_id) queueAgentNotice({ listingId: id, what: 'message', appUrl: request.nextUrl.origin });
-    await logListingActivity(id, user, shared ? 'Message from the listing agent' : 'Message sent on the listing thread');
+    await logListingActivity(id, user, speaksAsAgent ? 'Message from the listing agent' : 'Message sent on the listing thread');
     return NextResponse.json(result.comment, { status: 201 });
   } catch (error) {
     return fail(error, 'send');

@@ -1,3 +1,4 @@
+import { acceptedCoordinator } from '@/lib/listingCoordinators';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
@@ -37,7 +38,7 @@ async function userLabel(userId: string): Promise<string> {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user, isAdmin, listing, shared } = await requireListingAccess(request, id);
+    const { user, isAdmin, listing, shared, coordinated } = await requireListingAccess(request, id);
     const [tasks, offers, contacts, dates, agent, showings, priceChanges, activity] = await Promise.all([
       supabaseServer.from('listing_tasks').select('*').eq('listing_id', id).order('sort_order', { ascending: true }),
       supabaseServer.from('listing_offers').select('*').eq('listing_id', id).order('created_at', { ascending: false }),
@@ -58,7 +59,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({
       listing: shared ? { ...listing, notes: null } : listing,
       shared,
-      coordinator: shared ? await userLabel(listing.tc_user_id as string) : null,
+      coordinated,
+      // Who is on the other side: the coordinator (an agent's shared listing), the owning agent (a coordinator's view), or the coordinator an agent invited.
+      coordinator: shared || coordinated ? await userLabel(listing.tc_user_id as string) : null,
+      invitedCoordinator: !shared && !coordinated ? await acceptedCoordinator(id) : null,
       assignees,
       agent: agent.data,
       tasks: tasks.data || [],
@@ -78,11 +82,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user, isAdmin, listing, shared } = await requireListingAccess(request, id);
+    const { user, isAdmin, listing, shared, coordinated } = await requireListingAccess(request, id);
     await assertTrialActive(user);
     const body = await request.json().catch(() => ({}));
     // A listing shared with an agent is edited like any other, except who owns it, who the agent is, who it is shared with,
     // and the coordinator's private notes. Those stay with the coordinator.
+    if (coordinated && ['tcUserId', 'agentId', 'shareWithAgent', 'notifyAgent'].some((k) => k in body)) {
+      return NextResponse.json({ error: 'The agent who owns this listing manages who it belongs to.' }, { status: 403 });
+    }
     if (shared) {
       if (['tcUserId', 'agentId', 'shareWithAgent', 'notifyAgent'].some((k) => k in body)) {
         return NextResponse.json({ error: 'Your coordinator manages who this listing belongs to and who it is shared with.' }, { status: 403 });

@@ -1,3 +1,4 @@
+import { coordinatedListingIds } from '@/lib/listingCoordinators';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
@@ -43,6 +44,19 @@ export async function GET(request: NextRequest) {
         }
       }
     }
+    // A coordinator also sees the listings agents invited them onto.
+    const coordinatedSet = new Set<string>();
+    if (!isAdmin && !hasAgentRole(user)) {
+      const have = new Set(listings.map((l) => l.id as string));
+      const wanted = (await coordinatedListingIds(user.id)).filter((x) => !have.has(x));
+      if (wanted.length) {
+        const { data: extra } = await supabaseServer.from('listings').select('*').in('id', wanted);
+        for (const l of extra || []) {
+          listings = [...listings, l];
+          coordinatedSet.add(l.id as string);
+        }
+      }
+    }
     const ids = (listings || []).map((l) => l.id as string);
     const agentIds = [...new Set((listings || []).map((l) => l.agent_id as string | null).filter(Boolean) as string[])];
 
@@ -61,6 +75,7 @@ export async function GET(request: NextRequest) {
       return {
         ...l,
         shared: sharedIds.has(l.id as string),
+        coordinated: coordinatedSet.has(l.id as string),
         agent_name: l.agent_id ? agentName.get(l.agent_id as string) || null : null,
         tasks_total: mine.length,
         tasks_done: mine.length - open.length,

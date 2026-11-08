@@ -25,6 +25,8 @@ interface ListingRow {
   agent_name: string | null;
   /** Added by the agent's coordinator and shared with them. */
   shared?: boolean;
+  /** An agent invited this coordinator onto their listing. */
+  coordinated?: boolean;
   tasks_total: number;
   tasks_done: number;
   overdue_count: number;
@@ -359,6 +361,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
                     <p className="text-slate-100 font-semibold break-words">
                       {l.property_address}
                       {l.shared && <span className="ml-2 align-middle text-[10px] uppercase tracking-wider rounded-full bg-blue-500/15 text-blue-300 px-2 py-0.5">From your coordinator</span>}
+                      {l.coordinated && <span className="ml-2 align-middle text-[10px] uppercase tracking-wider rounded-full bg-blue-500/15 text-blue-300 px-2 py-0.5">Agent’s listing</span>}
                     </p>
                     <p className="text-xs text-slate-500">
                       {[l.seller_name && `Seller: ${l.seller_name}`, l.agent_name && `Agent: ${l.agent_name}`, money(l.list_price)].filter(Boolean).join(' · ')}
