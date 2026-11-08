@@ -683,7 +683,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     setOfferDocs([]);
     setDealCreated(null);
     const agentEmail = agents.find((a) => a.id === listing.agent_id)?.email;
-    setInviteAgent(Boolean(agentEmail));
+    // Agents run their own deals: the "put it on the agent's portal" invite is a coordinator step only.
+    setInviteAgent(!isWorkspaceAgent && Boolean(agentEmail));
     setConv({
       fileNumber: suggestFileNumber(new Date(), []),
       acceptanceDate: todayIso(),
@@ -757,7 +758,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
         closingDate: conv.closingDate || null,
         fromListingId: id,
         // The agent portal invite is sent with the deal (the server skips it when the agent has no email).
-        inviteAgent: inviteAgent && Boolean(agents.find((a) => a.id === listing.agent_id)?.email),
+        inviteAgent: !isWorkspaceAgent && inviteAgent && Boolean(agents.find((a) => a.id === listing.agent_id)?.email),
       });
       txId = tx.id as string;
       const notes: string[] = [];
@@ -2456,7 +2457,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               <label className={labelCls}>Sale price</label>
               <MoneyInput className={inputCls} aria-label="Sale price" value={conv.price} onValueChange={(v) => setConv({ ...conv, price: v })} />
             </div>
-            {(() => {
+            {!isWorkspaceAgent && (() => {
               const agentRow = agents.find((a) => a.id === listing.agent_id);
               return (
                 <label className={`flex items-start gap-2 text-sm ${agentRow?.email ? 'text-slate-300 cursor-pointer' : 'text-slate-500'}`}>
