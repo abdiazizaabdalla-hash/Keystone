@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { openStatement } from '@/lib/commissionClient';
+import { showToast } from '@/lib/toast';
+import AgentCommissionInvoiceForm from '@/components/AgentCommissionInvoiceForm';
 import type { SplitType } from '@/lib/commissionMath';
 
 // The commission section of an agent's deal when they are in a brokerage. Their brokerage's commission statement starts as an
@@ -19,6 +21,8 @@ interface Data { role: 'agent' | 'owner' | null; awaitingTerms?: boolean; canInv
 export default function AgentCommissionInvoice({ transactionId, hasCoordinator }: { transactionId: string; purchasePrice?: number | null; hasCoordinator: boolean }) {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState('');
+  // The confirm screen opens right here on the deal; sending never leaves the page.
+  const [confirming, setConfirming] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -75,7 +79,23 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator }
     return (
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-sm text-slate-300 max-w-xl">Send {data.brokerage.name} your commission invoice for this deal. It is filled in from the terms they set for you: sale price, commission rate, split and fees. They confirm the actual amount from the closing documents.</p>
-        <Link href={`/dashboard/invoices?commissionFor=${transactionId}`} className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">Send commission invoice</Link>
+        <button type="button" onClick={() => setConfirming(true)} className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">Review and send commission invoice</button>
+        {confirming && (
+          <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Confirm commission invoice">
+            <div className="w-full max-w-xl my-8 rounded-2xl border border-white/10 bg-slate-900 p-1 shadow-2xl">
+              <AgentCommissionInvoiceForm
+                initialTransactionId={transactionId}
+                lockDeal
+                onClose={() => setConfirming(false)}
+                onSent={() => {
+                  setConfirming(false);
+                  showToast({ title: 'Commission invoice sent', body: `Sent to ${data.brokerage?.name ?? 'your brokerage'}`, tone: 'success' });
+                  void load();
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }

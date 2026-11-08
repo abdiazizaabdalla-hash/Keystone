@@ -48,7 +48,7 @@ const STATE: Record<Statement['status'], string> = {
 const field = 'w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 text-sm focus:border-blue-500 focus:outline-none';
 const row = 'flex items-baseline justify-between gap-4 py-1.5';
 
-export default function AgentCommissionInvoiceForm({ initialTransactionId, onClose, onSent }: { initialTransactionId?: string; onClose: () => void; onSent: () => void }) {
+export default function AgentCommissionInvoiceForm({ initialTransactionId, lockDeal, onClose, onSent }: { initialTransactionId?: string; /** The deal is fixed (opened from the deal itself): show it instead of a picker. */ lockDeal?: boolean; onClose: () => void; onSent: () => void }) {
   const [options, setOptions] = useState<Options | null>(null);
   const [dealId, setDealId] = useState(initialTransactionId ?? '');
   const [busy, setBusy] = useState(false);
@@ -143,6 +143,13 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, onClo
         <p className="text-sm text-slate-300">You have no deals yet. Add a transaction and it appears here.</p>
       ) : (
         <>
+          {lockDeal && deal ? (
+            <div className="rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3">
+              <p className="text-xs text-slate-400">Transaction</p>
+              <p className="text-sm font-semibold text-slate-100">{deal.address || deal.fileNumber || 'Deal'}</p>
+              <p className="text-xs text-slate-400">{deal.closed ? 'Closed' : deal.closingDate ? `Closes ${date(deal.closingDate)}` : 'Active deal'}{deal.fileNumber ? ` · File ${deal.fileNumber}` : ''}</p>
+            </div>
+          ) : (
           <div>
             <label htmlFor="commission-deal" className="block text-xs text-slate-400 mb-1">Transaction</label>
             <select id="commission-deal" className={field} value={dealId} onChange={(e) => { setDealId(e.target.value); setNote(''); setError(''); setExtras([]); setMessage(''); }}>
@@ -151,6 +158,7 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, onClo
               {closed.length > 0 && <optgroup label="Closed deals">{closed.map((d) => <option key={d.id} value={d.id}>{label(d)}</option>)}</optgroup>}
             </select>
           </div>
+          )}
 
           {deal && calc && (
             <div className="rounded-xl border border-white/10 bg-slate-800/40 px-4 py-3 text-sm">
@@ -191,7 +199,7 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, onClo
           <div className="flex flex-wrap gap-2">
             {deal && !deal.statement && (
               <button type="button" disabled={busy} onClick={send} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
-                {busy ? 'Sending…' : `Send to ${options.brokerage?.name ?? 'your brokerage'}`}
+                {busy ? 'Sending…' : `Confirm and send to ${options.brokerage?.name ?? 'your brokerage'}`}
               </button>
             )}
           </div>
