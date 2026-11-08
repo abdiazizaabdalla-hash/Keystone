@@ -22,7 +22,8 @@ import OfferIntakeModal from '@/components/OfferIntakeModal';
 import OfferHistory from '@/components/OfferHistory';
 import ListingThread, { type ListingThreadComment } from '@/components/ListingThread';
 import MessagePreview from '@/components/MessagePreview';
-import OverviewSection from '@/components/OverviewSection';
+import OverviewCard from '@/components/OverviewCard';
+import QuickMessageComposer from '@/components/QuickMessageComposer';
 import SellerUpdateModal from '@/components/SellerUpdateModal';
 import ListingReadinessCard from '@/components/ListingReadinessCard';
 import ListingSignModal, { type ListingSigningRequest } from '@/components/ListingSignModal';
@@ -202,6 +203,10 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
   // The listing thread's messages, kept here so the same small preview shows beside the Documents and on the Overview.
   const [threadComments, setThreadComments] = useState<ListingThreadComment[]>([]);
+  const [quickDraft, setQuickDraft] = useState('');
+  const [quickSending, setQuickSending] = useState(false);
+  // Bumped after a message is sent from the Overview so the Messages tab's thread reloads and the preview follows.
+  const [threadKey, setThreadKey] = useState(0);
   // Documents
   const [docs, setDocs] = useState<ListingDoc[]>([]);
   const [signReqs, setSignReqs] = useState<ListingSigningRequest[]>([]);
@@ -403,6 +408,21 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  const sendQuickMessage = async () => {
+    const text = quickDraft.trim();
+    if (!text) return;
+    setQuickSending(true);
+    try {
+      await call('POST', `/api/listings/${id}/comments`, { body: text });
+      setQuickDraft('');
+      setThreadKey((k) => k + 1);
+    } catch (err) {
+      if (!handleAuth(err)) setError(err instanceof Error ? err.message : 'Could not send the message');
+    } finally {
+      setQuickSending(false);
+    }
+  };
+
   const openSellerUpdate = async () => {
     // The draft is signed with the coordinator's name, so fetch it before the window opens.
     if (!tcName) {
@@ -545,6 +565,8 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
 
   const { listing, tasks, offers, contacts, dates } = data;
   const showings = data.showings || [];
+  // A thread exists when the listing is shared with an agent (TC side) or an agent is looking at a shared listing.
+  const canMessage = data.shared === true || (!isWorkspaceAgent && Boolean(data.agent) && listing.share_with_agent !== false);
   const overdueTasks = tasks.filter((t) => !t.completed && t.due_date && t.due_date < new Date().toISOString().slice(0, 10)).length;
   const openOfferCount = offers.filter((o) => o.status === 'received' || o.status === 'countered').length;
   const nextTask = [...tasks.filter((t) => !t.completed)].sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999'))[0] || null;
@@ -1135,7 +1157,94 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
           </div>
           )}
 
-          <OverviewSection title="Key dates" defaultOpen summary={[listing.planned_list_date ? `List ${formatDisplayDate(listing.planned_list_date, { month: 'short', day: 'numeric' })}` : null, listing.expiration_date ? `Expires ${formatDisplayDate(listing.expiration_date, { month: 'short', day: 'numeric' })}` : null].filter(Boolean).join(' · ')}>
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
+            <div className="lg:order-2 lg:self-start flex flex-col gap-8 min-w-0">
+<OverviewCard
+            title="Messages"
+                        action={{ label: 'Open messages', onClick: () => selectTab('messages') }}
+          >
+            {previewMessages.length === 0 ? (
+              <p className="text-sm text-slate-400">{canMessage ? 'No messages yet.' : 'Choose a listing agent and turn on sharing in Details to start a conversation.'}</p>
+            ) : (
+              <MessagePreview messages={previewMessages} agentName={data.agent?.name || ''} limit={3} />
+            )}
+            {canMessage && <QuickMessageComposer value={quickDraft} onChange={setQuickDraft} onSend={() => void sendQuickMessage()} sending={quickSending} placeholder={data.shared ? `Message ${data.coordinator || 'your coordinator'}…` : `Message ${data.agent?.name || 'the agent'}…`} />}
+          </OverviewCard>
+<OverviewCard
+            title="Checklist"
+            summary={tasks.length === 0 ? 'No steps yet' : `${tasks.filter((t) => t.completed).length} of ${tasks.length} done`}
+            action={{ label: 'Open checklist', onClick: () => selectTab('checklist') }}
+          >
+            {tasks.filter((t) => !t.completed).length === 0 ? (
+              <p className="text-sm text-slate-400">Every step is done.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {tasks.filter((t) => !t.completed).slice(0, 5).map((t) => (
+                  <li key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="text-slate-200 truncate">{t.name}</span>
+                    <span className="text-slate-500 shrink-0">{t.due_date ? formatDisplayDate(t.due_date, { month: 'short', day: 'numeric' }) : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewCard>
+<OverviewCard
+            title="Offers"
+            summary={offers.length === 0 ? 'No offers yet' : `${offers.length} offer${offers.length === 1 ? '' : 's'}${offers.some((o) => o.status === 'received' || o.status === 'countered') ? ' · some still open' : ''}`}
+            action={{ label: 'Open offers', onClick: () => selectTab('offers') }}
+          >
+            {offers.length === 0 ? (
+              <p className="text-sm text-slate-400">Offers you add or forward in will show here.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {offers.slice(0, 5).map((o) => (
+                  <li key={o.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="text-slate-200 truncate">{o.buyer_name || 'Buyer'}</span>
+                    <span className="text-slate-400 shrink-0">{money(o.offer_price) || '—'} · {o.status}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewCard>
+<OverviewCard
+            title="Showings"
+            summary={showings.length === 0 ? 'None yet' : `${showings.length} showing${showings.length === 1 ? '' : 's'}${hotCount > 0 ? ` · ${hotCount} hot` : ''}`}
+            action={{ label: 'Open showings', onClick: () => selectTab('offers') }}
+          >
+            {showings.length === 0 ? (
+              <p className="text-sm text-slate-400">Showings and open houses you log will show here.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {showings.slice(0, 5).map((sh) => (
+                  <li key={sh.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="text-slate-200 truncate">{sh.visitor || sh.kind || 'Showing'}</span>
+                    <span className="text-slate-500 shrink-0">{sh.showing_date ? formatDisplayDate(sh.showing_date, { month: 'short', day: 'numeric' }) : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewCard>
+<OverviewCard
+            title="People"
+            summary={contacts.length === 0 ? 'None yet' : `${contacts.length} on this listing`}
+            action={{ label: 'Open details', onClick: () => selectTab('details') }}
+          >
+            {contacts.length === 0 ? (
+              <p className="text-sm text-slate-400">Sellers and other people you add show here.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {contacts.filter((c) => c.name || c.email).slice(0, 6).map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span className="text-slate-200 truncate">{c.name || c.email}</span>
+                    <span className="text-slate-500 shrink-0">{c.role || ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </OverviewCard>
+            </div>
+            <div className="lg:order-1 flex flex-col gap-8 min-w-0">
+<OverviewCard title="Key dates" summary={[listing.planned_list_date ? `List ${formatDisplayDate(listing.planned_list_date, { month: 'short', day: 'numeric' })}` : null, listing.expiration_date ? `Expires ${formatDisplayDate(listing.expiration_date, { month: 'short', day: 'numeric' })}` : null].filter(Boolean).join(' · ')}>
             <ul className="space-y-1 text-sm mb-3">
               {listing.planned_list_date && (
                 <li className="flex justify-between gap-3 text-slate-300">
@@ -1175,8 +1284,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 Add
               </button>
             </form>
-          </OverviewSection>
-
+          </OverviewCard>
           {/* Ready to list: what is still missing before go-live */}
           {['preparing', 'active'].includes(listing.status) && (
             <ListingReadinessCard
@@ -1189,65 +1297,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
             />
           )}
 
-
-          <OverviewSection
-            title="Checklist"
-            summary={tasks.length === 0 ? 'No steps yet' : `${tasks.filter((t) => t.completed).length} of ${tasks.length} done`}
-            action={{ label: 'Open checklist', onClick: () => selectTab('checklist') }}
-          >
-            {tasks.filter((t) => !t.completed).length === 0 ? (
-              <p className="text-sm text-slate-400">Every step is done.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {tasks.filter((t) => !t.completed).slice(0, 5).map((t) => (
-                  <li key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                    <span className="text-slate-200 truncate">{t.name}</span>
-                    <span className="text-slate-500 shrink-0">{t.due_date ? formatDisplayDate(t.due_date, { month: 'short', day: 'numeric' }) : ''}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
-
-          <OverviewSection
-            title="Offers"
-            summary={offers.length === 0 ? 'No offers yet' : `${offers.length} offer${offers.length === 1 ? '' : 's'}${offers.some((o) => o.status === 'received' || o.status === 'countered') ? ' · some still open' : ''}`}
-            action={{ label: 'Open offers', onClick: () => selectTab('offers') }}
-          >
-            {offers.length === 0 ? (
-              <p className="text-sm text-slate-400">Offers you add or forward in will show here.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {offers.slice(0, 5).map((o) => (
-                  <li key={o.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                    <span className="text-slate-200 truncate">{o.buyer_name || 'Buyer'}</span>
-                    <span className="text-slate-400 shrink-0">{money(o.offer_price) || '—'} · {o.status}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
-
-          <OverviewSection
-            title="Showings"
-            summary={showings.length === 0 ? 'None yet' : `${showings.length} showing${showings.length === 1 ? '' : 's'}${hotCount > 0 ? ` · ${hotCount} hot` : ''}`}
-            action={{ label: 'Open showings', onClick: () => selectTab('offers') }}
-          >
-            {showings.length === 0 ? (
-              <p className="text-sm text-slate-400">Showings and open houses you log will show here.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {showings.slice(0, 5).map((sh) => (
-                  <li key={sh.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                    <span className="text-slate-200 truncate">{sh.visitor || sh.kind || 'Showing'}</span>
-                    <span className="text-slate-500 shrink-0">{sh.showing_date ? formatDisplayDate(sh.showing_date, { month: 'short', day: 'numeric' }) : ''}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
-
-          <OverviewSection
+<OverviewCard
             title="Documents"
             summary={`${docs.length} file${docs.length === 1 ? '' : 's'}`}
             action={{ label: 'Open documents', onClick: () => selectTab('documents') }}
@@ -1261,50 +1311,21 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
                 ))}
               </ul>
             )}
-          </OverviewSection>
-
-          <OverviewSection
-            title="People"
-            summary={contacts.length === 0 ? 'None yet' : `${contacts.length} on this listing`}
-            action={{ label: 'Open details', onClick: () => selectTab('details') }}
-          >
-            {contacts.length === 0 ? (
-              <p className="text-sm text-slate-400">Sellers and other people you add show here.</p>
-            ) : (
-              <ul className="divide-y divide-white/10">
-                {contacts.filter((c) => c.name || c.email).slice(0, 6).map((c) => (
-                  <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                    <span className="text-slate-200 truncate">{c.name || c.email}</span>
-                    <span className="text-slate-500 shrink-0">{c.role || ''}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </OverviewSection>
-
-          <OverviewSection
-            title="Messages"
-            summary={previewMessages.length === 0 ? 'No messages yet' : previewMessages[previewMessages.length - 1].body || 'Attachment'}
-            action={{ label: 'Open messages', onClick: () => selectTab('messages') }}
-          >
-            {previewMessages.length === 0 ? (
-              <p className="text-sm text-slate-400">Nothing yet. Choose a listing agent and turn on sharing in Details to start a conversation.</p>
-            ) : (
-              <MessagePreview messages={previewMessages} agentName={data.agent?.name || ''} limit={3} />
-            )}
-          </OverviewSection>
+          </OverviewCard>
+            </div>
+          </div>
         </div>
 
         <div className={tab === 'messages' ? '' : 'hidden'}>
           {data.shared ? (
-            <ListingThread endpoint={`/api/listings/${id}/comments`} self="agent" otherLabel={data.coordinator || 'your coordinator'} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
+            <ListingThread key={threadKey} endpoint={`/api/listings/${id}/comments`} self="agent" otherLabel={data.coordinator || 'your coordinator'} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
           ) : isWorkspaceAgent ? (
             <div className={cardCls}>
               <h2 className="text-lg font-bold text-slate-100 mb-1">Messages</h2>
               <p className="text-sm text-slate-400">This is your own listing, so there is nobody to message. Messages with a coordinator appear here when they share a listing with you.</p>
             </div>
           ) : data.agent && listing.share_with_agent !== false ? (
-            <ListingThread endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
+            <ListingThread key={threadKey} endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
           ) : (
             <div className={cardCls}>
               <h2 className="text-lg font-bold text-slate-100 mb-1">Messages</h2>
@@ -1915,6 +1936,7 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               ) : (
                 <MessagePreview messages={previewMessages} agentName={data.agent?.name || ''} limit={4} onAttachmentDragStart={startDocDrag} />
               )}
+              {canMessage && <QuickMessageComposer value={quickDraft} onChange={setQuickDraft} onSend={() => void sendQuickMessage()} sending={quickSending} placeholder={data.shared ? `Message ${data.coordinator || 'your coordinator'}…` : `Message ${data.agent?.name || 'the agent'}…`} />}
             </div>
           {/* Communication -- offer emails forwarded to this listing's own address wait for review in the Offers card;
               the address itself lives down here, like the deal page. Hidden until the inbound domain is configured. */}

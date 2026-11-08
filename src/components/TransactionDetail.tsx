@@ -28,6 +28,7 @@ import StepEmailModal from '@/components/StepEmailModal';
 import ContactPicker from '@/components/ContactPicker';
 import KeyDatesPanel from '@/components/KeyDatesPanel';
 import OverviewSection from '@/components/OverviewSection';
+import QuickMessageComposer from '@/components/QuickMessageComposer';
 import { readPersona } from '@/lib/persona';
 import { isFeatureOnClient } from '@/lib/features';
 import { useAgentAccess } from '@/lib/useAgentAccess';
@@ -3272,6 +3273,15 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                 ) : (
                   <MessagePreview messages={messages} agentName={otherPartyName} selfRole={mySide} limit={4} onAttachmentDragStart={startDocDrag} />
                 )}
+                {hasThread && (
+                  <QuickMessageComposer
+                    value={messageDraft}
+                    onChange={setMessageDraft}
+                    onSend={handleSendMessage}
+                    sending={sendingMessage}
+                    placeholder={isAgentAcct ? 'Message your coordinator…' : 'Message the agent…'}
+                  />
+                )}
               </section>
 
               )}
@@ -3671,6 +3681,15 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               ) : (
                 <MessagePreview messages={messages} agentName={otherPartyName} selfRole={mySide} limit={4} onAttachmentDragStart={startDocDrag} />
               )}
+              {hasThread && (
+                  <QuickMessageComposer
+                    value={messageDraft}
+                    onChange={setMessageDraft}
+                    onSend={handleSendMessage}
+                    sending={sendingMessage}
+                    placeholder={isAgentAcct ? 'Message your coordinator…' : 'Message the agent…'}
+                  />
+                )}
             </div>
             )}
             {tab === 'documents' && templatesOn && !ownerView && (
