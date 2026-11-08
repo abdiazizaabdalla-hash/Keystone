@@ -34,6 +34,8 @@ const cspHeaderName =
   process.env.CSP_MODE === 'enforce' ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only';
 
 const nextConfig: NextConfig = {
+  // The read-only live-data server (scripts/dev-prod-readonly.mjs) builds into its own folder so it can run next to dev:local.
+  ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
   // The brokerage page is taken down until that product is built (source kept in docs/parked-pages).
   // Temporary redirect so old links still land somewhere. The free agent portal page is live.
   async redirects() {
