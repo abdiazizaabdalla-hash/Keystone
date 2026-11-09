@@ -1263,6 +1263,13 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
 
           <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
             <div className="lg:order-2 lg:self-start flex flex-col gap-8 min-w-0">
+{ownerView ? (
+            <OverviewCard title="Message the agent" summary={data.agent?.name || undefined}>
+              <p className="text-sm text-slate-400">The listing thread is between the agent and their coordinator. To ask about a step, message the agent directly.</p>
+              {data.agent?.id && <a href={`/dashboard/collaborate?with=${data.agent.id}#messages`} className="mt-4 inline-block px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl">Message {data.agent.name || 'the agent'}</a>}
+            </OverviewCard>
+          ) : (
+            <>
 <OverviewCard
             title="Messages"
                         action={{ label: 'Open messages', onClick: () => selectTab('messages') }}
@@ -1304,6 +1311,8 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
               <p className="text-sm text-slate-400">Add the seller&apos;s email under Details to send them updates from here.</p>
             )}
           </OverviewCard>
+            </>
+          )}
 <OverviewCard
             title="Checklist"
             summary={tasks.length === 0 ? 'No steps yet' : `${tasks.filter((t) => t.completed).length} of ${tasks.length} done`}
