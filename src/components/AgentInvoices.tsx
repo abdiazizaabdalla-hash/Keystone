@@ -374,7 +374,7 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
   );
 }
 
-function InvoiceEditor({ invoice, onClose, onChanged }: { invoice: InvoiceRow; onClose: () => void; onChanged: (inv: InvoiceRow) => void }) {
+function InvoiceEditor({ invoice, onClose, onChanged, backLabel = '← All invoices' }: { invoice: InvoiceRow; onClose: () => void; onChanged: (inv: InvoiceRow) => void; backLabel?: string }) {
   const [title, setTitle] = useState(invoice.title);
   const [billToName, setBillToName] = useState(invoice.bill_to_name);
   const [billToEmail, setBillToEmail] = useState(invoice.bill_to_email || '');
@@ -504,7 +504,7 @@ function InvoiceEditor({ invoice, onClose, onChanged }: { invoice: InvoiceRow; o
   return (
     <div className="p-4 md:p-10 max-w-3xl mx-auto">
       <button type="button" onClick={onClose} className="text-sm text-slate-400 hover:text-slate-200 mb-4">
-        ← All invoices
+        {backLabel}
       </button>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl md:text-3xl font-semibold text-slate-100">{invoice.invoice_number}</h1>
@@ -648,6 +648,86 @@ function InvoiceEditor({ invoice, onClose, onChanged }: { invoice: InvoiceRow; o
           <button type="button" disabled={busy} onClick={remove} className="px-4 py-2 text-red-300 hover:text-red-200 text-sm rounded-xl disabled:opacity-50">
             Delete draft
           </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+/**
+ * "Generate invoice" on a deal, as a popup that stays on the deal: pick a template, then fill the invoice in. The invoice is attached
+ * to the deal (and starts addressed to the coordinator when there is one). The brokerage commission invoice opens its own confirm screen.
+ */
+export function DealInvoiceModal({ transactionId, onClose, onChanged }: { transactionId: string; onClose: () => void; onChanged?: () => void }) {
+  const [editing, setEditing] = useState<InvoiceRow | null>(null);
+  const [commissionForm, setCommissionForm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const create = async (templateKey: string) => {
+    setBusy(true);
+    setError('');
+    try {
+      if (templateKey === 'commission_split') {
+        const opts = await authFetch('/api/commissions/invoice-options').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        if (opts?.inBrokerage) {
+          setCommissionForm(true);
+          return;
+        }
+      }
+      const res = await authFetch('/api/workspace-invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateKey, transactionId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not create the invoice');
+      setEditing(data);
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the invoice');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const close = () => {
+    onChanged?.();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Generate invoice">
+      <div className="w-full max-w-3xl my-8 rounded-2xl border border-white/10 bg-slate-900 shadow-2xl">
+        {commissionForm ? (
+          <AgentCommissionInvoiceForm initialTransactionId={transactionId} lockDeal onClose={close} onSent={close} />
+        ) : editing ? (
+          <InvoiceEditor invoice={editing} onClose={close} onChanged={(inv) => setEditing(inv)} backLabel="← Back to the deal" />
+        ) : (
+          <div className="p-5 md:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-100">Choose a template for this deal</h2>
+              <button type="button" onClick={close} className="text-sm text-slate-400 hover:text-slate-200">
+                Cancel
+              </button>
+            </div>
+            {error && <p className="mb-3 text-sm text-red-300">{error}</p>}
+            <div className="grid sm:grid-cols-2 gap-3">
+              {INVOICE_TEMPLATES.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => create(t.key)}
+                  className="text-left bg-slate-800/60 hover:bg-slate-800 border border-white/10 hover:border-blue-500/50 rounded-xl p-4 transition disabled:opacity-50"
+                >
+                  <p className="font-semibold text-slate-100 text-sm">{t.name}</p>
+                  <p className="text-xs text-slate-400 mt-1">{t.blurb}</p>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -6,6 +6,7 @@ import { authFetch } from '@/lib/authClient';
 import { openStatement } from '@/lib/commissionClient';
 import { showToast } from '@/lib/toast';
 import AgentCommissionInvoiceForm from '@/components/AgentCommissionInvoiceForm';
+import { DealInvoiceModal } from '@/components/AgentInvoices';
 import type { SplitType } from '@/lib/commissionMath';
 
 // The commission section of an agent's deal when they are in a brokerage. Their brokerage's commission statement starts as an
@@ -23,6 +24,8 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator, 
   const [error, setError] = useState('');
   // The confirm screen opens right here on the deal; sending never leaves the page.
   const [confirming, setConfirming] = useState(false);
+  // "Generate invoice" (billing someone else, like a coordinator) is a popup on the deal too.
+  const [generating, setGenerating] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -45,10 +48,13 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator, 
   }, [needsReply, onNeedsAction]);
 
   const other = (
+    <>
     <p className="text-xs text-slate-500 mt-4">
       Billing someone else for this deal, like a coordinator or a client? That is a separate invoice:{' '}
-      <Link href={hasCoordinator ? `/dashboard/invoices?transactionId=${transactionId}` : '/dashboard/invoices?new=1'} className="text-blue-400 hover:text-blue-300">create an invoice</Link>. Your brokerage commission invoice is listed in <Link href="/dashboard/invoices" className="text-blue-400 hover:text-blue-300">Invoices</Link> too, but it is not part of that billing.
+      <button type="button" onClick={() => setGenerating(true)} className="text-blue-400 hover:text-blue-300 underline-offset-2 hover:underline">create an invoice</button>. Your brokerage commission invoice is listed in <Link href="/dashboard/invoices" className="text-blue-400 hover:text-blue-300">Invoices</Link> too, but it is not part of that billing.
     </p>
+    {generating && <DealInvoiceModal transactionId={transactionId} onClose={() => setGenerating(false)} />}
+    </>
   );
 
   if (data === null) return <p className="text-sm text-slate-500">Loading…</p>;
@@ -121,7 +127,8 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator, 
       <p className="text-sm text-slate-400 max-w-xl">
         {hasCoordinator ? 'A coordinator is on this deal, so the invoice is attached to it and starts addressed to them.' : 'Create an invoice for this deal and send it to anyone. Add a coordinator to this deal and the invoice attaches to it automatically.'}
       </p>
-      <Link href={hasCoordinator ? `/dashboard/invoices?transactionId=${transactionId}` : '/dashboard/invoices?new=1'} className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">Generate invoice</Link>
+      <button type="button" onClick={() => setGenerating(true)} className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">Generate invoice</button>
+      {generating && <DealInvoiceModal transactionId={transactionId} onClose={() => setGenerating(false)} />}
     </div>
   );
 }
