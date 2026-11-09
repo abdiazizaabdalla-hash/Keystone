@@ -124,6 +124,8 @@ BUILT (committed locally, not pushed). The product model, per the founder: an **
 - UI: Automations page (cards, builder, history), "Apply automations" in the new-transaction form and the new-listing form, "Automations on this transaction/listing" block in the deal Automation tab and listing panel. Applying turns the deal's assistant from Off to Draft.
 - Turning a template off pauses its copies and cancels queued work; deleting stops its copies; removing a copy cancels its queue.
 
+- **Preset library** (`src/lib/automation/presets.ts`, `PresetLibrary.tsx` at the top of the Automations page): 14 transaction + 5 listing ready-made automations with full email wording, "View workflow and emails", "Customize" (opens the builder prefilled) and "Add as is". Every preset is validated by the same code as a hand-made one (unit test). Deadline triggers read the deal's Critical dates (earnest money, inspection, appraisal, financing, title) and stop once a date is marked done; reminders never mark anything complete. `COMING_SOON` lists wanted presets that need data Relay does not record yet (showings, offers, listing status events, required-document tracking).
+
 PLANNED, not built: natural-language/AI builder, conditions and branches, "run another automation", wait/check steps, update-deal-status and field actions, status-changed / showing / offer triggers (no events exist yet), listing email, listing-to-transaction handoff, team/brokerage-wide templates, a per-deal history view beyond the Activity list, and dedupe of events for listing triggers.
 
 ### Then

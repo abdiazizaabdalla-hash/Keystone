@@ -99,3 +99,33 @@ describe('recipients and variables', () => {
     expect(fillVars('Hi {{client_name}} at {{ address }} {{nope}}', { client_name: 'Bo', address: '1 Main' })).toBe('Hi Bo at 1 Main {{nope}}');
   });
 });
+
+import { COMING_SOON, PRESETS } from '@/lib/automation/presets';
+
+describe('preset library', () => {
+  it('has unique ids and every preset passes the same validation as a hand-made automation', () => {
+    expect(new Set(PRESETS.map((p) => p.id)).size).toBe(PRESETS.length);
+    for (const p of PRESETS) {
+      const r = validateDefinition({ name: p.name, description: p.summary, category: p.category, triggerType: p.triggerType, steps: p.steps });
+      expect(r.ok, `${p.id}: ${r.ok ? '' : r.error}`).toBe(true);
+    }
+    expect(PRESETS.filter((p) => p.category === 'transaction').length).toBeGreaterThanOrEqual(10);
+    expect(PRESETS.filter((p) => p.category === 'listing').length).toBeGreaterThanOrEqual(4);
+    expect(COMING_SOON.length).toBeGreaterThan(0);
+  });
+  it('every email placeholder is one the engine fills in', () => {
+    const known = new Set(['address', 'file_number', 'closing_date', 'client_name']);
+    for (const p of PRESETS) for (const s of p.steps) for (const text of [s.subject, s.message, s.title, s.body, s.name, s.text]) for (const m of (text ?? '').matchAll(/\{\{\s*([a-z_]+)\s*\}\}/gi)) expect(known.has(m[1].toLowerCase()), `${p.id}: {{${m[1]}}}`).toBe(true);
+  });
+});
+
+describe('critical-date triggers', () => {
+  const step: Step = { id: 'k', type: 'notify_me', when: { days: 2, direction: 'before' }, title: 'x' };
+  it('fire from the deal critical date and stop once it is marked done', () => {
+    const open = facts({ keyDates: { earnest_money: { date: '2026-11-15', completed: false } } });
+    expect(dueSteps('i1', 'earnest_money_due', [step], open, new Date('2026-11-13T17:00:00Z'), new Set())).toHaveLength(1);
+    const done = facts({ keyDates: { earnest_money: { date: '2026-11-15', completed: true } } });
+    expect(dueSteps('i1', 'earnest_money_due', [step], done, new Date('2026-11-13T17:00:00Z'), new Set())).toEqual([]);
+    expect(dueSteps('i1', 'earnest_money_due', [step], facts(), new Date('2026-11-13T17:00:00Z'), new Set())).toEqual([]);
+  });
+});

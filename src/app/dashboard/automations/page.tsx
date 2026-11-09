@@ -6,6 +6,8 @@ import { isFeatureOnClient } from '@/lib/features';
 import { TRIGGERS, type Category, type Step } from '@/lib/automation/library';
 import AutomationBuilder, { blankAutomation, type BuilderValue } from '@/components/AutomationBuilder';
 import { summarizeSteps } from '@/components/ApplyAutomations';
+import PresetLibrary from '@/components/PresetLibrary';
+import type { Preset } from '@/lib/automation/presets';
 
 interface Template {
   id: string;
@@ -90,6 +92,23 @@ export default function AutomationsPage() {
     }
   };
 
+  const presetValue = (p: Preset): BuilderValue => ({ name: p.name, description: p.summary, category: p.category, triggerType: p.triggerType, steps: p.steps.map((x) => ({ ...x })) });
+  const addPreset = async (p: Preset) => {
+    setSaving(true);
+    setNotice(null);
+    try {
+      const res = await authFetch('/api/automation/templates', { method: 'POST', headers: json, body: JSON.stringify(presetValue(p)) });
+      if (!res.ok) throw new Error(await errorOf(res, 'Could not add it'));
+      setError(null);
+      setNotice(`Added "${p.name}" to your list below. Apply it when you create a transaction or listing, or from a deal's Automation tab.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add it');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const section = (category: Category, title: string, blurb: string) => {
     const list = (templates ?? []).filter((t) => t.category === category);
     return (
@@ -157,6 +176,8 @@ export default function AutomationsPage() {
         </section>
       ) : (
         <>
+          <PresetLibrary busy={saving} owned={new Set((templates ?? []).map((t) => t.name))} onAdd={(p) => void addPreset(p)} onCustomize={(p) => { setBuilderError(null); setEditing({ id: null, value: presetValue(p) }); window.scrollTo({ top: 0 }); }} />
+          <h2 className="border-t border-white/10 pt-6 text-xl font-semibold text-white">Your automations</h2>
           {section('transaction', 'Transaction automations', 'Run on purchase and sale transactions.')}
           {section('listing', 'Listing automations', 'Run on listings. Email steps are not available for listings yet.')}
           <section className="space-y-2" data-testid="automation-history">

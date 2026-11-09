@@ -1,7 +1,7 @@
 import { supabaseServer } from '../supabase';
 import { loadDealForTemplates, recipientsOf } from '../templateContext';
 import { submitAutomationAction } from './actions';
-import { dueSteps, fillVars, localDayOf, resolveRecipients, triggerOf, validateDefinition, type Definition, type InstanceFacts, type Step } from './library';
+import { KEY_DATE_KIND_OF, dueSteps, fillVars, localDayOf, resolveRecipients, triggerOf, validateDefinition, type Definition, type InstanceFacts, type Step } from './library';
 import { DEFAULT_SETTINGS } from './server';
 
 // Database side of the Automation Library: templates, the independent copies applied to deals and listings, and the engine
@@ -226,10 +226,17 @@ async function loadFacts(inst: InstanceRow): Promise<{ facts: InstanceFacts; tim
     const { data: ev } = await supabaseServer.from('transaction_events').select('occurred_at').eq('transaction_id', inst.transaction_id).eq('type', inst.trigger_type).gte('occurred_at', inst.created_at).order('occurred_at', { ascending: false }).limit(1).maybeSingle();
     if (ev) events[inst.trigger_type] = ev.occurred_at as string;
   }
+  const keyDates: Record<string, { date: string; completed: boolean }> = {};
+  if (inst.transaction_id && KEY_DATE_KIND_OF[inst.trigger_type]) {
+    const { data: kds } = await supabaseServer.from('transaction_key_dates').select('due_date, completed').eq('transaction_id', inst.transaction_id).eq('kind', KEY_DATE_KIND_OF[inst.trigger_type]).order('due_date', { ascending: true });
+    // The earliest date still open; if every one is done, the deal's first one (done, so nothing is sent).
+    const open = (kds ?? []).find((k) => !k.completed) ?? (kds ?? [])[0];
+    if (open) keyDates[KEY_DATE_KIND_OF[inst.trigger_type]] = { date: open.due_date as string, completed: Boolean(open.completed) };
+  }
   const timeZone = (settings?.time_zone as string | undefined) ?? DEFAULT_SETTINGS.time_zone;
   return {
     timeZone,
-    facts: { createdAt: inst.created_at, timeZone, dealCreatedAt: r.created_at ?? null, closingDate: r.closing_date ?? null, acceptanceDate: r.acceptance_date ?? null, plannedListDate: r.planned_list_date ?? null, expirationDate: r.expiration_date ?? null, events },
+    facts: { createdAt: inst.created_at, timeZone, dealCreatedAt: r.created_at ?? null, closingDate: r.closing_date ?? null, acceptanceDate: r.acceptance_date ?? null, plannedListDate: r.planned_list_date ?? null, expirationDate: r.expiration_date ?? null, events, keyDates },
   };
 }
 

@@ -20,6 +20,11 @@ export const TRIGGERS: readonly TriggerDef[] = [
   { id: 'document_added', category: 'transaction', kind: 'event', label: 'Any document uploaded', help: 'Each time a document is added to the deal.' },
   { id: 'deal_closed', category: 'transaction', kind: 'event', label: 'Transaction closed', help: 'When the deal is marked Closed.' },
   { id: 'acceptance_date', category: 'transaction', kind: 'date', label: 'Contract acceptance date', help: "Counted from the deal's acceptance date." },
+  { id: 'earnest_money_due', category: 'transaction', kind: 'date', label: 'Earnest money due date', help: "Counted from the deal's Critical dates. Stops once you mark that date done." },
+  { id: 'inspection_deadline', category: 'transaction', kind: 'date', label: 'Inspection / option period deadline', help: "Counted from the deal's Critical dates. Stops once you mark that date done." },
+  { id: 'appraisal_deadline', category: 'transaction', kind: 'date', label: 'Appraisal deadline', help: "Counted from the deal's Critical dates. Stops once you mark that date done." },
+  { id: 'financing_deadline', category: 'transaction', kind: 'date', label: 'Financing contingency deadline', help: "Counted from the deal's Critical dates. Stops once you mark that date done." },
+  { id: 'title_commitment_due', category: 'transaction', kind: 'date', label: 'Title commitment due date', help: "Counted from the deal's Critical dates. Stops once you mark that date done." },
   { id: 'closing_date', category: 'transaction', kind: 'date', label: 'Closing date', help: "Counted from the deal's closing date. It follows the date if it changes." },
   { id: 'listing_created', category: 'listing', kind: 'created', label: 'Listing created', help: 'When the listing is created.' },
   { id: 'listing_planned_list_date', category: 'listing', kind: 'date', label: 'Planned list date', help: "Counted from the listing's planned list date." },
@@ -152,7 +157,18 @@ export interface InstanceFacts {
   expirationDate: string | null;
   /** Latest occurrence of each event type that happened after this copy was applied. */
   events: Record<string, string | undefined>;
+  /** The deal's Critical dates by kind (earliest open one). A completed date is done: nothing more is sent for it. */
+  keyDates?: Record<string, { date: string; completed: boolean } | undefined>;
 }
+
+/** Which Critical date kind (src/lib/keyDates.ts) each deadline trigger reads. */
+export const KEY_DATE_KIND_OF: Record<string, string> = {
+  earnest_money_due: 'earnest_money',
+  inspection_deadline: 'inspection',
+  appraisal_deadline: 'appraisal',
+  financing_deadline: 'financing',
+  title_commitment_due: 'title_commitment',
+};
 
 export type Anchor = { kind: 'time'; at: string } | { kind: 'day'; day: string };
 
@@ -168,6 +184,14 @@ export function triggerAnchor(triggerType: string, f: InstanceFacts): Anchor | n
       return f.events[triggerType] ? { kind: 'time', at: f.events[triggerType]! } : null;
     case 'closing_date':
       return day(f.closingDate);
+    case 'earnest_money_due':
+    case 'inspection_deadline':
+    case 'appraisal_deadline':
+    case 'financing_deadline':
+    case 'title_commitment_due': {
+      const kd = f.keyDates?.[KEY_DATE_KIND_OF[triggerType]];
+      return kd && !kd.completed ? day(kd.date) : null;
+    }
     case 'acceptance_date':
       return day(f.acceptanceDate);
     case 'listing_planned_list_date':
