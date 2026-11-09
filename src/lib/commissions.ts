@@ -192,6 +192,26 @@ export function termsFromLink(link: LinkTerms | null | undefined): BaseTerms {
 }
 
 /**
+ * The agent a deal's commission is about, with their brokerage link: the deal's owner when they are in a brokerage, otherwise a
+ * participant agent (added to a coordinator's deal) who is. Null when nobody on the deal is in a brokerage. This is commission-only:
+ * it never gives the brokerage a view of the deal itself.
+ */
+export async function commissionAgentForDeal(transactionId: string, ownerId?: string | null): Promise<{ agentId: string; link: NonNullable<Awaited<ReturnType<typeof activeLinkForAgent>>> } | null> {
+  let owner = ownerId;
+  if (owner === undefined) {
+    const { data: tx } = await supabaseServer.from('transactions').select('tc_user_id').eq('id', transactionId).maybeSingle();
+    owner = (tx?.tc_user_id as string | undefined) ?? null;
+  }
+  const { data: parts } = await supabaseServer.from('transaction_agents').select('agent_user_id').eq('transaction_id', transactionId).limit(50);
+  const candidates = [...(owner ? [owner] : []), ...((parts ?? []).map((p) => p.agent_user_id as string).filter((id) => id && id !== owner))];
+  for (const id of candidates) {
+    const link = await activeLinkForAgent(id);
+    if (link && (await overseesAgent(link.owner_user_id, id))) return { agentId: id, link };
+  }
+  return null;
+}
+
+/**
  * Make the estimate statement for a deal if there is none (a closed deal, or an open one when the agent sends their invoice) and the agent's brokerage has set their terms. It carries the base
  * split, the default fees and the cap rule as they are right now, and no figures: the brokerage owner confirms those from the
  * closing documents. Returns the statement (new or existing) or null when there is nothing to base one on. Never throws.
@@ -216,10 +236,9 @@ export async function ensureEstimateStatement(transactionId: string, options: { 
     }
     // A statement is made when a deal closes, or earlier when the agent sends their commission invoice (allowOpen).
     if (tx.status !== CLOSED_STAGE && !options.allowOpen) return null;
-    const agentId = tx.tc_user_id as string | undefined;
-    if (!agentId) return null;
-    const link = await activeLinkForAgent(agentId);
-    if (!link || !(await overseesAgent(link.owner_user_id, agentId))) return null;
+    const found = await commissionAgentForDeal(transactionId, tx.tc_user_id as string | null);
+    if (!found) return null;
+    const { agentId, link } = found;
     const terms = termsFromLink(link);
     if (!terms.split) return null;
     const price = tx.purchase_price === null || tx.purchase_price === undefined ? null : Number(tx.purchase_price);

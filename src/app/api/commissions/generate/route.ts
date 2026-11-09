@@ -7,7 +7,7 @@ import { activeLinkForAgent, assertWorkspaceAgent, brokerageOn, overseesAgent } 
 import { oversightError } from '@/lib/oversightServer';
 import { SplitError, mergeAgentFees } from '@/lib/commissionMath';
 import { CLOSED_STAGE } from '@/lib/oversightMath';
-import { commissionForTransaction, ensureEstimateStatement, isMissingTable, notifyCommission, termsFromLink, viewOf, breakdown } from '@/lib/commissions';
+import { commissionAgentForDeal, commissionForTransaction, ensureEstimateStatement, isMissingTable, notifyCommission, termsFromLink, viewOf, breakdown } from '@/lib/commissions';
 
 // An agent sends their commission invoice to their brokerage for one of their own deals, open or closed. There is no gross to enter:
 // the invoice starts as an ESTIMATE built from the base terms their brokerage set for them (sale price x commission rate, split, fees),
@@ -25,7 +25,9 @@ export async function POST(request: NextRequest) {
     if (!transactionId) return NextResponse.json({ error: 'Choose a deal.' }, { status: 400 });
 
     const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id, property_address, status').eq('id', transactionId).maybeSingle();
-    if (!tx || tx.tc_user_id !== user.id) throw new AuthError('Not found', 404);
+    if (!tx) throw new AuthError('Not found', 404);
+    // The agent's own deal, or a coordinator's deal they were added to.
+    if (tx.tc_user_id !== user.id && (await commissionAgentForDeal(transactionId, tx.tc_user_id as string | null))?.agentId !== user.id) throw new AuthError('Not found', 404);
 
     const link = await activeLinkForAgent(user.id);
     if (!link || !(await overseesAgent(link.owner_user_id, user.id))) {

@@ -27,10 +27,12 @@ export async function GET(request: NextRequest) {
     const today = new Date().toISOString().slice(0, 10);
     const cap = terms.cap ? await capInfoFor(link.owner_user_id, user.id, terms, today) : null;
 
+    const { data: part } = await supabaseServer.from('transaction_agents').select('transaction_id').eq('agent_user_id', user.id).limit(300);
+    const partIds = (part ?? []).map((p) => p.transaction_id as string);
     const { data: txs, error } = await supabaseServer
       .from('transactions')
       .select('id, property_address, file_number, status, purchase_price, closing_date')
-      .eq('tc_user_id', user.id)
+      .or(`tc_user_id.eq.${user.id}${partIds.length ? `,id.in.(${partIds.join(',')})` : ''}`)
       .order('closing_date', { ascending: true, nullsFirst: false })
       .limit(300);
     if (error) throw error;

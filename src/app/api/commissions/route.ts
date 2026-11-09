@@ -9,7 +9,7 @@ import { toCsv } from '@/lib/contactsCrm';
 import { DEFAULT_BILL_ACCOUNT, QB_BILL_HEADERS, QB_VENDOR_HEADERS, usDate, money as qbMoney } from '@/lib/quickbooks';
 import { oversightError } from '@/lib/oversightServer';
 import { cleanDeductions, cleanRate, grossPercentOfPrice, computeSplit, expectedGrossCents, isRateType, isSplitType, SplitError, splitLabel, toCents, type SplitType } from '@/lib/commissionMath';
-import { capInfoFor, commissionForTransaction, ensureEstimateStatement, isMissingTable, nextStatementNumber, notifyCommission, termsFromLink, viewOf, breakdown, type BaseTerms, type CommissionRow } from '@/lib/commissions';
+import { capInfoFor, commissionAgentForDeal, commissionForTransaction, ensureEstimateStatement, isMissingTable, nextStatementNumber, notifyCommission, termsFromLink, viewOf, breakdown, type BaseTerms, type CommissionRow } from '@/lib/commissions';
 
 // Commission splits between a brokerage owner and their agents, one per deal. Off (404) unless the brokerage feature is on.
 //
@@ -50,8 +50,11 @@ export async function GET(request: NextRequest) {
       if (!tx) return NextResponse.json({ role: null });
       const dealClosed = tx.status === CLOSED_STAGE;
       const today = new Date().toISOString().slice(0, 10);
-      if (tx.tc_user_id === user.id) {
-        // The agent who owns the deal. An estimate is made for them the first time they look, if their brokerage has set their terms.
+      const existingRow = await commissionForTransaction(transactionId);
+      // The agent the commission is about: the deal's owner, or an agent added to a coordinator's deal who is in a brokerage.
+      const isCommissionAgent = existingRow ? existingRow.agent_user_id === user.id : (await commissionAgentForDeal(transactionId, tx.tc_user_id as string | null))?.agentId === user.id;
+      if (isCommissionAgent) {
+        // The agent whose deal it is. An estimate is made for them the first time they look, if their brokerage has set their terms.
         const found = await ensureEstimateStatement(transactionId);
         // A statement exists for a closed deal, or for an open one once the agent has sent their commission invoice.
         const row = found;
@@ -71,18 +74,18 @@ export async function GET(request: NextRequest) {
         if (!dealClosed) return NextResponse.json({ role: null, canPropose: false, dealClosed, canInvoice: !!termsFromLink(link).split, awaitingTerms: !termsFromLink(link).split, brokerage, commission: null });
         return NextResponse.json({ role: null, canPropose: false, awaitingTerms: true, brokerage, purchasePrice: Number(tx.purchase_price) || null, dealClosed, commission: null });
       }
-      const existing = await commissionForTransaction(transactionId);
+      const existing = existingRow;
       const owns = existing ? existing.owner_user_id === user.id : false;
-      const oversees = await canOverseeDeal(user.id, transactionId);
+      const oversees = owns || (await canOverseeDeal(user.id, transactionId));
       if (!owns && !oversees) return NextResponse.json({ role: null });
       const found = oversees ? await ensureEstimateStatement(transactionId) : existing;
       const row = found;
       let terms: BaseTerms | null = null;
       let cap = null;
       if (oversees) {
-        const { data: link } = await supabaseServer.from('brokerage_links').select('*').eq('owner_user_id', user.id).eq('agent_user_id', tx.tc_user_id).eq('status', 'active').maybeSingle();
+        const { data: link } = await supabaseServer.from('brokerage_links').select('*').eq('owner_user_id', user.id).eq('agent_user_id', existing?.agent_user_id ?? tx.tc_user_id).eq('status', 'active').maybeSingle();
         terms = termsFromLink(link);
-        if (terms.cap) cap = await capInfoFor(user.id, tx.tc_user_id as string, terms, today);
+        if (terms.cap) cap = await capInfoFor(user.id, (existing?.agent_user_id ?? tx.tc_user_id) as string, terms, today);
       }
       return NextResponse.json({
         role: 'owner',
@@ -177,10 +180,11 @@ export async function POST(request: NextRequest) {
     const input = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const transactionId = typeof input.transactionId === 'string' ? input.transactionId : '';
     if (!transactionId) return NextResponse.json({ error: 'Choose a deal.' }, { status: 400 });
-    if (!(await canOverseeDeal(user.id, transactionId))) throw new AuthError('Not found', 404);
-
     const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id, property_address, status, purchase_price').eq('id', transactionId).single();
-    const agentId = tx!.tc_user_id as string;
+    const existingForAuth = await commissionForTransaction(transactionId);
+    // The brokerage that holds the statement can always work it, even on a deal a coordinator runs.
+    if (!(existingForAuth?.owner_user_id === user.id) && !(await canOverseeDeal(user.id, transactionId))) throw new AuthError('Not found', 404);
+    const agentId = (existingForAuth?.owner_user_id === user.id ? existingForAuth.agent_user_id : tx!.tc_user_id) as string;
     if (!(await overseesAgent(user.id, agentId))) throw new AuthError('Not found', 404);
 
     const hasGross = input.gross !== undefined && input.gross !== null && input.gross !== '';
