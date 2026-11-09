@@ -10,6 +10,17 @@ import ListingThread from '@/components/ListingThread';
 import KeyDatesPanel from '@/components/KeyDatesPanel';
 import { LISTING_DOC_TYPES, LISTING_STATUS_LABEL, daysOnMarket, SHOWING_INTEREST_LABEL, SHOWING_KIND_LABEL, type ListingStatus } from '@/lib/listingsShared';
 
+interface ListingInvoice {
+  id: string;
+  invoice_number: string;
+  amount_owed: number;
+  due_date: string;
+  paid: boolean;
+  paid_at: string | null;
+  payOnline: boolean;
+  listing?: { tcLabel: string } | null;
+}
+
 interface Detail {
   listing: {
     id: string;
@@ -79,11 +90,60 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
   const [showContactForm, setShowContactForm] = useState(false);
   const [contactError, setContactError] = useState('');
   const [docError, setDocError] = useState('');
+  // Listing fee invoices the coordinator sent for this listing.
+  const [invoices, setInvoices] = useState<ListingInvoice[]>([]);
+  const [invoiceBusy, setInvoiceBusy] = useState<string | null>(null);
+  const [invoiceError, setInvoiceError] = useState('');
   // Uploading a document: pick an area (or drop a file on it); moving and deleting stay with the coordinator.
   const docInputRef = useRef<HTMLInputElement>(null);
   const pendingDocType = useRef<string>('General');
   const [uploadTarget, setUploadTarget] = useState<string | null>(null);
   const [collapsedDocs, setCollapsedDocs] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    authFetch(`/api/agent/invoices?listingId=${id}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => { if (!cancelled) setInvoices(Array.isArray(rows) ? rows : []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [id]);
+
+  const payInvoice = async (inv: ListingInvoice) => {
+    setInvoiceBusy(inv.id);
+    setInvoiceError('');
+    try {
+      const res = await authFetch(`/api/invoices/${inv.id}/stripe-pay-link`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Could not create the payment link');
+      window.open(body.payUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setInvoiceError(err instanceof Error ? err.message : 'Could not create the payment link');
+    } finally {
+      setInvoiceBusy(null);
+    }
+  };
+
+  const downloadInvoice = async (inv: ListingInvoice) => {
+    setInvoiceBusy(inv.id);
+    setInvoiceError('');
+    try {
+      const res = await authFetch(`/api/invoices/${inv.id}/pdf`);
+      if (!res.ok) throw new Error('Could not prepare the PDF');
+      const url = window.URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${inv.invoice_number}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setInvoiceError(err instanceof Error ? err.message : 'Could not prepare the PDF');
+    } finally {
+      setInvoiceBusy(null);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -303,6 +363,43 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
         {/* Same grid as the deal page: wide column on the left, Messages + Checklist + People stacked on the right. */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
           <div className="lg:order-2 lg:self-start flex flex-col gap-8">
+            {invoices.length > 0 && (
+              <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                <h2 className="text-lg font-bold text-slate-100 mb-3">Invoice</h2>
+                <div className="space-y-4">
+                  {invoices.map((inv) => (
+                    <div key={inv.id}>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-slate-100 font-semibold">
+                            {inv.invoice_number} · ${inv.amount_owed.toLocaleString()} ·{' '}
+                            <span className={inv.paid ? 'text-green-400' : 'text-blue-400'}>{inv.paid ? 'Paid' : 'Unpaid'}</span>
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Listing fee · {inv.paid && inv.paid_at ? `Paid on ${formatDisplayDate(inv.paid_at)}` : `Due ${formatDisplayDate(inv.due_date)}`}
+                          </p>
+                        </div>
+                        {!inv.paid && (
+                          <button
+                            type="button"
+                            onClick={() => (inv.payOnline ? payInvoice(inv) : downloadInvoice(inv))}
+                            disabled={invoiceBusy === inv.id}
+                            className={inv.payOnline ? 'px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50' : 'px-4 py-2 border border-slate-500/50 text-slate-300 hover:text-slate-100 rounded-lg transition font-medium text-sm'}
+                          >
+                            {invoiceBusy === inv.id ? 'Working…' : inv.payOnline ? 'Pay Now' : 'Download PDF'}
+                          </button>
+                        )}
+                      </div>
+                      {!inv.paid && !inv.payOnline && (
+                        <p className="text-xs text-slate-500 mt-2">Invoice sent -- {inv.listing?.tcLabel || 'your coordinator'} will let you know how to pay.</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {invoiceError && <p className="text-red-400 text-xs mt-2">{invoiceError}</p>}
+              </section>
+            )}
+
             <ListingThread endpoint={`/api/agent/listings/${id}/comments`} self="agent" otherLabel={data.tcLabel} />
 
             <section className="bg-white/5 border border-white/10 rounded-2xl p-6">

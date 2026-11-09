@@ -5,7 +5,7 @@ import { isAgentUser, assertAgentOnOrOwnsTransaction, getAgentTransactionIds, ge
 import { isStripePayAvailable } from '@/lib/stripeConnect';
 
 const INVOICE_FIELDS =
-  'id, invoice_number, amount_owed, due_date, invoice_date, paid, paid_at, paid_amount, refunded, refunded_at, transaction_id';
+  'id, invoice_number, amount_owed, due_date, invoice_date, paid, paid_at, paid_amount, refunded, refunded_at, transaction_id, listing_id, kind, description';
 const INVOICE_FIELDS_WITH_AGENT = `${INVOICE_FIELDS}, agent_id`;
 
 // GET: the invoice(s) for this agent -- deliberately narrow fields (no
@@ -70,27 +70,64 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const listingIdParam = request.nextUrl.searchParams.get('listingId');
+
     // Deals the agent was added to, plus deals they own (a coordinator invoicing on one is billing them).
-    const transactionIds = [...new Set([...(await getAgentTransactionIds(user.id)), ...(await getOwnedTransactionIds(user.id))])];
-    if (transactionIds.length === 0) {
-      return NextResponse.json([]);
+    const transactionIds = listingIdParam ? [] : [...new Set([...(await getAgentTransactionIds(user.id)), ...(await getOwnedTransactionIds(user.id))])];
+    const dealInvoices: Record<string, unknown>[] = [];
+    if (transactionIds.length > 0) {
+      const { data: found, error } = await supabaseServer
+        .from('invoices')
+        .select(INVOICE_FIELDS_WITH_AGENT)
+        .in('transaction_id', transactionIds)
+        .order('invoice_date', { ascending: false });
+      if (error) throw error;
+      dealInvoices.push(...((found || []) as unknown as Record<string, unknown>[]));
     }
 
-    const { data: found, error } = await supabaseServer
-      .from('invoices')
-      .select(INVOICE_FIELDS_WITH_AGENT)
-      .in('transaction_id', transactionIds)
-      .order('invoice_date', { ascending: false });
-    if (error) throw error;
+    // Listing fees: invoices a coordinator made for a listing. They belong to the agent the invoice is billed to (matched by
+    // login email, the same rule that shares the listing itself) and to the owner of a listing a coordinator invoiced on.
+    const listingInvoices: Record<string, unknown>[] = [];
+    const email = (user.email || '').trim().toLowerCase();
+    const { data: billedRows } = email
+      ? await supabaseServer.from('agents').select('id').ilike('email', email.replace(/[\\%_]/g, (c) => `\\${c}`)).limit(200)
+      : { data: [] as { id: string }[] };
+    const { data: ownedListings } = await supabaseServer.from('listings').select('id').eq('tc_user_id', user.id).limit(1000);
+    const billedIds = (billedRows || []).map((a) => a.id as string);
+    const ownedListingIds = (ownedListings || []).map((l) => l.id as string);
+    const listingQueries = [];
+    if (billedIds.length > 0) {
+      const q0 = supabaseServer.from('invoices').select(INVOICE_FIELDS_WITH_AGENT).not('listing_id', 'is', null).in('agent_id', billedIds);
+      listingQueries.push(listingIdParam ? q0.eq('listing_id', listingIdParam) : q0);
+    }
+    if (ownedListingIds.length > 0) {
+      const q = supabaseServer.from('invoices').select(INVOICE_FIELDS_WITH_AGENT).in('listing_id', listingIdParam ? ownedListingIds.filter((x) => x === listingIdParam) : ownedListingIds);
+      listingQueries.push(q);
+    }
+    for (const r of await Promise.all(listingQueries)) {
+      // add-listing-invoices.sql not run yet: there are no listing invoices to show.
+      if (r.error) { console.error('agent listing invoices (ignored):', r.error.message); continue; }
+      for (const row of (r.data || []) as unknown as Record<string, unknown>[]) {
+        if (!listingInvoices.some((x) => x.id === row.id)) listingInvoices.push(row);
+      }
+    }
+
+    const all = [...dealInvoices, ...listingInvoices];
     // The agent's own records of the deal's people are not coordinator invoices.
-    const owners = await invoiceOwners((found || []).map((i) => i.agent_id as string));
-    const invoices = (found || []).filter((i) => owners.get(i.agent_id as string) && owners.get(i.agent_id as string) !== user.id);
+    const owners = await invoiceOwners(all.map((i) => i.agent_id as string));
+    const invoices = all
+      .filter((i) => owners.get(i.agent_id as string) && owners.get(i.agent_id as string) !== user.id)
+      .sort((a, b) => String(b.invoice_date).localeCompare(String(a.invoice_date)));
     if (invoices.length === 0) {
       return NextResponse.json([]);
     }
 
-    const invoiceTxIds = [...new Set(invoices.map((i) => i.transaction_id as string))];
-    const { data: transactions } = await supabaseServer.from('transactions').select('id, file_number, property_address').in('id', invoiceTxIds);
+    const invoiceTxIds = [...new Set(invoices.map((i) => i.transaction_id as string).filter(Boolean))];
+    const invoiceListingIds = [...new Set(invoices.map((i) => i.listing_id as string).filter(Boolean))];
+    const [{ data: transactions }, { data: listingRows }] = await Promise.all([
+      invoiceTxIds.length ? supabaseServer.from('transactions').select('id, file_number, property_address').in('id', invoiceTxIds) : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+      invoiceListingIds.length ? supabaseServer.from('listings').select('id, property_address').in('id', invoiceListingIds) : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    ]);
 
     const tcUserIds = [...new Set(invoices.map((i) => owners.get(i.agent_id as string) as string))];
     const tcLabels = new Map<string, string>();
@@ -105,21 +142,18 @@ export async function GET(request: NextRequest) {
     );
 
     const txById = new Map((transactions || []).map((t) => [t.id as string, t]));
+    const listingById = new Map((listingRows || []).map((l) => [l.id as string, l]));
 
     const result = invoices.map(({ agent_id, ...inv }) => {
       const tx = txById.get(inv.transaction_id as string);
+      const listing = listingById.get(inv.listing_id as string);
       const tcUserId = owners.get(agent_id as string) || '';
+      const tcLabel = tcLabels.get(tcUserId) || 'Transaction coordinator';
       return {
         ...inv,
         payOnline: tcPayOnline.get(tcUserId) || false,
-        transaction: tx
-          ? {
-              id: tx.id,
-              fileNumber: tx.file_number,
-              propertyAddress: tx.property_address,
-              tcLabel: tcLabels.get(tcUserId) || 'Transaction coordinator',
-            }
-          : null,
+        transaction: tx ? { id: tx.id, fileNumber: tx.file_number, propertyAddress: tx.property_address, tcLabel } : null,
+        listing: listing ? { id: listing.id, propertyAddress: listing.property_address, tcLabel } : null,
       };
     });
 

@@ -3,6 +3,14 @@ import { AuthError } from '@/lib/auth';
 import { assertAgentOnOrOwnsTransaction } from '@/lib/agentPortal';
 import type { TcInfo } from '@/lib/invoicePdf';
 
+/** The signed-in agent's login email is the email on the agent record a listing invoice is billed to. */
+async function isBilledListingAgent(billedEmail: string | null | undefined, userId: string) {
+  const billed = (billedEmail || '').trim().toLowerCase();
+  if (!billed) return false;
+  const { data } = await supabaseServer.auth.admin.getUserById(userId);
+  return (data.user?.email || '').trim().toLowerCase() === billed;
+}
+
 /**
  * `opts.allowAgent` + `opts.isAgent` lets the invited agent on this
  * invoice's own transaction through too -- gated via
@@ -39,8 +47,14 @@ export async function loadInvoiceBundle(
   // they were added to.
   const ownsInvoice = !!agent && agent.tc_user_id === userId;
   if (opts.allowAgent && opts.isAgent && !ownsInvoice) {
-    if (!invoice.transaction_id) throw new AuthError('You do not have permission to access this invoice', 403);
-    await assertAgentOnOrOwnsTransaction(invoice.transaction_id, userId);
+    if (!invoice.transaction_id) {
+      // A listing fee: the agent it is billed to may see it, the same way the listing itself is theirs by email.
+      if (!(invoice.listing_id && (await isBilledListingAgent(agent?.email, userId)))) {
+        throw new AuthError('You do not have permission to access this invoice', 403);
+      }
+    } else {
+      await assertAgentOnOrOwnsTransaction(invoice.transaction_id, userId);
+    }
   } else if (!isAdmin) {
     if (!agent || agent.tc_user_id !== userId) {
       throw new AuthError('You do not have permission to access this invoice', 403);

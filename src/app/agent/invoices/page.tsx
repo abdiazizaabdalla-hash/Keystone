@@ -17,9 +17,12 @@ interface AgentInvoice {
   paid_amount: number | null;
   refunded: boolean;
   refunded_at: string | null;
-  transaction_id: string;
+  transaction_id: string | null;
+  listing_id?: string | null;
+  kind?: string | null;
   payOnline: boolean;
   transaction: { id: string; fileNumber: string; propertyAddress: string | null; tcLabel: string } | null;
+  listing?: { id: string; propertyAddress: string | null; tcLabel: string } | null;
 }
 
 export default function AgentInvoicesPage() {
@@ -122,7 +125,14 @@ export default function AgentInvoicesPage() {
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          {invoice.transaction ? (
+          {invoice.listing ? (
+            <Link
+              href={`/agent/listings/${invoice.listing.id}`}
+              className="text-slate-100 font-semibold hover:text-blue-300 transition truncate block"
+            >
+              {invoice.listing.propertyAddress || 'Listing'}
+            </Link>
+          ) : invoice.transaction ? (
             <Link
               href={`/agent/transactions/${invoice.transaction.id}`}
               className="text-slate-100 font-semibold hover:text-blue-300 transition truncate block"
@@ -133,7 +143,8 @@ export default function AgentInvoicesPage() {
             <p className="text-slate-100 font-semibold">Deal no longer accessible</p>
           )}
           <p className="text-xs text-slate-500 mt-0.5">
-            {invoice.transaction ? `${invoice.transaction.tcLabel} · ` : ''}
+            {invoice.listing ? 'Listing fee · ' : 'Transaction coordination · '}
+            {(invoice.listing || invoice.transaction) ? `${(invoice.listing || invoice.transaction)!.tcLabel} · ` : ''}
             {invoice.invoice_number}
           </p>
         </div>
@@ -189,7 +200,7 @@ export default function AgentInvoicesPage() {
           emailed it. Mirrors the per-transaction agent page. */}
       {!invoice.paid && !invoice.payOnline && (
         <p className="text-xs text-slate-500 mt-2">
-          Invoice sent -- {invoice.transaction ? invoice.transaction.tcLabel : 'Your TC'} will let you know how to pay.
+          Invoice sent -- {(invoice.listing || invoice.transaction)?.tcLabel || 'Your TC'} will let you know how to pay.
         </p>
       )}
       {payErrors[invoice.id] && <p className="text-red-400 text-xs mt-2">{payErrors[invoice.id]}</p>}
@@ -216,7 +227,7 @@ export default function AgentInvoicesPage() {
         ) : invoices.length === 0 ? (
           <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-8 text-center">
             <p className="text-slate-400 text-sm">
-              No invoices yet -- they show up here once a TC generates one on a deal you&apos;re on.
+              No invoices yet -- they show up here once a TC invoices a deal or a listing of yours.
             </p>
           </div>
         ) : (
