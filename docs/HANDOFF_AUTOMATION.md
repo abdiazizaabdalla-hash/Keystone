@@ -6,7 +6,7 @@ Written 2026-11-09. Branch `preview/agent-invoices-and-stripe`. Nothing is pushe
 
 Paste this as the first message:
 
-> Read `docs/HANDOFF_AUTOMATION.md`, `docs/DEV_LOG.md` (top 3 entries) and section 16 of `docs/RELAY_IMPLEMENTATION_PLAN.md`. Then start Auto-0 behind a new `automation` flag. Inspect the code before changing anything, keep BUILT and PLANNED separate, commit locally, never push. Ask me before any Stripe or production change.
+> Read `docs/HANDOFF_AUTOMATION.md`, `docs/DEV_LOG.md` (top 3 entries) and section 16 of `docs/RELAY_IMPLEMENTATION_PLAN.md`. Then continue Auto-0 behind the existing `automation` flag. Inspect the code before changing anything, keep BUILT and PLANNED separate, commit locally, never push. Ask me before any Stripe or production change.
 
 Working agreements: direct, critical feedback; inspect code first; Abdi pushes; agent, brokerage and template features are OFF in production behind flags; localhost uses the relay-test Supabase project (`bmuaxlcaqqifybgheqiq`); production project ref starts `vjfttw` and is never written to from a dev machine.
 
@@ -55,7 +55,7 @@ Tests:
 - `tests/route-registry.ts` must list every API route. Writing routes call `assertNotCollaborator`.
 - Service-role Supabase client everywhere, so authorization lives in app code (`authorize.ts`, `entitlements.ts`). RLS is not the safety net.
 - Commissions assume the agent is the deal owner; the participant path goes through `commissionAgentForDeal`. Do not widen `canOverseeDeal` (privacy).
-- Feature flags: `RELAY_FEATURES` / `NEXT_PUBLIC_RELAY_FEATURES`. Add `automation` to the list and gate routes, UI and cron on it.
+- Feature flags: `RELAY_FEATURES` / `NEXT_PUBLIC_RELAY_FEATURES`. The `automation` flag already exists in `src/lib/features.ts` (deployment switch, off in production). The `automation` entry in `tiers.ts` is a different thing: the per-plan entitlement for template rules. Auto-0 checks both (the flag, then the owner's entitlement in `loadGuardContext`). Gate routes, UI and cron on the flag.
 - Every new table needs a SQL file at the repo root, run on relay-test first, then prod before its flag turns on (`docs/PROD_SCHEMA_RECONCILIATION.md`).
 
 ## 6. The automation plan, in order
@@ -77,6 +77,27 @@ Source of truth for sequencing: `docs/RELAY_IMPLEMENTATION_PLAN.md` section 16 (
 8. Tests: cross-account isolation, fake clock, fake Claude, prompt injection, idempotency (replay sends nothing twice), guard refusals, route registry.
 
 Done when: a replayed event or cron tick sends nothing twice, the kill switch stops everything, and no user can see or trigger another account's automation.
+
+### Auto-0 status (updated 2026-11-09, session 2)
+
+**BUILT (committed locally, unit-tested, not run against any database):**
+- Step 1, migration: `add-automation-foundation.sql` (`transaction_events`, `automation_settings`, `automation_account_controls`, `automation_actions` with unique idempotency key, `automation_approvals`). **Not run on relay-test or prod.** Run on relay-test first; prod needs the founder's approval before the flag is ever on there.
+- Step 2, guard: `src/lib/automation/guard.ts` (pure `evaluateGuard`) and `types.ts`. Order: feature, kill switch, entitlement, restricted list, unknown action, mode, recipient allowlist, daily cap, quiet hours, approval rules. No settings row = Off; a new row defaults to Draft.
+- Step 3, events: `eventCore.ts` (pure) and `events.ts` (Supabase). Inert unless the flag is on; never fails the request. Wired at: deal PATCH (`deal_closed`, `date_changed`), documents POST (`document_added`, `contract_uploaded` for a Purchase Contract), task toggle (`step_ticked`, and `deal_closed` when the checklist auto-closes the deal).
+- Step 5 (partly), actions: `actionCore.ts` (pure `submitAction` / `approveAction`, replay-safe, rechecks the guard at approval) and `actions.ts` (Supabase store, `loadGuardContext`, executors for `create_task` and `send_deal_email` via `sendDealEmail`, D4). Recipients are read from the same `inputs.to` that is sent.
+- Step 6, AI wrapper: `aiCore.ts` (strict proposal catalog, untrusted-text fence, monthly token cap, `FakeAiClient`) and `ai.ts` (Claude tool-call client, usage via `ai_usage` feature `automation`). Default model `claude-haiku-5-5`, overridable with `ANTHROPIC_AUTOMATION_MODEL`; cap default 500k tokens/month is a placeholder until D6.
+
+**PLANNED / NOT built yet:**
+- Step 4, runner: `/api/cron/automation-tick`. **Blocked on D3** (the answer came back garbled; ask again). Also needs atomic claims and backoff, which the schema supports (`claimed_at`, `next_attempt_at`, `attempts`).
+- Step 5, remaining executors (`add_note`, `suggest_tick`, `classify_document`, `file_document`, `set_date`, `send_step_email`, `notify_user`): the manual routes still hold their own logic; extract it into shared functions first. These actions currently end as `failed: not_implemented`.
+- Step 7, Activity and Approvals panel, the Off / Draft / Auto setting UI, and the API routes behind them (new routes must be added to `tests/route-registry.ts`).
+- Step 8, partly: cross-account isolation and DB-backed idempotency integration tests need the migration run on relay-test first. Unit tests cover the fake clock, fake Claude, prompt injection, replay, guard refusals.
+- Kill switch UI/endpoint (the table and the guard check exist; env `AUTOMATION_KILL_SWITCH=1` also works).
+- Delivery status audit for sent mail (result is stored on `automation_actions`; real Resend delivery is untested).
+
+**Found while building (not fixed):**
+- The checklist auto-close path in `src/app/api/tasks/route.ts` does not call `notifyDealClosed`, so a deal closed by completing the last step never notifies the broker. Same root cause as the open item in section 3. (An automation `deal_closed` event is now emitted there.)
+- Git on this machine had no identity configured; commits in this session used the repo's existing author with `-c user.name/-c user.email`, no config was changed.
 
 ### Then
 Stage A (rules only, no AI: follow-up timers, deadline guard, daily briefing, missing documents), Stage B (AI reads, a person confirms), Stage C (drafts with approval), Stage D (opt-in auto-send). Brokerage-wide automation and external integrations come after customer validation.
