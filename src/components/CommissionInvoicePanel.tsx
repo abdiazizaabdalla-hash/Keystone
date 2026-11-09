@@ -63,7 +63,7 @@ export default function CommissionInvoicePanel({ role, row, counterpart, onChang
   const confirmed = row.status !== 'estimate';
   const agreed = row.status === 'accepted' || row.status === 'paid';
   const awaitingAgent = row.status === 'proposed';
-  const [mode, setMode] = useState<'view' | 'edit' | 'pay' | 'editpay'>('view');
+  const [mode, setMode] = useState<'view' | 'edit' | 'confirm' | 'pay' | 'editpay'>('view');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
@@ -139,7 +139,7 @@ export default function CommissionInvoicePanel({ role, row, counterpart, onChang
       )}
       {mode === 'view' && !confirmed && <p className="text-[11px] text-slate-500 -mt-2">An estimate. The actual commission can differ with negotiated amounts, concessions or referrals, and is confirmed from the closing documents.</p>}
 
-      {mode === 'edit' && (isOwner ? <OwnerEditor row={row} closed={closed} busy={busy} onCancel={() => setMode('view')} onSave={(body, ok) => run('/api/commissions', 'POST', { transactionId: row.transactionId, ...body }, ok)} /> : <AgentEditor row={row} counterpart={counterpart} busy={busy} onCancel={() => setMode('view')} onSave={(action, body, ok) => patch(action, body, ok)} />)}
+      {(mode === 'edit' || mode === 'confirm') && (isOwner ? <OwnerEditor row={row} closed={closed} confirming={mode === 'confirm'} busy={busy} onCancel={() => setMode('view')} onSave={(body, ok) => run('/api/commissions', 'POST', { transactionId: row.transactionId, ...body }, ok)} /> : <AgentEditor row={row} counterpart={counterpart} busy={busy} onCancel={() => setMode('view')} onSave={(action, body, ok) => patch(action, body, ok)} />)}
 
       {mode === 'pay' && (
         <PayForm
@@ -162,7 +162,7 @@ export default function CommissionInvoicePanel({ role, row, counterpart, onChang
           {!isOwner && row.status === 'estimate' && <button type="button" onClick={() => { setError(''); setDone(''); setMode('edit'); }} className={ghost}>Edit my lines and note</button>}
           {/* The brokerage's turn */}
           {isOwner && row.status === 'change_requested' && row.submitted && <button type="button" disabled={busy} onClick={() => patch('approve', {}, 'Approved. The agent was told.')} className={primary}>Approve</button>}
-          {isOwner && row.status === 'estimate' && closed && <button type="button" onClick={() => { setError(''); setDone(''); setMode('edit'); }} className={primary}>Confirm actual commission</button>}
+          {isOwner && row.status === 'estimate' && closed && <button type="button" onClick={() => { setError(''); setDone(''); setMode('confirm'); }} className={primary}>Confirm actual commission</button>}
           {isOwner && row.status === 'change_requested' && !row.submitted && <button type="button" onClick={() => { setError(''); setDone(''); setMode('edit'); }} className={primary}>Edit and send back</button>}
           {isOwner && row.status === 'accepted' && <button type="button" onClick={() => { setError(''); setDone(''); setMode('pay'); }} className={primary}>Mark paid</button>}
           {isOwner && row.status === 'proposed' && <button type="button" onClick={() => { setError(''); setDone(''); setMode('pay'); }} className={ghost}>Mark paid anyway</button>}
@@ -242,9 +242,9 @@ function AgentEditor({ row, counterpart, busy, onCancel, onSave }: { row: PanelR
 }
 
 // --- The brokerage's edit: every figure on this invoice. Changes here are for this deal only; base terms live on the agent. ---
-function OwnerEditor({ row, closed, busy, onCancel, onSave }: { row: PanelRow; closed: boolean; busy: boolean; onCancel: () => void; onSave: (body: Record<string, unknown>, ok: string) => void }) {
+function OwnerEditor({ row, closed, confirming, busy, onCancel, onSave }: { row: PanelRow; closed: boolean; confirming?: boolean; busy: boolean; onCancel: () => void; onSave: (body: Record<string, unknown>, ok: string) => void }) {
   const confirmed = row.status !== 'estimate';
-  const [gross, setGross] = useState(confirmed && row.gross !== null ? String(row.gross) : '');
+  const [gross, setGross] = useState(confirmed && row.gross !== null ? String(row.gross) : confirming && row.estimate?.gross ? String(row.estimate.gross) : '');
   const [rateType, setRateType] = useState<'percent' | 'flat'>(row.rate?.type ?? 'percent');
   const [rateValue, setRateValue] = useState(row.rate ? String(row.rate.value) : '');
   const [splitType, setSplitType] = useState<SplitType>(row.splitType);
@@ -257,6 +257,7 @@ function OwnerEditor({ row, closed, busy, onCancel, onSave }: { row: PanelRow; c
       className="rounded-xl border border-white/10 bg-slate-800/40 p-4 space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
+        if (confirming && gross.trim() === '') return;
         const body: Record<string, unknown> = { splitType, splitValue: Number(splitValue), deductions: fees.map((x) => ({ label: x.label, amount: x.amount, ...(x.by ? { by: x.by } : {}) })) };
         if (sending) body.gross = Number(gross);
         if (rateValue.trim() !== '') {
@@ -266,11 +267,11 @@ function OwnerEditor({ row, closed, busy, onCancel, onSave }: { row: PanelRow; c
         onSave(body, sending ? 'Sent to the agent to review.' : 'Saved. The agent was told.');
       }}
     >
-      <p className="text-sm font-semibold text-slate-100">Edit this invoice</p>
+      <p className="text-sm font-semibold text-slate-100">{confirming ? 'Confirm the actual commission' : 'Edit this invoice'}</p>
       {row.changeNote && <p className="text-xs text-orange-200">Agent’s note: {row.changeNote}</p>}
       {canGross ? (
         <label className="block text-xs text-slate-400">Commission your brokerage received ($), from the closing documents
-          <input type="number" step="0.01" min="0" value={gross} onChange={(e) => setGross(e.target.value)} className={`${field} mt-1`} placeholder={row.estimate?.gross ? `Expected about ${money(row.estimate.gross)}. Leave blank to keep it an estimate` : 'Leave blank to keep it an estimate'} />
+          <input type="number" step="0.01" min="0" value={gross} required={confirming} onChange={(e) => setGross(e.target.value)} className={`${field} mt-1`} placeholder={confirming ? 'Enter the commission from the closing documents' : row.estimate?.gross ? `Expected about ${money(row.estimate.gross)}. Leave blank to keep it an estimate` : 'Leave blank to keep it an estimate'} />
         </label>
       ) : (
         <p className="text-xs text-slate-400">The actual commission is confirmed once the deal closes. For now you can adjust the terms and fee lines below.</p>
@@ -310,7 +311,7 @@ function OwnerEditor({ row, closed, busy, onCancel, onSave }: { row: PanelRow; c
       </div>
       <p className="text-[11px] text-slate-500">{sending ? 'Sending shows the confirmed amounts to the agent, who has to agree before it becomes final.' : 'Saving keeps this an estimate; the agent is told about the change.'} Changes apply to this invoice only.</p>
       <div className="flex gap-2">
-        <button type="submit" disabled={busy} className={primary}>{sending ? (confirmed ? 'Send revised invoice' : 'Confirm and send to agent') : 'Save changes'}</button>
+        <button type="submit" disabled={busy || (confirming && gross.trim() === '')} className={primary}>{sending ? (confirmed ? 'Send revised invoice' : 'Confirm and send to agent') : 'Save changes'}</button>
         <button type="button" onClick={onCancel} className={`${btn} text-slate-300`}>Cancel</button>
       </div>
     </form>
