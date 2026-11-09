@@ -58,14 +58,19 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
     fetchHasWorkspace().then((has) => {
       if (cancelled) return;
       setHasWorkspace(has);
-      // An agent with a workspace works on listings inside their own workspace, not in this read-only view.
-      const m = window.location.pathname.match(/^\/agent\/listings(?:\/([^/]+))?/);
-      if (has && m) router.replace(m[1] ? `/dashboard/listings/${m[1]}` : '/dashboard/listings');
+      // /agent is the view for FREE agent logins. An agent with their own workspace (paid or granted) works in /dashboard,
+      // where deals they were added to sit in their normal list with a "Shared" badge. Send them there from any portal page
+      // (the login, accept and welcome steps are left alone), keeping the listing or deal when we can.
+      const path = window.location.pathname;
+      if (!has || BARE_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`))) return;
+      const listing = path.match(/^\/agent\/listings(?:\/([^/]+))?/);
+      const deal = path.match(/^\/agent\/transactions\/([^/]+)/);
+      router.replace(listing ? (listing[1] ? `/dashboard/listings/${listing[1]}` : '/dashboard/listings') : deal ? `/dashboard/transactions/${deal[1]}` : '/dashboard');
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const initCollapsed = async () => {
@@ -100,6 +105,9 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   if (BARE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return <>{children}</>;
   }
+
+  // A paid/granted agent is being sent to their workspace: show nothing instead of the free portal.
+  if (hasWorkspace) return null;
 
   const isMessages = pathname === '/agent/messages';
   const isInvoices = pathname.startsWith('/agent/invoices');

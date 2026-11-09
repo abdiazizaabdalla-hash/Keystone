@@ -49,7 +49,7 @@ export type GuardRefusal =
   | 'over_daily_cap';
 
 export type GuardDecision =
-  | { outcome: 'allow'; requiresApproval: boolean; approvalReason?: 'draft_mode' | 'contract_dates' | 'not_template' }
+  | { outcome: 'allow'; requiresApproval: boolean; approvalReason?: 'draft_mode' | 'contract_dates' | 'suggestion' | 'not_template' }
   | { outcome: 'refuse'; reason: GuardRefusal; detail?: string }
   | { outcome: 'defer'; reason: 'quiet_hours' };
 
@@ -93,7 +93,7 @@ export function evaluateGuard(req: GuardRequest, ctx: GuardContext): GuardDecisi
     if (ctx.quietHours && inQuietHours(ctx.now, ctx.quietHours)) return { outcome: 'defer', reason: 'quiet_hours' };
   }
 
-  if (ALWAYS_APPROVE_ACTIONS.includes(req.kind)) return { outcome: 'allow', requiresApproval: true, approvalReason: 'contract_dates' };
+  if (ALWAYS_APPROVE_ACTIONS.includes(req.kind)) return { outcome: 'allow', requiresApproval: true, approvalReason: req.kind === 'set_date' ? 'contract_dates' : 'suggestion' };
   if (external) {
     if (ctx.mode === 'draft') return { outcome: 'allow', requiresApproval: true, approvalReason: 'draft_mode' };
     if (!req.fromApprovedTemplate) return { outcome: 'allow', requiresApproval: true, approvalReason: 'not_template' };

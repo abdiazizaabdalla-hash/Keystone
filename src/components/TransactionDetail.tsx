@@ -40,6 +40,7 @@ import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
 import ChatBubbles, { type ChatLine } from '@/components/chat/ChatBubbles';
 import { DealCoordinatorInvoices } from '@/components/CoordinatorInvoices';
 import { isClosedMessage, parseClosedMessage } from '@/lib/dealClosedMarker';
+import AssistantPanel from '@/components/AssistantPanel';
 
 interface Transaction {
   id: string;
@@ -3405,6 +3406,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               </section>
 
               {tab === 'overview' && isFeatureOnClient('brokerage') && transaction?.id && !(isAgentAcct && !ownerView) && !ownerView && <CommissionBox transactionId={transaction.id} />}
+
+              {tab === 'overview' && isFeatureOnClient('automation') && !ownerView && !isAgentAcct && transaction?.id && <AssistantPanel transactionId={transaction.id} />}
 
               {tab === 'overview' && templatesOn && !ownerView && (
               <DealStateDocs

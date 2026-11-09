@@ -100,6 +100,20 @@ Done when: a replayed event or cron tick sends nothing twice, the kill switch st
 - The checklist auto-close path in `src/app/api/tasks/route.ts` does not call `notifyDealClosed`, so a deal closed by completing the last step never notifies the broker. Same root cause as the open item in section 3. (An automation `deal_closed` event is now emitted there.)
 - Git on this machine had no identity configured; commits in this session used the repo's existing author with `-c user.name/-c user.email`, no config was changed.
 
+### Auto-0 part 2 status (updated 2026-11-09, session 3)
+
+BUILT (committed locally, not pushed):
+- Runner `src/lib/automation/tick.ts` + `GET /api/cron/automation-tick` (Bearer CRON_SECRET). Resumes held/retried actions, processes new events, sweeps deals with the assistant on, sends one daily briefing per owner from 7am local. Repeatable: idempotency keys + atomic claims. **D3 resolved:** Vercel Hobby only allows daily crons, so Supabase pg_cron + pg_net calls the route hourly (`add-automation-schedule.sql`, placeholders `<APP_URL>`/`<CRON_SECRET>`, never commit them filled) and `vercel.json` has a daily fallback.
+- Executors: create_task, add_note (Activity timeline only), notify_user, suggest_tick, classify_document, file_document, set_date, send_deal_email, send_step_email, send_briefing.
+- Stage A rules (no AI) in `rules.ts`: follow-up timers (approved-template step emails, max 5 chases), deadline overdue/soon, closing soon, missing contract, daily briefing.
+- Routes under `/api/automation/*` (activity, settings, pause, approvals, actions/[id]/decide), registered in the route registry.
+- UI: `AssistantPanel` (Off/Draft/Auto + Activity and approvals) on the deal Overview tab (TC accounts) and listing page.
+- `/agent` redirects workspace (paid) agents to `/dashboard`.
+
+SQL: `add-automation-foundation.sql` (run on relay-test), `add-automation-owner-actions.sql` (needed for the briefing; relay-test pending), `add-automation-schedule.sql` (pending). NONE run on production.
+
+PLANNED / known gaps: AI proposals are not wired into the tick (Stage B); listing events are not emitted; checklist auto-close does not call `notifyDealClosed`; a send retry could double-send if the email went out but the DB update failed; no all-deals approvals page or badge yet (the route exists).
+
 ### Then
 Stage A (rules only, no AI: follow-up timers, deadline guard, daily briefing, missing documents), Stage B (AI reads, a person confirms), Stage C (drafts with approval), Stage D (opt-in auto-send). Brokerage-wide automation and external integrations come after customer validation.
 

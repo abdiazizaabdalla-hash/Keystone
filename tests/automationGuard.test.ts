@@ -96,8 +96,13 @@ describe('automation guard: approval rules', () => {
   it('changing contract dates always needs approval, even in Auto', () => {
     expect(evaluateGuard({ kind: 'set_date' }, { ...base, mode: 'auto' })).toEqual({ outcome: 'allow', requiresApproval: true, approvalReason: 'contract_dates' });
   });
+  it('suggestions (tick a step, file a document) always need a person, even in Auto', () => {
+    for (const kind of ['suggest_tick', 'classify_document', 'file_document']) {
+      expect(evaluateGuard({ kind }, { ...base, mode: 'auto' })).toEqual({ outcome: 'allow', requiresApproval: true, approvalReason: 'suggestion' });
+    }
+  });
   it('internal low-risk actions run without approval', () => {
-    for (const kind of ['create_task', 'add_note', 'suggest_tick', 'classify_document', 'notify_user']) {
+    for (const kind of ['create_task', 'add_note', 'notify_user', 'send_briefing']) {
       expect(evaluateGuard({ kind }, base)).toEqual({ outcome: 'allow', requiresApproval: false });
     }
   });

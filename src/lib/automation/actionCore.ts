@@ -34,12 +34,18 @@ export interface ActionRow {
   result: Record<string, unknown> | null;
   refusal_reason: string | null;
   attempts: number;
+  approved_by?: string | null;
 }
 
 export interface ActionStore {
   /** Inserts, or returns the existing row for the same idempotency key (created = false). */
   record(req: ActionRequest): Promise<{ row: ActionRow; created: boolean }>;
   get(id: string): Promise<ActionRow | null>;
+  /**
+   * Atomically claims up to `limit` deferred actions that are due. Claiming pushes next_attempt_at forward by `leaseMinutes`, so two
+   * overlapping runs can never take the same row, and a run that dies simply lets it come due again later.
+   */
+  claimDue(now: Date, limit: number, leaseMinutes: number): Promise<ActionRow[]>;
   update(id: string, patch: Partial<Pick<ActionRow, 'status' | 'result' | 'refusal_reason' | 'attempts' | 'inputs'>> & { approved_by?: string; approved_at?: string; executed_at?: string; next_attempt_at?: string | null }): Promise<void>;
   createApproval(actionId: string, ownerUserId: string, draft: Record<string, unknown>): Promise<void>;
   decideApproval(actionId: string, status: 'approved' | 'rejected', decidedBy: string, draft?: Record<string, unknown>): Promise<void>;
@@ -64,20 +70,32 @@ export interface ActionOutcome {
   decision?: GuardDecision;
 }
 
+export const MAX_ATTEMPTS = 3;
+/** Wait after the Nth failed attempt: 5 minutes, then 20. */
+export const retryDelayMinutes = (attemptsSoFar: number) => 5 * 4 ** Math.max(0, attemptsSoFar - 1);
+
 async function execute(row: ActionRow, deps: ActionDeps): Promise<ActionStatus> {
   const executor = deps.executors[row.kind];
   const now = (deps.now ?? (() => new Date()))();
+  const attempts = row.attempts + 1;
   if (!executor) {
-    await deps.store.update(row.id, { status: 'failed', refusal_reason: 'not_implemented', attempts: row.attempts + 1 });
+    await deps.store.update(row.id, { status: 'failed', refusal_reason: 'not_implemented', attempts });
     return 'failed';
   }
   try {
     const result = await executor(row, { now });
-    await deps.store.update(row.id, { status: 'executed', result, executed_at: now.toISOString(), attempts: row.attempts + 1 });
+    await deps.store.update(row.id, { status: 'executed', result, executed_at: now.toISOString(), attempts });
     return 'executed';
   } catch (err) {
     console.error('Automation action failed:', row.kind, err);
-    await deps.store.update(row.id, { status: 'failed', result: { error: err instanceof Error ? err.message.slice(0, 300) : 'failed' }, attempts: row.attempts + 1 });
+    const error = err instanceof Error ? err.message.slice(0, 300) : 'failed';
+    if (attempts < MAX_ATTEMPTS) {
+      // Retry with backoff. The runner picks it up when next_attempt_at passes.
+      const next = new Date(now.getTime() + retryDelayMinutes(attempts) * 60_000).toISOString();
+      await deps.store.update(row.id, { status: 'deferred', refusal_reason: 'retrying', result: { error }, attempts, next_attempt_at: next });
+      return 'deferred';
+    }
+    await deps.store.update(row.id, { status: 'failed', result: { error }, attempts });
     return 'failed';
   }
 }
@@ -156,4 +174,43 @@ export async function approveAction(
   // Claim before executing: the status moves off awaiting_approval first, so a concurrent second approval is refused above.
   await deps.store.update(actionId, { status: 'approved', approved_by: decidedBy, approved_at: nowIso, ...(opts.editedInputs ? { inputs } : {}) });
   return { status: await execute({ ...row, inputs, status: 'approved' }, deps), actionId, duplicate: false, decision };
+}
+
+/** The flag that lets Auto mode send a routine template reminder is kept with the action, so a later retry still knows it. */
+export const TEMPLATE_FLAG = '_fromApprovedTemplate';
+
+/**
+ * Runner entry for a claimed deferred action (quiet hours ended, or a retry after a failure). Everything is re-checked with current
+ * facts. An action a person already approved runs; one that was only waiting for quiet hours goes back through the normal rules.
+ */
+export async function resumeAction(actionId: string, deps: ActionDeps): Promise<ActionOutcome | { error: 'not_found' | 'not_deferred' }> {
+  const row = await deps.store.get(actionId);
+  if (!row) return { error: 'not_found' };
+  if (row.status !== 'deferred') return { error: 'not_deferred' };
+  const req: ActionRequest = {
+    ownerUserId: row.owner_user_id,
+    transactionId: row.transaction_id,
+    listingId: row.listing_id,
+    kind: row.kind,
+    inputs: row.inputs,
+    fromApprovedTemplate: row.inputs[TEMPLATE_FLAG] === true,
+    idempotencyKey: '',
+  };
+  const decision = evaluateGuard({ kind: row.kind, recipients: recipientsOfInputs(row.inputs), fromApprovedTemplate: req.fromApprovedTemplate }, await deps.loadGuardContext(req));
+  const now = (deps.now ?? (() => new Date()))();
+  if (decision.outcome === 'refuse') {
+    await deps.store.update(row.id, { status: 'refused', refusal_reason: decision.detail ? `${decision.reason}:${decision.detail}` : decision.reason });
+    return { status: 'refused', actionId: row.id, duplicate: false, decision };
+  }
+  if (decision.outcome === 'defer') {
+    const next = new Date(now.getTime() + (deps.deferMinutes ?? 60) * 60_000).toISOString();
+    await deps.store.update(row.id, { status: 'deferred', refusal_reason: decision.reason, next_attempt_at: next });
+    return { status: 'deferred', actionId: row.id, duplicate: false, decision };
+  }
+  if (decision.requiresApproval && !row.approved_by) {
+    await deps.store.update(row.id, { status: 'awaiting_approval', refusal_reason: null, next_attempt_at: null });
+    await deps.store.createApproval(row.id, row.owner_user_id, row.inputs);
+    return { status: 'awaiting_approval', actionId: row.id, duplicate: false, decision };
+  }
+  return { status: await execute(row, deps), actionId: row.id, duplicate: false, decision };
 }

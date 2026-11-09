@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { approveAction, submitAction, type ActionDeps, type ActionRequest, type ActionRow, type ActionStore } from '@/lib/automation/actionCore';
+import { approveAction, resumeAction, retryDelayMinutes, submitAction, type ActionDeps, type ActionRequest, type ActionRow, type ActionStore } from '@/lib/automation/actionCore';
 import type { GuardContext } from '@/lib/automation/guard';
 import { FakeAiClient, fenceUntrusted, parseProposals, runAssistant, type AssistantDeps } from '@/lib/automation/aiCore';
 
@@ -22,6 +22,11 @@ function memoryStore() {
       return { row, created: true };
     },
     async get(id) { return rows.get(id) ?? null; },
+    async claimDue(now, limit, lease) {
+      const due = [...rows.values()].filter((r) => r.status === 'deferred' && (r as ActionRow & { next_attempt_at?: string }).next_attempt_at !== undefined && new Date((r as ActionRow & { next_attempt_at?: string }).next_attempt_at!) <= now).slice(0, limit);
+      for (const r of due) (r as ActionRow & { next_attempt_at?: string }).next_attempt_at = new Date(now.getTime() + lease * 60_000).toISOString();
+      return due;
+    },
     async update(id, patch) { Object.assign(rows.get(id)!, patch); },
     async createApproval(actionId, _o, draft) { approvals.set(actionId, { status: 'pending', draft }); },
     async decideApproval(actionId, status, _by, draft) { approvals.set(actionId, { status, draft: draft ?? approvals.get(actionId)?.draft ?? {} }); },
@@ -105,12 +110,48 @@ describe('submitAction', () => {
     expect(t.rows.get(out.actionId)?.refusal_reason).toBe('not_implemented');
   });
 
-  it('a failing executor is recorded as failed, with an attempt counted', async () => {
+  it('a failing executor is retried with backoff, then marked failed after the third attempt', async () => {
     const t = setup();
-    t.deps.executors.create_task = async () => { throw new Error('db down'); };
+    let calls = 0;
+    t.deps.executors.create_task = async () => { calls++; throw new Error('db down'); };
     const out = await submitAction({ ownerUserId: owner, transactionId: tx, kind: 'create_task', inputs: { name: 'x' }, idempotencyKey: 'k5' }, t.deps);
-    expect(out.status).toBe('failed');
-    expect(t.rows.get(out.actionId)?.attempts).toBe(1);
+    expect(out.status).toBe('deferred');
+    expect(t.rows.get(out.actionId)).toMatchObject({ attempts: 1, refusal_reason: 'retrying' });
+    expect((await resumeAction(out.actionId, t.deps) as { status: string }).status).toBe('deferred');
+    expect((await resumeAction(out.actionId, t.deps) as { status: string }).status).toBe('failed');
+    expect(t.rows.get(out.actionId)?.attempts).toBe(3);
+    expect(calls).toBe(3);
+    expect(retryDelayMinutes(1)).toBe(5);
+    expect(retryDelayMinutes(2)).toBe(20);
+  });
+});
+
+describe('resumeAction', () => {
+  it('an unapproved action held for quiet hours goes to approval when the window ends (Draft mode)', async () => {
+    const t = setup({ now: new Date('2026-11-10T04:30:00Z') });
+    const held = await submitAction(email(['buyer@x.com']), t.deps);
+    expect(held.status).toBe('deferred');
+    t.setCtx({ now: new Date('2026-11-10T14:00:00Z') });
+    expect((await resumeAction(held.actionId, t.deps) as { status: string }).status).toBe('awaiting_approval');
+    expect(t.sent).toHaveLength(0);
+  });
+
+  it('an approved action held for quiet hours sends once the window ends, and only once', async () => {
+    const t = setup();
+    const q = await submitAction(email(['buyer@x.com']), t.deps);
+    t.setCtx({ now: new Date('2026-11-10T04:30:00Z') });
+    expect((await approveAction(q.actionId, owner, t.deps) as { status: string }).status).toBe('deferred');
+    t.setCtx({ now: new Date('2026-11-10T14:00:00Z') });
+    expect((await resumeAction(q.actionId, t.deps) as { status: string }).status).toBe('executed');
+    expect(await resumeAction(q.actionId, t.deps)).toEqual({ error: 'not_deferred' });
+    expect(t.sent).toHaveLength(1);
+  });
+
+  it('is refused on resume if the world changed (kill switch)', async () => {
+    const t = setup({ now: new Date('2026-11-10T04:30:00Z') });
+    const held = await submitAction(email(['buyer@x.com']), t.deps);
+    t.setCtx({ killSwitch: true, now: new Date('2026-11-10T14:00:00Z') });
+    expect((await resumeAction(held.actionId, t.deps) as { status: string }).status).toBe('refused');
   });
 });
 

@@ -2,6 +2,12 @@
 
 Newest first. One entry per working session: commit, what changed, what was verified, what remains.
 
+## 2026-11-09 (session 3) - Auto-0: runner, screens, Stage A rules
+
+- BUILT: runner + cron route (hourly via Supabase pg_cron, daily Vercel fallback; D3 resolved), remaining executors, Stage A rules, five `/api/automation/*` routes, AssistantPanel on deal and listing pages, `/agent` redirect for paid agents. Two new SQL files (owner-actions, schedule), unrun anywhere.
+- Verified: tsc clean, eslint clean (pre-existing `<img>` warnings only), 463 unit tests, 21 automation integration tests on relay-test. Not verified: browser clicks, briefing end to end (needs owner-actions SQL), real Resend, production.
+- Not built: AI in the tick, listing events, approvals page. Nothing pushed.
+
 ## 2026-11-09 (session 2) - Auto-0 started behind the existing `automation` flag
 
 - BUILT: migration SQL (unrun), guard, event log with emitters at the deal PATCH, documents POST and task toggle, action pipeline with idempotency and approval rechecks, AI wrapper with a strict proposal catalog and a fake. See `docs/HANDOFF_AUTOMATION.md` "Auto-0 status".

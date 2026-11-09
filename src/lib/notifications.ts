@@ -21,7 +21,8 @@ export type NotificationType =
   | 'deal_started'
   | 'commission'
   | 'invite'
-  | 'invoice';
+  | 'invoice'
+  | 'assistant';
 
 export const NOTIFICATION_TYPES: { type: NotificationType; label: string }[] = [
   { type: 'message', label: 'New messages' },
@@ -35,6 +36,7 @@ export const NOTIFICATION_TYPES: { type: NotificationType; label: string }[] = [
   { type: 'commission', label: 'Commission invoices and reminders' },
   { type: 'invite', label: 'Invitations to coordinate a deal' },
   { type: 'invoice', label: 'Invoices from your coordinator' },
+  { type: 'assistant', label: 'Assistant reminders and drafts waiting for you' },
 ];
 
 const VALID_TYPES = new Set<string>(NOTIFICATION_TYPES.map((t) => t.type));

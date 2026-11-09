@@ -28,6 +28,7 @@ import OverviewCard from '@/components/OverviewCard';
 import QuickMessageComposer from '@/components/QuickMessageComposer';
 import SellerUpdateModal from '@/components/SellerUpdateModal';
 import ListingReadinessCard from '@/components/ListingReadinessCard';
+import AssistantPanel from '@/components/AssistantPanel';
 import ListingFeeInvoiceCard from '@/components/ListingFeeInvoiceCard';
 import ListingSignModal, { type ListingSigningRequest } from '@/components/ListingSignModal';
 import { computeReadiness } from '@/lib/listingReadiness';
@@ -1436,6 +1437,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
               </button>
             </form>
           </OverviewCard>
+          {!speaksAsAgent && <AssistantPanel listingId={id} />}
           {/* Ready to list: what is still missing before go-live */}
           {['preparing', 'active'].includes(listing.status) && (
             <ListingReadinessCard

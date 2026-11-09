@@ -23,6 +23,7 @@ export const ACTION_KINDS = [
   'send_step_email',
   'send_deal_email',
   'notify_user',
+  'send_briefing',
 ] as const;
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
@@ -43,8 +44,8 @@ export type RestrictedAction = (typeof RESTRICTED_ACTIONS)[number];
 /** Actions that reach someone outside Relay. */
 export const EXTERNAL_ACTIONS: readonly string[] = ['send_step_email', 'send_deal_email'];
 
-/** Actions that change contract dates: always need a person's explicit approval, even in Auto (plan section 6). */
-export const ALWAYS_APPROVE_ACTIONS: readonly string[] = ['set_date'];
+/** Always need a person's explicit approval, even in Auto: contract dates (plan section 6), and anything the assistant only SUGGESTS (ticking a step, filing a document). */
+export const ALWAYS_APPROVE_ACTIONS: readonly string[] = ['set_date', 'suggest_tick', 'classify_document', 'file_document'];
 
 export type ActionStatus =
   | 'proposed'

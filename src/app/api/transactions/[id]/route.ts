@@ -15,6 +15,7 @@ import { isStateCode } from '@/lib/usStates';
 import { brokerageOn, brokerageOwnersForDeal } from '@/lib/oversight';
 import { notifyDeal } from '@/lib/notifications';
 import { emitDealEvent } from '@/lib/automation/events';
+import { recomputeTaskDueDates } from '@/lib/dealActions';
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
@@ -115,49 +116,10 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (acceptanceDate !== undefined || closingDate !== undefined) {
-      // Either anchor date changed -- rewrite the computed due_date
-      // snapshot on every task for this transaction. computeDueDates
-      // returns all-null for a custom (non-baseline) checklist template
-      // or when no acceptance date is set, which is a harmless no-op
-      // write in either case.
-      const { data: existingTasks, error: tasksFetchError } = await supabaseServer
-        .from('tasks')
-        .select('id, name, due_date_spec, due_days_after_acceptance')
-        .eq('transaction_id', transactionId)
-        .order('sort_order', { ascending: true });
-
-      if (tasksFetchError) throw tasksFetchError;
-
-      if (existingTasks && existingTasks.length > 0) {
-        // due_date_spec is the current source of truth; a row saved before
-        // it existed only has the legacy due_days_after_acceptance column,
-        // which dueDaysToSpec() converts to the same shape.
-        const dueDates = computeDueDates(
-          existingTasks.map((t) => ({
-            name: t.name as string,
-            dueDate: t.due_date_spec
-              ? normalizeDueDateSpec(t.due_date_spec)
-              : dueDaysToSpec(t.due_days_after_acceptance as number | null),
-          })),
-          transaction.acceptance_date,
-          transaction.closing_date
-        );
-
-        const updatedTasks = await Promise.all(
-          existingTasks.map(async (t, index) => {
-            const { data: updatedTask, error: taskUpdateError } = await supabaseServer
-              .from('tasks')
-              .update({ due_date: dueDates[index] })
-              .eq('id', t.id as string)
-              .select()
-              .single();
-            if (taskUpdateError) throw taskUpdateError;
-            return updatedTask;
-          })
-        );
-
-        responseTasks = updatedTasks;
-      }
+      // Either anchor date changed -- rewrite the computed due_date snapshot on every task for this transaction (shared with the
+      // assistant: src/lib/dealActions.ts). A custom checklist or a missing acceptance date makes this a harmless no-op write.
+      const updatedTasks = await recomputeTaskDueDates(transactionId, transaction.acceptance_date, transaction.closing_date);
+      if (updatedTasks) responseTasks = updatedTasks;
     }
 
     // Brokerage oversight: when the agent changes the stage or dates of a deal their brokerage oversees, the owner hears. Deals outside a brokerage are unchanged.
