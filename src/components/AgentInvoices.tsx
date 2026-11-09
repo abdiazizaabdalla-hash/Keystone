@@ -72,6 +72,25 @@ const inputCls = 'w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 
 
 // An agent with their own workspace: invoices from templates, billed to anyone in their contacts (or typed in), with an
 // optional link to a deal when a coordinator is on it. Separate from the coordinator's commission invoices.
+/** Is this agent in a brokerage (so their commission invoice has its own calculated flow)? false until known. */
+function useInBrokerage(): boolean {
+  const [inBrokerage, setIn] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    authFetch('/api/commissions/invoice-options')
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { inBrokerage?: boolean };
+        if (!cancelled) setIn(data.inBrokerage === true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return inBrokerage;
+}
+
 export default function AgentInvoices({ initialTransactionId, startNew, commissionTransactionId }: { initialTransactionId?: string; startNew?: boolean; commissionTransactionId?: string }) {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [commissions, setCommissions] = useState<CommissionInvoiceRow[]>([]);
@@ -86,6 +105,8 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
   const [busy, setBusy] = useState(false);
   // The commission invoice to the agent's brokerage (see AgentCommissionInvoiceForm), opened from the template list or from a deal.
   const [commissionForm, setCommissionForm] = useState(Boolean(commissionTransactionId));
+  // In a brokerage, the commission invoice is its own thing (calculated from the brokerage's terms), not one of the general templates.
+  const inBrokerage = useInBrokerage();
   // Which commission invoice is opened to show its lines, edits and PDF.
   const [openCommission, setOpenCommission] = useState<string | null>(null);
 
@@ -226,6 +247,15 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
           >
             QuickBooks import / export
           </Link>
+          {!readOnly && inBrokerage && (
+          <button
+            type="button"
+            onClick={() => setCommissionForm(true)}
+            className="px-4 py-2.5 border border-blue-500/50 text-blue-300 hover:text-blue-200 hover:border-blue-400 text-sm font-semibold rounded-xl transition whitespace-nowrap"
+          >
+            Commission invoice
+          </button>
+          )}
           {!readOnly && (
           <button
             type="button"
@@ -240,7 +270,7 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
 
       {error && <p className="mb-4 text-sm text-red-300">{error}</p>}
 
-      {commissionForm && <AgentCommissionInvoiceForm initialTransactionId={commissionTransactionId} onClose={() => setCommissionForm(false)} onSent={load} />}
+      {commissionForm && <AgentCommissionInvoiceForm initialTransactionId={commissionTransactionId ?? initialTransactionId} lockDeal={Boolean(commissionTransactionId ?? initialTransactionId)} onClose={() => setCommissionForm(false)} onSent={load} />}
 
       {picking && (
         <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-5">
@@ -253,7 +283,7 @@ export default function AgentInvoices({ initialTransactionId, startNew, commissi
             </button>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {INVOICE_TEMPLATES.map((t) => (
+            {INVOICE_TEMPLATES.filter((t) => !(inBrokerage && t.key === 'commission_split')).map((t) => (
               <button
                 key={t.key}
                 type="button"
@@ -664,6 +694,7 @@ export function DealInvoiceModal({ transactionId, onClose, onChanged }: { transa
   const [commissionForm, setCommissionForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const inBrokerage = useInBrokerage();
 
   const create = async (templateKey: string) => {
     setBusy(true);
@@ -714,7 +745,7 @@ export function DealInvoiceModal({ transactionId, onClose, onChanged }: { transa
             </div>
             {error && <p className="mb-3 text-sm text-red-300">{error}</p>}
             <div className="grid sm:grid-cols-2 gap-3">
-              {INVOICE_TEMPLATES.map((t) => (
+              {INVOICE_TEMPLATES.filter((t) => !(inBrokerage && t.key === 'commission_split')).map((t) => (
                 <button
                   key={t.key}
                   type="button"

@@ -64,7 +64,13 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, lockD
       const json = res.ok ? ((await res.json()) as Options) : { inBrokerage: false };
       setOptions(json);
       // Start on the deal the agent came from, or the first one still to invoice.
-      setDealId((current) => current || (json.deals ?? []).find((d) => !d.statement)?.id || '');
+      // The deal the agent came from; otherwise the one deal still to invoice (the first active one, then the first closed), so nothing needs picking.
+      setDealId((current) => {
+        const deals = json.deals ?? [];
+        if (current && deals.some((d) => d.id === current)) return current;
+        const todo = deals.filter((d) => !d.statement);
+        return (todo.find((d) => !d.closed) ?? todo[0] ?? deals[0])?.id || '';
+      });
     } catch {
       setOptions({ inBrokerage: false });
     }
