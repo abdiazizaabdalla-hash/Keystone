@@ -122,4 +122,32 @@ if (broker && member) {
   }
   console.log('Brokerage demo ready: broker@local.relay oversees agent-workspace@local.relay.');
 }
+// A listing fee a coordinator has invoiced, so the free invited agent has one on their Invoices page and on the listing.
+{
+  const tcUser = after.users.find((u) => u.email === 'tc@local.relay');
+  const free = after.users.find((u) => u.email === 'agent-free@local.relay');
+  if (tcUser && free) {
+    let { data: row } = await admin.from('agents').select('id').eq('tc_user_id', tcUser.id).ilike('email', free.email).maybeSingle();
+    if (!row) {
+      const ins = await admin.from('agents').insert({ tc_user_id: tcUser.id, name: 'Free Demo Agent', email: free.email, flat_fee: 395, commission_percent: 0, listing_fee: 250 }).select('id').single();
+      row = ins.data;
+    }
+    if (row) {
+      let { data: listing } = await admin.from('listings').select('id').eq('tc_user_id', tcUser.id).eq('property_address', '88 Listing Fee Ln, Austin, TX 78702').maybeSingle();
+      if (!listing) {
+        const ins = await admin.from('listings').insert({ tc_user_id: tcUser.id, agent_id: row.id, property_address: '88 Listing Fee Ln, Austin, TX 78702', list_price: 450000, share_with_agent: true }).select('id').single();
+        listing = ins.data;
+      }
+      if (listing) {
+        const { data: have } = await admin.from('invoices').select('id').eq('listing_id', listing.id).eq('agent_id', row.id).maybeSingle();
+        if (!have) {
+          const now = new Date();
+          const { error } = await admin.from('invoices').insert({ agent_id: row.id, transaction_id: null, kind: 'listing', listing_id: listing.id, amount_owed: 250, invoice_number: `DEMO-LIST-${now.getTime().toString().slice(-6)}`, invoice_date: now.toISOString(), due_date: new Date(now.getTime() + 7 * 86400000).toISOString().slice(0, 10), paid: false, flat_fee: 250, percent_fee: 0 });
+          if (error) console.warn('Could not add the demo listing invoice (is add-listing-invoices.sql run?):', error.message);
+        }
+        console.log('Listing fee demo ready: log in as agent-free@local.relay at /agent/login to see the invoice.');
+      }
+    }
+  }
+}
 console.log(`Wrote ${ACCOUNTS.length} accounts to .local-accounts.txt`);
