@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "test:int": "vitest run --config vitest.integration.config.ts",
     "dev:local": "node scripts/check-local-env.mjs && next dev",
-    "dev:prod-readonly": "node scripts/dev-prod-readonly.mjs"
+    "dev:prod-readonly": "node scripts/dev-prod-readonly.mjs",
+    "automation:tick": "node scripts/automation-tick.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

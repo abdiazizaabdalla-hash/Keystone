@@ -233,13 +233,14 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-type TxTab = 'overview' | 'checklist' | 'documents' | 'messages' | 'people';
+type TxTab = 'overview' | 'checklist' | 'documents' | 'messages' | 'people' | 'automation';
 const TX_TABS: { id: TxTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'checklist', label: 'Checklist' },
   { id: 'documents', label: 'Documents' },
   { id: 'messages', label: 'Messages' },
   { id: 'people', label: 'Contacts' },
+  { id: 'automation', label: 'Automation' },
 ];
 
 /**
@@ -3054,7 +3055,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             Every panel stays mounted (just hidden) so drafts, uploads and
             polling keep their state when you switch tabs. */}
         <div role="tablist" aria-label="Transaction sections" className="flex gap-1 overflow-x-auto mb-8 p-1 bg-white/5 border border-white/10 rounded-2xl">
-          {TX_TABS.filter((t) => !(ownerView && t.id === 'messages')).map((t) => (
+          {TX_TABS.filter((t) => !(ownerView && t.id === 'messages') && !(t.id === 'automation' && (ownerView || !isFeatureOnClient('automation')))).map((t) => (
             <button
               key={t.id}
               type="button"
@@ -3406,8 +3407,6 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               </section>
 
               {tab === 'overview' && isFeatureOnClient('brokerage') && transaction?.id && !(isAgentAcct && !ownerView) && !ownerView && <CommissionBox transactionId={transaction.id} />}
-
-              {tab === 'overview' && isFeatureOnClient('automation') && !ownerView && !isAgentAcct && transaction?.id && <AssistantPanel transactionId={transaction.id} />}
 
               {tab === 'overview' && templatesOn && !ownerView && (
               <DealStateDocs
@@ -4025,6 +4024,12 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           {tab === 'messages' && !ownerView && <ClientMessagesPanel transactionId={resolvedParams.id} viewerRole={mySide} />}
         </div>
         </div>
+
+        {tab === 'automation' && !ownerView && transaction?.id && (
+          <div className="max-w-3xl" data-testid="automation-tab">
+            <AssistantPanel transactionId={transaction.id} />
+          </div>
+        )}
 
         <fieldset disabled={ownerView} className={tab === 'people' ? 'space-y-8 min-w-0 border-0 p-0 m-0' : 'hidden'}>
         {/* Contacts: the agent (read-only, from the agents record)
