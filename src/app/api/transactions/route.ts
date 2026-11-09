@@ -16,7 +16,7 @@ import { computeDueDates, NO_DUE_DATE, DueDateSpec } from '@/lib/dueDates';
 import crypto from 'crypto';
 import { getUserPlan } from '@/lib/privileged';
 import { isFeatureOn } from '@/lib/features';
-import { getEntitlements } from '@/lib/entitlements';
+import { hasAgentRole } from '@/lib/appMetadata';
 import { queueCalendarSync, removeTransactionCalendarEvents } from '@/lib/calendarSync';
 import { logAudit } from '@/lib/audit';
 import { queueBrokerageNewFile } from '@/lib/notifications';
@@ -62,7 +62,8 @@ export async function GET(request: NextRequest) {
       // A coordinator whose trial ended unpaid still sees the deals they were added to (read-mostly, flagged limited);
       // a free agent login uses the /agent portal instead.
       const level = isFeatureOn('agent_workspace') ? await participantLevel(user) : null;
-      limitedParticipant = level === 'limited' && !getEntitlements(user).isCollaborator;
+      // Only a coordinator account: an agent whose workspace trial ended keeps using the /agent portal for shared deals.
+      limitedParticipant = level === 'limited' && !hasAgentRole(user);
       if (level === 'full' || limitedParticipant) {
         const { data: links } = await supabaseServer
           .from('transaction_agents')

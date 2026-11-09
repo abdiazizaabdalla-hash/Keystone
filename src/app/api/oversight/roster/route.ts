@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
           email: label?.email ?? null,
           phone: phoneOf.get(id) ?? null,
           joinedAt: l.responded_at,
+          canOpenDocuments: l.can_open_documents !== false,
           baseCommission: l.default_split_type && l.default_split_value !== null && l.default_split_value !== undefined ? { type: l.default_split_type, value: Number(l.default_split_value) } : null,
           // The agent's base commission terms, so the Commissions tab can show and change them without opening the profile.
           baseRate: terms.commission,

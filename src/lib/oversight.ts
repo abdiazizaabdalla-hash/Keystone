@@ -37,6 +37,8 @@ export interface BrokerageLink {
   cap_cents?: number | string | null;
   cap_reset?: string | null;
   cap_start?: string | null;
+  /** The agent lets the brokerage open their document files (add-brokerage-permissions.sql). Missing column = on, as before. */
+  can_open_documents?: boolean | null;
 }
 
 export const brokerageOn = () => isFeatureOn('brokerage');
@@ -45,8 +47,9 @@ export const brokerageOn = () => isFeatureOn('brokerage');
 export const OVERSIGHT_TERMS = {
   sees: [
     'Your name, email, phone, license number, the states you work in and what you focus on.',
-    'Every deal in your workspace: address, stage, key dates and the checklist.',
-    'Every listing in your workspace: address, status, price, dates, the checklist and the names of its documents (not the seller’s details or the offers themselves).',
+    'Every deal in your workspace: address, stage, key dates, the checklist and its contacts.',
+    'The document files on your deals and listings (contracts, disclosures, uploads). You can switch this off at any time on this page; then they see document names only.',
+    'Every listing in your workspace: address, status, price, dates, the checklist and its documents (not the seller’s details or the offers themselves).',
     'Deadlines, overdue steps and which deals need attention.',
     'Production numbers: deals closed and sales volume.',
     'Updates on your deals in their notification bell (not your messages).',
@@ -142,6 +145,13 @@ export async function brokerageOwnersFor(userId: string): Promise<string[]> {
   if (member) owners.add(member);
   const checked = await Promise.all([...owners].map(async (id) => ((await ownerStillOnTeamPlan(id)) ? id : null)));
   return checked.filter((id): id is string => id !== null);
+}
+
+/** May the brokerage owner open this agent's document files? On unless the agent switched it off (or the column is not there yet). */
+export async function ownerMayOpenDocuments(ownerId: string, agentUserId: string): Promise<boolean> {
+  const { data, error } = await supabaseServer.from('brokerage_links').select('*').eq('owner_user_id', ownerId).eq('agent_user_id', agentUserId).eq('status', 'active').maybeSingle();
+  if (error || !data) return false;
+  return (data as BrokerageLink).can_open_documents !== false;
 }
 
 /** Does this brokerage owner currently oversee this agent? (Active link and the owner is still on a team plan.) */

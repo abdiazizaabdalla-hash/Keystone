@@ -265,6 +265,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  // A brokerage owner whose agent has switched off file access sees document names only.
+  const [documentsLocked, setDocumentsLocked] = useState(false);
   const [signingRequests, setSigningRequests] = useState<SigningRequestItem[]>([]);
   const [requestingSignatureDocId, setRequestingSignatureDocId] = useState<string | null>(null);
   const [signerNameDraft, setSignerNameDraft] = useState('');
@@ -1005,6 +1007,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
     setTransaction(data.transaction);
     setTasks(data.tasks);
     setDocuments(Array.isArray(data.documents) ? data.documents : []);
+    setDocumentsLocked(data.documentsLocked === true);
     setContacts(Array.isArray(data.contacts) ? data.contacts : []);
     setDraftContacts([]);
     setOwnerKeyDates(data.keyDates ?? []);
@@ -2016,9 +2019,13 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
       return (
         <div key={doc.id} className="flex items-center justify-between gap-3 bg-slate-800/50 border border-slate-600 rounded-lg px-4 py-2.5">
           <div className="min-w-0 flex-1">
-            <a href={doc.url || '#'} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 truncate block">
-              📄 {doc.file_name}
-            </a>
+            {doc.url ? (
+              <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 truncate block">
+                📄 {doc.file_name}
+              </a>
+            ) : (
+              <span className="text-slate-300 truncate block" title="This agent has turned off file access for their brokerage">📄 {doc.file_name} <span className="text-xs text-slate-500">· file access off</span></span>
+            )}
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
               <span className="text-xs text-slate-500">{doc.document_type || 'General'}</span>
               {doc.task_id && taskNameById[doc.task_id] && (
@@ -2573,6 +2580,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           <div className="flex flex-wrap items-start justify-between gap-4 mb-2">
             <div className="min-w-[14rem] flex-1">
               <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
+              {ownerView && documentsLocked && <p className="text-sm text-amber-300 bg-amber-500/10 border border-amber-400/30 rounded-lg px-3 py-2 mb-2">This agent has turned off file access for their brokerage, so you can see document names but not open the files.</p>}
               <p className="text-sm text-slate-400">
                 Organized by category — a document can optionally be tagged with a checklist stage, but
                 doesn&apos;t have to be.

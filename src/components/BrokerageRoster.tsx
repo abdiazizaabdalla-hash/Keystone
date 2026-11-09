@@ -20,6 +20,7 @@ interface Row {
   closingThisWeek: number;
   lastActivity: string | null;
   openListings: number;
+  canOpenDocuments?: boolean;
 }
 interface Pending {
   linkId: string;
@@ -220,6 +221,7 @@ export default function BrokerageRoster() {
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-100 truncate">{a.name}</p>
                     <p className="text-xs text-slate-500 truncate">{a.email ?? ''}</p>
+                    {a.canOpenDocuments === false && <p className="text-[11px] text-amber-300">Files off: names only</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-5">

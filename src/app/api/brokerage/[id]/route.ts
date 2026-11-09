@@ -13,11 +13,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { id } = await params;
     const { user } = await getUserFromRequest(request);
     assertBrokerageAgent(user);
-    const body = (await request.json().catch(() => ({}))) as { action?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { action?: unknown; canOpenDocuments?: unknown };
     const action = body.action;
-    if (action !== 'accept' && action !== 'decline' && action !== 'leave') throw new AuthError('Choose accept, decline or leave.', 400);
+    if (action !== 'accept' && action !== 'decline' && action !== 'leave' && action !== 'set_permissions') throw new AuthError('Choose accept, decline, leave or set_permissions.', 400);
     const now = new Date().toISOString();
     const name = (await agentLabels([user.id])).get(user.id)?.name ?? user.email ?? 'An agent';
+
+    if (action === 'set_permissions') {
+      // The agent decides whether their brokerage may open document files (names stay visible either way).
+      if (typeof body.canOpenDocuments !== 'boolean') throw new AuthError('canOpenDocuments must be true or false.', 400);
+      const current = await activeLinkForAgent(user.id);
+      if (!current || current.id !== id) throw new AuthError('Not found', 404);
+      const { error } = await supabaseServer.from('brokerage_links').update({ can_open_documents: body.canOpenDocuments }).eq('id', id);
+      if (error) throw error.code === '42703' ? new AuthError('This setting needs a database update first (add-brokerage-permissions.sql).', 409) : error;
+      await logAudit(request, user, 'brokerage.permissions', { entityType: 'brokerage_link', entityId: id, metadata: { canOpenDocuments: body.canOpenDocuments } });
+      await notifyOwnerRoster(current.owner_user_id, user.id, `${name} ${body.canOpenDocuments ? 'allowed' : 'turned off'} document file access for your brokerage`);
+      return NextResponse.json({ success: true });
+    }
 
     if (action === 'leave') {
       const current = await activeLinkForAgent(user.id);

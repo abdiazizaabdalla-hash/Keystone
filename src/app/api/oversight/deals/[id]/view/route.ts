@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
-import { agentLabels, assertBrokerageOwner, canOverseeDeal } from '@/lib/oversight';
+import { agentLabels, assertBrokerageOwner, canOverseeDeal, ownerMayOpenDocuments } from '@/lib/oversight';
+import { logAudit } from '@/lib/audit';
 import { oversightError } from '@/lib/oversightServer';
 
 const BUCKET = 'transaction-documents';
@@ -28,14 +29,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       supabaseServer.from('transaction_contacts').select('*').eq('transaction_id', id).order('position', { ascending: true }),
       supabaseServer.from('transaction_key_dates').select('*').eq('transaction_id', id).order('due_date', { ascending: true }),
     ]);
+    // Document files open only while the agent allows it; otherwise the owner gets names without links.
+    const mayOpen = await ownerMayOpenDocuments(user.id, deal.tc_user_id as string);
+    if (mayOpen && (docs ?? []).length) await logAudit(request, user, 'brokerage.documents_opened', { entityType: 'transaction', entityId: id, metadata: { count: (docs ?? []).length } });
     const documents = await Promise.all(
       (docs ?? []).map(async (doc) => {
+        if (!mayOpen) return { ...doc, url: null };
         const { data: signed } = await supabaseServer.storage.from(BUCKET).createSignedUrl(doc.storage_path as string, SIGNED_URL_TTL_SECONDS);
         return { ...doc, url: signed?.signedUrl ?? null };
       })
     );
     const label = (await agentLabels([deal.tc_user_id as string])).get(deal.tc_user_id as string) ?? null;
-    return NextResponse.json({ transaction, agent: label ? { name: label.name, email: label.email } : null, tasks: tasks ?? [], documents, contacts: contacts ?? [], keyDates: keyDates ?? [] });
+    return NextResponse.json({ transaction, agent: label ? { name: label.name, email: label.email } : null, tasks: tasks ?? [], documents, documentsLocked: !mayOpen, contacts: contacts ?? [], keyDates: keyDates ?? [] });
   } catch (error) {
     return oversightError(error, 'load that deal');
   }

@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const labels = await agentLabels([...(current ? [current.owner_user_id] : []), ...invites.map((i) => i.owner_user_id)]);
     const who = (id: string) => labels.get(id) ?? { id, name: 'A brokerage', email: null };
     return NextResponse.json({
-      current: current ? { id: current.id, owner: who(current.owner_user_id), since: current.responded_at, paused } : null,
+      current: current ? { id: current.id, owner: who(current.owner_user_id), since: current.responded_at, paused, canOpenDocuments: current.can_open_documents !== false } : null,
       invites: invites.map((i) => ({ id: i.id, owner: who(i.owner_user_id), invitedAt: i.invited_at })),
       // True when this agent's workspace comes from the brokerage (Agent Basic), so leaving ends it.
       providesWorkspace: hasBrokerageAccess(user),

@@ -8,7 +8,7 @@ import { authFetch } from '@/lib/authClient';
 
 interface Owner { id: string; name: string; email: string | null }
 interface Terms { sees: string[]; canDo: string[]; private: string[]; leave: string }
-interface Data { providesWorkspace?: boolean; current: { id: string; owner: Owner; since: string | null; paused?: boolean } | null; invites: { id: string; owner: Owner; invitedAt: string }[]; terms: Terms }
+interface Data { providesWorkspace?: boolean; current: { id: string; owner: Owner; since: string | null; paused?: boolean; canOpenDocuments?: boolean } | null; invites: { id: string; owner: Owner; invitedAt: string }[]; terms: Terms }
 
 const card = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 
@@ -30,6 +30,20 @@ export default function BrokerageMembership({ onChanged }: { onChanged?: () => v
     }, 0);
     return () => clearTimeout(t);
   }, [load]);
+
+  const setDocuments = async (id: string, canOpenDocuments: boolean) => {
+    setBusy(id);
+    setError('');
+    try {
+      const res = await authFetch(`/api/brokerage/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'set_permissions', canOpenDocuments }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not do that');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not do that');
+    } finally {
+      setBusy('');
+    }
+  };
 
   const act = async (id: string, action: 'accept' | 'decline' | 'leave') => {
     const leaveWarning = data?.providesWorkspace
@@ -104,6 +118,13 @@ export default function BrokerageMembership({ onChanged }: { onChanged?: () => v
             </button>
           </div>
           {data.current.paused && <p className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mt-3">Sharing is paused: this brokerage’s plan is not active right now, so they cannot see or change your deals. Nothing was removed, and it resumes if they renew.</p>}
+          <label className="mt-3 flex items-start gap-3 text-sm text-slate-200 cursor-pointer">
+            <input type="checkbox" className="mt-1" checked={data.current.canOpenDocuments !== false} disabled={busy === data.current.id} onChange={(e) => setDocuments(data.current!.id, e.target.checked)} />
+            <span>
+              Let my brokerage open the document files on my deals and listings
+              <span className="block text-xs text-slate-400">Off: they still see document names and everything else, but cannot open the files.</span>
+            </span>
+          </label>
           <details className="mt-3 group">
             <summary className="cursor-pointer text-sm text-blue-400 hover:text-blue-300">What they can see and change</summary>
             <div className="mt-3">
