@@ -19,8 +19,9 @@ interface Detail {
   refundedAmount: number | null;
   payOnline: boolean;
   billedBy: { name: string; email: string | null };
+  kind?: 'listing' | 'transaction';
   deal: { id: string; fileNumber: string; propertyAddress: string | null; purchasePrice: number; closingDate: string | null; status: string | null };
-  fee: { flatFee: number; percent: number; percentAmount: number; total: number };
+  fee: { flatFee: number; percent: number; percentAmount: number; adjustment?: number; adjustmentNote?: string | null; total: number };
 }
 
 const money = (n: number) => `$${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -134,10 +135,13 @@ export default function ReceivedInvoicePage({ params }: { params: Promise<{ id: 
         <p className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">How this was calculated</p>
         <div className="space-y-2 text-sm">
           {inv.fee.flatFee > 0 && (
-            <div className="flex justify-between"><span className="text-slate-300">Transaction coordination fee (flat)</span><span className="text-slate-100">{money(inv.fee.flatFee)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-300">{inv.kind === 'listing' ? 'Listing fee' : 'Transaction coordination fee (flat)'}</span><span className="text-slate-100">{money(inv.fee.flatFee)}</span></div>
           )}
           {inv.fee.percent > 0 && (
             <div className="flex justify-between"><span className="text-slate-300">{inv.fee.percent}% of the {money(inv.deal.purchasePrice)} purchase price</span><span className="text-slate-100">{money(inv.fee.percentAmount)}</span></div>
+          )}
+          {!!inv.fee.adjustment && (
+            <div className="flex justify-between"><span className="text-slate-300">{inv.fee.adjustmentNote || 'Adjustment'}</span><span className="text-slate-100">{money(inv.fee.adjustment)}</span></div>
           )}
           {inv.fee.flatFee === 0 && inv.fee.percent === 0 && <p className="text-slate-400">No fee terms are on file for this invoice.</p>}
           <div className="flex justify-between border-t border-white/10 pt-2 font-semibold"><span className="text-slate-200">Total due</span><span className="text-slate-100">{money(inv.amountOwed)}</span></div>
@@ -148,15 +152,21 @@ export default function ReceivedInvoicePage({ params }: { params: Promise<{ id: 
       </div>
 
       <div className={card}>
-        <p className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Deal</p>
+        <p className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">{inv.kind === 'listing' ? 'Listing' : 'Deal'}</p>
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
             <p className={label}>Property</p>
-            <Link href={`/dashboard/transactions/${inv.deal.id}`} className="text-blue-300 hover:text-blue-200">{inv.deal.propertyAddress || inv.deal.fileNumber}</Link>
+            <Link href={inv.kind === 'listing' ? `/agent/listings/${inv.deal.id}` : `/dashboard/transactions/${inv.deal.id}`} className="text-blue-300 hover:text-blue-200">{inv.deal.propertyAddress || inv.deal.fileNumber}</Link>
           </div>
-          <div><p className={label}>File number</p><p className="text-slate-100">{inv.deal.fileNumber || '—'}</p></div>
-          <div><p className={label}>Purchase price</p><p className="text-slate-100">{money(inv.deal.purchasePrice)}</p></div>
-          <div><p className={label}>Closing</p><p className="text-slate-100">{inv.deal.closingDate ? formatDisplayDate(inv.deal.closingDate) : '—'}{inv.deal.status ? ` · ${inv.deal.status}` : ''}</p></div>
+          {inv.kind === 'listing' ? (
+            <div><p className={label}>List price</p><p className="text-slate-100">{money(inv.deal.purchasePrice)}</p></div>
+          ) : (
+            <>
+              <div><p className={label}>File number</p><p className="text-slate-100">{inv.deal.fileNumber || '—'}</p></div>
+              <div><p className={label}>Purchase price</p><p className="text-slate-100">{money(inv.deal.purchasePrice)}</p></div>
+              <div><p className={label}>Closing</p><p className="text-slate-100">{inv.deal.closingDate ? formatDisplayDate(inv.deal.closingDate) : '—'}{inv.deal.status ? ` · ${inv.deal.status}` : ''}</p></div>
+            </>
+          )}
         </div>
       </div>
 

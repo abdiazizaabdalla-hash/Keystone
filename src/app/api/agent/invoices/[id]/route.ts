@@ -17,16 +17,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // An agent's own record of someone is never an invoice to them.
     if (agent.tc_user_id === user.id) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
 
+    const isListing = !!(transaction as { isListing?: boolean }).isListing;
     const [tc, payOnline, { data: tx }] = await Promise.all([
       loadTcInfo(agent.tc_user_id),
       isStripePayAvailable(agent.tc_user_id),
-      supabaseServer.from('transactions').select('closing_date, status').eq('id', transaction.id).maybeSingle(),
+      isListing ? Promise.resolve({ data: null as { closing_date: string | null; status: string | null } | null }) : supabaseServer.from('transactions').select('closing_date, status').eq('id', transaction.id).maybeSingle(),
     ]);
 
     const price = Number(transaction.purchase_price) || 0;
-    const flatFee = Number(agent.flat_fee) || 0;
-    const percent = Number(agent.commission_percent) || 0;
+    // A listing fee was built when it was made (flat fee, optional adjustment); a deal invoice shows the agent's current fee terms.
+    const flatFee = isListing ? Number(invoice.flat_fee) || 0 : Number(agent.flat_fee) || 0;
+    const percent = isListing ? Number(invoice.percent_fee) || 0 : Number(agent.commission_percent) || 0;
     const percentAmount = (price * percent) / 100;
+    const adjustment = isListing ? Number(invoice.adjustment) || 0 : 0;
 
     return NextResponse.json({
       id: invoice.id,
@@ -42,6 +45,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       refundedAmount: invoice.refunded_amount ?? null,
       payOnline,
       billedBy: { name: tc.name, email: tc.email },
+      kind: isListing ? 'listing' : 'transaction',
       deal: {
         id: transaction.id,
         fileNumber: transaction.file_number,
@@ -50,7 +54,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         closingDate: tx?.closing_date ?? null,
         status: tx?.status ?? null,
       },
-      fee: { flatFee, percent, percentAmount, total: flatFee + percentAmount },
+      fee: { flatFee, percent, percentAmount, adjustment, adjustmentNote: isListing ? invoice.adjustment_note ?? null : null, total: flatFee + percentAmount + adjustment },
     });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });

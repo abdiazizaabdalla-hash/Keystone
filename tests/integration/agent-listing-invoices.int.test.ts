@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { POST as createAgent } from '@/app/api/agents/route';
 import { POST as createInvoice } from '@/app/api/invoices/route';
 import { GET as agentInvoices } from '@/app/api/agent/invoices/route';
+import { GET as agentInvoice } from '@/app/api/agent/invoices/[id]/route';
 import { GET as invoicePdf } from '@/app/api/invoices/[id]/pdf/route';
 import { admin, call, cleanup, createActor, type Actor } from './helpers';
 
@@ -53,6 +54,18 @@ describe('listing fee on the agent side', () => {
     expect((res.json as { id: string }[]).map((i) => i.id)).toEqual([invoiceId]);
     const pdf = await call(h(invoicePdf), agent, { method: 'GET', path: `/api/invoices/${invoiceId}/pdf`, params: { id: invoiceId } });
     expect(pdf.status).toBe(200);
+  });
+
+  it('opens the detail page with the listing fee, not deal fields', async () => {
+    const res = await call(h(agentInvoice), agent, { method: 'GET', path: `/api/agent/invoices/${invoiceId}`, params: { id: invoiceId } });
+    expect(res.status, JSON.stringify(res.json)).toBe(200);
+    const d = res.json as { kind: string; deal: { id: string; propertyAddress: string }; fee: { flatFee: number; total: number }; amountOwed: number };
+    expect(d.kind).toBe('listing');
+    expect(d.deal.id).toBe(listingId);
+    expect(d.deal.propertyAddress).toBe('9 Fee Lane');
+    expect(d.fee.total).toBeCloseTo(d.amountOwed, 2);
+    const other = await call(h(agentInvoice), stranger, { method: 'GET', path: `/api/agent/invoices/${invoiceId}`, params: { id: invoiceId } });
+    expect(other.status).toBe(403);
   });
 
   it('is invisible to another agent', async () => {

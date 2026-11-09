@@ -15,9 +15,11 @@ export interface CoordinatorInvoice {
   paid: boolean;
   paid_at: string | null;
   refunded: boolean;
-  transaction_id: string;
+  transaction_id: string | null;
   payOnline: boolean;
   transaction: { id: string; fileNumber: string; propertyAddress: string | null; tcLabel: string } | null;
+  // A listing fee: billed for a listing, not a deal.
+  listing?: { id: string; propertyAddress: string | null; tcLabel: string } | null;
 }
 
 const money = (n: number) => `$${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -73,7 +75,8 @@ export default function CoordinatorInvoiceList({ invoices, detailHref }: { invoi
   return (
     <div className="space-y-2">
       {invoices.map((inv) => {
-        const tc = inv.transaction?.tcLabel || 'Your coordinator';
+        const tc = inv.transaction?.tcLabel || inv.listing?.tcLabel || 'Your coordinator';
+        const where = inv.transaction?.propertyAddress || inv.transaction?.fileNumber || inv.listing?.propertyAddress || inv.invoice_number;
         return (
           <div
             key={inv.id}
@@ -84,13 +87,13 @@ export default function CoordinatorInvoiceList({ invoices, detailHref }: { invoi
               <div className="min-w-0">
                 {detailHref ? (
                   <Link href={detailHref(inv.id)} className="font-semibold text-slate-100 hover:text-blue-300 transition truncate block">
-                    {inv.transaction?.propertyAddress || inv.transaction?.fileNumber || inv.invoice_number}
+                    {where}
                   </Link>
                 ) : (
-                  <p className="font-semibold text-slate-100 truncate">{inv.transaction?.propertyAddress || inv.transaction?.fileNumber || inv.invoice_number}</p>
+                  <p className="font-semibold text-slate-100 truncate">{where}</p>
                 )}
                 <p className="text-xs text-slate-500 truncate">
-                  {inv.invoice_number} · from {tc} ·{' '}
+                  {inv.invoice_number} · {inv.listing ? 'listing fee · ' : ''}from {tc} ·{' '}
                   {inv.paid && inv.paid_at ? `paid ${formatDisplayDate(inv.paid_at)}` : `due ${formatDisplayDate(inv.due_date)}`}
                 </p>
               </div>
