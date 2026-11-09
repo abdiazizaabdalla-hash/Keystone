@@ -94,7 +94,7 @@ export type AgentFeature =
   | 'invoices'
   | 'template_use' // use the brokerage's templates and Relay's standard forms, and send them from a deal
   | 'custom_templates' // save their own templates, emails, checklists and workflows
-  | 'automation'; // rules and workflows that act on their own downstream
+  | 'automation'; // per-plan entitlement for template rules and workflows. NOT the `automation` deployment flag in features.ts (that switch gates the Auto-0 assistant; Auto-0 checks both).
 
 const GUEST_AGENT: AgentFeature[] = ['deal_visibility', 'documents', 'key_dates', 'messaging'];
 // Basic runs a whole deal, including AI intake, follow-ups and using templates. It cannot save customised templates or emails,
