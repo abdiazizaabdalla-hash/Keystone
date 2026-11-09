@@ -136,6 +136,11 @@ export async function cleanup(): Promise<void> {
   await admin.from('brokerage_links').delete().in('agent_user_id', created);
   await admin.from('template_pins').delete().in('owner_user_id', created);
   await admin.from('template_folders').delete().in('owner_user_id', created);
+  // Automation (Auto-0): approvals go with their actions; events, settings and the kill switch are removed by owner.
+  await admin.from('automation_actions').delete().in('owner_user_id', created);
+  await admin.from('automation_settings').delete().in('owner_user_id', created);
+  await admin.from('automation_account_controls').delete().in('owner_user_id', created);
+  await admin.from('transaction_events').delete().in('owner_user_id', created);
   await admin.from('email_outbox').delete().in('owner_user_id', created);
   await admin.from('template_runs').delete().in('owner_user_id', created);
   await admin.from('template_rules').delete().in('owner_user_id', created);

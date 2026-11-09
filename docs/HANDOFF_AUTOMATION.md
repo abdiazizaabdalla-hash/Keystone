@@ -91,11 +91,12 @@ Done when: a replayed event or cron tick sends nothing twice, the kill switch st
 - Step 4, runner: `/api/cron/automation-tick`. **Blocked on D3** (the answer came back garbled; ask again). Also needs atomic claims and backoff, which the schema supports (`claimed_at`, `next_attempt_at`, `attempts`).
 - Step 5, remaining executors (`add_note`, `suggest_tick`, `classify_document`, `file_document`, `set_date`, `send_step_email`, `notify_user`): the manual routes still hold their own logic; extract it into shared functions first. These actions currently end as `failed: not_implemented`.
 - Step 7, Activity and Approvals panel, the Off / Draft / Auto setting UI, and the API routes behind them (new routes must be added to `tests/route-registry.ts`).
-- Step 8, partly: cross-account isolation and DB-backed idempotency integration tests need the migration run on relay-test first. Unit tests cover the fake clock, fake Claude, prompt injection, replay, guard refusals.
+- Step 8, remaining: integration tests for the runner, the AI wrapper against the real model, and the future routes/UI. DONE (relay-test, 14 tests in `tests/integration/automation-foundation.int.test.ts`): events from the real routes (once, owner-scoped, nothing when the flag is off), replay, Draft queue and approve-once, cross-account refusal, kill switch rechecked at approval, create_task once per key, restricted action refused.
 - Kill switch UI/endpoint (the table and the guard check exist; env `AUTOMATION_KILL_SWITCH=1` also works).
 - Delivery status audit for sent mail (result is stored on `automation_actions`; real Resend delivery is untested).
 
 **Found while building (not fixed):**
+- `automation_settings` is unique per deal only through a partial index, so PostgREST `upsert(..., onConflict)` cannot target it. The future settings route must select-then-insert/update (the integration test does delete + insert).
 - The checklist auto-close path in `src/app/api/tasks/route.ts` does not call `notifyDealClosed`, so a deal closed by completing the last step never notifies the broker. Same root cause as the open item in section 3. (An automation `deal_closed` event is now emitted there.)
 - Git on this machine had no identity configured; commits in this session used the repo's existing author with `-c user.name/-c user.email`, no config was changed.
 

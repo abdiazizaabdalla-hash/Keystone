@@ -6,7 +6,7 @@ Newest first. One entry per working session: commit, what changed, what was veri
 
 - BUILT: migration SQL (unrun), guard, event log with emitters at the deal PATCH, documents POST and task toggle, action pipeline with idempotency and approval rechecks, AI wrapper with a strict proposal catalog and a fake. See `docs/HANDOFF_AUTOMATION.md` "Auto-0 status".
 - Decisions: reuse the existing `automation` flag (the `tiers.ts` entry is a separate entitlement, now commented); D4 confirmed (send from Relay under the user's name, Reply-To the deal address; outbox-only locally). D3 still open: no runner written.
-- Verified: `tsc` clean, eslint clean on changed files, 441 unit tests pass (41 new). Not verified: any database run (migration not applied), integration tests, browser, real email, real Claude calls.
+- Verified: `tsc` clean, eslint clean on changed files, 441 unit tests pass (41 new). Migration run on relay-test only (production untouched, checked read-only). 14 new integration tests pass on relay-test through the real routes; deal-closed-notify, cross-account and collaborator-routes still pass (74 tests). Not verified: browser clicks, real Resend delivery, real Claude calls, production.
 - Not built: runner (D3), remaining executors, Activity and Approvals UI, routes, integration tests. Nothing pushed.
 
 ## 2026-11-09 - commission flows finished, handoff to automation
