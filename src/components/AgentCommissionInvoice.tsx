@@ -1,31 +1,25 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
-import { openStatement } from '@/lib/commissionClient';
 import { showToast } from '@/lib/toast';
 import AgentCommissionInvoiceForm from '@/components/AgentCommissionInvoiceForm';
-import { DealInvoiceModal } from '@/components/AgentInvoices';
-import type { SplitType } from '@/lib/commissionMath';
+import CommissionBox from '@/components/CommissionBox';
 
-// The commission section of an agent's deal when they are in a brokerage. Their brokerage's commission statement starts as an
-// estimate (no amounts) built from the terms the brokerage set for them. The brokerage owner confirms the actual commission from
-// the closing documents; the agent reviews it in the Commission box. This is the brokerage's commission accounting, separate from
-// anything billed through Relay Invoices (a coordinator, a client, anyone else).
+// The "Commission" box on an agent's own deal, for an agent in a brokerage. It is only about the money between the agent and their
+// brokerage, and is separate from the "Invoices" box below it (a coordinator, a client, anyone else).
+//   * No commission invoice yet (an open deal): the worked-out figures from the brokerage's terms, room to add a line of their own and a
+//     note, and a button to send it. Nothing else on the page needs reading first.
+//   * Once there is one (sent, or made when the deal closed): the full commission breakdown and what the agent can do next (agree or
+//     ask for a change, open the statement).
+// Not in a brokerage: nothing is shown here.
 
-const money = (n: number | null) => `$${(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+interface Data { role: 'agent' | 'owner' | null; awaitingTerms?: boolean; canInvoice?: boolean; brokerage?: { name: string; email: string | null }; commission: { status: string } | null }
 
-interface View { id: string; statementNumber: string; status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void'; submitted?: boolean; gross: number | null; agentNet: number | null; brokerageNet: number | null; paidOn: string | null; splitType: SplitType; splitValue: number; estimate?: { gross: number | null; agentNet: number | null } | null }
-interface Data { role: 'agent' | 'owner' | null; awaitingTerms?: boolean; canInvoice?: boolean; brokerage?: { name: string; email: string | null }; dealClosed?: boolean; commission: View | null }
+const card = 'bg-white/5 border border-white/10 rounded-2xl p-5';
 
-export default function AgentCommissionInvoice({ transactionId, dealStatus, hasCoordinator, onOpenDetails, onNeedsAction }: { transactionId: string; purchasePrice?: number | null; /** The deal's stage: when it changes (for instance to Closed) the commission status is read again. */ dealStatus?: string | null; hasCoordinator: boolean; onOpenDetails?: () => void; onNeedsAction?: () => void }) {
+export default function AgentCommissionInvoice({ transactionId, dealStatus }: { transactionId: string; purchasePrice?: number | null; /** The deal's stage: when it changes (for instance to Closed) the commission is read again. */ dealStatus?: string | null; hasCoordinator?: boolean }) {
   const [data, setData] = useState<Data | null>(null);
-  const [error, setError] = useState('');
-  // The confirm screen opens right here on the deal; sending never leaves the page.
-  const [confirming, setConfirming] = useState(false);
-  // "Generate invoice" (billing someone else, like a coordinator) is a popup on the deal too.
-  const [generating, setGenerating] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -41,97 +35,44 @@ export default function AgentCommissionInvoice({ transactionId, dealStatus, hasC
     return () => clearTimeout(t);
   }, [load, dealStatus]);
 
-  // When the brokerage has confirmed an amount, the agent has something to answer: open the details for them.
-  const needsReply = data?.commission?.status === 'proposed';
-  useEffect(() => {
-    if (needsReply) onNeedsAction?.();
-  }, [needsReply, onNeedsAction]);
-
-  const other = (
-    <>
-    <p className="text-xs text-slate-500 mt-4">
-      Billing someone else for this deal, like a coordinator or a client? That is a separate invoice:{' '}
-      <button type="button" onClick={() => setGenerating(true)} className="text-blue-400 hover:text-blue-300 underline-offset-2 hover:underline">create an invoice</button>. Your brokerage commission invoice is listed in <Link href="/dashboard/invoices" className="text-blue-400 hover:text-blue-300">Invoices</Link> too, but it is not part of that billing.
-    </p>
-    {generating && <DealInvoiceModal transactionId={transactionId} onClose={() => setGenerating(false)} />}
-    </>
-  );
-
-  if (data === null) return <p className="text-sm text-slate-500">Loading…</p>;
+  if (data === null) return null;
   const c = data.commission;
 
-  if (c && c.status !== 'void') {
-    const estimate = c.status === 'estimate';
-    const state =
-      estimate ? { text: data.dealClosed ? 'Estimate. This deal closed, and your brokerage will confirm the actual commission from the closing documents. No amount counts until then.' : 'Sent. Your brokerage confirms the actual commission from the closing documents when the deal closes. No amount counts until then.', cls: 'text-amber-300' }
-      : c.status === 'paid' ? { text: `Your brokerage paid you${c.paidOn ? ` on ${c.paidOn}` : ''}.`, cls: 'text-emerald-300' }
-      : c.status === 'accepted' ? { text: 'You agreed. Your brokerage pays you, then records it as paid here.', cls: 'text-emerald-300' }
-      : c.status === 'proposed' ? { text: 'Your brokerage confirmed the commission. Review the details below and agree or ask for a change.', cls: 'text-amber-300' }
-      : c.submitted ? { text: 'Sent. Waiting for your brokerage to approve it.', cls: 'text-blue-300' }
-      : { text: 'You asked for a change. Waiting for your brokerage.', cls: 'text-orange-300' };
-    return (
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-slate-100 font-semibold">
-              {c.statementNumber} · {estimate ? (c.estimate?.agentNet ? `Estimate, about ${money(c.estimate.agentNet)} to you` : 'Estimate, no amount yet') : `You take home ${money(c.agentNet)}`}
-            </p>
-            {!estimate && <p className="text-xs text-slate-400 mt-0.5">Your brokerage received {money(c.gross)} in commission on this deal. The rest is its share and any fees.</p>}
-            <p className={`text-sm mt-0.5 ${state.cls}`}>{state.text}</p>
-          </div>
-          {c.status === 'proposed' && onOpenDetails && <button type="button" onClick={onOpenDetails} className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">Review and respond</button>}
-          {(c.status === 'accepted' || c.status === 'paid') && <button type="button" onClick={() => openStatement(c.id).catch((e) => setError(e instanceof Error ? e.message : 'Could not open the statement'))} className="shrink-0 px-3 py-1.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-sm font-semibold rounded-lg">View statement</button>}
-        </div>
-        {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
-        {other}
-      </div>
-    );
-  }
+  // A commission invoice exists: the full commission box, with the breakdown and the agent's next step.
+  if (c && c.status !== 'void') return <CommissionBox key={`${c.status}`} transactionId={transactionId} />;
 
   if (data.canInvoice && data.brokerage) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-sm text-slate-300 max-w-xl">Send {data.brokerage.name} your commission invoice for this deal. It is filled in from the terms they set for you: sale price, commission rate, split and fees. They confirm the actual amount from the closing documents.</p>
-        <button type="button" onClick={() => setConfirming(true)} className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">Review and send commission invoice</button>
-        {confirming && (
-          <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Confirm commission invoice">
-            <div className="w-full max-w-xl my-8 rounded-2xl border border-white/10 bg-slate-900 p-1 shadow-2xl">
-              <AgentCommissionInvoiceForm
-                initialTransactionId={transactionId}
-                lockDeal
-                onClose={() => {
-                  setConfirming(false);
-                  void load();
-                }}
-                onSent={() => {
-                  setConfirming(false);
-                  showToast({ title: 'Commission invoice sent', body: `Sent to ${data.brokerage?.name ?? 'your brokerage'}`, tone: 'success' });
-                  void load();
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
+      <section className={card}>
+        <div className="mb-3">
+          <h2 className="text-lg font-bold text-slate-100">Commission</h2>
+          <p className="text-xs text-slate-400">Between you and your brokerage only. Separate from any fees for a coordinator on Relay.</p>
+        </div>
+        <AgentCommissionInvoiceForm
+          inline
+          initialTransactionId={transactionId}
+          lockDeal
+          onClose={() => void load()}
+          onSent={() => {
+            showToast({ title: 'Commission invoice sent', body: `Sent to ${data.brokerage?.name ?? 'your brokerage'}`, tone: 'success' });
+            void load();
+          }}
+        />
+      </section>
     );
   }
 
   if (data.awaitingTerms && data.brokerage) {
     return (
-      <div>
+      <section className={card}>
+        <div className="mb-3">
+          <h2 className="text-lg font-bold text-slate-100">Commission</h2>
+          <p className="text-xs text-slate-400">Between you and your brokerage only. Separate from any fees for a coordinator on Relay.</p>
+        </div>
         <p className="text-sm text-slate-300">{data.brokerage.name} has not set your commission terms yet, so there is no commission estimate on this deal. When they set your split and commission rate, it appears here.</p>
-        {other}
-      </div>
+      </section>
     );
   }
 
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-4">
-      <p className="text-sm text-slate-400 max-w-xl">
-        {hasCoordinator ? 'A coordinator is on this deal, so the invoice is attached to it and starts addressed to them.' : 'Create an invoice for this deal and send it to anyone. Add a coordinator to this deal and the invoice attaches to it automatically.'}
-      </p>
-      <button type="button" onClick={() => setGenerating(true)} className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">Generate invoice</button>
-      {generating && <DealInvoiceModal transactionId={transactionId} onClose={() => setGenerating(false)} />}
-    </div>
-  );
+  return null;
 }

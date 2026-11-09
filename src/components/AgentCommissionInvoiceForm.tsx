@@ -48,7 +48,7 @@ const STATE: Record<Statement['status'], string> = {
 const field = 'w-full bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 text-sm focus:border-blue-500 focus:outline-none';
 const row = 'flex items-baseline justify-between gap-4 py-1.5';
 
-export default function AgentCommissionInvoiceForm({ initialTransactionId, lockDeal, onClose, onSent }: { initialTransactionId?: string; /** The deal is fixed (opened from the deal itself): show it instead of a picker. */ lockDeal?: boolean; onClose: () => void; onSent: () => void }) {
+export default function AgentCommissionInvoiceForm({ initialTransactionId, lockDeal, inline = false, onClose, onSent }: { initialTransactionId?: string; /** Shown inside a card the caller provides: no frame, title or Close button of its own. */ inline?: boolean; /** The deal is fixed (opened from the deal itself): show it instead of a picker. */ lockDeal?: boolean; onClose: () => void; onSent: () => void }) {
   const [options, setOptions] = useState<Options | null>(null);
   const [dealId, setDealId] = useState(initialTransactionId ?? '');
   const [busy, setBusy] = useState(false);
@@ -125,7 +125,7 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, lockD
   if (sentInfo) {
     const to = options.brokerage?.name ?? 'your brokerage';
     return (
-      <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4 text-center" role="status">
+      <div className={inline ? 'space-y-4 text-center py-2' : 'mb-8 bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4 text-center'} role="status">
         <div className="mx-auto h-12 w-12 rounded-full bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-300 text-2xl" aria-hidden="true">✓</div>
         <div>
           <h2 className="text-lg font-semibold text-slate-100">Commission invoice sent{sentInfo.number ? ` · ${sentInfo.number}` : ''}</h2>
@@ -143,7 +143,10 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, lockD
   const label = (d: Deal) => `${d.address || d.fileNumber || 'Deal'}${d.statement ? ` · ${d.statement.statementNumber} sent` : ''}${d.closed ? ' · closed' : d.closingDate ? ` · closes ${date(d.closingDate)}` : ''}`;
 
   return (
-    <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-5 space-y-5">
+    <div className={inline ? 'space-y-5' : 'mb-8 bg-white/5 border border-white/10 rounded-2xl p-5 space-y-5'}>
+      {inline ? (
+        <p className="text-xs text-slate-400">Your share of this deal&apos;s commission, billed to your brokerage. The amounts come from the terms your brokerage set for you. Check them, add anything of your own, then send.</p>
+      ) : (
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-100">Commission invoice</h2>
@@ -151,6 +154,7 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, lockD
         </div>
         <button type="button" onClick={onClose} className="text-sm text-slate-400 hover:text-slate-200">Close</button>
       </div>
+      )}
 
       <div className="rounded-xl border border-white/10 bg-slate-800/50 px-4 py-3">
         <p className="text-xs text-slate-400">Bill to</p>
@@ -219,7 +223,7 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, lockD
           {note && <p className="text-sm text-green-300">{note}</p>}
 
           <div className="flex flex-wrap gap-2">
-            {deal?.statement && (
+            {deal?.statement && !inline && (
               <button type="button" onClick={onClose} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl">Done</button>
             )}
             {!deal && deals.length > 0 && <p className="text-sm text-slate-400">Choose a deal to see its commission.</p>}
@@ -228,7 +232,7 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, lockD
                 <button type="button" disabled={busy} onClick={send} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
                   {busy ? 'Sending…' : `Confirm and send to ${options.brokerage?.name ?? 'your brokerage'}`}
                 </button>
-                <button type="button" disabled={busy} onClick={onClose} className="px-4 py-2 border border-white/15 hover:bg-white/5 text-slate-300 text-sm rounded-xl disabled:opacity-50">Not now</button>
+                {!inline && <button type="button" disabled={busy} onClick={onClose} className="px-4 py-2 border border-white/15 hover:bg-white/5 text-slate-300 text-sm rounded-xl disabled:opacity-50">Not now</button>}
               </>
             )}
           </div>

@@ -13,7 +13,7 @@ import CoordinatorStatus from '@/components/CoordinatorStatus';
 import UseTemplateModal from '@/components/UseTemplateModal';
 import DealStateDocs from '@/components/DealStateDocs';
 import LibraryPicker from '@/components/LibraryPicker';
-import AgentCommissionInvoice from '@/components/AgentCommissionInvoice';
+import DealInvoicesCard from '@/components/DealInvoicesCard';
 import CommissionBox from '@/components/CommissionBox';
 import CommissionAndInvoices from '@/components/CommissionAndInvoices';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
@@ -3152,7 +3152,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             <CommissionAndInvoices transactionId={transaction.id} purchasePrice={Number(transaction.purchase_price) || null} dealStatus={transaction.status} hasCoordinator={Boolean(transaction.shared) || acceptedAgentUsers.length > 0} />
           ) : (
           <OverviewSection defaultOpen title="Invoice" summary="Bill a coordinator, client or anyone else">
-            <AgentCommissionInvoice transactionId={transaction.id} purchasePrice={Number(transaction.purchase_price) || null} hasCoordinator={Boolean(transaction.shared) || acceptedAgentUsers.length > 0} />
+            <DealInvoicesCard bare transactionId={transaction.id} hasCoordinator={Boolean(transaction.shared) || acceptedAgentUsers.length > 0} />
           </OverviewSection>
           )
           )}
