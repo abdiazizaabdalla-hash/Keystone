@@ -144,6 +144,8 @@ export async function POST(request: NextRequest) {
       .select('*')
       .single();
     if (error) throw error;
+    // The agent's dashboard announces a listing they were added to once (add-listing-agent-notice.sql; ignored until it is run).
+    if (agentId) await supabaseServer.from('listings').update({ agent_notice_seen: false }).eq('id', listing.id);
 
     const steps = await loadTemplateSteps(user.id, cleanTemplateName(body.templateName));
     const rows = steps.map((s, i) => ({

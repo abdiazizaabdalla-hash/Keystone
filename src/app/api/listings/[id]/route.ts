@@ -230,6 +230,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // Only while the listing is still open, and never twice for the same agent.
     const agentChanged = 'agent_id' in updates && updates.agent_id && updates.agent_id !== listing.agent_id;
     const sharingTurnedOn = updates.share_with_agent === true && listing.share_with_agent !== true;
+    // Announce it on the agent's dashboard once (add-listing-agent-notice.sql; ignored until it is run).
+    if ((agentChanged || sharingTurnedOn) && data?.agent_id) await supabaseServer.from('listings').update({ agent_notice_seen: false }).eq('id', id);
     if ((agentChanged || sharingTurnedOn) && data && ['preparing', 'active', 'under_offer'].includes(data.status as string)) {
       await sendListingPortalInvite({ listing: data, user, appUrl: request.nextUrl.origin, onlyIfNew: true });
     }

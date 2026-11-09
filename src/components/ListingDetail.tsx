@@ -28,6 +28,7 @@ import OverviewCard from '@/components/OverviewCard';
 import QuickMessageComposer from '@/components/QuickMessageComposer';
 import SellerUpdateModal from '@/components/SellerUpdateModal';
 import ListingReadinessCard from '@/components/ListingReadinessCard';
+import ListingFeeInvoiceCard from '@/components/ListingFeeInvoiceCard';
 import ListingSignModal, { type ListingSigningRequest } from '@/components/ListingSignModal';
 import { computeReadiness } from '@/lib/listingReadiness';
 import { useWorkspaceAgent } from '@/lib/useWorkspaceAgent';
@@ -1359,6 +1360,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
           </OverviewCard>
             </div>
             <div className="lg:order-1 flex flex-col gap-8 min-w-0">
+{isWorkspaceAgent && !ownerView && <ListingFeeInvoiceCard listingId={id} />}
 <OverviewCard title="Key dates" summary={[listing.planned_list_date ? `List ${formatDisplayDate(listing.planned_list_date, { month: 'short', day: 'numeric' })}` : null, listing.expiration_date ? `Expires ${formatDisplayDate(listing.expiration_date, { month: 'short', day: 'numeric' })}` : null].filter(Boolean).join(' · ')}>
             <ul className="space-y-1 text-sm mb-3">
               {listing.planned_list_date && (

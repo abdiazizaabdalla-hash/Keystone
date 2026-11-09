@@ -7,6 +7,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import AgentCalendarPrompt from '@/components/AgentCalendarPrompt';
 import AgentBrokerageInvites from '@/components/AgentBrokerageInvites';
 import AgentTransactionList, { type AgentTransaction } from '@/components/AgentTransactionList';
+import ListingAddedNotice from '@/components/ListingAddedNotice';
 import AgentListingCard, { type AgentListingSummary } from '@/components/AgentListingCard';
 import type { ListingStatus } from '@/lib/listingsShared';
 
@@ -207,6 +208,7 @@ export default function AgentHubPage() {
           <p className="text-red-400 text-sm">{error}</p>
         ) : (
           <>
+            <ListingAddedNotice />
             {notices.length > 0 && (
               <div className="mb-8 space-y-2">
                 {notices.map((t) => (

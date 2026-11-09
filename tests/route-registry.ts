@@ -57,6 +57,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/agent-quickbooks/export': { kind: 'session', methods: ['GET'], why: 'CSV files built from the caller’s own workspace invoices only (assertInvoiceSender).' },
   '/api/agent-quickbooks/import': { kind: 'session', methods: ['DELETE', 'POST'], why: 'Creates and undoes invoices owned by the caller only; undo is limited to invoices an import made.', collaboratorWrites: 'assertInvoiceSender refuses anyone without an agent workspace or brokerage account (403); proven in workspace-invoice-pay.int.test.ts.' },
   '/api/agent/listings': { kind: 'agent', methods: ['GET'] },
+  '/api/agent/listings/seen': { kind: 'agent', methods: ['POST'] },
   '/api/agent/listings/[id]': { kind: 'agent', methods: ['GET'] },
   '/api/agent/listings/[id]/comments': { kind: 'agent', methods: ['GET', 'POST'] },
   '/api/agent/listings/[id]/contacts': { kind: 'agent', methods: ['POST'] },

@@ -1,5 +1,6 @@
 'use client';
 
+import ListingAddedNotice from '@/components/ListingAddedNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -685,6 +686,7 @@ export default function DashboardLayout({
             </Link>
           </div>
         )}
+        {isAgentAccount && hasWorkspace && isFeatureOnClient('agent_workspace') && <ListingAddedNotice />}
         {children}
       <ToastHost />
       </div>
