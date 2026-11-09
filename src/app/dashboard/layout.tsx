@@ -69,6 +69,11 @@ const NAV_ICONS: Record<string, React.ReactNode> = {
       <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
     </svg>
   ),
+  automations: (
+    <svg className={ICON_CLS} fill="currentColor" viewBox="0 0 20 20">
+      <path fillRule="evenodd" d="M11.3 1.05a1 1 0 01.64 1.1L11.3 8H16a1 1 0 01.78 1.63l-7 9a1 1 0 01-1.78-.85L8.7 12H4a1 1 0 01-.78-1.63l7-9a1 1 0 011.08-.32z" clipRule="evenodd" />
+    </svg>
+  ),
   templates: (
     <svg className={ICON_CLS} fill="currentColor" viewBox="0 0 20 20">
       <path d="M4 3a2 2 0 00-2 2v2h16V5a2 2 0 00-2-2H4zM2 9v6a2 2 0 002 2h4V9H2zm8 0v8h6a2 2 0 002-2V9h-8z" />
@@ -105,6 +110,7 @@ const PRIMARY_NAV = [
   { href: '/dashboard/calendar', label: 'Calendar', icon: 'calendar' },
   { href: '/dashboard/messages', label: 'Messages', icon: 'messages' },
   { href: '/dashboard/invoices', label: 'Invoices', icon: 'invoices' },
+  { href: '/dashboard/automations', label: 'Automations', icon: 'automations' },
 ] as const;
 
 function isActivePath(pathname: string | null, href: string) {
@@ -406,7 +412,12 @@ export default function DashboardLayout({
   const messagesUnread = messagesBadge ? teamUnread + privateUnread : 0;
   const collaborateUnread = messagesBadge ? 0 : teamUnread;
 
-  const primaryNav = isAgentAccount && !hasWorkspace ? PRIMARY_NAV.filter((i) => i.href !== '/dashboard/invoices') : PRIMARY_NAV;
+  // Automations is last, and only where the feature is on and the account can use it (not a free or Basic agent login).
+  const primaryNav = PRIMARY_NAV.filter((i) => {
+    if (i.href === '/dashboard/invoices') return !(isAgentAccount && !hasWorkspace);
+    if (i.href === '/dashboard/automations') return isFeatureOnClient('automation') && !(isAgentAccount && !hasWorkspace);
+    return true;
+  });
 
   const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
     { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },

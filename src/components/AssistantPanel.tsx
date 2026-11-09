@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import { isFeatureOnClient } from '@/lib/features';
+import Link from 'next/link';
+import { TRIGGERS } from '@/lib/automation/library';
+import { summarizeSteps } from '@/components/ApplyAutomations';
 
 // The assistant on one deal or listing: an Off / Draft / Auto setting and an Activity and Approvals list. Drafts wait here
 // for Approve / Edit / Reject. Nothing sends from a draft until a person approves it.
@@ -19,6 +22,8 @@ interface Item {
   executedAt: string | null;
   draft: { inputs: Record<string, unknown> } | null;
 }
+interface Applied { id: string; template_id: string | null; name: string; trigger_type: string; steps: Parameters<typeof summarizeSteps>[0]; status: string }
+interface Available { id: string; name: string; category: string; active: boolean }
 interface Data {
   outboxOnly: boolean;
   paused: boolean;
@@ -53,6 +58,10 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [applied, setApplied] = useState<Applied[]>([]);
+  const [available, setAvailable] = useState<Available[]>([]);
+  const [pick, setPick] = useState('');
+  const [applyError, setApplyError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ subject?: string; message?: string; text?: string; name?: string; dueDate?: string; date?: string }>({});
   const qs = transactionId ? `transactionId=${transactionId}` : `listingId=${listingId}`;
@@ -63,6 +72,9 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not load the assistant');
       setData(await res.json());
       setError(null);
+      const [i, t] = await Promise.all([authFetch(`/api/automation/instances?${qs}`), authFetch('/api/automation/templates')]);
+      if (i.ok) setApplied((await i.json()).instances);
+      if (t.ok) setAvailable((await t.json()).templates);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the assistant');
     }
@@ -89,6 +101,35 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
     }
   };
 
+  const addAutomation = async () => {
+    if (!pick) return;
+    setBusy(true);
+    try {
+      const res = await authFetch('/api/automation/instances', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactionId, listingId, templateIds: [pick] }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Could not apply it');
+      setApplyError(body.skipped?.[0]?.reason ?? null);
+      setPick('');
+      await load();
+    } catch (e) {
+      setApplyError(e instanceof Error ? e.message : 'Could not apply it');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const removeAutomation = async (id: string) => {
+    setBusy(true);
+    try {
+      const res = await authFetch(`/api/automation/instances/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not remove it');
+      await load();
+    } catch (e) {
+      setApplyError(e instanceof Error ? e.message : 'Could not remove it');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const setMode = (mode: Mode) => call('/api/automation/settings', 'PUT', { transactionId, listingId, mode });
   const decide = (id: string, decision: 'approve' | 'reject', edits?: unknown) => call(`/api/automation/actions/${id}/decide`, 'POST', { decision, edited: edits }).then(() => setEditing(null));
   const mode = data?.settings.mode ?? 'off';
@@ -110,6 +151,34 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
       {data?.paused && <p className="mt-2 text-sm text-amber-300">The assistant is paused for your whole account. Nothing runs until you resume it.</p>}
       {data?.outboxOnly && <p className="mt-2 text-xs text-slate-500">Test environment: emails are saved to the outbox, not sent.</p>}
       {error && <p role="alert" className="mt-2 text-sm text-red-300">{error}</p>}
+
+      <h4 className="mt-5 mb-2 text-sm font-semibold text-slate-200">Automations on this {transactionId ? 'transaction' : 'listing'}</h4>
+      {applied.length === 0 ? (
+        <p className="text-sm text-slate-500">None applied. Pick one below, or build new ones on the <Link href="/dashboard/automations" className="text-blue-300 hover:text-blue-200">Automations page</Link>.</p>
+      ) : (
+        <ul className="space-y-2" data-testid="applied-automations">
+          {applied.map((a) => (
+            <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 p-3">
+              <span className="min-w-0 text-sm text-white">{a.name}<span className="block text-xs text-slate-400">{TRIGGERS.find((t) => t.id === a.trigger_type)?.label}: {summarizeSteps(a.steps)}{a.status === 'paused' ? ' (paused: switched off on the Automations page)' : ''}</span></span>
+              <button type="button" disabled={busy} onClick={() => void removeAutomation(a.id)} className="rounded-lg border border-white/10 px-3 py-1 text-xs text-red-300 hover:bg-white/5">Remove</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(() => {
+        const category = transactionId ? 'transaction' : 'listing';
+        const options = available.filter((t) => t.category === category && t.active && !applied.some((a) => a.template_id === t.id));
+        return options.length === 0 ? null : (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <select aria-label="Automation to apply" value={pick} onChange={(e) => setPick(e.target.value)} className="rounded-lg bg-slate-900 border border-white/10 px-3 py-1.5 text-sm text-white">
+              <option value="">Add an automation…</option>
+              {options.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <button type="button" disabled={busy || !pick} onClick={() => void addAutomation()} className="rounded-lg bg-blue-500 px-3 py-1.5 text-sm text-white disabled:opacity-50" data-testid="apply-automation">Apply</button>
+          </div>
+        );
+      })()}
+      {applyError && <p role="alert" className="mt-2 text-sm text-amber-300">{applyError}</p>}
 
       <h4 className="mt-5 mb-2 text-sm font-semibold text-slate-200">Activity and approvals</h4>
       {!data ? (

@@ -2,6 +2,12 @@
 
 Newest first. One entry per working session: commit, what changed, what was verified, what remains.
 
+## 2026-11-09 (session 3b) - Automation Library, phase 1
+
+- BUILT: Automations page + builder, saved templates, per-deal copies, Apply automations in transaction and listing setup, engine step in the runner, history, routes (registered), sidebar entry. Founder decisions: sidebar placement, phase 1 only, keep the per-deal Assistant tab. See HANDOFF "Auto-1".
+- Verified: tsc clean, 492 unit tests (22 new for validation and scheduling). Integration test written (`automation-library.int.test.ts`) but NOT run: relay-test lacks the new tables until `add-automation-library.sql` is run. Not verified: browser clicks.
+- Not built: AI builder, branching, org templates, more triggers (see HANDOFF). Nothing pushed.
+
 ## 2026-11-09 (session 3) - Auto-0: runner, screens, Stage A rules
 
 - BUILT: runner + cron route (hourly via Supabase pg_cron, daily Vercel fallback; D3 resolved), remaining executors, Stage A rules, five `/api/automation/*` routes, AssistantPanel on deal and listing pages, `/agent` redirect for paid agents. Two new SQL files (owner-actions, schedule), unrun anywhere.

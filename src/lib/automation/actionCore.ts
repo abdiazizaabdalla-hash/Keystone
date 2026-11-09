@@ -11,6 +11,9 @@ export interface ActionRequest {
   transactionId?: string | null;
   listingId?: string | null;
   eventId?: string | null;
+  /** Set when the action comes from a saved automation copy running on this deal or listing. */
+  instanceId?: string | null;
+  stepId?: string | null;
   kind: string;
   inputs: Record<string, unknown>;
   fromApprovedTemplate?: boolean;

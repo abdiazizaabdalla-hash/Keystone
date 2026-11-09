@@ -15,6 +15,7 @@ import { useAgentAccess } from '@/lib/useAgentAccess';
 import { readPersona } from '@/lib/persona';
 import InvitePersonModal, { type PickedPerson } from '@/components/InvitePersonModal';
 import AgentListingsList from '@/components/AgentListingsList';
+import ApplyAutomations, { applyAutomations } from '@/components/ApplyAutomations';
 
 interface ListingRow {
   id: string;
@@ -86,6 +87,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
   const [filter, setFilter] = useState<'open' | 'all'>('open');
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [automationIds, setAutomationIds] = useState<string[]>([]);
   const [formError, setFormError] = useState('');
   // The same property is already being listed: offer to open it, or add this one anyway.
   const [dupListing, setDupListing] = useState<{ id: string; message: string } | null>(null);
@@ -177,6 +179,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
     setFound([]);
     setReadMsg('');
     setFormError('');
+    setAutomationIds([]);
   };
 
   const readAgreement = async (file: File) => {
@@ -280,6 +283,12 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
           });
         } catch {
           /* the listing page lets them upload it again */
+        }
+      }
+      if (automationIds.length) {
+        const problem = await applyAutomations({ listingId: data.id }, automationIds);
+        if (problem) {
+          try { sessionStorage.setItem('relay-automation-apply-error', problem); } catch { /* the listing page still shows what is applied */ }
         }
       }
       router.push(`/dashboard/listings/${data.id}`);
@@ -541,6 +550,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
                 </div>
               </div>
             )}
+            <ApplyAutomations category="listing" value={automationIds} onChange={setAutomationIds} />
             <div className="flex items-center gap-3 pt-1">
               <button type="submit" data-tour="listing-submit" disabled={saving} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 {saving ? 'Creating…' : 'Create listing'}

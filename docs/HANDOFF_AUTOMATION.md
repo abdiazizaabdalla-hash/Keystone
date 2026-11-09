@@ -114,6 +114,18 @@ SQL: `add-automation-foundation.sql` (run on relay-test), `add-automation-owner-
 
 PLANNED / known gaps: AI proposals are not wired into the tick (Stage B); listing events are not emitted; checklist auto-close does not call `notifyDealClosed`; a send retry could double-send if the email went out but the DB update failed; no all-deals approvals page or badge yet (the route exists).
 
+### Auto-1: Automation Library, phase 1 (updated 2026-11-09, session 3)
+
+BUILT (committed locally, not pushed). The product model, per the founder: an **Automations** page (last item in the left sidebar, `/dashboard/automations`) where saved workflows are built, split Transaction / Listing. Applying one to a deal or listing creates an independent **copy** (instance) with its own snapshot of the steps; editing the template never changes running copies, "Update them" does that on purpose. Each copy runs through the same guard, approval queue and action log as Auto-0 (Draft = emails wait for approval, Auto = they send).
+- SQL: `add-automation-library.sql` (templates, instances, `instance_id`/`step_id` on `automation_actions`). Run `add-automation-owner-actions.sql` too. NOT run anywhere yet when this was written.
+- `src/lib/automation/library.ts` (pure: catalog, validation, scheduling rule, recipients, variables), `instances.ts` (database side + `runInstances`, called by the tick), routes `/api/automation/templates[/id[/duplicate|/update-copies]]`, `/instances[/id]`, `/history`.
+- Triggers (all real): transaction created, contract uploaded, any document uploaded, transaction closed, acceptance date, closing date; listing created, planned list date, listing expiration date. Steps: send email (by role, only people on the deal), add checklist step, notify me, add note; listing automations have notify/note only (no email yet: listings have no recipient allow-list).
+- Timing: N days after the trigger, or N days before a date trigger. Steps whose time passed before the copy was applied, or more than 3 days ago, are skipped, never fired late. A moved closing date schedules the steps again (key includes the anchor).
+- UI: Automations page (cards, builder, history), "Apply automations" in the new-transaction form and the new-listing form, "Automations on this transaction/listing" block in the deal Automation tab and listing panel. Applying turns the deal's assistant from Off to Draft.
+- Turning a template off pauses its copies and cancels queued work; deleting stops its copies; removing a copy cancels its queue.
+
+PLANNED, not built: natural-language/AI builder, conditions and branches, "run another automation", wait/check steps, update-deal-status and field actions, status-changed / showing / offer triggers (no events exist yet), listing email, listing-to-transaction handoff, team/brokerage-wide templates, a per-deal history view beyond the Activity list, and dedupe of events for listing triggers.
+
 ### Then
 Stage A (rules only, no AI: follow-up timers, deadline guard, daily briefing, missing documents), Stage B (AI reads, a person confirms), Stage C (drafts with approval), Stage D (opt-in auto-send). Brokerage-wide automation and external integrations come after customer validation.
 

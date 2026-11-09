@@ -8,6 +8,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { DueDateSpec } from '@/lib/dueDates';
 import { readPersona } from '@/lib/persona';
 import InvitePersonModal, { type PickedPerson } from '@/components/InvitePersonModal';
+import ApplyAutomations, { applyAutomations } from '@/components/ApplyAutomations';
 
 interface Agent {
   id: string;
@@ -70,6 +71,7 @@ export default function NewTransactionPage() {
   const [aiAvailable, setAiAvailable] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
+  const [automationIds, setAutomationIds] = useState<string[]>([]);
   const [extractNotes, setExtractNotes] = useState<string | null>(null);
   const [extractedFileName, setExtractedFileName] = useState<string | null>(null);
   const [contractFile, setContractFile] = useState<File | null>(null);
@@ -424,6 +426,14 @@ export default function NewTransactionPage() {
           });
         } catch {
           // Dates can be added by hand from the transaction page.
+        }
+      }
+
+      // Apply the chosen saved automations (each becomes this deal's own copy). If it fails, say so on the next page.
+      if (created?.id && automationIds.length) {
+        const problem = await applyAutomations({ transactionId: created.id }, automationIds);
+        if (problem) {
+          try { sessionStorage.setItem('relay-automation-apply-error', problem); } catch { /* the Automation tab still shows what is applied */ }
         }
       }
 
@@ -818,6 +828,9 @@ export default function NewTransactionPage() {
               </p>
             </div>
           )}
+
+          {/* Saved automations to run on this deal (skippable) */}
+          <div className="mt-6"><ApplyAutomations category="transaction" value={automationIds} onChange={setAutomationIds} /></div>
 
           {/* Form Actions */}
           <div className="flex gap-4 pt-6 border-t border-slate-600">

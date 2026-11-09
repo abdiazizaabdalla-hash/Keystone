@@ -27,6 +27,8 @@ export const supabaseActionStore: ActionStore = {
       transaction_id: req.transactionId ?? null,
       listing_id: req.listingId ?? null,
       event_id: req.eventId ?? null,
+      instance_id: req.instanceId ?? null,
+      step_id: req.stepId ?? null,
       kind: req.kind,
       // The "routine template reminder" flag travels with the action so a later retry or resume still knows it.
       inputs: req.fromApprovedTemplate ? { ...req.inputs, [TEMPLATE_FLAG]: true } : req.inputs,
@@ -146,6 +148,17 @@ async function assertOwnsDeal(action: ActionRow): Promise<string> {
   return action.transaction_id;
 }
 
+/** Deal or listing actions: whichever it is, it must belong to the account the action runs for. */
+async function assertOwnsDealOrListing(action: ActionRow): Promise<void> {
+  if (action.transaction_id) {
+    await assertOwnsDeal(action);
+    return;
+  }
+  if (!action.listing_id) throw new Error('This action needs a deal or a listing');
+  const { data } = await supabaseServer.from('listings').select('tc_user_id').eq('id', action.listing_id).maybeSingle();
+  if (!data || data.tc_user_id !== action.owner_user_id) throw new Error('Listing does not belong to this account');
+}
+
 const createTask: Executor = async (action) => {
   const transactionId = await assertOwnsDeal(action);
   const name = typeof action.inputs.name === 'string' ? action.inputs.name.trim().slice(0, 255) : '';
@@ -184,7 +197,7 @@ const clip = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slic
 
 /** A note lives on the deal's Activity timeline (this action row). It changes nothing else. */
 const addNote: Executor = async (action) => {
-  await assertOwnsDeal(action);
+  await assertOwnsDealOrListing(action);
   const text = clip(action.inputs.text, 2000);
   if (!text) throw new Error('A note needs text');
   return { text };
@@ -195,7 +208,7 @@ const notifyUser: Executor = async (action) => {
   if (!title) throw new Error('A notification needs a title');
   if ((await getMutedTypes(action.owner_user_id)).includes('assistant')) return { muted: true };
   const transactionId = action.transaction_id;
-  if (transactionId) await assertOwnsDeal(action);
+  if (transactionId || action.listing_id) await assertOwnsDealOrListing(action);
   const { error } = await supabaseServer.from('notifications').insert({
     recipient_user_id: action.owner_user_id,
     actor_user_id: null,
@@ -203,7 +216,7 @@ const notifyUser: Executor = async (action) => {
     event_type: 'assistant',
     title,
     body: clip(action.inputs.body, 160) || null,
-    link: transactionId ? `/dashboard/transactions/${transactionId}` : '/dashboard',
+    link: transactionId ? `/dashboard/transactions/${transactionId}` : action.listing_id ? `/dashboard/listings/${action.listing_id}` : '/dashboard',
   });
   if (error) throw error;
   return { delivered: true };

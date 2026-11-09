@@ -4,6 +4,7 @@ import { loadDealForTemplates } from '../templateContext';
 import { resumeAutomationAction, submitAutomationAction } from './actions';
 import { buildBriefing, daysBetween, evaluateDealRules, localDay, type BriefingDeal, type DealSnapshot } from './rules';
 import { localHour } from './guard';
+import { runInstances } from './instances';
 
 // The runner (plan 16.4 item 6). Called hourly by a Supabase schedule and once a day by Vercel as a fallback; either call is
 // safe to repeat because every proposal has an idempotency key and every claim is atomic. A tick does four things:
@@ -19,6 +20,7 @@ export interface TickReport {
   dealsChecked: number;
   proposed: number;
   briefings: number;
+  automations: number;
   outcomes: Record<string, number>;
   errors: string[];
 }
@@ -59,7 +61,7 @@ async function loadSnapshot(transactionId: string, followUpDays: number): Promis
 }
 
 export async function runTick(now: Date = new Date(), opts: { budgetMs?: number } = {}): Promise<TickReport> {
-  const report: TickReport = { resumed: 0, events: 0, dealsChecked: 0, proposed: 0, briefings: 0, outcomes: {}, errors: [] };
+  const report: TickReport = { resumed: 0, events: 0, dealsChecked: 0, proposed: 0, briefings: 0, automations: 0, outcomes: {}, errors: [] };
   if (!isFeatureOn('automation')) return { ...report, skipped: 'automation is off' };
   const started = Date.now();
   const outOfTime = () => Date.now() - started > (opts.budgetMs ?? 45_000);
@@ -143,6 +145,17 @@ export async function runTick(now: Date = new Date(), opts: { budgetMs?: number 
     } catch (err) {
       fail(`deal ${s.transaction_id}`, err);
     }
+  }
+
+  // 3b. Saved automations (the library): fire the steps that are due on every active copy.
+  try {
+    const r = await runInstances(now, outOfTime);
+    report.automations = r.instances;
+    report.proposed += r.proposed;
+    for (const [k, v] of Object.entries(r.outcomes)) report.outcomes[k] = (report.outcomes[k] ?? 0) + v;
+    report.errors.push(...r.errors);
+  } catch (err) {
+    fail('automations', err);
   }
 
   // 4. Daily briefings, once per owner per local day, from 7am local.

@@ -25,6 +25,7 @@ const REFUSALS: Record<string, string> = {
   over_daily_cap: 'The daily send limit for this deal was reached.',
   quiet_hours: 'Held until quiet hours end.',
   not_implemented: 'Relay cannot do this yet.',
+  automation_removed: 'The automation was turned off or removed before this ran.',
 };
 
 export function kindLabel(kind: string): string {
