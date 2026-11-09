@@ -77,7 +77,7 @@ export default function BrokerageHome({ compact = false }: { compact?: boolean }
       <ul className="divide-y divide-white/5">
         {home.confirmDeals.map((d) => (
           <li key={d.id}>
-            <Link href="/dashboard/invoices" className="flex flex-wrap items-baseline justify-between gap-2 py-2 hover:bg-white/5 rounded-lg px-1 -mx-1">
+            <Link href={`/dashboard/collaborate/agents/${d.agent.id}#confirm`} className="flex flex-wrap items-baseline justify-between gap-2 py-2 hover:bg-white/5 rounded-lg px-1 -mx-1">
               <span><span className="text-sm text-slate-100">{d.address || 'Untitled deal'}</span><span className="block text-xs text-slate-400">{d.agent.name}{d.salePrice ? ` · sold for ${money(d.salePrice)}` : ''}</span></span>
               <span className="text-sm text-amber-300">{d.estimatedGrossCents ? `about ${money(d.estimatedGrossCents / 100)} expected · Confirm` : 'Confirm'}</span>
             </Link>

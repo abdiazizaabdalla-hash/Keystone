@@ -8,6 +8,7 @@ import AgentDealRows, { type AgentDeal } from '@/components/AgentDealRows';
 import AgentListingRows, { type AgentListing } from '@/components/AgentListingRows';
 import { type CapView } from '@/components/CapNotice';
 import CommissionQuickPay from '@/components/CommissionQuickPay';
+import CommissionInvoicePanel, { type PanelRow } from '@/components/CommissionInvoicePanel';
 import AgentCommissionTerms, { type SplitType } from '@/components/AgentCommissionTerms';
 
 // One agent in your brokerage, in full. Read-only apart from their base commission.
@@ -33,11 +34,16 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
   const { id } = use(params);
   const [data, setData] = useState<Profile | null>(null);
   const [error, setError] = useState('');
+  const [toConfirm, setToConfirm] = useState<(PanelRow & { property: string | null; agent: { id: string } })[]>([]);
   const load = useCallback(async () => {
     const res = await authFetch(`/api/oversight/agents/${id}`);
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json.error || 'Could not load this agent');
     setData(json);
+    // Closed deals with only an estimate: the brokerage signs these off here, with the confirm form open.
+    const c = await authFetch('/api/commissions');
+    const cj = await c.json().catch(() => ({}));
+    if (c.ok) setToConfirm(((cj.asOwner ?? []) as (PanelRow & { property: string | null; agent: { id: string } })[]).filter((r) => r.agent?.id === id && r.status === 'estimate' && r.dealStatus === 'Closed'));
   }, [id]);
 
   useEffect(() => {
@@ -82,6 +88,18 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
         </div>
       </div>
       {error && <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</p>}
+
+      {toConfirm.length > 0 && (
+        <div id="confirm" className="bg-red-500/5 border border-red-500/40 rounded-2xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-slate-100">{toConfirm.length} closed deal{toConfirm.length === 1 ? '' : 's'} to sign off for {agent.name}</h2>
+          {toConfirm.map((r) => (
+            <div key={r.id} className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+              <p className="text-sm font-semibold text-slate-100">{r.property || r.statementNumber} <span className="text-xs font-normal text-slate-500">{r.statementNumber}</span></p>
+              <CommissionInvoicePanel role="owner" row={r} counterpart={agent.name} onChanged={() => load().catch(() => undefined)} />
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className={card}>
         <AgentCommissionTerms terms={{ linkId: agent.linkId, baseRate: agent.baseRate, baseCommission: agent.baseCommission, baseFees: agent.baseFees, baseCap: agent.baseCap, cap: agent.cap }} onSaved={load} />
