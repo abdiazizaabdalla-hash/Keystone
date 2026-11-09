@@ -9,7 +9,7 @@ import CommissionBox from '@/components/CommissionBox';
 // underneath, so everything about money on the deal lives in one place.
 const KEY = 'relay.commissionOpen';
 
-export default function CommissionAndInvoices({ transactionId, purchasePrice, hasCoordinator }: { transactionId: string; purchasePrice?: number | null; hasCoordinator: boolean }) {
+export default function CommissionAndInvoices({ transactionId, purchasePrice, dealStatus, hasCoordinator }: { transactionId: string; purchasePrice?: number | null; dealStatus?: string | null; hasCoordinator: boolean }) {
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => {
@@ -40,7 +40,7 @@ export default function CommissionAndInvoices({ transactionId, purchasePrice, ha
         </svg>
       </button>
       <div className="px-5 pb-5">
-        <AgentCommissionInvoice transactionId={transactionId} purchasePrice={purchasePrice} hasCoordinator={hasCoordinator} onOpenDetails={showDetails} onNeedsAction={openQuietly} />
+        <AgentCommissionInvoice transactionId={transactionId} purchasePrice={purchasePrice} dealStatus={dealStatus} hasCoordinator={hasCoordinator} onOpenDetails={showDetails} onNeedsAction={openQuietly} />
         <div ref={detailsRef} className={open ? 'mt-4' : 'hidden'}>
           <CommissionBox transactionId={transactionId} embedded />
         </div>

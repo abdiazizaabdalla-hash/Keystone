@@ -19,7 +19,7 @@ const money = (n: number | null) => `$${(n || 0).toLocaleString('en-US', { minim
 interface View { id: string; statementNumber: string; status: 'estimate' | 'proposed' | 'change_requested' | 'accepted' | 'paid' | 'void'; submitted?: boolean; gross: number | null; agentNet: number | null; brokerageNet: number | null; paidOn: string | null; splitType: SplitType; splitValue: number; estimate?: { gross: number | null; agentNet: number | null } | null }
 interface Data { role: 'agent' | 'owner' | null; awaitingTerms?: boolean; canInvoice?: boolean; brokerage?: { name: string; email: string | null }; dealClosed?: boolean; commission: View | null }
 
-export default function AgentCommissionInvoice({ transactionId, hasCoordinator, onOpenDetails, onNeedsAction }: { transactionId: string; purchasePrice?: number | null; hasCoordinator: boolean; onOpenDetails?: () => void; onNeedsAction?: () => void }) {
+export default function AgentCommissionInvoice({ transactionId, dealStatus, hasCoordinator, onOpenDetails, onNeedsAction }: { transactionId: string; purchasePrice?: number | null; /** The deal's stage: when it changes (for instance to Closed) the commission status is read again. */ dealStatus?: string | null; hasCoordinator: boolean; onOpenDetails?: () => void; onNeedsAction?: () => void }) {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState('');
   // The confirm screen opens right here on the deal; sending never leaves the page.
@@ -39,7 +39,7 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator, 
   useEffect(() => {
     const t = setTimeout(load, 0);
     return () => clearTimeout(t);
-  }, [load]);
+  }, [load, dealStatus]);
 
   // When the brokerage has confirmed an amount, the agent has something to answer: open the details for them.
   const needsReply = data?.commission?.status === 'proposed';
@@ -99,7 +99,10 @@ export default function AgentCommissionInvoice({ transactionId, hasCoordinator, 
               <AgentCommissionInvoiceForm
                 initialTransactionId={transactionId}
                 lockDeal
-                onClose={() => setConfirming(false)}
+                onClose={() => {
+                  setConfirming(false);
+                  void load();
+                }}
                 onSent={() => {
                   setConfirming(false);
                   showToast({ title: 'Commission invoice sent', body: `Sent to ${data.brokerage?.name ?? 'your brokerage'}`, tone: 'success' });

@@ -38,7 +38,7 @@ const date = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:
 const rateText = (r: Rate) => (r.type === 'percent' ? `${r.value}% of the sale price` : `${money(r.value)} flat fee`);
 const splitSides = (t: SplitType, v: number) => (t === 'percent' ? `You keep ${v}% · brokerage keeps ${Math.round((100 - v) * 1000) / 1000}%` : t === 'flat_agent' ? `You get ${money(v)}, the brokerage keeps the rest` : `Brokerage fee ${money(v)}, you keep the rest`);
 const STATE: Record<Statement['status'], string> = {
-  estimate: 'Sent. Your brokerage confirms the actual commission from the closing documents.',
+  estimate: 'Sent to your brokerage. They confirm the actual commission from the closing documents. There is nothing more for you to do.',
   proposed: 'Your brokerage confirmed the commission. Review it on the deal and agree or ask for a change.',
   change_requested: 'Waiting for your brokerage.',
   accepted: 'You agreed. Your brokerage pays you, then records it as paid.',
@@ -57,6 +57,8 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, lockD
   // The agent's own additions before sending: lines taken from their share (a referral fee) and a note for the brokerage.
   const [extras, setExtras] = useState<{ label: string; amount: string }[]>([]);
   const [message, setMessage] = useState('');
+  // Set once the invoice has gone to the brokerage: the form gives way to a confirmation with a Done button.
+  const [sentInfo, setSentInfo] = useState<{ number: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -105,11 +107,11 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, lockD
       const res = await authFetch('/api/commissions/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transactionId: deal.id, extraFees: extras.map((x) => ({ label: x.label, amount: x.amount })), note: message }) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || 'Could not send the invoice');
-      setNote(`Sent to ${options?.brokerage?.name ?? 'your brokerage'}.`);
+      setNote('');
       setExtras([]);
       setMessage('');
+      setSentInfo({ number: typeof json.statementNumber === 'string' ? json.statementNumber : '' });
       await load();
-      onSent();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not send the invoice');
     } finally {
@@ -119,6 +121,20 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, lockD
 
   if (options === null) return <p className="text-sm text-slate-400">Loading…</p>;
   if (!options.inBrokerage) return null;
+
+  if (sentInfo) {
+    const to = options.brokerage?.name ?? 'your brokerage';
+    return (
+      <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4 text-center" role="status">
+        <div className="mx-auto h-12 w-12 rounded-full bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-300 text-2xl" aria-hidden="true">✓</div>
+        <div>
+          <h2 className="text-lg font-semibold text-slate-100">Commission invoice sent{sentInfo.number ? ` · ${sentInfo.number}` : ''}</h2>
+          <p className="text-sm text-slate-300 mt-1">{to} has it now and was notified. They confirm the actual commission from the closing documents, then you review it here on the deal and agree or ask for a change. Nothing is paid until then.</p>
+        </div>
+        <button type="button" onClick={onSent} className="px-5 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl">Done</button>
+      </div>
+    );
+  }
 
   const extraTotal = extras.reduce((n, x) => n + (Number(x.amount) || 0), 0);
   const deals = options.deals ?? [];
@@ -203,10 +219,17 @@ export default function AgentCommissionInvoiceForm({ initialTransactionId, lockD
           {note && <p className="text-sm text-green-300">{note}</p>}
 
           <div className="flex flex-wrap gap-2">
+            {deal?.statement && (
+              <button type="button" onClick={onClose} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl">Done</button>
+            )}
+            {!deal && deals.length > 0 && <p className="text-sm text-slate-400">Choose a deal to see its commission.</p>}
             {deal && !deal.statement && (
-              <button type="button" disabled={busy} onClick={send} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
-                {busy ? 'Sending…' : `Confirm and send to ${options.brokerage?.name ?? 'your brokerage'}`}
-              </button>
+              <>
+                <button type="button" disabled={busy} onClick={send} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl disabled:opacity-50">
+                  {busy ? 'Sending…' : `Confirm and send to ${options.brokerage?.name ?? 'your brokerage'}`}
+                </button>
+                <button type="button" disabled={busy} onClick={onClose} className="px-4 py-2 border border-white/15 hover:bg-white/5 text-slate-300 text-sm rounded-xl disabled:opacity-50">Not now</button>
+              </>
             )}
           </div>
         </>
