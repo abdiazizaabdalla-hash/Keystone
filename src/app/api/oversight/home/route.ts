@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       agentLabels(ids),
       loadOversightDeals(ids, today),
       loadOversightListings(ids, today),
-      supabaseServer.from('deal_commissions').select('transaction_id, status, change_note, agent_net_cents, gross_cents').eq('owner_user_id', user.id).limit(2000),
+      supabaseServer.from('deal_commissions').select('transaction_id, agent_user_id, status, change_note, agent_net_cents, gross_cents, estimated_gross_cents').eq('owner_user_id', user.id).limit(2000),
       supabaseServer.from('brokerage_messages').select('id', { count: 'exact', head: true }).eq('owner_user_id', user.id).neq('sender_id', user.id).is('read_at', null),
     ]);
 
@@ -28,15 +28,27 @@ export async function GET(request: NextRequest) {
     const production = productionFor(deals, today);
 
     const rows = commissionRows ?? [];
-    const closedIds = new Set(deals.filter((d) => d.status === CLOSED_STAGE).map((d) => d.id));
     // An estimate on an open deal is an invoice the agent sent early; it has no amounts and waits for the closing documents.
     const live = rows.filter((r) => r.status !== 'void');
     const withCommission = new Set(live.map((r) => r.transaction_id as string));
     // An estimate has no amount to pay yet, so it is not 'owed'; it is something the owner still has to confirm.
     const unpaid = live.filter((r) => r.status !== 'paid' && r.status !== 'estimate');
+    // Closed deals whose estimate is waiting for the actual commission. Includes deals a coordinator runs that an agent was added to, which are not in the agents' own deals above.
+    const estimates = live.filter((r) => r.status === 'estimate');
+    const estimateDeals = new Map<string, { address: string | null; status: string | null; price: number | null }>();
+    for (let i = 0; i < estimates.length; i += 80) {
+      const { data } = await supabaseServer.from('transactions').select('id, property_address, status, purchase_price').in('id', estimates.slice(i, i + 80).map((r) => r.transaction_id as string));
+      for (const t of data ?? []) estimateDeals.set(t.id as string, { address: t.property_address as string | null, status: t.status as string | null, price: t.purchase_price ? Number(t.purchase_price) : null });
+    }
+    const confirmDeals = estimates
+      .filter((r) => estimateDeals.get(r.transaction_id as string)?.status === CLOSED_STAGE)
+      .map((r) => {
+        const d = estimateDeals.get(r.transaction_id as string)!;
+        return { id: r.transaction_id as string, address: d.address, salePrice: d.price, estimatedGrossCents: r.estimated_gross_cents === null || r.estimated_gross_cents === undefined ? null : Number(r.estimated_gross_cents), agent: { id: r.agent_user_id as string, name: nameOf(r.agent_user_id as string) } };
+      });
     const commissions = {
       changeRequested: live.filter((r) => r.status === 'change_requested' && r.change_note).length,
-      needsConfirm: live.filter((r) => r.status === 'estimate' && closedIds.has(r.transaction_id as string)).length,
+      needsConfirm: confirmDeals.length,
       needsApproval: live.filter((r) => r.status === 'change_requested' && !r.change_note).length,
       awaitingAgent: live.filter((r) => r.status === 'proposed').length,
       readyToPay: live.filter((r) => r.status === 'accepted').length,
@@ -85,6 +97,7 @@ export async function GET(request: NextRequest) {
       attentionListings: openListings.filter((l) => l.health.flags.length > 0).slice(0, 6).map(listingRow),
       closingSoon: closingSoon(openDeals, today, 30).slice(0, 8).map(dealRow),
       commissions,
+      confirmDeals,
       unreadMessages: unread ?? 0,
       agents,
     });

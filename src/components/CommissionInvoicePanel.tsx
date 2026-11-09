@@ -250,6 +250,7 @@ function OwnerEditor({ row, closed, confirming, busy, onCancel, onSave }: { row:
   const [splitType, setSplitType] = useState<SplitType>(row.splitType);
   const [splitValue, setSplitValue] = useState(String(row.splitValue));
   const [fees, setFees] = useState<{ label: string; amount: string; by?: 'agent' }[]>(row.deductions.map((d) => ({ label: d.label, amount: String(d.amount), by: d.by })));
+  const [adjust, setAdjust] = useState(!confirming);
   const canGross = closed || confirmed;
   const sending = canGross && gross.trim() !== '';
   return (
@@ -270,12 +271,20 @@ function OwnerEditor({ row, closed, confirming, busy, onCancel, onSave }: { row:
       <p className="text-sm font-semibold text-slate-100">{confirming ? 'Confirm the actual commission' : 'Edit this invoice'}</p>
       {row.changeNote && <p className="text-xs text-orange-200">Agent’s note: {row.changeNote}</p>}
       {canGross ? (
-        <label className="block text-xs text-slate-400">Commission your brokerage received ($), from the closing documents
-          <input type="number" step="0.01" min="0" value={gross} required={confirming} onChange={(e) => setGross(e.target.value)} className={`${field} mt-1`} placeholder={confirming ? 'Enter the commission from the closing documents' : row.estimate?.gross ? `Expected about ${money(row.estimate.gross)}. Leave blank to keep it an estimate` : 'Leave blank to keep it an estimate'} />
-        </label>
+        <div className={`rounded-xl border-2 ${confirming ? 'border-amber-400/70 bg-amber-500/10' : 'border-white/10 bg-slate-800/60'} p-4`}>
+          <label className="block text-sm font-semibold text-slate-100">Commission your brokerage received, from the closing documents
+            <span className="mt-2 flex items-center gap-2">
+              <span className="text-3xl font-bold text-amber-300" aria-hidden="true">$</span>
+              <input type="number" step="0.01" min="0" value={gross} required={confirming} autoFocus={confirming} onChange={(e) => setGross(e.target.value)} className={`${field} !text-2xl !font-bold !py-3`} placeholder={confirming ? 'Enter the amount from the closing documents' : row.estimate?.gross ? `Expected about ${money(row.estimate.gross)}. Leave blank to keep it an estimate` : 'Leave blank to keep it an estimate'} />
+            </span>
+          </label>
+          {confirming && row.estimate?.gross ? <p className="text-xs text-amber-200 mt-2">Filled in from the estimate ({money(row.estimate.gross)}). Check it against the closing documents, change it if it differs, then confirm.</p> : null}
+        </div>
       ) : (
         <p className="text-xs text-slate-400">The actual commission is confirmed once the deal closes. For now you can adjust the terms and fee lines below.</p>
       )}
+      {confirming && !adjust && <button type="button" onClick={() => setAdjust(true)} className="text-xs text-blue-400 hover:text-blue-300 font-medium">Adjust the rate, split or fees for this deal</button>}
+      <div className={confirming && !adjust ? 'hidden' : 'space-y-3'}>
       <div className="grid grid-cols-2 gap-2">
         <label className="text-xs text-slate-400">Commission rate
           <select value={rateType} onChange={(e) => setRateType(e.target.value as 'percent' | 'flat')} className={`${field} mt-1`}>
@@ -308,6 +317,7 @@ function OwnerEditor({ row, closed, confirming, busy, onCancel, onSave }: { row:
           </div>
         ))}
         {fees.length < 10 && <button type="button" onClick={() => setFees([...fees, { label: '', amount: '' }])} className="text-xs text-blue-400 hover:text-blue-300 font-medium">+ Add a fee</button>}
+      </div>
       </div>
       <p className="text-[11px] text-slate-500">{sending ? 'Sending shows the confirmed amounts to the agent, who has to agree before it becomes final.' : 'Saving keeps this an estimate; the agent is told about the change.'} Changes apply to this invoice only.</p>
       <div className="flex gap-2">

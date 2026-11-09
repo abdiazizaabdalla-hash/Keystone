@@ -14,6 +14,7 @@ interface Home {
   attentionDeals: Item[];
   attentionListings: Item[];
   closingSoon: Item[];
+  confirmDeals: { id: string; address: string | null; salePrice: number | null; estimatedGrossCents: number | null; agent: { id: string; name: string } }[];
   commissions: { changeRequested: number; needsConfirm: number; needsApproval: number; awaitingAgent: number; readyToPay: number; unpaidCount: number; unpaidAgentCents: number; paidCount: number; paidAgentCents: number; confirmedGrossCents: number; closedWithoutStatement: number };
   unreadMessages: number;
   agents: { id: string; name: string; openDeals: number; openListings: number; needsAttention: number; closedThisYear: number; baseCommission: { type: 'percent' | 'flat_agent' | 'flat_brokerage'; value: number } | null }[];
@@ -59,7 +60,7 @@ export default function BrokerageHome({ compact = false }: { compact?: boolean }
 
   const { totals: t, commissions: c } = home;
   const todo: { text: string; href: string; tone: 'red' | 'amber' | 'slate' }[] = [
-    ...(c.needsConfirm > 0 ? [{ text: `${c.needsConfirm} closed deal${c.needsConfirm === 1 ? ' needs its' : 's need their'} actual commission confirmed`, href: '/dashboard/invoices', tone: 'red' as const }] : []),
+    ...(compact && c.needsConfirm > 0 ? [{ text: `${c.needsConfirm} closed deal${c.needsConfirm === 1 ? ' needs its' : 's need their'} actual commission confirmed`, href: '/dashboard/invoices', tone: 'red' as const }] : []),
     ...(c.needsApproval > 0 ? [{ text: `${c.needsApproval} commission invoice${c.needsApproval === 1 ? '' : 's'} from your agents ${c.needsApproval === 1 ? 'needs' : 'need'} your approval`, href: '/dashboard/invoices', tone: 'red' as const }] : []),
     ...(c.changeRequested > 0 ? [{ text: `${c.changeRequested} agent${c.changeRequested === 1 ? '' : 's'} asked for a change to a commission split`, href: '/dashboard/invoices', tone: 'red' as const }] : []),
     ...(home.unreadMessages > 0 ? [{ text: `${home.unreadMessages} unread message${home.unreadMessages === 1 ? '' : 's'} from your agents`, href: '/dashboard/collaborate#messages', tone: 'amber' as const }] : []),
@@ -67,6 +68,24 @@ export default function BrokerageHome({ compact = false }: { compact?: boolean }
     ...(c.readyToPay > 0 ? [{ text: `${c.readyToPay} agreed commission${c.readyToPay === 1 ? '' : 's'} ready to mark paid`, href: '/dashboard/invoices', tone: 'slate' as const }] : []),
     ...(t.pendingInvites > 0 ? [{ text: `${t.pendingInvites} invitation${t.pendingInvites === 1 ? '' : 's'} waiting for an answer`, href: '/dashboard/collaborate#agents', tone: 'slate' as const }] : []),
   ];
+  const confirmBubble = home.confirmDeals.length > 0 && (
+    <div className="bg-red-500/5 border border-red-500/40 rounded-2xl p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+        <h2 className="text-lg font-semibold text-slate-100">{home.confirmDeals.length} closed deal{home.confirmDeals.length === 1 ? '' : 's'} need{home.confirmDeals.length === 1 ? 's' : ''} the actual commission confirmed</h2>
+        <Link href="/dashboard/invoices" className="text-sm text-blue-400 hover:text-blue-300">Open commissions</Link>
+      </div>
+      <ul className="divide-y divide-white/5">
+        {home.confirmDeals.map((d) => (
+          <li key={d.id}>
+            <Link href="/dashboard/invoices" className="flex flex-wrap items-baseline justify-between gap-2 py-2 hover:bg-white/5 rounded-lg px-1 -mx-1">
+              <span><span className="text-sm text-slate-100">{d.address || 'Untitled deal'}</span><span className="block text-xs text-slate-400">{d.agent.name}{d.salePrice ? ` · sold for ${money(d.salePrice)}` : ''}</span></span>
+              <span className="text-sm text-amber-300">{d.estimatedGrossCents ? `about ${money(d.estimatedGrossCents / 100)} expected · Confirm` : 'Confirm'}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
   const toneCls = { red: 'text-red-300', amber: 'text-amber-300', slate: 'text-slate-300' } as const;
 
   const tiles = (
@@ -129,6 +148,7 @@ export default function BrokerageHome({ compact = false }: { compact?: boolean }
   return (
     <div className="space-y-6">
       {tiles}
+      {confirmBubble}
 
       <div className="grid lg:grid-cols-2 gap-6">
         <div className={card}>
