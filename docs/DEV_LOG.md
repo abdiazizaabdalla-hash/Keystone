@@ -2,6 +2,13 @@
 
 Newest first. One entry per working session: commit, what changed, what was verified, what remains.
 
+## 2026-11-09 - commission flows finished, handoff to automation
+
+- Listing-fee invoices visible to agents (portal, workspace Invoices, listing Overview) with a banner when a coordinator adds them; Generate invoice stays on the listing/deal as a popup.
+- Commission: its own box first, Invoices second; works for agents added to a coordinator's deal (`commissionAgentForDeal`); brokerage confirm step with a highlighted `$` amount; broker home bubble listing closed deals to sign off, linking to the agent's page; broker listing view has a Message the agent button instead of the thread.
+- Verified: tsc, 400 unit tests, commission and brokerage integration tests on relay-test. Not verified: browser clicks.
+- Remaining: run `add-listing-agent-notice.sql` (relay-test, prod); broker notice when a coordinator-run deal closes. Next: Auto-0, see `docs/HANDOFF_AUTOMATION.md`.
+
 ## 2026-11-08 - closing out the pre-automation gaps
 
 - **Team reports** (owner-only Excel workbook, weekly/monthly schedule, saved snapshots, notes), **admin Activity tab and full account profile**, `npm run dev:prod-readonly` (live data, every write blocked, port 3001).
