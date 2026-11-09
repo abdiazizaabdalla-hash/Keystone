@@ -14,6 +14,7 @@ import { evaluateTemplateRulesQuietly } from '@/lib/templateRules';
 import { isStateCode } from '@/lib/usStates';
 import { brokerageOn, brokerageOwnersForDeal } from '@/lib/oversight';
 import { notifyDeal } from '@/lib/notifications';
+import { emitDealEvent } from '@/lib/automation/events';
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
@@ -71,6 +72,12 @@ export async function PATCH(request: NextRequest) {
     // saving the same stage again is silent.
     let stageChanged = status !== undefined;
     let closingNow = false;
+    // Automation (flag off = nothing happens): remember the stage before this save so a close is recorded once.
+    let wasClosedBefore = false;
+    if (status !== undefined && isFeatureOn('automation')) {
+      const { data: prev } = await supabaseServer.from('transactions').select('status').eq('id', transactionId).maybeSingle();
+      wasClosedBefore = prev?.status === 'Closed';
+    }
     if (status !== undefined && brokerageOn()) {
       const { data: before } = await supabaseServer.from('transactions').select('status').eq('id', transactionId).maybeSingle();
       stageChanged = !before || before.status !== status;
@@ -162,6 +169,11 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    // Automation events (inert unless the `automation` flag is on; never fail this request).
+    if (status === 'Closed' && !wasClosedBefore) await emitDealEvent(transactionId, 'deal_closed', {}, `deal_closed:${transactionId}`);
+    if (acceptanceDate !== undefined || closingDate !== undefined) {
+      await emitDealEvent(transactionId, 'date_changed', { acceptanceDate: transaction.acceptance_date ?? null, closingDate: transaction.closing_date ?? null }, `date_changed:${transactionId}:${transaction.acceptance_date ?? ''}:${transaction.closing_date ?? ''}`);
+    }
     if (closingNow) await notifyDealClosed(transactionId, user.id);
     if (closingNow) await announceDealClosed(transactionId, user, request.nextUrl.origin);
 

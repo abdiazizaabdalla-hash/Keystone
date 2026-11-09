@@ -7,6 +7,7 @@ import { authorizeDeal, actsAsCollaborator, assertTrialForOwnWork } from '@/lib/
 import { isAgentUser, isCollaboratorOnly } from '@/lib/agentPortal';
 import { logAudit } from '@/lib/audit';
 import { queueDealNotification } from '@/lib/notifications';
+import { emitDealEvent } from '@/lib/automation/events';
 
 const BUCKET = 'transaction-documents';
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
@@ -262,6 +263,11 @@ export async function POST(request: NextRequest) {
       body: file.name,
       coalesce: { title: (n) => `${n} documents added` },
     });
+    // Automation events (inert unless the `automation` flag is on; never fail this request).
+    await emitDealEvent(transactionId, 'document_added', { documentId: docRow.id, category, documentType });
+    if (category === 'contract_disclosures' && documentType === 'Purchase Contract') {
+      await emitDealEvent(transactionId, 'contract_uploaded', { documentId: docRow.id });
+    }
     return NextResponse.json({ ...docRow, url: signed?.signedUrl || null }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

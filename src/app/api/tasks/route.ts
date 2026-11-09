@@ -8,6 +8,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { statusFromTasks } from '@/lib/transactionStages';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { queueCalendarSync } from '@/lib/calendarSync';
+import { emitDealEvent } from '@/lib/automation/events';
 
 export async function GET(request: NextRequest) {
   try {
@@ -154,11 +155,15 @@ export async function PATCH(request: NextRequest) {
           type: 'stage_changed',
           title: `Stage moved to ${newStatus}`,
         });
+        // Automation: the checklist closed the deal (same once-only key as the stage change in the deal PATCH route).
+        if (newStatus === 'Closed') await emitDealEvent(transaction.id as string, 'deal_closed', {}, `deal_closed:${transaction.id}`);
       }
 
     }
 
     if (nowCompleted) {
+      // Automation event (inert unless the `automation` flag is on).
+      await emitDealEvent(task.transaction_id as string, 'step_ticked', { taskId, name: task.name });
       queueDealNotification({
         transactionId: task.transaction_id as string,
         actorUserId: user.id,
