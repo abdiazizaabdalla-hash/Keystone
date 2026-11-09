@@ -103,6 +103,8 @@ interface InboundItem {
 }
 interface Detail {
   listing: Listing;
+  /** The listing fee already invoiced to the agent (coordinator's view); the prompt to generate one gives way to it. */
+  invoice?: { id: string; invoice_number: string; amount_owed: number; paid: boolean; paid_at: string | null; due_date: string | null; refunded?: boolean } | null;
   /** An agent is looking at a listing their coordinator runs and shared with them. */
   shared?: boolean;
   /** A coordinator is looking at a listing an agent invited them onto. */
@@ -1185,7 +1187,25 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
             )}
           </div>
 
-          {!readOnlyAgent && !agentHidden && data.agent && (
+          {!readOnlyAgent && !agentHidden && data.agent && data.invoice && (
+            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-100">
+                    Invoice {data.invoice.invoice_number} · ${Number(data.invoice.amount_owed).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ·{' '}
+                    <span className={data.invoice.refunded ? 'text-slate-300' : data.invoice.paid ? 'text-green-400' : 'text-amber-300'}>{data.invoice.refunded ? 'Refunded' : data.invoice.paid ? 'Paid' : 'Unpaid'}</span>
+                  </p>
+                  <p className="text-sm text-slate-400 mt-0.5">
+                    Billed to {data.agent.name}. {data.invoice.paid && data.invoice.paid_at ? `Paid ${formatDisplayDate(data.invoice.paid_at)}.` : data.invoice.due_date ? `Due ${formatDisplayDate(data.invoice.due_date)}.` : ''}
+                  </p>
+                </div>
+                <Link href={`/dashboard/invoices/${data.invoice.id}`} className="shrink-0 px-4 py-2 border border-white/15 hover:bg-white/5 text-slate-100 text-sm font-semibold rounded-xl transition">
+                  View invoice
+                </Link>
+              </div>
+            </div>
+          )}
+          {!readOnlyAgent && !agentHidden && data.agent && !data.invoice && (
             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { POST as createAgent, PATCH as patchAgent } from '@/app/api/agents/route';
 import { POST as createInvoice, GET as listInvoices } from '@/app/api/invoices/route';
 import { POST as emailPayLink } from '@/app/api/invoices/[id]/email-pay-link/route';
+import { GET as getListing } from '@/app/api/listings/[id]/route';
 import { GET as invoicePdf } from '@/app/api/invoices/[id]/pdf/route';
 import { admin, call, cleanup, createActor, seedDeal, type Actor, type Deal } from './helpers';
 
@@ -102,6 +103,9 @@ describe('creating with a changed price', () => {
     expect(row?.transaction).toMatchObject({ property_address: '7 Listing Way', isListing: true });
     const pdf = await call(h(invoicePdf), tc, { method: 'GET', path: `/api/invoices/${inv.id}/pdf`, params: { id: inv.id } });
     expect(pdf.status).toBe(200);
+    // The coordinator's listing page then shows this invoice in place of the "Generate invoice" prompt.
+    const detail = await call(h(getListing), tc, { method: 'GET', path: `/api/listings/${listingId}`, params: { id: listingId } });
+    expect((detail.json as { invoice: { id: string; paid: boolean } | null }).invoice).toMatchObject({ id: inv.id, paid: false });
   });
   it('the same listing cannot be billed twice to the same agent', async () => {
     const res = await post(tc, { kind: 'listing', listingId });

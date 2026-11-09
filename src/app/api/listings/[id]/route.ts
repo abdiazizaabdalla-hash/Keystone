@@ -55,8 +55,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const visible = await getVisibleTcUserIds(user.id);
       if (visible.length > 1) assignees = await Promise.all(visible.map(async (uid) => ({ id: uid, label: await userLabel(uid) })));
     }
+    // The listing fee the coordinator already invoiced (so the "Generate invoice" prompt can give way to it). Only the coordinator who runs it.
+    let invoice: Record<string, unknown> | null = null;
+    if (!shared && !coordinated && listing.agent_id && (isAdmin || listing.tc_user_id === user.id)) {
+      const inv = await supabaseServer
+        .from('invoices')
+        .select('id, invoice_number, amount_owed, paid, paid_at, due_date, refunded')
+        .eq('listing_id', id)
+        .eq('agent_id', listing.agent_id as string)
+        .maybeSingle();
+      // add-listing-invoices.sql not run yet: there is no listing invoice to show.
+      invoice = inv.error ? null : (inv.data as Record<string, unknown> | null);
+    }
     // An agent opening a shared listing never gets the coordinator's private notes or internal history.
     return NextResponse.json({
+      invoice,
       listing: shared ? { ...listing, notes: null } : listing,
       shared,
       coordinated,
