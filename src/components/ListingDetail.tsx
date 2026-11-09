@@ -1226,9 +1226,14 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
             <InvoiceConfirmModal
               target={{ kind: 'listing', listingId: id }}
               onClose={() => setInvoiceOpen(false)}
-              onCreated={(inv) => {
+              onCreated={async () => {
+                // Stay on the listing: the prompt gives way to the new invoice right here.
                 setInvoiceOpen(false);
-                router.push(`/dashboard/invoices/${inv.id}`);
+                try {
+                  applyDetail(await call('GET', `/api/listings/${id}`));
+                } catch {
+                  // The invoice exists; it shows on the next load.
+                }
               }}
             />
           )}
