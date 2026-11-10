@@ -28,7 +28,8 @@ export interface DealEmail {
   ownerUserId: string;
   ownerName: string;
   ownerEmail: string | null;
-  transactionId: string;
+  /** Null for a listing email: there is no deal inbox, so replies go straight to the sender. */
+  transactionId: string | null;
   to: string[];
   subject: string;
   message: string;
@@ -48,7 +49,7 @@ export async function dealInboundAddress(transactionId: string): Promise<string 
 export async function sendDealEmail(input: DealEmail): Promise<{ mode: 'sent' | 'outbox'; loggedToDeal: boolean }> {
   const to = [...new Set(input.to.map((a) => a.trim().toLowerCase()))].filter((a) => EMAIL_RE.test(a));
   if (to.length === 0) throw new Error('No valid recipients');
-  const dealAddress = await dealInboundAddress(input.transactionId);
+  const dealAddress = input.transactionId ? await dealInboundAddress(input.transactionId) : null;
   const replyTo = dealAddress ?? input.ownerEmail ?? undefined;
   const cc = input.copySender && input.ownerEmail ? [input.ownerEmail] : [];
   const bcc = dealAddress ? [dealAddress] : [];

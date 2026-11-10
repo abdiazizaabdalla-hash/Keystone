@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dueSteps, fillVars, resolveRecipients, validateDefinition, type InstanceFacts, type Step } from '@/lib/automation/library';
+import { categoryOfRole, dueSteps, fillVars, missingRecipientRoles, resolveRecipients, validateDefinition, type InstanceFacts, type Step } from '@/lib/automation/library';
 
 const email: Step = { id: 's1', type: 'send_email', when: { days: 0, direction: 'after' }, to: ['buyer'], subject: 'Welcome', message: 'Hi' };
 const base = { name: 'Onboarding', description: '', category: 'transaction', triggerType: 'transaction_created', steps: [email] };
@@ -22,7 +22,8 @@ describe('validateDefinition', () => {
     ['email with nobody to send to', { ...base, steps: [{ ...email, to: [] }] }],
     ['email to an arbitrary role', { ...base, steps: [{ ...email, to: ['someone@example.com'] }] }],
     ['unknown action', { ...base, steps: [{ ...email, type: 'delete_deal' }] }],
-    ['email on a listing automation', { ...base, category: 'listing', triggerType: 'listing_created', steps: [email] }],
+    ['a condition on a listing automation', { ...base, category: 'listing', triggerType: 'listing_created', steps: [{ ...email, condition: { type: 'role_present', role: 'seller' } }] }],
+    ['a deal trigger on a listing automation', { ...base, category: 'listing', triggerType: 'closing_date', steps: [email] }],
     ['"before" on an event trigger', { ...base, steps: [{ ...email, when: { days: 2, direction: 'before' } }] }],
     ['negative days', { ...base, steps: [{ ...email, when: { days: -1, direction: 'after' } }] }],
     ['13 steps', { ...base, steps: Array.from({ length: 13 }, (_, i) => ({ ...email, id: `a${i}` })) }],
@@ -130,7 +131,6 @@ describe('critical-date triggers', () => {
   });
 });
 
-import { missingRecipientRoles } from '@/lib/automation/library';
 
 describe('missingRecipientRoles', () => {
   const mail = (to: string[]): Step => ({ id: 'm', type: 'send_email', when: { days: 0, direction: 'after' }, to, subject: 's', message: 'm' });
@@ -166,5 +166,45 @@ describe('conditions', () => {
     expect(validateDefinition({ ...base, steps: [{ ...base.steps[0], condition: { type: 'run_sql', text: 'x' } }] }).ok).toBe(false);
     expect(validateDefinition({ ...base, steps: [{ ...base.steps[0], condition: { type: 'role_missing', role: 'everyone' } }] }).ok).toBe(false);
     expect(describeCondition({ type: 'role_missing', role: 'lender' })).toBe('the deal has no Lender');
+  });
+});
+
+describe('listing emails, tasks and the offer trigger', () => {
+  const email = { id: 's1', type: 'send_email', when: { days: 0, direction: 'after' }, to: ['seller'], subject: 'New offer on {{address}}', message: 'Hello' };
+  const task = { id: 's2', type: 'create_task', when: { days: 0, direction: 'after' }, name: 'Review offer', dueInDays: 1 };
+  const def = { name: 'Offer', description: '', category: 'listing', triggerType: 'offer_received', steps: [email, task] };
+
+  it('accepts email and checklist steps on a listing', () => {
+    expect(validateDefinition(def).ok).toBe(true);
+  });
+  it('refuses "before" on the offer trigger (it is an event, not a date)', () => {
+    expect(validateDefinition({ ...def, steps: [{ ...email, when: { days: 1, direction: 'before' } }] }).ok).toBe(false);
+  });
+  it('fires after an offer arrives, once, and not for an offer from before the copy existed', () => {
+    const f = { createdAt: '2026-11-01T10:00:00Z', timeZone: 'UTC', dealCreatedAt: null, closingDate: null, acceptanceDate: null, plannedListDate: null, expirationDate: null, events: { offer_received: '2026-11-03T09:00:00Z' } };
+    const now = new Date('2026-11-03T09:30:00Z');
+    const due = dueSteps('i1', 'offer_received', def.steps as never, f, now, new Set());
+    expect(due.map((d) => d.step.id)).toEqual(['s1', 's2']);
+    expect(dueSteps('i1', 'offer_received', def.steps as never, f, now, new Set(due.map((d) => d.key)))).toEqual([]);
+    expect(dueSteps('i1', 'offer_received', def.steps as never, { ...f, events: {} }, now, new Set())).toEqual([]);
+  });
+  it('a second offer fires the steps again (its own anchor)', () => {
+    const f = { createdAt: '2026-11-01T10:00:00Z', timeZone: 'UTC', dealCreatedAt: null, closingDate: null, acceptanceDate: null, plannedListDate: null, expirationDate: null, events: { offer_received: '2026-11-03T09:00:00Z' } };
+    const first = dueSteps('i1', 'offer_received', def.steps as never, f, new Date('2026-11-03T09:30:00Z'), new Set());
+    const second = dueSteps('i1', 'offer_received', def.steps as never, { ...f, events: { offer_received: '2026-11-04T12:00:00Z' } }, new Date('2026-11-04T12:30:00Z'), new Set(first.map((d) => d.key)));
+    expect(second.length).toBe(2);
+  });
+});
+
+describe('listing contact roles', () => {
+  it.each([
+    ['Seller', 'Seller'], ["Seller's attorney", 'Attorney'], ['Lender', 'Lender'], ['Title / escrow officer', 'Title'], ['Home inspector', 'Inspector'], ['Photographer', 'Other'], [null, 'Other'],
+  ])('%s -> %s', (role, cat) => {
+    expect(categoryOfRole(role as string | null)).toBe(cat);
+  });
+  it('emails go only to listing people with an address, by role', () => {
+    const people = [{ name: 'Sam', email: 'sam@x.com', role: 'Seller', category: 'Seller' }, { name: 'Lee', email: null, role: 'Lender', category: 'Lender' }];
+    expect(resolveRecipients(['seller'], people)).toEqual(['sam@x.com']);
+    expect(missingRecipientRoles([{ id: 's1', type: 'send_email', when: { days: 0, direction: 'after' }, to: ['lender'] }], people)).toEqual(['Lender']);
   });
 });

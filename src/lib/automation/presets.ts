@@ -110,11 +110,22 @@ export const PRESETS: Preset[] = [
     email(14, 'after', CLIENTS, 'Know someone buying or selling?', 'Hello,\n\nIf you have friends or family who are buying or selling, we would be glad to help them the way we helped you. Feel free to pass along my contact details.\n\nThank you,'),
   ]),
   // ---- Listings ----
-  make({ id: 'li-prep', category: 'listing', tier: 'essential', name: 'Listing Preparation Reminders', summary: 'When a listing is created: a prep note, then check-ins at three and seven days.', triggerType: 'listing_created', notes: ['Notifications and notes only: listing emails and listing tasks are not available yet.'] }, () => [
+  make({ id: 'li-prep', category: 'listing', tier: 'essential', name: 'Listing Preparation Reminders', summary: 'When a listing is created: a prep note, then check-ins at three and seven days.', triggerType: 'listing_created' }, () => [
     notify(0, 'after', 'New listing: {{address}}', 'Start preparation: photography, staging, signage, disclosures and marketing materials.'),
-    note(0, 'after', 'Preparation checklist: photography, staging, signage, disclosures, marketing materials.'),
+    task(0, 'after', 'Book listing photography', 5),
+    task(0, 'after', 'Order yard sign and lockbox', 5),
+    task(0, 'after', 'Collect seller disclosures', 7),
     notify(3, 'after', 'Listing preparation check-in: {{address}}'),
     notify(7, 'after', 'One week since {{address}} was created: is preparation done?'),
+  ]),
+  make({ id: 'li-live', category: 'listing', tier: 'essential', name: 'Listing Goes Live: Tell the Seller', summary: 'On the planned list date: emails the seller that the listing is live and adds a marketing follow-up.', triggerType: 'listing_planned_list_date', notes: ['Needs a planned list date and a seller contact with an email on the listing. Drafts wait for your approval unless the listing is on Auto.'] }, () => [
+    email(0, 'after', ['seller'], '{{address}} is going live', 'Hello,\n\nGood news: {{address}} is going live today. I will keep you posted on showings and feedback as they come in.\n\nThank you,'),
+    task(1, 'after', 'Check online listing syndication for {{address}}', 2),
+  ]),
+  make({ id: 'li-offer', category: 'listing', tier: 'essential', name: 'New Offer Received', summary: 'When an offer is added: notifies you, adds a review task and drafts a note to the seller. It never accepts or rejects.', triggerType: 'offer_received', notes: ['Needs a seller contact with an email on the listing. Drafts wait for your approval unless the listing is on Auto.'] }, () => [
+    notify(0, 'after', 'New offer on {{address}}', 'Review the offer terms and let the seller know.'),
+    task(0, 'after', 'Review the new offer with the seller', 1),
+    email(0, 'after', ['seller'], 'New offer on {{address}}', 'Hello,\n\nWe have received a new offer on {{address}}. I am reviewing the terms and will walk you through them shortly.\n\nThank you,'),
   ]),
   make({ id: 'li-prelaunch', category: 'listing', tier: 'essential', name: 'Pre-Launch Countdown', summary: 'Counts down to the planned list date so nothing is missed before the listing goes live.', triggerType: 'listing_planned_list_date', notes: ['Needs a planned list date on the listing.'] }, () => [
     notify(3, 'before', 'Listing goes live in 3 days: {{address}}', 'Confirm photos, description and pricing are final.'),
@@ -144,7 +155,6 @@ export const COMING_SOON: ComingSoon[] = [
   { name: 'Listing Activation Workflow', category: 'listing', summary: 'Tell the seller the listing is live and create marketing follow-ups.', needs: 'A listing status change event.' },
   { name: 'Showing Confirmation and Post-Showing Follow-up', category: 'listing', summary: 'Notify the seller and agent of showings and collect feedback.', needs: 'Showings recorded in Relay.' },
   { name: 'No Showing Activity Alert', category: 'listing', summary: 'Alert the agent after 7 days without showings.', needs: 'Showings recorded in Relay.' },
-  { name: 'New Offer Received and Offer Follow-up', category: 'listing', summary: 'Notify the team and create an offer review task. Never accepts or rejects.', needs: 'Offers recorded on the listing.' },
   { name: 'Accepted Offer Handoff', category: 'listing', summary: 'Start a transaction from the listing and suggest its automations.', needs: 'Offers and listing-to-transaction conversion.' },
   { name: 'Missing Document Escalation', category: 'transaction', summary: 'Remind and escalate when a required document is overdue.', needs: 'Required documents tracked per deal.' },
   { name: 'Stalled Transaction Detection', category: 'transaction', summary: 'Flag deals with no progress.', needs: 'Conditions and activity tracking (phase 2).' },

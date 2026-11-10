@@ -1,3 +1,4 @@
+import { loadListingParties } from './listingContext';
 import { isFeatureOn } from '../features';
 import { supabaseServer } from '../supabase';
 import { getEntitlements } from '../entitlements';
@@ -112,6 +113,15 @@ export async function loadGuardContext(req: ActionRequest): Promise<GuardContext
 
   let allowedRecipients: string[] = [];
   let sentToday = 0;
+  if (!req.transactionId && req.listingId) {
+    const listing = await loadListingParties(req.listingId);
+    const { data: own } = await supabaseServer.from('listings').select('tc_user_id').eq('id', req.listingId).maybeSingle();
+    // The listing must belong to this owner; only its agent and saved contacts can ever be emailed.
+    if (listing && own?.tc_user_id === req.ownerUserId) allowedRecipients = listing.people.map((p) => p.email!.toLowerCase());
+    const since = new Date(now.getTime() - 24 * 3600_000).toISOString();
+    const { data: sent } = await supabaseServer.from('automation_actions').select('result').eq('listing_id', req.listingId).eq('status', 'executed').in('kind', ['send_deal_email', 'send_step_email']).gte('executed_at', since);
+    sentToday = (sent ?? []).reduce((n, r) => n + (Array.isArray((r.result as { to?: unknown } | null)?.to) ? ((r.result as { to: unknown[] }).to.length) : 1), 0);
+  }
   if (req.transactionId) {
     const deal = await loadDealForTemplates(req.transactionId);
     // The deal must belong to this owner; otherwise nothing is allowed to go anywhere.
@@ -160,10 +170,18 @@ async function assertOwnsDealOrListing(action: ActionRow): Promise<void> {
 }
 
 const createTask: Executor = async (action) => {
-  const transactionId = await assertOwnsDeal(action);
   const name = typeof action.inputs.name === 'string' ? action.inputs.name.trim().slice(0, 255) : '';
   if (!name) throw new Error('A task needs a name');
   const dueDate = typeof action.inputs.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(action.inputs.dueDate) ? action.inputs.dueDate : null;
+  if (!action.transaction_id && action.listing_id) {
+    // A listing's checklist: same rules, its own table.
+    await assertOwnsDealOrListing(action);
+    const { data: lastL } = await supabaseServer.from('listing_tasks').select('sort_order').eq('listing_id', action.listing_id).order('sort_order', { ascending: false }).limit(1).maybeSingle();
+    const { data: row, error: e } = await supabaseServer.from('listing_tasks').insert({ listing_id: action.listing_id, name: name.slice(0, 200), due_date: dueDate, sort_order: ((lastL?.sort_order as number | undefined) ?? 0) + 1 }).select('id').single();
+    if (e) throw e;
+    return { taskId: row.id };
+  }
+  const transactionId = await assertOwnsDeal(action);
   const { data: last } = await supabaseServer.from('tasks').select('sort_order').eq('transaction_id', transactionId).order('sort_order', { ascending: false }).limit(1).maybeSingle();
   const { data, error } = await supabaseServer.from('tasks').insert({ transaction_id: transactionId, name, due_date: dueDate, sort_order: ((last?.sort_order as number | undefined) ?? 0) + 1 }).select('id').single();
   if (error) throw error;
@@ -171,7 +189,9 @@ const createTask: Executor = async (action) => {
 };
 
 const sendEmail: Executor = async (action) => {
-  const transactionId = await assertOwnsDeal(action);
+  let transactionId: string | null = null;
+  if (action.transaction_id) transactionId = await assertOwnsDeal(action);
+  else await assertOwnsDealOrListing(action); // a listing email: still the owner's own listing
   const to = Array.isArray(action.inputs.to) ? (action.inputs.to as unknown[]).filter((a): a is string => typeof a === 'string') : [];
   const subject = typeof action.inputs.subject === 'string' ? action.inputs.subject.trim().slice(0, 200) : '';
   const message = typeof action.inputs.message === 'string' ? action.inputs.message.trim().slice(0, 10000) : '';

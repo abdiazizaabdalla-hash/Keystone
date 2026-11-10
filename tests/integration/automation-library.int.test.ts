@@ -155,4 +155,44 @@ describe('applying and running', () => {
     await admin.from('automation_settings').delete().eq('listing_id', listing!.id);
     await admin.from('listings').delete().eq('id', listing!.id);
   });
+  it('a listing gets emails and checklist steps when an offer arrives; only its own contacts can be emailed', async () => {
+    const { data: listing } = await admin.from('listings').insert({ tc_user_id: tc.id, property_address: '2 Offer St', status: 'active', seller_name: 'Sam Seller' }).select('id').single();
+    const lid = listing!.id as string;
+    await admin.from('listing_contacts').insert([{ listing_id: lid, role: 'Seller', name: 'Sam Seller', email: 'sam.seller@example.com', position: 0 }]);
+    const steps = [
+      { id: 's1', type: 'create_task', when: { days: 0, direction: 'after' }, name: 'Review the offer', dueInDays: 1 },
+      { id: 's2', type: 'send_email', when: { days: 0, direction: 'after' }, to: ['seller'], subject: 'New offer on {{address}}', message: 'Hello {{client_name}}' },
+      { id: 's3', type: 'send_email', when: { days: 0, direction: 'after' }, to: ['lender'], subject: 'x', message: 'y' },
+    ];
+    const t = await create(tc, { name: 'Offer in', category: 'listing', triggerType: 'offer_received', steps });
+    await post(tc, '/api/automation/instances', { listingId: lid, templateIds: [t] }, applyInstances);
+    const inst = (await admin.from('automation_instances').select('id').eq('listing_id', lid)).data![0].id as string;
+
+    await runInstances(new Date(), () => false);
+    expect(await actions(inst)).toEqual([]); // no offer yet: nothing happens
+
+    const listed = (await call(h(listInstances), tc, { method: 'GET', path: `/api/automation/instances?listingId=${lid}` })).json as { instances: { missingRoles: string[] }[] };
+    expect(listed.instances[0].missingRoles).toEqual(['Lender']); // the warning works for listings too
+
+    const offerIns = await admin.from('listing_offers').insert({ listing_id: lid, buyer_name: 'Bea Buyer', offer_price: 400000, status: 'received' });
+    expect(offerIns.error).toBeNull();
+    await runInstances(new Date(Date.now() + 5000), () => false); // a few seconds on, so database/test-machine clock skew can't matter
+    const acts = await actions(inst);
+    expect(acts.find((a) => a.step_id === 's1')).toMatchObject({ kind: 'create_task', status: 'executed' });
+    expect((await admin.from('listing_tasks').select('name').eq('listing_id', lid)).data?.map((r) => r.name)).toEqual(['Review the offer']);
+    expect(acts.find((a) => a.step_id === 's2')).toMatchObject({ kind: 'send_deal_email', status: 'awaiting_approval' }); // Draft mode waits
+    expect(acts.find((a) => a.step_id === 's3')).toMatchObject({ status: 'refused' }); // nobody with that role: refused, never sent
+
+    const before = acts.length;
+    await runInstances(new Date(Date.now() + 5000), () => false); // a few seconds on, so database/test-machine clock skew can't matter
+    expect((await actions(inst)).length).toBe(before); // one offer, one set of actions
+
+    await admin.from('automation_actions').delete().eq('listing_id', lid);
+    await admin.from('automation_instances').delete().eq('listing_id', lid);
+    await admin.from('automation_settings').delete().eq('listing_id', lid);
+    await admin.from('listing_offers').delete().eq('listing_id', lid);
+    await admin.from('listing_tasks').delete().eq('listing_id', lid);
+    await admin.from('listing_contacts').delete().eq('listing_id', lid);
+    await admin.from('listings').delete().eq('id', lid);
+  });
 });

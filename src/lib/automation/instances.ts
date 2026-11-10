@@ -1,3 +1,4 @@
+import { loadListingParties } from './listingContext';
 import { supabaseServer } from '../supabase';
 import { loadDealForTemplates, recipientsOf } from '../templateContext';
 import { submitAutomationAction } from './actions';
@@ -166,9 +167,12 @@ export async function listInstances(ownerId: string, scope: { transactionId?: st
   if (error) throw error;
   const rows = (data ?? []) as InstanceRow[];
   // Live check against the people on the deal right now, so a missing Lender shows up (and goes away) as contacts change.
-  const deal = scope.transactionId && rows.some((r) => r.steps.some((s) => s.type === 'send_email')) ? await loadDealForTemplates(scope.transactionId) : null;
-  const people = deal ? recipientsOf(deal) : [];
-  return rows.map((r) => ({ ...r, missingRoles: deal ? missingRecipientRoles(r.steps, people) : [] }));
+  const wantsEmail = rows.some((r) => r.steps.some((s) => s.type === 'send_email'));
+  const deal = scope.transactionId && wantsEmail ? await loadDealForTemplates(scope.transactionId) : null;
+  const listing = scope.listingId && wantsEmail ? await loadListingParties(scope.listingId) : null;
+  const people = deal ? recipientsOf(deal) : listing ? listing.people : [];
+  const known = Boolean(deal || listing);
+  return rows.map((r) => ({ ...r, missingRoles: known ? missingRecipientRoles(r.steps, people) : [] }));
 }
 
 export async function removeInstance(ownerId: string, id: string): Promise<boolean> {
@@ -230,6 +234,11 @@ async function loadFacts(inst: InstanceRow): Promise<{ facts: InstanceFacts; tim
     const { data: ev } = await supabaseServer.from('transaction_events').select('occurred_at').eq('transaction_id', inst.transaction_id).eq('type', inst.trigger_type).gte('occurred_at', inst.created_at).order('occurred_at', { ascending: false }).limit(1).maybeSingle();
     if (ev) events[inst.trigger_type] = ev.occurred_at as string;
   }
+  if (inst.listing_id && inst.trigger_type === 'offer_received') {
+    // Offers have no event log of their own; the offer rows are the record. The latest one added after this copy was applied.
+    const { data: off } = await supabaseServer.from('listing_offers').select('created_at').eq('listing_id', inst.listing_id).gte('created_at', inst.created_at).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (off) events.offer_received = off.created_at as string;
+  }
   const keyDates: Record<string, { date: string; completed: boolean }> = {};
   if (inst.transaction_id && KEY_DATE_KIND_OF[inst.trigger_type]) {
     const { data: kds } = await supabaseServer.from('transaction_key_dates').select('due_date, completed').eq('transaction_id', inst.transaction_id).eq('kind', KEY_DATE_KIND_OF[inst.trigger_type]).order('due_date', { ascending: true });
@@ -260,12 +269,13 @@ export async function runInstances(now: Date, outOfTime: () => boolean, limit = 
         const due = dueSteps(inst.id, inst.trigger_type, inst.steps, loaded.facts, now, fired);
         if (due.length) {
           const deal = inst.transaction_id ? await loadDealForTemplates(inst.transaction_id) : null;
-          const people = deal ? recipientsOf(deal) : [];
+          const listing = inst.listing_id ? await loadListingParties(inst.listing_id) : null;
+          const people = deal ? recipientsOf(deal) : listing ? listing.people : [];
           const vars: Record<string, string> = {
-            address: deal?.address ?? '',
+            address: deal?.address ?? listing?.address ?? '',
             file_number: deal?.fileNumber ?? '',
             closing_date: deal?.closingDate ?? '',
-            client_name: people.find((p) => /buyer|seller/i.test(p.category))?.name ?? '',
+            client_name: people.find((p) => /buyer|seller/i.test(p.category))?.name ?? listing?.sellerName ?? '',
           };
           // "Only if" conditions are checked now, against the deal as it is. A step whose condition is false is simply not done;
           // it is checked again on later runs until it is too old to send.

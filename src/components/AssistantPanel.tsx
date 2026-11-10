@@ -131,7 +131,7 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
                     <p className="truncate text-sm text-white">{r.name}</p>
                     <p className="truncate text-xs text-slate-400">{TRIGGERS.find((t) => t.id === r.trigger)?.label} · {summarizeSteps(r.steps)}{r.copy?.status === 'paused' ? ' · paused' : ''}</p>
                     {r.copy?.missingRoles && r.copy.missingRoles.length > 0 && (
-                      <p className="mt-1 text-xs text-amber-300" data-testid="missing-roles">No {r.copy.missingRoles.join(' or ')} with an email on this deal, so that email will be skipped. Add them in Contacts.</p>
+                      <p className="mt-1 text-xs text-amber-300" data-testid="missing-roles">No {r.copy.missingRoles.join(' or ')} with an email on this deal or listing, so that email will be skipped. Add them in Contacts.</p>
                     )}
                   </div>
                   <button type="button" role="switch" aria-checked={on} aria-label={`${r.name} on this ${category}`} disabled={busy !== null}

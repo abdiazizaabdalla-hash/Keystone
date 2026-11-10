@@ -28,14 +28,15 @@ export const TRIGGERS: readonly TriggerDef[] = [
   { id: 'closing_date', category: 'transaction', kind: 'date', label: 'Closing date', help: "Counted from the deal's closing date. It follows the date if it changes." },
   { id: 'listing_created', category: 'listing', kind: 'created', label: 'Listing created', help: 'When the listing is created.' },
   { id: 'listing_planned_list_date', category: 'listing', kind: 'date', label: 'Planned list date', help: "Counted from the listing's planned list date." },
+  { id: 'offer_received', category: 'listing', kind: 'event', label: 'Offer received', help: 'Each time an offer is added to the listing.' },
   { id: 'listing_expiration', category: 'listing', kind: 'date', label: 'Listing expiration date', help: "Counted from the listing's expiration date." },
 ];
 
 export type StepType = 'send_email' | 'create_task' | 'notify_me' | 'add_note';
 
 export const STEP_TYPES: readonly { id: StepType; label: string; categories: Category[]; help: string }[] = [
-  { id: 'send_email', label: 'Send an email', categories: ['transaction'], help: 'To people on the deal, by role. Drafts wait for your approval unless the deal is on Auto.' },
-  { id: 'create_task', label: 'Add a checklist step', categories: ['transaction'], help: 'Adds a step to the transaction checklist.' },
+  { id: 'send_email', label: 'Send an email', categories: ['transaction', 'listing'], help: 'To people on the deal or listing, by role. Drafts wait for your approval unless the deal is on Auto.' },
+  { id: 'create_task', label: 'Add a checklist step', categories: ['transaction', 'listing'], help: 'Adds a step to the checklist.' },
   { id: 'notify_me', label: 'Notify me', categories: ['transaction', 'listing'], help: 'Puts a notification in your Relay bell.' },
   { id: 'add_note', label: 'Add a note', categories: ['transaction', 'listing'], help: 'Writes a note on the Activity list.' },
 ];
@@ -225,6 +226,7 @@ export function triggerAnchor(triggerType: string, f: InstanceFacts): Anchor | n
     case 'contract_uploaded':
     case 'document_added':
     case 'deal_closed':
+    case 'offer_received':
       return f.events[triggerType] ? { kind: 'time', at: f.events[triggerType]! } : null;
     case 'closing_date':
       return day(f.closingDate);
@@ -360,3 +362,28 @@ export function conditionMet(c: Condition | null | undefined, ctx: ConditionCont
       return !ctx.documents.some((d) => d.includes(c.text.toLowerCase()));
   }
 }
+
+// ---- Listing people ------------------------------------------------------------------------------------------------
+
+const ROLE_WORDS: [RegExp, string][] = [
+  [/seller|owner|landlord/i, 'Seller'],
+  [/buyer/i, 'Buyer'],
+  [/lender|mortgage|loan/i, 'Lender'],
+  [/title|escrow|closing/i, 'Title'],
+  [/inspect/i, 'Inspector'],
+  [/apprais/i, 'Appraiser'],
+  [/attorney|lawyer/i, 'Attorney'],
+];
+
+/** Pure: a free-text contact role ("Seller's attorney", "Lender") to the group an automation addresses it by. */
+export function categoryOfRole(role: string | null | undefined): string {
+  const r = (role ?? '').trim();
+  // "Seller's attorney" is an attorney, not the seller: the last matching word names the person.
+  let best: { idx: number; cat: string } | null = null;
+  for (const [re, cat] of ROLE_WORDS) {
+    const m = re.exec(r);
+    if (m && (!best || m.index >= best.idx)) best = { idx: m.index, cat };
+  }
+  return best?.cat ?? 'Other';
+}
+

@@ -2,6 +2,12 @@
 
 Newest first. One entry per working session: commit, what changed, what was verified, what remains.
 
+## 2026-11-10 - Automation: listing side
+
+- BUILT: listing automations can email (agent and saved listing contacts only) and add checklist steps; new Offer received trigger; two new listing presets; listing missing-role warning. HANDOFF "Auto-1b".
+- Verified: tsc clean, 521 unit + 30 integration tests (relay-test, SQL already in), live Sonnet draft. Not verified: browser. Nothing pushed.
+- Next: the broker side (brokerage-wide templates and an overview).
+
 ## 2026-11-09 (session 3b) - Automation Library, phase 1
 
 - BUILT: Automations page + builder, saved templates, per-deal copies, Apply automations in transaction and listing setup, engine step in the runner, history, routes (registered), sidebar entry. Founder decisions: sidebar placement, phase 1 only, keep the per-deal Assistant tab. See HANDOFF "Auto-1".
