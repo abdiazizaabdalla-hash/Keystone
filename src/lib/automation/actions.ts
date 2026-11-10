@@ -208,8 +208,9 @@ const sendEmail: Executor = async (action) => {
     subject,
     message,
     source: 'automation',
+    copySender: true,
   });
-  return { to: to.map((a) => a.toLowerCase()), mode: sent.mode, subject };
+  return { to: to.map((a) => a.toLowerCase()), mode: sent.mode, subject, ...(sent.copiedTo.length ? { copiedTo: sent.copiedTo } : {}) };
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

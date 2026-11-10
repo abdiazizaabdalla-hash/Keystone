@@ -46,12 +46,12 @@ export async function dealInboundAddress(transactionId: string): Promise<string 
   return data?.inbound_token ? `deal-${data.inbound_token as string}@${domain}` : null;
 }
 
-export async function sendDealEmail(input: DealEmail): Promise<{ mode: 'sent' | 'outbox'; loggedToDeal: boolean }> {
+export async function sendDealEmail(input: DealEmail): Promise<{ mode: 'sent' | 'outbox'; loggedToDeal: boolean; copiedTo: string[] }> {
   const to = [...new Set(input.to.map((a) => a.trim().toLowerCase()))].filter((a) => EMAIL_RE.test(a));
   if (to.length === 0) throw new Error('No valid recipients');
   const dealAddress = input.transactionId ? await dealInboundAddress(input.transactionId) : null;
   const replyTo = dealAddress ?? input.ownerEmail ?? undefined;
-  const cc = input.copySender && input.ownerEmail ? [input.ownerEmail] : [];
+  const cc = input.copySender && input.ownerEmail && !to.includes(input.ownerEmail.trim().toLowerCase()) ? [input.ownerEmail.trim().toLowerCase()] : [];
   const bcc = dealAddress ? [dealAddress] : [];
 
   if (outboxOnly()) {
@@ -68,7 +68,7 @@ export async function sendDealEmail(input: DealEmail): Promise<{ mode: 'sent' | 
       body: input.message,
     });
     if (error) throw error;
-    return { mode: 'outbox', loggedToDeal: Boolean(dealAddress) };
+    return { mode: 'outbox', loggedToDeal: Boolean(dealAddress), copiedTo: cc };
   }
 
   const fromAddress = INVOICE_FROM_EMAIL.match(/<([^>]+)>/)?.[1] ?? INVOICE_FROM_EMAIL;
@@ -88,5 +88,5 @@ export async function sendDealEmail(input: DealEmail): Promise<{ mode: 'sent' | 
     console.error('Resend rejected a deal email:', error);
     throw new Error('The email could not be sent. Please try again.');
   }
-  return { mode: 'sent', loggedToDeal: Boolean(dealAddress) };
+  return { mode: 'sent', loggedToDeal: Boolean(dealAddress), copiedTo: cc };
 }
