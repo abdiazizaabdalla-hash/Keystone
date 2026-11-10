@@ -33,6 +33,7 @@ const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]).filter((x): x 
 
 export default function ApprovalPopup() {
   const [items, setItems] = useState<Approval[]>([]);
+  const [testMode, setTestMode] = useState(false);
   const [later, setLater] = useState<string[]>([]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<{ subject?: string; message?: string; text?: string }>({});
@@ -42,7 +43,11 @@ export default function ApprovalPopup() {
   const load = useCallback(async () => {
     try {
       const res = await authFetch('/api/automation/approvals');
-      if (res.ok) setItems((await res.json()).approvals ?? []);
+      if (res.ok) {
+        const body = await res.json();
+        setItems(body.approvals ?? []);
+        setTestMode(body.outboxOnly === true);
+      }
     } catch {
       /* no popup if it cannot load */
     }
@@ -127,6 +132,7 @@ export default function ApprovalPopup() {
             </>
           )}
         </div>
+        {testMode && isEmail && <p className="mt-2 rounded-lg bg-amber-400/10 p-2 text-xs text-amber-200" data-testid="popup-test-mode">Test mode: approving saves this to the outbox. Nothing is really sent to anyone.</p>}
         {error && <p role="alert" className="mt-2 text-sm text-amber-300">{error}</p>}
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">

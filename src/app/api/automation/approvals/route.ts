@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { automationError, requireAutomationUser } from '@/lib/automation/server';
 import { kindLabel, summarizeAction } from '@/lib/automation/describe';
+import { outboxOnly } from '@/lib/dealEmail';
 
 // GET: every draft waiting for the caller across all their deals (one list). ?countOnly=1 returns just the number for a badge.
 export async function GET(request: NextRequest) {
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
     const deals = new Map((tx ?? []).map((t) => [t.id as string, t]));
     const byId = new Map((actions ?? []).map((a) => [a.id as string, a]));
     return NextResponse.json({
+      outboxOnly: outboxOnly(),
       approvals: (approvals ?? []).flatMap((ap) => {
         const a = byId.get(ap.action_id as string);
         if (!a) return [];

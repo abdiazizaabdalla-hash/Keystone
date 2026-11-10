@@ -385,6 +385,8 @@ export interface TrackedStep {
   manual: boolean;
   /** A draft waiting for the person: its action id, so the tracker can approve or reject it. */
   pendingActionId: string | null;
+  /** For an email that went out: what it said and where it went. `mode` is 'outbox' on a test machine (saved, not sent). */
+  sent: { to: string[]; subject: string; message: string; mode: string } | null;
 }
 export interface TrackedInstance {
   id: string;
@@ -411,7 +413,7 @@ export async function progressFor(ownerId: string, scope: { transactionId?: stri
     const trig = triggerOf(inst.trigger_type);
     const [loaded, { data: acts }, sc] = await Promise.all([
       loadFacts(inst),
-      supabaseServer.from('automation_actions').select('id, step_id, idempotency_key, status, refusal_reason, created_at, executed_at').eq('instance_id', inst.id).order('created_at', { ascending: false }).limit(500),
+      supabaseServer.from('automation_actions').select('id, step_id, idempotency_key, status, refusal_reason, created_at, executed_at, kind, inputs, result').eq('instance_id', inst.id).order('created_at', { ascending: false }).limit(500),
       stepContext(inst, inst.steps.some((s) => s.condition)),
     ]);
     const rows = acts ?? [];
@@ -424,9 +426,13 @@ export async function progressFor(ownerId: string, scope: { transactionId?: stri
       const pr = progress.find((x) => x.stepId === st.id)!;
       const req = stepToRequest(st, sc.vars, sc.people, tz, now);
       const pending = rows.find((a) => a.step_id === st.id && a.status === 'awaiting_approval');
+      const out = rows.find((a) => a.step_id === st.id && a.status === 'executed' && (a.kind === 'send_deal_email' || a.kind === 'send_step_email'));
+      const outIn = (out?.inputs ?? {}) as Record<string, unknown>;
+      const outRes = (out?.result ?? {}) as Record<string, unknown>;
+      const sent: TrackedStep['sent'] = out ? { to: Array.isArray(outRes.to) ? (outRes.to as string[]) : Array.isArray(outIn.to) ? (outIn.to as string[]) : [], subject: String(outIn.subject ?? ''), message: String(outIn.message ?? ''), mode: String(outRes.mode ?? 'sent') } : null;
       return {
         id: st.id, type: st.type, when: describeWhen(st, trig?.label ?? 'the trigger'), what: summarizeAction(req.kind, req.inputs),
-        state: pr.state, due: pr.due, note: pr.note, lastAt: pr.lastAt, manual: pr.manual, pendingActionId: pending ? (pending.id as string) : null,
+        state: pr.state, due: pr.due, note: pr.note, lastAt: pr.lastAt, manual: pr.manual, pendingActionId: pending ? (pending.id as string) : null, sent,
       };
     });
     out.push({

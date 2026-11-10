@@ -193,3 +193,7 @@ Financial automation (commission amounts, invoices, payments) only prepares reco
 - Verified: tsc, 542 unit, 34 integration tests (new: a draft appears on apply, in quiet hours, approving sends now). Not verified in a browser.
 - Not built: a global approvals page; editing quiet hours in the UI (the settings route accepts them).
 
+### Auto-1g: test-mode honesty (BUILT, committed locally, not pushed)
+
+- On a developer machine `RELAY_OUTBOX_ONLY=1` (and `check-local-env.mjs` refuses a real Resend key), so an approved or automatic email is recorded in `email_outbox` (`result.mode = 'outbox'`) and goes to no one. The Tracker used to say just "Done". Now: a prominent amber test-environment banner; each sent email shows "Saved to the test outbox (not sent)" (or "Sent to ...") with **View email** (To, subject, body, from the action's inputs); the approval popup says approving saves to the outbox. Nothing about real sending changed: production (no `RELAY_OUTBOX_ONLY`) sends through Resend.
+

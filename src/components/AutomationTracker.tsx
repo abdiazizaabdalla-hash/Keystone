@@ -14,7 +14,7 @@ import type { Step as StepDef } from '@/lib/automation/library';
 // pause or remove an automation, and add another at any time.
 
 type State = 'done' | 'needs_ok' | 'waiting' | 'not_done' | 'failed' | 'cancelled' | 'scheduled' | 'due' | 'held' | 'skipped' | 'waiting_trigger';
-interface Step { id: string; type: string; when: string; what: string; state: State; due: string | null; note: string; lastAt: string | null; manual: boolean; pendingActionId: string | null }
+interface Step { id: string; type: string; when: string; what: string; state: State; due: string | null; note: string; lastAt: string | null; manual: boolean; pendingActionId: string | null; sent: { to: string[]; subject: string; message: string; mode: string } | null }
 interface Auto { id: string; templateId: string | null; name: string; trigger: string; triggerLabel: string; status: string; category: 'transaction' | 'listing'; definition: StepDef[]; missingRoles: string[]; done: number; total: number; steps: Step[] }
 interface Progress { automations: Auto[]; mode: 'off' | 'draft' | 'auto'; paused: boolean; outboxOnly: boolean }
 interface Template { id: string; name: string; category: string; active: boolean; trigger_type: string; steps: Parameters<typeof summarizeSteps>[0] }
@@ -46,6 +46,7 @@ export default function AutomationTracker({ transactionId, listingId }: { transa
   const [busy, setBusy] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [quick, setQuick] = useState<null | { edit: EditTarget | null }>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
   const qs = transactionId ? `transactionId=${transactionId}` : `listingId=${listingId}`;
   const category = transactionId ? 'transaction' : 'listing';
 
@@ -127,7 +128,7 @@ export default function AutomationTracker({ transactionId, listingId }: { transa
       )}
       {data && data.mode !== 'off' && <p className="text-xs text-slate-500">{MODE_WORDS[data.mode]}. Change it in the Automation tab.</p>}
       {data?.paused && <p className="text-sm text-amber-300">Automations are paused for your whole account.</p>}
-      {data?.outboxOnly && <p className="text-xs text-slate-500">Test environment: emails go to the outbox, not out.</p>}
+      {data?.outboxOnly && <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200" data-testid="tracker-test-mode">Test environment: emails are saved to the outbox, not sent to anyone. A step marked Done below was recorded, not delivered. Use “View email” on it to see exactly what would have gone out.</p>}
       {error && <p role="alert" className="text-sm text-amber-300">{error}</p>}
       {message && <p role="status" className="rounded-lg bg-white/5 p-2 text-sm text-slate-200">{message}</p>}
 
@@ -174,6 +175,19 @@ export default function AutomationTracker({ transactionId, listingId }: { transa
                     <div className="min-w-0">
                       <p className="text-sm text-white">{s.what}</p>
                       <p className="text-xs text-slate-500">{s.when}{s.due && s.state !== 'done' ? ` · ${dateText(s.due)}` : ''}{s.manual ? ' · run by you' : ''}</p>
+                      {s.sent && (
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          {s.sent.mode === 'outbox' ? 'Saved to the test outbox (not sent)' : `Sent to ${s.sent.to.join(', ') || 'recipients'}`} ·{' '}
+                          <button type="button" className="text-blue-300 hover:text-blue-200" onClick={() => setViewing(viewing === `${a.id}:${s.id}` ? null : `${a.id}:${s.id}`)}>{viewing === `${a.id}:${s.id}` ? 'Hide email' : 'View email'}</button>
+                        </p>
+                      )}
+                      {s.sent && viewing === `${a.id}:${s.id}` && (
+                        <div className="mt-2 rounded-lg border border-white/10 bg-slate-950 p-3 text-xs text-slate-300" data-testid="tracker-sent-email">
+                          <p><span className="text-slate-500">To </span>{s.sent.to.join(', ') || 'nobody'}</p>
+                          <p className="mt-1 font-medium text-white">{s.sent.subject}</p>
+                          <p className="mt-2 whitespace-pre-wrap">{s.sent.message}</p>
+                        </div>
+                      )}
                       <p className="mt-0.5 text-xs"><span className={st.tone}>{st.label}</span>{s.lastAt ? <span className="text-slate-500"> · {dateText(s.lastAt)}</span> : null}{s.note ? <span className="text-slate-400"> · {s.note}</span> : null}</p>
                     </div>
                   </div>

@@ -378,6 +378,11 @@ describe('applying and running', () => {
     expect((await actions(inst))[0].status).toBe('executed'); // went now, in quiet hours, because the owner approved it
     expect(((await admin.from('email_outbox').select('id').eq('owner_user_id', tc.id)).data?.length ?? 0)).toBe(before + 1);
 
+    // The tracker says what happened to the email: here it was saved to the test outbox, and it can be read back.
+    const prog = (await call(h(getProgress), tc, { method: 'GET', path: `/api/automation/progress?listingId=${lid}` })).json as { outboxOnly: boolean; automations: { steps: { state: string; sent: { to: string[]; subject: string; mode: string } | null }[] }[] };
+    expect(prog.outboxOnly).toBe(true);
+    expect(prog.automations[0].steps[0]).toMatchObject({ state: 'done', sent: { to: ['sam.popup@example.com'], subject: 'Welcome to 6 Popup St', mode: 'outbox' } });
+
     await admin.from('email_outbox').delete().eq('owner_user_id', tc.id).like('subject', 'Welcome to 6 Popup%');
     await admin.from('automation_actions').delete().eq('listing_id', lid);
     await admin.from('automation_instances').delete().eq('listing_id', lid);
