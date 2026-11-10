@@ -162,6 +162,50 @@ export async function assignTemplates(ownerId: string, scope: { transactionId?: 
   return { applied, skipped, settings };
 }
 
+/**
+ * Creates an automation that exists only on this deal or listing (no library entry). The caller has already proven they own it.
+ * Returns the new copy, or says what is wrong in words.
+ */
+export async function createFileAutomation(ownerId: string, scope: { transactionId?: string | null; listingId?: string | null }, input: unknown): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const checked = validateDefinition(input);
+  if (!checked.ok) return checked;
+  const def = checked.value;
+  const category = scope.transactionId ? 'transaction' : 'listing';
+  if (def.category !== category) return { ok: false, error: `This is a ${category}; that is a ${def.category} automation.` };
+  const col = scope.transactionId ? 'transaction_id' : 'listing_id';
+  const scopeId = (scope.transactionId ?? scope.listingId)!;
+  const { data, error } = await supabaseServer.from('automation_instances').insert({ template_id: null, owner_user_id: ownerId, [col]: scopeId, name: def.name, category, trigger_type: def.triggerType, steps: def.steps, template_version: 1 }).select('id').single();
+  if (error) throw error;
+  await ensureSettings(ownerId, scope);
+  return { ok: true, id: data.id as string };
+}
+
+/**
+ * Edits one copy on one file: its name and steps. When it starts (the trigger) cannot change here, because a different start
+ * date would make steps that already ran look new. Steps that were removed lose anything they had queued; steps that already
+ * ran are not run again.
+ */
+export async function updateInstanceDefinition(ownerId: string, id: string, input: unknown): Promise<{ ok: true } | { ok: false; error: string; notFound?: boolean }> {
+  const { data } = await supabaseServer.from('automation_instances').select(INSTANCE_COLS).eq('id', id).eq('owner_user_id', ownerId).neq('status', 'removed').maybeSingle();
+  if (!data) return { ok: false, error: 'Automation not found', notFound: true };
+  const inst = data as InstanceRow;
+  const checked = validateDefinition(input);
+  if (!checked.ok) return checked;
+  const def = checked.value;
+  if (def.category !== inst.category) return { ok: false, error: 'The type of an automation cannot change.' };
+  if (def.triggerType !== inst.trigger_type) return { ok: false, error: 'What an automation starts from cannot be changed on a file. Create a new one instead.' };
+  const { error } = await supabaseServer.from('automation_instances').update({ name: def.name, steps: def.steps, updated_at: new Date().toISOString() }).eq('id', id).eq('owner_user_id', ownerId);
+  if (error) throw error;
+  const keep = new Set(def.steps.map((x) => x.id));
+  const gone = inst.steps.map((x) => x.id).filter((x) => !keep.has(x));
+  if (gone.length) {
+    const { data: cut } = await supabaseServer.from('automation_actions').update({ status: 'cancelled', refusal_reason: 'automation_removed' }).eq('instance_id', id).in('step_id', gone).in('status', PENDING).select('id');
+    const ids = (cut ?? []).map((r) => r.id as string);
+    if (ids.length) await supabaseServer.from('automation_approvals').update({ status: 'expired' }).in('action_id', ids).eq('status', 'pending');
+  }
+  return { ok: true };
+}
+
 export async function listInstances(ownerId: string, scope: { transactionId?: string | null; listingId?: string | null }) {
   const col = scope.transactionId ? 'transaction_id' : 'listing_id';
   const { data, error } = await supabaseServer.from('automation_instances').select(INSTANCE_COLS).eq(col, (scope.transactionId ?? scope.listingId)!).eq('owner_user_id', ownerId).neq('status', 'removed').order('created_at', { ascending: true });
@@ -345,6 +389,9 @@ export interface TrackedInstance {
   trigger: string;
   triggerLabel: string;
   status: string;
+  category: 'transaction' | 'listing';
+  /** The steps as saved (for editing), as opposed to `steps`, which is what the tracker shows for each. */
+  definition: Step[];
   missingRoles: string[];
   done: number;
   total: number;
@@ -379,7 +426,7 @@ export async function progressFor(ownerId: string, scope: { transactionId?: stri
       };
     });
     out.push({
-      id: inst.id, templateId: inst.template_id, name: inst.name, trigger: inst.trigger_type, triggerLabel: trig?.label ?? inst.trigger_type, status: inst.status,
+      id: inst.id, templateId: inst.template_id, name: inst.name, trigger: inst.trigger_type, triggerLabel: trig?.label ?? inst.trigger_type, status: inst.status, category: inst.category, definition: inst.steps,
       missingRoles: inst.steps.some((st) => st.type === 'send_email') ? missingRecipientRoles(inst.steps, sc.people) : [],
       done: steps.filter((x) => x.state === 'done').length, total: steps.length, steps,
     });

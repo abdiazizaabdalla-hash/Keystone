@@ -113,7 +113,8 @@ export async function GET(request: NextRequest) {
     }
     const data = (rawData || []).map((t) => {
       const shared = !isAdmin && sharedSet.has(t.id as string) && t.tc_user_id !== user.id;
-      return { ...t, shared, ...(shared && limitedParticipant ? { limited: true } : {}), ...(shared ? { shared_agent: sharedAgents.get(t.agent_id as string) ?? null, tc_agent: myProfiles.get(t.tc_user_id as string) ?? null } : {}) };
+      // Automations belong to the account that owns the deal: not to someone it is shared with, a teammate, or an admin looking in.
+      return { ...t, shared, canAutomate: !isAdmin && t.tc_user_id === user.id, ...(shared && limitedParticipant ? { limited: true } : {}), ...(shared ? { shared_agent: sharedAgents.get(t.agent_id as string) ?? null, tc_agent: myProfiles.get(t.tc_user_id as string) ?? null } : {}) };
     });
 
     if (!data || data.length === 0) {

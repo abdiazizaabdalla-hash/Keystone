@@ -73,6 +73,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       listing: shared ? { ...listing, notes: null } : listing,
       shared,
       coordinated,
+      // Automations belong to the account that owns the listing, not to an agent, a coordinator it is shared with, or an admin looking in.
+      canAutomate: !isAdmin && !shared && !coordinated && listing.tc_user_id === user.id,
       // Who is on the other side: the coordinator (an agent's shared listing), the owning agent (a coordinator's view), or the coordinator an agent invited.
       coordinator: shared || coordinated ? await userLabel(listing.tc_user_id as string) : null,
       invitedCoordinator: !shared && !coordinated ? await acceptedCoordinator(id) : null,

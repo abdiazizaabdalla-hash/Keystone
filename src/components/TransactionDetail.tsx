@@ -58,6 +58,8 @@ interface Transaction {
   inbound_token?: string | null;
   /** Someone else owns this deal and added you to it. */
   shared?: boolean;
+  /** True only for the account that owns the deal: the Automation and Tracker tabs belong to it alone. */
+  canAutomate?: boolean;
   /** A shared deal seen by a coordinator whose trial ended: view and light updates only until they subscribe. */
   limited?: boolean;
   shared_agent?: Agent | null;
@@ -254,7 +256,6 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   const router = useRouter();
   const resolvedParams = { id };
   const [tab, setTab] = useState<TxTab>('overview');
-  const autoAlerts = useAutomationAlerts({ transactionId: id, enabled: !ownerView && isFeatureOnClient('automation') });
   const selectTab = (next: TxTab) => {
     setTab(next);
     try {
@@ -269,6 +270,9 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
     if (TX_TABS.some((t) => t.id === h) && !(ownerView && h === 'messages')) setTab(h as TxTab);
   }, [ownerView]);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
+  // Automations belong to the account that owns the deal: nobody it is shared with, no teammate, no brokerage owner looking in.
+  const canAutomate = !ownerView && isFeatureOnClient('automation') && transaction?.canAutomate === true;
+  const autoAlerts = useAutomationAlerts({ transactionId: id, enabled: canAutomate });
   const [tasks, setTasks] = useState<Task[]>([]);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   // A brokerage owner whose agent has switched off file access sees document names only.
@@ -3052,7 +3056,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           </div>
         )}
 
-        {!ownerView && isFeatureOnClient('automation') && transaction?.id && (
+        {canAutomate && transaction?.id && (
           <AutomationBanners alerts={autoAlerts.alerts} scope={{ transactionId: transaction.id }} onChanged={() => void autoAlerts.reload()} onOpenTracker={() => selectTab('tracker')} />
         )}
 
@@ -3063,7 +3067,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             Every panel stays mounted (just hidden) so drafts, uploads and
             polling keep their state when you switch tabs. */}
         <div role="tablist" aria-label="Transaction sections" className="flex gap-1 overflow-x-auto mb-8 p-1 bg-white/5 border border-white/10 rounded-2xl">
-          {TX_TABS.filter((t) => !(ownerView && t.id === 'messages') && !((t.id === 'automation' || t.id === 'tracker') && (ownerView || !isFeatureOnClient('automation')))).map((t) => (
+          {TX_TABS.filter((t) => !(ownerView && t.id === 'messages') && !((t.id === 'automation' || t.id === 'tracker') && !canAutomate)).map((t) => (
             <button
               key={t.id}
               type="button"
@@ -4036,12 +4040,12 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
         </div>
         </div>
 
-        {tab === 'automation' && !ownerView && transaction?.id && (
+        {tab === 'automation' && canAutomate && transaction?.id && (
           <div className="max-w-3xl" data-testid="automation-tab">
             <AssistantPanel transactionId={transaction.id} />
           </div>
         )}
-        {tab === 'tracker' && !ownerView && transaction?.id && (
+        {tab === 'tracker' && canAutomate && transaction?.id && (
           <div className="max-w-3xl" data-testid="tracker-tab">
             <AutomationTracker transactionId={transaction.id} />
           </div>

@@ -8,6 +8,8 @@ import { DELETE as removeInstance, PATCH as patchInstance } from '@/app/api/auto
 import { POST as runStep } from '@/app/api/automation/instances/[id]/run/route';
 import { GET as getProgress } from '@/app/api/automation/progress/route';
 import { GET as getAlerts, POST as ackAlerts } from '@/app/api/automation/alerts/route';
+import { GET as listTransactions } from '@/app/api/transactions/route';
+import { GET as getListing } from '@/app/api/listings/[id]/route';
 import { GET as getHistory } from '@/app/api/automation/history/route';
 import { runInstances } from '@/lib/automation/instances';
 import { admin, call, cleanup, createActor, createCollaborator, seedDeal, type Actor, type Deal } from './helpers';
@@ -25,6 +27,8 @@ const create = async (who: Actor, over?: Record<string, unknown>) => ((await pos
 const apply = (who: Actor, d: Deal, templateIds: string[]) => post(who, '/api/automation/instances', { transactionId: d.transactionId, templateIds }, applyInstances);
 const copies = async (who: Actor, d: Deal) => ((await call(h(listInstances), who, { method: 'GET', path: `/api/automation/instances?transactionId=${d.transactionId}` })).json as { instances: { id: string; name: string; missingRoles: string[]; template_version: number; status: string; steps: { title?: string }[] }[] }).instances;
 const actions = async (instanceId: string) => (await admin.from('automation_actions').select('status, kind, refusal_reason, instance_id, step_id').eq('instance_id', instanceId)).data ?? [];
+
+const noQuietHours = (listingId: string) => admin.from('automation_settings').update({ quiet_start_hour: 0, quiet_end_hour: 0 }).eq('listing_id', listingId); // tests must not depend on the time of day
 
 let tc: Actor, other: Actor, collab: Actor;
 let d1: Deal, d2: Deal, dOther: Deal;
@@ -101,6 +105,7 @@ describe('applying and running', () => {
     const nobody = await create(tc, { name: 'Lender email', steps: [{ id: 's1', type: 'send_email', when: { days: 0, direction: 'after' }, to: ['lender'], subject: 'Hi', message: 'Hi {{address}}' }] });
     const agent = await create(tc, { name: 'Agent email', steps: [{ id: 's1', type: 'send_email', when: { days: 0, direction: 'after' }, to: ['agent'], subject: 'Hi', message: 'Hello' }] });
     await apply(tc, d2, [nobody, agent]);
+    await admin.from('automation_settings').update({ quiet_start_hour: 0, quiet_end_hour: 0 }).eq('transaction_id', d2.transactionId); // not time-of-day dependent
     await runInstances(new Date(), () => false);
     const cs = await copies(tc, d2);
     const lender = cs.find((c) => c.name === 'Lender email')!;
@@ -169,6 +174,7 @@ describe('applying and running', () => {
     ];
     const t = await create(tc, { name: 'Offer in', category: 'listing', triggerType: 'offer_received', steps });
     await post(tc, '/api/automation/instances', { listingId: lid, templateIds: [t] }, applyInstances);
+    await noQuietHours(lid);
     const inst = (await admin.from('automation_instances').select('id').eq('listing_id', lid)).data![0].id as string;
 
     await runInstances(new Date(), () => false);
@@ -258,6 +264,7 @@ describe('applying and running', () => {
     ];
     const t = await create(tc, { name: 'Banners', category: 'listing', triggerType: 'listing_created', steps });
     await post(tc, '/api/automation/instances', { listingId: lid, templateIds: [t] }, applyInstances);
+    await noQuietHours(lid);
     await runInstances(new Date(Date.now() + 5000), () => false);
     type A = { alerts: { id: string; kind: string; title: string }[]; count: number };
     const get = async (who: Actor = tc) => call(h(getAlerts), who, { method: 'GET', path: `/api/automation/alerts?listingId=${lid}` });
@@ -287,6 +294,58 @@ describe('applying and running', () => {
     await admin.from('automation_instances').delete().eq('listing_id', lid);
     await admin.from('automation_settings').delete().eq('listing_id', lid);
     await admin.from('listing_tasks').delete().eq('listing_id', lid);
+    await admin.from('listing_contacts').delete().eq('listing_id', lid);
+    await admin.from('listings').delete().eq('id', lid);
+  });
+  it('quick create and edit on one file: file-only automations, locked trigger, removed steps lose their queue, owner-only', async () => {
+    const { data: listing } = await admin.from('listings').insert({ tc_user_id: tc.id, property_address: '5 Quick St', status: 'preparing' }).select('id').single();
+    const lid = listing!.id as string;
+    await admin.from('listing_contacts').insert([{ listing_id: lid, role: 'Seller', name: 'Sam', email: 'sam.quick@example.com', position: 0 }]);
+
+    // Only the owner is told they can automate.
+    const own = (await call(h(getListing), tc, { method: 'GET', path: `/api/listings/${lid}`, params: { id: lid } })).json as { canAutomate?: boolean };
+    expect(own.canAutomate).toBe(true);
+    const txs = (await call(h(listTransactions), tc, { method: 'GET', path: '/api/transactions' })).json as { id: string; canAutomate?: boolean }[];
+    expect(txs.find((t) => t.id === d1.transactionId)?.canAutomate).toBe(true);
+
+    const def = {
+      name: 'Just here', description: '', category: 'listing', triggerType: 'listing_created',
+      steps: [
+        { id: 's1', type: 'send_email', when: { days: 0, direction: 'after' }, to: ['seller'], subject: 'Hello {{address}}', message: 'Hi' },
+        { id: 's2', type: 'notify_me', when: { days: 30, direction: 'after' }, title: 'A month in' },
+      ],
+    };
+    // A transaction automation cannot be put on a listing; a bad one is refused in words.
+    expect((await post(tc, '/api/automation/instances', { listingId: lid, definition: { ...def, category: 'transaction', triggerType: 'transaction_created' } }, applyInstances)).status).toBe(400);
+    expect((await post(tc, '/api/automation/instances', { listingId: lid, definition: { ...def, steps: [] } }, applyInstances)).status).toBe(400);
+    expect((await post(other, '/api/automation/instances', { listingId: lid, definition: def }, applyInstances)).status).toBe(404);
+
+    const made = await post(tc, '/api/automation/instances', { listingId: lid, definition: def }, applyInstances);
+    expect(made.status).toBe(200);
+    const inst = (await admin.from('automation_instances').select('id, template_id').eq('listing_id', lid)).data![0];
+    expect(inst.template_id).toBeNull(); // lives on this file only
+    await noQuietHours(lid);
+    expect(await admin.from('automation_templates').select('id').eq('owner_user_id', tc.id).eq('name', 'Just here')).toMatchObject({ data: [] });
+
+    await runInstances(new Date(Date.now() + 5000), () => false); // the email waits for approval (Draft)
+    expect((await actions(inst.id as string)).find((a) => a.step_id === 's1')).toMatchObject({ status: 'awaiting_approval' });
+
+    const edit = (who: Actor, body: unknown) => call(h(patchInstance), who, { method: 'PATCH', path: `/api/automation/instances/${inst.id}`, body, params: { id: inst.id as string } });
+    expect((await edit(other, { definition: def })).status).toBe(404);
+    expect((await edit(tc, { definition: { ...def, triggerType: 'listing_expiration' } })).status).toBe(400); // when it starts is fixed on a file
+    expect((await edit(tc, { definition: { ...def, category: 'transaction' } })).status).toBe(400);
+
+    // Drop the email (s1) and rename the notice: the waiting draft is cancelled, the rest is kept.
+    const edited = { ...def, name: 'Just here, edited', steps: [{ id: 's2', type: 'notify_me', when: { days: 30, direction: 'after' }, title: 'A month in (edited)' }] };
+    expect((await edit(tc, { definition: edited })).status).toBe(200);
+    const row = (await admin.from('automation_instances').select('name, steps').eq('id', inst.id as string).single()).data!;
+    expect(row.name).toBe('Just here, edited');
+    expect((row.steps as { id: string }[]).map((x) => x.id)).toEqual(['s2']);
+    expect((await actions(inst.id as string)).find((a) => a.step_id === 's1')).toMatchObject({ status: 'cancelled' });
+
+    await admin.from('automation_actions').delete().eq('listing_id', lid);
+    await admin.from('automation_instances').delete().eq('listing_id', lid);
+    await admin.from('automation_settings').delete().eq('listing_id', lid);
     await admin.from('listing_contacts').delete().eq('listing_id', lid);
     await admin.from('listings').delete().eq('id', lid);
   });

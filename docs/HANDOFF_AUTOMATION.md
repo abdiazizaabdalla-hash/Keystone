@@ -176,3 +176,11 @@ Financial automation (commission amounts, invoices, payments) only prepares reco
 - Banners are not shown to a brokerage owner looking in, or to agents.
 - Verified: tsc, 538 unit, 32 integration tests on relay-test. Not verified in a browser.
 
+### Auto-1e: owner-only tabs; quick create and edit on a file (BUILT, committed locally, not pushed)
+
+- **Owner-only.** The Automation and Tracker tabs and the banners show only to the account that owns the deal or listing. The server decides: `GET /api/transactions` adds `canAutomate` (`!isAdmin && tc_user_id === user.id`) and `GET /api/listings/[id]` adds `canAutomate` (`!isAdmin && !shared && !coordinated && tc_user_id === user.id`). Not shown to a coordinator or agent a file is shared with, a teammate, a brokerage owner looking in, or an admin. The API already refused all of them (404); the screen now matches.
+- **Quick create on a file** (`QuickAutomation.tsx`; "Create new" in the Tracker, "New automation here" in the Automation tab): describe it in plain English (the AI draft, type already fixed) or build it by hand, review, then it is added to this file as soon as it is saved. Checkbox "Also save it to my library" (on by default); off = a file-only automation (`template_id` null, via `POST /api/automation/instances { definition }`).
+- **Edit on a file** ("Edit" on each automation, in the Tracker and the Automation tab): changes this file's copy only (`PATCH /api/automation/instances/[id] { definition }`). When it starts (the trigger) and its type are locked, because a different start date would make steps that already ran look new. Steps that already ran are never run again; removed steps lose anything they had queued; new steps get ids never used before on that copy (`reservedIds`), so a removed step's id cannot be reused. Optional checkbox "Also update the version in my library" (other files keep their copy until Update copies).
+- Test-suite fix: integration tests now switch quiet hours off so they do not depend on the time of day (the default 9pm-7am Central holds emails as `deferred`, which is correct product behaviour).
+- Verified: tsc, 538 unit, 33 integration tests on relay-test. Not verified in a browser.
+

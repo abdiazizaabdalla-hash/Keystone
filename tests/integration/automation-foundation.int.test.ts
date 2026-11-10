@@ -21,7 +21,8 @@ const agentEmail = (deal: Deal) => `${deal.marker.toLowerCase()}@example.test`;
 // (automation_settings is unique per deal through a partial index, which PostgREST cannot use for on_conflict, so write it as delete + insert.)
 const setMode = async (who: Actor, deal: Deal, mode: string) => {
   await admin.from('automation_settings').delete().eq('transaction_id', deal.transactionId);
-  const { error } = await admin.from('automation_settings').insert({ owner_user_id: who.id, transaction_id: deal.transactionId, mode });
+  // Quiet hours are off (start = end) so these tests do not depend on the time of day.
+  const { error } = await admin.from('automation_settings').insert({ owner_user_id: who.id, transaction_id: deal.transactionId, mode, quiet_start_hour: 0, quiet_end_hour: 0 });
   if (error) throw new Error(`setMode failed: ${error.message}`);
 };
 const outbox = async (who: Actor) => (await admin.from('email_outbox').select('source, to_emails').eq('owner_user_id', who.id).eq('source', 'automation')).data ?? [];

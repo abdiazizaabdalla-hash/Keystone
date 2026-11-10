@@ -6,6 +6,8 @@ import { authFetch } from '@/lib/authClient';
 import { notifyAutomationChanged } from '@/components/AutomationAlerts';
 import { isFeatureOnClient } from '@/lib/features';
 import { summarizeSteps } from '@/components/ApplyAutomations';
+import QuickAutomation, { type EditTarget } from '@/components/QuickAutomation';
+import type { Step as StepDef } from '@/lib/automation/library';
 
 // The Tracker tab of one deal or listing: every automation on it, step by step. What ran, what is waiting for you, what is
 // scheduled for which day, what was held back and why. From here you can run a step (or the rest) right now, approve a draft,
@@ -13,7 +15,7 @@ import { summarizeSteps } from '@/components/ApplyAutomations';
 
 type State = 'done' | 'needs_ok' | 'waiting' | 'not_done' | 'failed' | 'cancelled' | 'scheduled' | 'due' | 'held' | 'skipped' | 'waiting_trigger';
 interface Step { id: string; type: string; when: string; what: string; state: State; due: string | null; note: string; lastAt: string | null; manual: boolean; pendingActionId: string | null }
-interface Auto { id: string; templateId: string | null; name: string; triggerLabel: string; status: string; missingRoles: string[]; done: number; total: number; steps: Step[] }
+interface Auto { id: string; templateId: string | null; name: string; trigger: string; triggerLabel: string; status: string; category: 'transaction' | 'listing'; definition: StepDef[]; missingRoles: string[]; done: number; total: number; steps: Step[] }
 interface Progress { automations: Auto[]; mode: 'off' | 'draft' | 'auto'; paused: boolean; outboxOnly: boolean }
 interface Template { id: string; name: string; category: string; active: boolean; trigger_type: string; steps: Parameters<typeof summarizeSteps>[0] }
 
@@ -43,6 +45,7 @@ export default function AutomationTracker({ transactionId, listingId }: { transa
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [quick, setQuick] = useState<null | { edit: EditTarget | null }>(null);
   const qs = transactionId ? `transactionId=${transactionId}` : `listingId=${listingId}`;
   const category = transactionId ? 'transaction' : 'listing';
 
@@ -111,7 +114,8 @@ export default function AutomationTracker({ transactionId, listingId }: { transa
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={btn} onClick={() => void load()} disabled={busy !== null}>Refresh</button>
-          <button type="button" className="rounded-lg bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-400" onClick={() => setAdding((v) => !v)} data-testid="tracker-add">{adding ? 'Close' : 'Add an automation'}</button>
+          <button type="button" className={btn} onClick={() => setQuick({ edit: null })} data-testid="tracker-create">Create new</button>
+          <button type="button" className="rounded-lg bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-400" onClick={() => setAdding((v) => !v)} data-testid="tracker-add">{adding ? 'Close' : 'Add from my library'}</button>
         </div>
       </div>
 
@@ -130,7 +134,7 @@ export default function AutomationTracker({ transactionId, listingId }: { transa
       {adding && (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3" data-testid="tracker-add-panel">
           {templates === null ? <p className="text-sm text-slate-500">Loading…</p> : available.length === 0 ? (
-            <p className="text-sm text-slate-400">Every {category} automation you have is already on this file. <Link href="/dashboard/automations" className="text-blue-300 hover:text-blue-200">Build or pick another in Automations</Link>.</p>
+            <p className="text-sm text-slate-400">Every {category} automation you have is already on this file. <button type="button" className="text-blue-300 hover:text-blue-200" onClick={() => setQuick({ edit: null })}>Create a new one here</button> or <Link href="/dashboard/automations" className="text-blue-300 hover:text-blue-200">browse the Library</Link>.</p>
           ) : (
             <ul className="divide-y divide-white/10">
               {available.map((t) => (
@@ -154,6 +158,7 @@ export default function AutomationTracker({ transactionId, listingId }: { transa
             </div>
             <div className="flex flex-wrap gap-2">
               {a.status === 'active' && <button type="button" className={btn} disabled={busy !== null} onClick={() => run(a)}>Run what is left now</button>}
+              <button type="button" className={btn} disabled={busy !== null} onClick={() => setQuick({ edit: { id: a.id, templateId: a.templateId, name: a.name, category: a.category, triggerType: a.trigger, steps: a.definition } })} data-testid="tracker-edit">Edit</button>
               <button type="button" className={btn} disabled={busy !== null} onClick={() => void act(`pause-${a.id}`, `/api/automation/instances/${a.id}`, 'PATCH', { status: a.status === 'paused' ? 'active' : 'paused' })}>{a.status === 'paused' ? 'Resume' : 'Pause'}</button>
               <button type="button" className={btn} disabled={busy !== null} onClick={() => window.confirm(`Take "${a.name}" off this file? Anything it had queued is cancelled; what already happened stays in the history.`) && void act(`rm-${a.id}`, `/api/automation/instances/${a.id}`, 'DELETE')}>Remove</button>
             </div>
@@ -190,6 +195,7 @@ export default function AutomationTracker({ transactionId, listingId }: { transa
         </article>
       ))}
       {data && data.automations.length > 0 && <p className="text-xs text-slate-500">Dates follow the file: if the closing date or another date moves, the steps move with it. Running a step here uses the same rules as a scheduled one (who can be emailed, daily limit, your approval on Draft).</p>}
+      {quick && <QuickAutomation scope={transactionId ? { transactionId } : { listingId }} edit={quick.edit} onClose={() => setQuick(null)} onDone={(m) => { setQuick(null); setMessage(m); setError(null); void load().then(notifyAutomationChanged); }} />}
     </section>
   );
 }

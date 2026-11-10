@@ -7,6 +7,7 @@ import { notifyAutomationChanged } from '@/components/AutomationAlerts';
 import { isFeatureOnClient } from '@/lib/features';
 import { TRIGGERS } from '@/lib/automation/library';
 import { summarizeSteps } from '@/components/ApplyAutomations';
+import QuickAutomation, { type EditTarget } from '@/components/QuickAutomation';
 
 // The Automation tab of one deal or listing: every automation you have, switched on or off for this file, then what has
 // happened (and any draft waiting for your approval). Switching one on applies a separate copy; off removes it and cancels
@@ -51,6 +52,8 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [quick, setQuick] = useState<null | { edit: EditTarget | null }>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ subject?: string; message?: string; text?: string }>({});
   const qs = transactionId ? `transactionId=${transactionId}` : `listingId=${listingId}`;
   const category = transactionId ? 'transaction' : 'listing';
@@ -118,9 +121,13 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
       {data?.paused && <p className="text-sm text-amber-300">Automations are paused for your whole account.</p>}
       {data?.outboxOnly && <p className="text-xs text-slate-500">Test environment: emails go to the outbox, not out.</p>}
       {error && <p role="alert" className="text-sm text-amber-300">{error}</p>}
+      {notice && <p role="status" className="rounded-lg bg-white/5 p-2 text-sm text-slate-200">{notice}</p>}
 
       <div>
-        <h4 className="mb-2 text-sm font-semibold text-slate-200">Your automations</h4>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h4 className="text-sm font-semibold text-slate-200">Your automations</h4>
+          <button type="button" onClick={() => setQuick({ edit: null })} className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-slate-200 hover:bg-white/5" data-testid="assistant-create">New automation here</button>
+        </div>
         {templates === null ? <p className="text-sm text-slate-500">Loading…</p> : rows.length === 0 ? (
           <p className="text-sm text-slate-500">You have no {category} automations yet. <Link href="/dashboard/automations" className="text-blue-300 hover:text-blue-200">Add one</Link>.</p>
         ) : (
@@ -136,11 +143,17 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
                       <p className="mt-1 text-xs text-amber-300" data-testid="missing-roles">No {r.copy.missingRoles.join(' or ')} with an email on this deal or listing, so that email will be skipped. Add them in Contacts.</p>
                     )}
                   </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                  {r.copy && (
+                    <button type="button" disabled={busy !== null} onClick={() => setQuick({ edit: { id: r.copy!.id, templateId: r.copy!.template_id, name: r.copy!.name, category, triggerType: r.copy!.trigger_type, steps: r.copy!.steps as EditTarget['steps'] } })}
+                      className="shrink-0 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-slate-200 hover:bg-white/5 disabled:opacity-60" data-testid="assistant-edit">Edit</button>
+                  )}
                   <button type="button" role="switch" aria-checked={on} aria-label={`${r.name} on this ${category}`} disabled={busy !== null}
                     onClick={() => (r.tpl ? void toggle(r.tpl, r.copy) : r.copy && void call(r.key, `/api/automation/instances/${r.copy.id}`, 'DELETE'))}
                     className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-60 ${on ? 'bg-emerald-500' : 'bg-white/20'}`}>
                     <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${on ? 'left-[22px]' : 'left-0.5'}`} />
                   </button>
+                  </div>
                 </li>
               );
             })}
@@ -187,6 +200,7 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
           </ul>
         )}
       </div>
+      {quick && <QuickAutomation scope={transactionId ? { transactionId } : { listingId }} edit={quick.edit} onClose={() => setQuick(null)} onDone={(m) => { setQuick(null); setError(null); setNotice(m); void load().then(() => notifyAutomationChanged()); }} />}
     </section>
   );
 }

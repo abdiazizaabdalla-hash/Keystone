@@ -110,6 +110,8 @@ interface Detail {
   invoice?: { id: string; invoice_number: string; amount_owed: number; paid: boolean; paid_at: string | null; due_date: string | null; refunded?: boolean } | null;
   /** An agent is looking at a listing their coordinator runs and shared with them. */
   shared?: boolean;
+  /** True only for the account that owns the listing. */
+  canAutomate?: boolean;
   /** A coordinator is looking at a listing an agent invited them onto. */
   coordinated?: boolean;
   /** Who the label in `coordinator` is: the coordinator (shared), or the owning agent (coordinated). */
@@ -193,8 +195,8 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
   const [pickAgent, setPickAgent] = useState<null | 'primary' | 'contact'>(null);
   // Agent-only controls (who the listing agent is, sharing, portal, invoicing) stay hidden from agents and from invited coordinators.
   const agentHidden = ownerView || isWorkspaceAgent || data?.coordinated === true;
-  // Automation is the owner's own tool: not shown to a brokerage owner looking in, to an agent, or when the feature is off.
-  const automationHidden = ownerView || !isFeatureOnClient('automation') || data?.shared === true || (isWorkspaceAgent && !data?.coordinated);
+  // Automation belongs to the account that owns the listing (the server says so): not an agent, a coordinator it is shared with, a brokerage owner looking in, or an admin.
+  const automationHidden = ownerView || !isFeatureOnClient('automation') || data?.canAutomate !== true;
   const autoAlerts = useAutomationAlerts({ listingId: id, enabled: !automationHidden });
   const tabs = LISTING_TABS.filter((t) => !(ownerView && t.id === 'messages') && !((t.id === 'automation' || t.id === 'tracker') && automationHidden));
   const loadCoordInvites = useCallback(async () => {

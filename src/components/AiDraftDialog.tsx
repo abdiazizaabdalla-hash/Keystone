@@ -14,9 +14,10 @@ const EXAMPLES = [
   'Remind me 14, 7 and 2 days before a listing expires.',
 ];
 
-export default function AiDraftDialog({ onClose, onManual, onDraft }: { onClose: () => void; onManual: () => void; onDraft: (v: BuilderValue, unsupported: string[]) => void }) {
+export default function AiDraftDialog({ onClose, onManual, onDraft, fixedCategory }: { onClose: () => void; onManual: () => void; onDraft: (v: BuilderValue, unsupported: string[]) => void; /** Set when it is opened from a deal or listing: the type is already known. */ fixedCategory?: 'transaction' | 'listing' }) {
   const [text, setText] = useState('');
-  const [category, setCategory] = useState<'transaction' | 'listing'>('transaction');
+  const [pickedCategory, setCategory] = useState<'transaction' | 'listing'>('transaction');
+  const category = fixedCategory ?? pickedCategory;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [questions, setQuestions] = useState<string[]>([]);
@@ -58,11 +59,11 @@ export default function AiDraftDialog({ onClose, onManual, onDraft }: { onClose:
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg px-2 py-1 text-slate-400 hover:bg-white/10 hover:text-white">✕</button>
         </div>
-        <div className="mt-4 flex gap-1">
+        {!fixedCategory && <div className="mt-4 flex gap-1">
           {(['transaction', 'listing'] as const).map((c) => (
             <button key={c} type="button" onClick={() => setCategory(c)} className={`rounded-lg px-3 py-1.5 text-sm ${category === c ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'}`}>{c === 'transaction' ? 'Transaction' : 'Listing'}</button>
           ))}
-        </div>
+        </div>}
         <textarea aria-label="Describe the automation" rows={4} maxLength={1500} value={text} onChange={(e) => setText(e.target.value)} placeholder="When a transaction is created, email the buyer a welcome and remind me to verify earnest money…"
           className="mt-2 w-full rounded-lg bg-slate-950 border border-white/10 px-3 py-2 text-sm text-white placeholder:text-slate-500" />
         <div className="mt-2 flex flex-wrap gap-2">

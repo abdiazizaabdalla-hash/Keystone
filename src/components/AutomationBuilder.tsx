@@ -23,7 +23,7 @@ export const blankAutomation = (category: Category): BuilderValue => ({
   name: '', description: '', category, triggerType: TRIGGERS.find((t) => t.category === category)!.id, steps: [blankStep(1, category === 'transaction' ? 'send_email' : 'notify_me')],
 });
 
-export default function AutomationBuilder({ initial, editing, saving, error, onSave, onCancel }: { initial: BuilderValue; editing: boolean; saving: boolean; error: string | null; onSave: (v: BuilderValue) => void; onCancel: () => void }) {
+export default function AutomationBuilder({ initial, editing, saving, error, onSave, onCancel, lockTrigger = false, lockCategory = false, reservedIds = [], saveLabel }: { initial: BuilderValue; editing: boolean; saving: boolean; error: string | null; onSave: (v: BuilderValue) => void; onCancel: () => void; /** On a file, when an automation starts cannot change. */ lockTrigger?: boolean; lockCategory?: boolean; /** Step ids that already exist on a running copy: never reused for a different step. */ reservedIds?: string[]; saveLabel?: string }) {
   const [v, setV] = useState<BuilderValue>(initial);
   const trigger = triggerOf(v.triggerType);
   const triggers = TRIGGERS.filter((t) => t.category === v.category);
@@ -41,7 +41,7 @@ export default function AutomationBuilder({ initial, editing, saving, error, onS
   const changeCategory = (category: Category) => setV((x) => ({ ...blankAutomation(category), name: x.name, description: x.description }));
   const changeTrigger = (triggerType: string) =>
     setV((x) => ({ ...x, triggerType, steps: x.steps.map((s) => (triggerOf(triggerType)?.kind === 'date' ? s : { ...s, when: { ...s.when, direction: 'after' } })) }));
-  const nextId = () => `s${Math.max(0, ...v.steps.map((s) => Number(s.id.replace(/\D/g, '')) || 0)) + 1}`;
+  const nextId = () => `s${Math.max(0, ...[...v.steps.map((s) => s.id), ...reservedIds].map((id) => Number(id.replace(/\D/g, '')) || 0)) + 1}`;
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSave(v); }} className="space-y-5" data-testid="automation-builder">
@@ -52,7 +52,7 @@ export default function AutomationBuilder({ initial, editing, saving, error, onS
         </div>
         <div>
           <label className={label} htmlFor="auto-category">Type</label>
-          <select id="auto-category" className={input} value={v.category} disabled={editing} onChange={(e) => changeCategory(e.target.value as Category)}>
+          <select id="auto-category" className={input} value={v.category} disabled={editing || lockCategory} onChange={(e) => changeCategory(e.target.value as Category)}>
             <option value="transaction">Transaction automation</option>
             <option value="listing">Listing automation</option>
           </select>
@@ -66,10 +66,10 @@ export default function AutomationBuilder({ initial, editing, saving, error, onS
       {/* Trigger -> steps, drawn top to bottom */}
       <div className="rounded-2xl border border-blue-400/30 bg-blue-500/10 p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-200">When this happens</p>
-        <select aria-label="Trigger" className={`${input} mt-2`} value={v.triggerType} onChange={(e) => changeTrigger(e.target.value)}>
+        <select aria-label="Trigger" className={`${input} mt-2`} value={v.triggerType} disabled={lockTrigger} onChange={(e) => changeTrigger(e.target.value)}>
           {triggers.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
-        {trigger && <p className="mt-1 text-xs text-slate-400">{trigger.help}</p>}
+        {trigger && <p className="mt-1 text-xs text-slate-400">{lockTrigger ? 'This is fixed on a file. To start from something else, create a new automation.' : trigger.help}</p>}
       </div>
 
       {v.steps.map((s, i) => (
@@ -87,7 +87,7 @@ export default function AutomationBuilder({ initial, editing, saving, error, onS
             <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto_auto]">
               <div>
                 <label className={label}>Action</label>
-                <select className={input} value={s.type} onChange={(e) => { const t = e.target.value as StepType; setStep(i, { ...blankStep(1, t), id: s.id, when: s.when }); }}>
+                <select className={input} value={s.type} onChange={(e) => { const t = e.target.value as StepType; setStep(i, { ...blankStep(1, t), id: reservedIds.includes(s.id) ? nextId() : s.id, when: s.when }); }}>
                   {stepTypes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
               </div>
@@ -154,7 +154,7 @@ export default function AutomationBuilder({ initial, editing, saving, error, onS
 
       {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
       <div className="flex gap-2">
-        <button type="submit" disabled={saving} className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-400 disabled:opacity-50" data-testid="builder-save">{saving ? 'Saving…' : editing ? 'Save changes' : 'Save automation'}</button>
+        <button type="submit" disabled={saving} className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-400 disabled:opacity-50" data-testid="builder-save">{saving ? 'Saving…' : saveLabel ?? (editing ? 'Save changes' : 'Save automation')}</button>
         <button type="button" onClick={onCancel} className="rounded-lg px-4 py-2 text-sm text-slate-300 hover:bg-white/5">Cancel</button>
       </div>
     </form>

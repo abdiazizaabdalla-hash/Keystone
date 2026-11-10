@@ -2,6 +2,11 @@
 
 Newest first. One entry per working session: commit, what changed, what was verified, what remains.
 
+## 2026-11-10 - Automation: owner-only tabs, quick create and edit on a file
+
+- BUILT: Automation/Tracker tabs and banners only for the owner (server `canAutomate`); create or edit an automation from inside a deal or listing and apply it. HANDOFF "Auto-1e". Tests no longer depend on the time of day (quiet hours).
+- Verified: tsc, 538 unit + 33 integration tests. Not verified: browser. Nothing pushed.
+
 ## 2026-11-10 - Automation: banners
 
 - BUILT: dismissable banners on deals and listings (draft waiting, reminders, emails that did not go) and a count on the Tracker tab. HANDOFF "Auto-1d".
