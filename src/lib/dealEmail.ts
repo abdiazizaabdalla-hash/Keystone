@@ -35,6 +35,8 @@ export interface DealEmail {
   message: string;
   /** Copy the sender so it lands in their own inbox. */
   copySender?: boolean;
+  /** With copySender: put the copy in Bcc so other recipients do not see it. */
+  copyHidden?: boolean;
   /** Where this came from, for the outbox: 'template' (a person pressed send) or 'rule' (automation). */
   source: string;
 }
@@ -51,8 +53,9 @@ export async function sendDealEmail(input: DealEmail): Promise<{ mode: 'sent' | 
   if (to.length === 0) throw new Error('No valid recipients');
   const dealAddress = input.transactionId ? await dealInboundAddress(input.transactionId) : null;
   const replyTo = dealAddress ?? input.ownerEmail ?? undefined;
-  const cc = input.copySender && input.ownerEmail && !to.includes(input.ownerEmail.trim().toLowerCase()) ? [input.ownerEmail.trim().toLowerCase()] : [];
-  const bcc = dealAddress ? [dealAddress] : [];
+  const copy = input.copySender && input.ownerEmail && !to.includes(input.ownerEmail.trim().toLowerCase()) ? [input.ownerEmail.trim().toLowerCase()] : [];
+  const cc = input.copyHidden ? [] : copy;
+  const bcc = [...(dealAddress ? [dealAddress] : []), ...(input.copyHidden ? copy : [])];
 
   if (outboxOnly()) {
     const { error } = await supabaseServer.from('email_outbox').insert({
@@ -68,7 +71,7 @@ export async function sendDealEmail(input: DealEmail): Promise<{ mode: 'sent' | 
       body: input.message,
     });
     if (error) throw error;
-    return { mode: 'outbox', loggedToDeal: Boolean(dealAddress), copiedTo: cc };
+    return { mode: 'outbox', loggedToDeal: Boolean(dealAddress), copiedTo: copy };
   }
 
   const fromAddress = INVOICE_FROM_EMAIL.match(/<([^>]+)>/)?.[1] ?? INVOICE_FROM_EMAIL;
@@ -88,5 +91,5 @@ export async function sendDealEmail(input: DealEmail): Promise<{ mode: 'sent' | 
     console.error('Resend rejected a deal email:', error);
     throw new Error('The email could not be sent. Please try again.');
   }
-  return { mode: 'sent', loggedToDeal: Boolean(dealAddress), copiedTo: cc };
+  return { mode: 'sent', loggedToDeal: Boolean(dealAddress), copiedTo: copy };
 }

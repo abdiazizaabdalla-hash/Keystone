@@ -209,6 +209,7 @@ const sendEmail: Executor = async (action) => {
     message,
     source: 'automation',
     copySender: true,
+    copyHidden: true,
   });
   return { to: to.map((a) => a.toLowerCase()), mode: sent.mode, subject, ...(sent.copiedTo.length ? { copiedTo: sent.copiedTo } : {}) };
 };
