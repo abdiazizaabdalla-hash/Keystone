@@ -14,8 +14,9 @@ export const anthropicBuilderClient: BuilderClient = {
       max_tokens: 3000,
       system,
       tools: [tool],
-      tool_choice: { type: 'tool', name: tool.name },
-      messages: [{ role: 'user', content: prompt }],
+      // Sonnet-class models reject a forced tool choice, so ask for the tool in the prompt instead (as contract reading does).
+      tool_choice: { type: 'auto' },
+      messages: [{ role: 'user', content: `${prompt}\n\nAnswer only by calling the ${tool.name} tool.` }],
     });
     const toolUse = response.content.find((b) => b.type === 'tool_use');
     return { raw: toolUse && toolUse.type === 'tool_use' ? toolUse.input : null, usage: response.usage };
