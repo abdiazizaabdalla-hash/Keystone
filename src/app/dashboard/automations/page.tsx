@@ -7,6 +7,7 @@ import { TRIGGERS, type Category, type Step } from '@/lib/automation/library';
 import AutomationBuilder, { blankAutomation, type BuilderValue } from '@/components/AutomationBuilder';
 import { summarizeSteps } from '@/components/ApplyAutomations';
 import PresetLibrary from '@/components/PresetLibrary';
+import WorkflowDialog from '@/components/WorkflowDialog';
 
 interface Template {
   id: string;
@@ -44,6 +45,8 @@ export default function AutomationsPage() {
   const [showActivity, setShowActivity] = useState(false);
   const [tab, setTab] = useState<'mine' | 'library'>('mine');
   const [libError, setLibError] = useState<string | null>(null);
+  const [openMine, setOpenMine] = useState<Template | null>(null);
+  const [mineError, setMineError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -112,45 +115,45 @@ export default function AutomationsPage() {
     }
   };
 
-  const row = (t: Template) => {
+  const saveMine = async (t: Template, v: BuilderValue) => {
+    setSaving(true);
+    setMineError(null);
+    try {
+      const res = await authFetch(`/api/automation/templates/${t.id}`, { method: 'PUT', headers: json, body: JSON.stringify({ ...v, category: t.category, triggerType: t.trigger_type }) });
+      if (!res.ok) throw new Error(await errorOf(res, 'Could not save'));
+      setOpenMine(null);
+      setNotice('Saved. Deals already using it keep their own copy until you choose Update them.');
+      await load();
+    } catch (e) {
+      setMineError(e instanceof Error ? e.message : 'Could not save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const card = (t: Template) => {
     const trig = TRIGGERS.find((x) => x.id === t.trigger_type)?.label ?? t.trigger_type;
     const unit = t.category === 'transaction' ? 'transaction' : 'listing';
-    const item = 'block w-full px-3 py-2 text-left text-sm hover:bg-white/10';
     return (
-      <li key={t.id} className="p-4" data-testid="automation-card">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-white">{t.name}</p>
-            <p className="text-xs text-slate-400">
-              {trig} · {t.steps.length} {t.steps.length === 1 ? 'step' : 'steps'} · {t.dealCount === 0 ? `not used yet` : `on ${t.dealCount} ${unit}${t.dealCount === 1 ? '' : 's'}`}
-              {t.stats.failed > 0 && <span className="text-red-300"> · {t.stats.failed} failed</span>}
-              {t.stats.pending > 0 && <span className="text-amber-300"> · {t.stats.pending} waiting</span>}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button type="button" role="switch" aria-checked={t.active} aria-label={`${t.name} is ${t.active ? 'on' : 'off'}`} title={t.active ? 'On: can be applied to deals' : 'Off: paused everywhere'}
-              onClick={() => void act(() => authFetch(`/api/automation/templates/${t.id}`, { method: 'PATCH', headers: json, body: JSON.stringify({ active: !t.active }) }), 'Could not switch it', () => (t.active ? 'Turned off. Its copies on deals are paused and anything queued was cancelled.' : 'Turned on.'))}
-              className={`relative h-6 w-11 rounded-full transition ${t.active ? 'bg-emerald-500' : 'bg-white/20'}`}>
-              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${t.active ? 'left-[22px]' : 'left-0.5'}`} />
-            </button>
-            <button type="button" className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/5" onClick={() => { setBuilderError(null); setEditing({ id: t.id, value: { name: t.name, description: t.description, category: t.category, triggerType: t.trigger_type, steps: t.steps } }); }}>Edit</button>
-            <details className="relative">
-              <summary className="cursor-pointer list-none rounded-lg px-2 py-1.5 text-slate-400 hover:bg-white/5" aria-label={`More for ${t.name}`}>⋯</summary>
-              <div className="absolute right-0 z-10 mt-1 w-40 overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-lg">
-                <button type="button" className={item} onClick={() => void act(() => authFetch(`/api/automation/templates/${t.id}/duplicate`, { method: 'POST' }), 'Could not duplicate', () => 'Duplicated.')}>Duplicate</button>
-                <button type="button" className={item} onClick={() => { setHistoryFor(t.id); setShowActivity(true); }}>View history</button>
-                <button type="button" className={`${item} text-red-300`} onClick={() => { if (window.confirm(`Delete "${t.name}"? It will stop running on ${t.dealCount} ${unit}${t.dealCount === 1 ? '' : 's'} and cancel anything queued.`)) void act(() => authFetch(`/api/automation/templates/${t.id}`, { method: 'DELETE' }), 'Could not delete', () => 'Deleted.'); }}>Delete</button>
-              </div>
-            </details>
-          </div>
-        </div>
-        {t.outdatedCount > 0 && (
-          <p className="mt-2 text-xs text-amber-200">
-            Edited since {t.outdatedCount} {t.outdatedCount === 1 ? unit : `${unit}s`} started using it.{' '}
-            <button type="button" className="underline" onClick={() => void act(() => authFetch(`/api/automation/templates/${t.id}/update-copies`, { method: 'POST' }), 'Could not update', (b) => `Updated ${b.updated} ${b.updated === 1 ? unit : `${unit}s`}.`)}>Update them</button>
-          </p>
-        )}
-      </li>
+      <div key={t.id} className={`relative min-h-[170px] rounded-2xl border border-white/10 bg-white/5 transition hover:border-blue-400/50 hover:bg-white/10 ${t.active ? '' : 'opacity-70'}`} data-testid="automation-card">
+        <button type="button" onClick={() => { setMineError(null); setOpenMine(t); }} className="flex h-full min-h-[170px] w-full flex-col justify-between p-4 pr-16 text-left">
+          <span>
+            <span className="block text-base font-semibold text-white">{t.name}</span>
+            <span className="mt-1 block text-xs text-slate-400">{t.description || `${t.steps.length} ${t.steps.length === 1 ? 'step' : 'steps'}: ${summarizeSteps(t.steps)}`}</span>
+          </span>
+          <span className="mt-3 block text-xs text-slate-500">
+            {trig} · {t.steps.length} steps · {t.dealCount === 0 ? 'not used yet' : `on ${t.dealCount} ${unit}${t.dealCount === 1 ? '' : 's'}`}
+            {t.stats.failed > 0 && <span className="text-red-300"> · {t.stats.failed} failed</span>}
+            {t.stats.pending > 0 && <span className="text-amber-300"> · {t.stats.pending} waiting</span>}
+            {t.outdatedCount > 0 && <span className="text-amber-300"> · edited since used</span>}
+          </span>
+        </button>
+        <button type="button" role="switch" aria-checked={t.active} aria-label={`${t.name} is ${t.active ? 'on' : 'off'}`} title={t.active ? 'On: can be applied to deals' : 'Off: paused everywhere'}
+          onClick={() => void act(() => authFetch(`/api/automation/templates/${t.id}`, { method: 'PATCH', headers: json, body: JSON.stringify({ active: !t.active }) }), 'Could not switch it', () => (t.active ? 'Turned off. Its copies on deals are paused and anything queued was cancelled.' : 'Turned on.'))}
+          className={`absolute right-3 top-3 h-6 w-11 rounded-full transition ${t.active ? 'bg-emerald-500' : 'bg-white/20'}`}>
+          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${t.active ? 'left-[22px]' : 'left-0.5'}`} />
+        </button>
+      </div>
     );
   };
 
@@ -159,8 +162,8 @@ export default function AutomationsPage() {
     if (templates !== null && list.length === 0) return null;
     return (
       <div key={category} data-testid={`automations-${category}`}>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-        <ul className="divide-y divide-white/10 rounded-2xl border border-white/10 bg-white/5">{list.map(row)}</ul>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{list.map(card)}</div>
       </div>
     );
   };
@@ -229,6 +232,24 @@ export default function AutomationsPage() {
           )}
         </>
       )}
+      {openMine && (() => {
+        const t = openMine;
+        const unit = t.category === 'transaction' ? 'transaction' : 'listing';
+        return (
+          <WorkflowDialog key={t.id} preset={{ name: t.name, description: t.description, category: t.category, triggerType: t.trigger_type, steps: t.steps }} saving={saving} error={mineError} saveLabel="Save changes"
+            banner={t.outdatedCount > 0 ? (
+              <p className="mt-3 text-xs text-amber-200">{t.outdatedCount} {t.outdatedCount === 1 ? unit : `${unit}s`} still run an older version.{' '}
+                <button type="button" className="underline" onClick={() => { setOpenMine(null); void act(() => authFetch(`/api/automation/templates/${t.id}/update-copies`, { method: 'POST' }), 'Could not update', (b) => `Updated ${b.updated} ${b.updated === 1 ? unit : `${unit}s`}.`); }}>Update them</button></p>
+            ) : undefined}
+            footerLeft={<>
+              <button type="button" className="text-slate-300 hover:text-white" onClick={() => { setOpenMine(null); void act(() => authFetch(`/api/automation/templates/${t.id}/duplicate`, { method: 'POST' }), 'Could not duplicate', () => 'Duplicated.'); }}>Duplicate</button>
+              <button type="button" className="text-slate-300 hover:text-white" onClick={() => { setOpenMine(null); setHistoryFor(t.id); setShowActivity(true); }}>History</button>
+              <button type="button" className="text-red-300 hover:text-red-200" onClick={() => { if (window.confirm(`Delete "${t.name}"? It will stop running on ${t.dealCount} ${unit}${t.dealCount === 1 ? '' : 's'} and cancel anything queued.`)) { setOpenMine(null); void act(() => authFetch(`/api/automation/templates/${t.id}`, { method: 'DELETE' }), 'Could not delete', () => 'Deleted.'); } }}>Delete</button>
+            </>}
+            onClose={() => setOpenMine(null)} onSave={(v) => void saveMine(t, v)}
+            onFullEditor={(v) => { setOpenMine(null); setBuilderError(null); setEditing({ id: t.id, value: v }); window.scrollTo({ top: 0 }); }} />
+        );
+      })()}
     </div>
   );
 }
