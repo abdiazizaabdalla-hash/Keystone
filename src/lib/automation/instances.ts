@@ -1,8 +1,9 @@
 import { loadListingParties } from './listingContext';
 import { supabaseServer } from '../supabase';
-import { loadDealForTemplates, recipientsOf } from '../templateContext';
+import { loadDealForTemplates, recipientsOf, type DealPerson as Person } from '../templateContext';
 import { submitAutomationAction } from './actions';
-import { KEY_DATE_KIND_OF, conditionMet, dueSteps, fillVars, missingRecipientRoles, localDayOf, resolveRecipients, triggerOf, validateDefinition, type Definition, type InstanceFacts, type Step } from './library';
+import { refusalText, summarizeAction } from './describe';
+import { KEY_DATE_KIND_OF, conditionMet, describeWhen, dueSteps, stepProgress, type SeenAction, type StepProgress, fillVars, missingRecipientRoles, localDayOf, resolveRecipients, triggerOf, validateDefinition, type Definition, type InstanceFacts, type Step } from './library';
 import { DEFAULT_SETTINGS } from './server';
 
 // Database side of the Automation Library: templates, the independent copies applied to deals and listings, and the engine
@@ -253,6 +254,34 @@ async function loadFacts(inst: InstanceRow): Promise<{ facts: InstanceFacts; tim
   };
 }
 
+interface StepContext {
+  vars: Record<string, string>;
+  people: Person[];
+  ctx: { keyDates: { kind: string; completed: boolean }[]; people: Person[]; documents: string[] };
+}
+
+/** What a copy's steps are filled in from, and what their "only if" conditions are checked against, as the file is right now. */
+async function stepContext(inst: InstanceRow, withConditions: boolean): Promise<StepContext> {
+  const deal = inst.transaction_id ? await loadDealForTemplates(inst.transaction_id) : null;
+  const listing = inst.listing_id ? await loadListingParties(inst.listing_id) : null;
+  const people = deal ? recipientsOf(deal) : listing ? listing.people : [];
+  const vars: Record<string, string> = {
+    address: deal?.address ?? listing?.address ?? '',
+    file_number: deal?.fileNumber ?? '',
+    closing_date: deal?.closingDate ?? '',
+    client_name: people.find((p) => /buyer|seller/i.test(p.category))?.name ?? listing?.sellerName ?? '',
+  };
+  let ctx: StepContext['ctx'] = { keyDates: [], people, documents: [] };
+  if (withConditions && inst.transaction_id) {
+    const [{ data: kds }, { data: docs }] = await Promise.all([
+      supabaseServer.from('transaction_key_dates').select('kind, completed').eq('transaction_id', inst.transaction_id),
+      supabaseServer.from('documents').select('document_type, file_name').eq('transaction_id', inst.transaction_id),
+    ]);
+    ctx = { keyDates: (kds ?? []).map((k) => ({ kind: k.kind as string, completed: Boolean(k.completed) })), people, documents: (docs ?? []).map((d) => `${d.document_type ?? ''} ${d.file_name ?? ''}`.toLowerCase()) };
+  }
+  return { vars, people, ctx };
+}
+
 /** Fires whatever is due for every active copy. Safe to run any number of times: each step has a key that includes its anchor. */
 export async function runInstances(now: Date, outOfTime: () => boolean, limit = 300): Promise<InstancesReport> {
   const report: InstancesReport = { instances: 0, proposed: 0, outcomes: {}, errors: [] };
@@ -268,26 +297,9 @@ export async function runInstances(now: Date, outOfTime: () => boolean, limit = 
         const fired = new Set((done ?? []).map((d) => d.idempotency_key as string));
         const due = dueSteps(inst.id, inst.trigger_type, inst.steps, loaded.facts, now, fired);
         if (due.length) {
-          const deal = inst.transaction_id ? await loadDealForTemplates(inst.transaction_id) : null;
-          const listing = inst.listing_id ? await loadListingParties(inst.listing_id) : null;
-          const people = deal ? recipientsOf(deal) : listing ? listing.people : [];
-          const vars: Record<string, string> = {
-            address: deal?.address ?? listing?.address ?? '',
-            file_number: deal?.fileNumber ?? '',
-            closing_date: deal?.closingDate ?? '',
-            client_name: people.find((p) => /buyer|seller/i.test(p.category))?.name ?? listing?.sellerName ?? '',
-          };
-          // "Only if" conditions are checked now, against the deal as it is. A step whose condition is false is simply not done;
+          // "Only if" conditions are checked now, against the file as it is. A step whose condition is false is simply not done;
           // it is checked again on later runs until it is too old to send.
-          const needsCtx = due.some((d) => d.step.condition);
-          let ctx = { keyDates: [] as { kind: string; completed: boolean }[], people, documents: [] as string[] };
-          if (needsCtx && inst.transaction_id) {
-            const [{ data: kds }, { data: docs }] = await Promise.all([
-              supabaseServer.from('transaction_key_dates').select('kind, completed').eq('transaction_id', inst.transaction_id),
-              supabaseServer.from('documents').select('document_type, file_name').eq('transaction_id', inst.transaction_id),
-            ]);
-            ctx = { keyDates: (kds ?? []).map((k) => ({ kind: k.kind as string, completed: Boolean(k.completed) })), people, documents: (docs ?? []).map((d) => `${d.document_type ?? ''} ${d.file_name ?? ''}`.toLowerCase()) };
-          }
+          const { vars, people, ctx } = await stepContext(inst, due.some((d) => d.step.condition));
           for (const { step, key } of due) {
             if (!conditionMet(step.condition, ctx)) continue;
             const request = stepToRequest(step, vars, people, loaded.timeZone, now);
@@ -307,6 +319,123 @@ export async function runInstances(now: Date, outOfTime: () => boolean, limit = 
     await supabaseServer.from('automation_instances').update({ updated_at: now.toISOString() }).eq('id', inst.id);
   }
   return report;
+}
+
+// ---- The tracker: what each step did, or when it will; running one by hand; pausing a copy ------------------------------
+
+export interface TrackedStep {
+  id: string;
+  type: string;
+  /** "3 days before closing date" */
+  when: string;
+  /** What it does, in a line ("Welcome to {address} to a@b.com"). */
+  what: string;
+  state: StepProgress['state'];
+  due: string | null;
+  note: string;
+  lastAt: string | null;
+  manual: boolean;
+  /** A draft waiting for the person: its action id, so the tracker can approve or reject it. */
+  pendingActionId: string | null;
+}
+export interface TrackedInstance {
+  id: string;
+  templateId: string | null;
+  name: string;
+  trigger: string;
+  triggerLabel: string;
+  status: string;
+  missingRoles: string[];
+  done: number;
+  total: number;
+  steps: TrackedStep[];
+}
+
+export async function progressFor(ownerId: string, scope: { transactionId?: string | null; listingId?: string | null }, now: Date = new Date()): Promise<TrackedInstance[]> {
+  const col = scope.transactionId ? 'transaction_id' : 'listing_id';
+  const { data, error } = await supabaseServer.from('automation_instances').select(INSTANCE_COLS).eq(col, (scope.transactionId ?? scope.listingId)!).eq('owner_user_id', ownerId).neq('status', 'removed').order('created_at', { ascending: true });
+  if (error) throw error;
+  const out: TrackedInstance[] = [];
+  for (const inst of (data ?? []) as InstanceRow[]) {
+    const trig = triggerOf(inst.trigger_type);
+    const [loaded, { data: acts }, sc] = await Promise.all([
+      loadFacts(inst),
+      supabaseServer.from('automation_actions').select('id, step_id, idempotency_key, status, refusal_reason, created_at, executed_at').eq('instance_id', inst.id).order('created_at', { ascending: false }).limit(500),
+      stepContext(inst, inst.steps.some((s) => s.condition)),
+    ]);
+    const rows = acts ?? [];
+    const seen: SeenAction[] = rows.map((a) => ({ stepId: a.step_id as string | null, key: a.idempotency_key as string | null, status: a.status as string, at: (a.executed_at ?? a.created_at) as string, reason: a.refusal_reason as string | null }));
+    const tz = loaded?.timeZone ?? DEFAULT_SETTINGS.time_zone;
+    const progress: StepProgress[] = loaded
+      ? stepProgress(inst.id, inst.trigger_type, inst.steps, loaded.facts, now, seen, (st) => conditionMet(st.condition, sc.ctx), refusalText)
+      : inst.steps.map((st) => ({ stepId: st.id, state: 'waiting_trigger' as const, due: null, note: 'This file could not be read.', lastAt: null, manual: false }));
+    const steps: TrackedStep[] = inst.steps.map((st) => {
+      const pr = progress.find((x) => x.stepId === st.id)!;
+      const req = stepToRequest(st, sc.vars, sc.people, tz, now);
+      const pending = rows.find((a) => a.step_id === st.id && a.status === 'awaiting_approval');
+      return {
+        id: st.id, type: st.type, when: describeWhen(st, trig?.label ?? 'the trigger'), what: summarizeAction(req.kind, req.inputs),
+        state: pr.state, due: pr.due, note: pr.note, lastAt: pr.lastAt, manual: pr.manual, pendingActionId: pending ? (pending.id as string) : null,
+      };
+    });
+    out.push({
+      id: inst.id, templateId: inst.template_id, name: inst.name, trigger: inst.trigger_type, triggerLabel: trig?.label ?? inst.trigger_type, status: inst.status,
+      missingRoles: inst.steps.some((st) => st.type === 'send_email') ? missingRecipientRoles(inst.steps, sc.people) : [],
+      done: steps.filter((x) => x.state === 'done').length, total: steps.length, steps,
+    });
+  }
+  return out;
+}
+
+export type RunNowResult =
+  | { ok: true; results: { stepId: string; status: string; message: string | null; actionId: string | null }[] }
+  | { ok: false; reason: 'not_found' | 'not_active' | 'unknown_step' };
+
+const RUN_AGAIN_AFTER_MS = 15_000; // a double click must not send twice
+
+/**
+ * Runs steps of one copy right now, whatever their schedule or "only if". Everything still goes through the guard: the
+ * assistant's mode, the allowed recipients, the daily cap and approval in Draft. One step, or every step not yet handled.
+ */
+export async function runNow(ownerId: string, instanceId: string, stepId: string | null, now: Date = new Date()): Promise<RunNowResult> {
+  const { data } = await supabaseServer.from('automation_instances').select(INSTANCE_COLS).eq('id', instanceId).eq('owner_user_id', ownerId).neq('status', 'removed').maybeSingle();
+  if (!data) return { ok: false, reason: 'not_found' };
+  const inst = data as InstanceRow;
+  if (inst.status !== 'active') return { ok: false, reason: 'not_active' };
+  let steps = inst.steps;
+  if (stepId) {
+    steps = inst.steps.filter((x) => x.id === stepId);
+    if (steps.length === 0) return { ok: false, reason: 'unknown_step' };
+  } else {
+    const tracked = (await progressFor(ownerId, { transactionId: inst.transaction_id, listingId: inst.listing_id }, now)).find((t) => t.id === inst.id);
+    const finished = new Set(tracked?.steps.filter((x) => ['done', 'needs_ok', 'waiting'].includes(x.state)).map((x) => x.id));
+    steps = inst.steps.filter((x) => !finished.has(x.id));
+  }
+  const loaded = await loadFacts(inst);
+  const tz = loaded?.timeZone ?? DEFAULT_SETTINGS.time_zone;
+  const sc = await stepContext(inst, false);
+  const since = new Date(now.getTime() - RUN_AGAIN_AFTER_MS).toISOString();
+  const results: { stepId: string; status: string; message: string | null; actionId: string | null }[] = [];
+  for (const st of steps) {
+    const { data: recent } = await supabaseServer.from('automation_actions').select('id').eq('instance_id', inst.id).eq('step_id', st.id).like('idempotency_key', `inst:${inst.id}:${st.id}:manual:%`).gte('created_at', since).limit(1);
+    if (recent && recent.length) {
+      results.push({ stepId: st.id, status: 'already_running', message: 'That was just run.', actionId: recent[0].id as string });
+      continue;
+    }
+    const request = stepToRequest(st, sc.vars, sc.people, tz, now);
+    const out = await submitAutomationAction({ ownerUserId: inst.owner_user_id, transactionId: inst.transaction_id, listingId: inst.listing_id, instanceId: inst.id, stepId: st.id, ...request, fromApprovedTemplate: true, idempotencyKey: `inst:${inst.id}:${st.id}:manual:${now.getTime()}` });
+    const reason = out.decision && out.decision.outcome === 'refuse' ? (out.decision.detail ? `${out.decision.reason}:${out.decision.detail}` : out.decision.reason) : null;
+    results.push({ stepId: st.id, status: out.status, message: reason ? refusalText(reason) : null, actionId: out.actionId });
+  }
+  return { ok: true, results };
+}
+
+/** Pause or resume one copy on one file. Pausing also cancels what it had queued; what already happened stays in the history. */
+export async function setInstanceStatus(ownerId: string, id: string, status: 'active' | 'paused'): Promise<boolean> {
+  const { data } = await supabaseServer.from('automation_instances').update({ status, updated_at: new Date().toISOString() }).eq('id', id).eq('owner_user_id', ownerId).neq('status', 'removed').select('id');
+  if (!data || data.length === 0) return false;
+  if (status === 'paused') await cancelPending([id]);
+  return true;
 }
 
 export function stepToRequest(step: Step, vars: Record<string, string>, people: { name: string; email: string | null; role: string; category: string }[], timeZone: string, now: Date): { kind: string; inputs: Record<string, unknown> } {

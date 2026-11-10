@@ -4,7 +4,9 @@ import { PUT as editTemplate, PATCH as switchTemplate, DELETE as deleteTemplate 
 import { POST as duplicateTemplate } from '@/app/api/automation/templates/[id]/duplicate/route';
 import { POST as updateCopies } from '@/app/api/automation/templates/[id]/update-copies/route';
 import { GET as listInstances, POST as applyInstances } from '@/app/api/automation/instances/route';
-import { DELETE as removeInstance } from '@/app/api/automation/instances/[id]/route';
+import { DELETE as removeInstance, PATCH as patchInstance } from '@/app/api/automation/instances/[id]/route';
+import { POST as runStep } from '@/app/api/automation/instances/[id]/run/route';
+import { GET as getProgress } from '@/app/api/automation/progress/route';
 import { GET as getHistory } from '@/app/api/automation/history/route';
 import { runInstances } from '@/lib/automation/instances';
 import { admin, call, cleanup, createActor, createCollaborator, seedDeal, type Actor, type Deal } from './helpers';
@@ -193,6 +195,54 @@ describe('applying and running', () => {
     await admin.from('listing_offers').delete().eq('listing_id', lid);
     await admin.from('listing_tasks').delete().eq('listing_id', lid);
     await admin.from('listing_contacts').delete().eq('listing_id', lid);
+    await admin.from('listings').delete().eq('id', lid);
+  });
+  it('the tracker shows each step, runs one on demand once, pauses and resumes, and is closed to other accounts', async () => {
+    const planned = new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10);
+    const { data: listing } = await admin.from('listings').insert({ tc_user_id: tc.id, property_address: '3 Tracker St', status: 'preparing', planned_list_date: planned }).select('id').single();
+    const lid = listing!.id as string;
+    const steps = [
+      { id: 's1', type: 'notify_me', when: { days: 5, direction: 'before' }, title: 'Almost live: {{address}}' },
+      { id: 's2', type: 'add_note', when: { days: 0, direction: 'after' }, text: 'Went live' },
+    ];
+    const t = await create(tc, { name: 'Tracked', category: 'listing', triggerType: 'listing_planned_list_date', steps });
+    await post(tc, '/api/automation/instances', { listingId: lid, templateIds: [t] }, applyInstances);
+    const inst = (await admin.from('automation_instances').select('id').eq('listing_id', lid)).data![0].id as string;
+    const progress = async (who: Actor = tc) => call(h(getProgress), who, { method: 'GET', path: `/api/automation/progress?listingId=${lid}` });
+    type P = { automations: { id: string; status: string; done: number; total: number; steps: { id: string; state: string; due: string | null; manual: boolean }[] }[]; mode: string };
+
+    const first = (await progress()).json as P;
+    expect(first.mode).toBe('draft');
+    expect(first.automations[0].steps.map((x) => x.state)).toEqual(['scheduled', 'scheduled']);
+    expect(first.automations[0].steps[0].due).toBe(new Date(Date.parse(`${planned}T00:00:00Z`) - 5 * 86_400_000).toISOString().slice(0, 10));
+    expect(first.automations[0]).toMatchObject({ done: 0, total: 2 });
+
+    const run1 = await post(tc, `/api/automation/instances/${inst}/run`, { stepId: 's1' }, runStep, { id: inst });
+    expect((run1.json as { results: { status: string }[] }).results[0].status).toBe('executed');
+    const again = await post(tc, `/api/automation/instances/${inst}/run`, { stepId: 's1' }, runStep, { id: inst });
+    expect((again.json as { results: { status: string }[] }).results[0].status).toBe('already_running'); // a double click sends nothing twice
+    const mid = (await progress()).json as P;
+    expect(mid.automations[0].steps[0]).toMatchObject({ state: 'done', manual: true });
+    expect(mid.automations[0]).toMatchObject({ done: 1, total: 2 });
+
+    expect((await post(tc, `/api/automation/instances/${inst}/run`, { stepId: 'nope' }, runStep, { id: inst })).status).toBe(400);
+    expect((await call(h(patchInstance), tc, { method: 'PATCH', path: `/api/automation/instances/${inst}`, body: { status: 'paused' }, params: { id: inst } })).status).toBe(200);
+    expect((await post(tc, `/api/automation/instances/${inst}/run`, {}, runStep, { id: inst })).status).toBe(409); // paused: nothing runs
+    expect(((await progress()).json as P).automations[0].status).toBe('paused');
+    await call(h(patchInstance), tc, { method: 'PATCH', path: `/api/automation/instances/${inst}`, body: { status: 'active' }, params: { id: inst } });
+
+    const rest = (await post(tc, `/api/automation/instances/${inst}/run`, {}, runStep, { id: inst })).json as { results: { stepId: string; status: string }[] };
+    expect(rest.results.map((r) => r.stepId)).toEqual(['s2']); // "run what is left" skips what is already done
+    expect(((await progress()).json as P).automations[0]).toMatchObject({ done: 2, total: 2 });
+
+    // Other accounts cannot see or run anything here.
+    expect((await progress(other)).status).toBe(404);
+    expect((await call(h(runStep), other, { method: 'POST', path: `/api/automation/instances/${inst}/run`, body: {}, params: { id: inst } })).status).toBe(404);
+    expect((await call(h(patchInstance), other, { method: 'PATCH', path: `/api/automation/instances/${inst}`, body: { status: 'paused' }, params: { id: inst } })).status).toBe(404);
+
+    await admin.from('automation_actions').delete().eq('listing_id', lid);
+    await admin.from('automation_instances').delete().eq('listing_id', lid);
+    await admin.from('automation_settings').delete().eq('listing_id', lid);
     await admin.from('listings').delete().eq('id', lid);
   });
 });

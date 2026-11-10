@@ -208,3 +208,50 @@ describe('listing contact roles', () => {
     expect(missingRecipientRoles([{ id: 's1', type: 'send_email', when: { days: 0, direction: 'after' }, to: ['lender'] }], people)).toEqual(['Lender']);
   });
 });
+
+import { stepProgress, type SeenAction } from '@/lib/automation/library';
+
+describe('stepProgress (what the tracker shows)', () => {
+  const f = { createdAt: '2026-11-01T10:00:00Z', timeZone: 'UTC', dealCreatedAt: '2026-11-01T10:00:00Z', closingDate: '2026-11-20', acceptanceDate: null, plannedListDate: null, expirationDate: null, events: {} } as InstanceFacts;
+  const at = (days: number, direction: 'after' | 'before' = 'before', over: Partial<Step> = {}): Step => ({ id: `s${days}${direction[0]}`, type: 'notify_me', when: { days, direction }, title: 't', ...over });
+  const now = new Date('2026-11-12T12:00:00Z');
+  const none: SeenAction[] = [];
+  const get = (steps: Step[], seen: SeenAction[] = none, cond: (s: Step) => boolean = () => true, facts = f) => stepProgress('i1', 'closing_date', steps, facts, now, seen, cond, (c) => `why:${c}`);
+
+  it('shows a future step as scheduled with its day, and a step that is due as due', () => {
+    const [far, today] = get([at(3), at(8)]);
+    expect(far).toMatchObject({ state: 'scheduled', due: '2026-11-17' });
+    expect(today).toMatchObject({ state: 'due', due: '2026-11-12' });
+  });
+  it('shows a step from before the automation was added as skipped', () => {
+    expect(get([at(15)])[0].state).toBe('skipped'); // due Nov 5, copy added Nov 1: that is fine, but more than 3 days ago
+  });
+  it('holds a due step whose condition is false, and says why', () => {
+    const s = at(8, 'before', { condition: { type: 'key_date_open', kind: 'appraisal' } });
+    const [p] = get([s], none, () => false);
+    expect(p.state).toBe('held');
+    expect(p.note).toMatch(/appraisal date is not marked done/);
+  });
+  it('waits for a date that does not exist yet', () => {
+    const [p] = get([at(3)], none, () => true, { ...f, closingDate: null });
+    expect(p).toMatchObject({ state: 'waiting_trigger', due: null });
+    expect(p.note).toMatch(/closing date/i);
+  });
+  it('uses what actually happened for the current date, and the reason when it was refused', () => {
+    const s = at(8);
+    const key = 'inst:i1:s8b:2026-11-20';
+    expect(get([s], [{ stepId: s.id, key, status: 'executed', at: '2026-11-12T08:00:00Z', reason: null }])[0]).toMatchObject({ state: 'done', manual: false });
+    expect(get([s], [{ stepId: s.id, key, status: 'refused', at: '2026-11-12T08:00:00Z', reason: 'no_recipients' }])[0]).toMatchObject({ state: 'not_done', note: 'why:no_recipients' });
+    expect(get([s], [{ stepId: s.id, key, status: 'awaiting_approval', at: '2026-11-12T08:00:00Z', reason: null }])[0].state).toBe('needs_ok');
+  });
+  it('a step run by hand counts, and is marked as run by you', () => {
+    const s = at(3);
+    const p = get([s], [{ stepId: s.id, key: 'inst:i1:s3b:manual:123', status: 'executed', at: '2026-11-12T09:00:00Z', reason: null }])[0];
+    expect(p).toMatchObject({ state: 'done', manual: true });
+  });
+  it('an action for an OLD closing date does not mark the step done after the date moves', () => {
+    const s = at(8);
+    const p = get([s], [{ stepId: s.id, key: 'inst:i1:s8b:2026-11-10', status: 'executed', at: '2026-11-02T08:00:00Z', reason: null }])[0];
+    expect(p.state).toBe('due');
+  });
+});

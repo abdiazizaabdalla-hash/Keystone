@@ -2,6 +2,11 @@
 
 Newest first. One entry per working session: commit, what changed, what was verified, what remains.
 
+## 2026-11-10 - Automation: Tracker tab
+
+- BUILT: Tracker tab on deals and listings (step-by-step state, run now, run what is left, approve/reject, pause/resume, add another); listings got an Automation tab. HANDOFF "Auto-1c".
+- Verified: tsc, 530 unit + 31 integration tests. Not verified: browser. Nothing pushed.
+
 ## 2026-11-10 - Automation: listing side
 
 - BUILT: listing automations can email (agent and saved listing contacts only) and add checklist steps; new Offer received trigger; two new listing presets; listing missing-role warning. HANDOFF "Auto-1b".

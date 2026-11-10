@@ -29,6 +29,7 @@ import QuickMessageComposer from '@/components/QuickMessageComposer';
 import SellerUpdateModal from '@/components/SellerUpdateModal';
 import ListingReadinessCard from '@/components/ListingReadinessCard';
 import AssistantPanel from '@/components/AssistantPanel';
+import AutomationTracker from '@/components/AutomationTracker';
 import ListingFeeInvoiceCard from '@/components/ListingFeeInvoiceCard';
 import ListingSignModal, { type ListingSigningRequest } from '@/components/ListingSignModal';
 import { computeReadiness } from '@/lib/listingReadiness';
@@ -151,13 +152,15 @@ const OFFER_LABEL: Record<string, string> = { received: 'Received', countered: '
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '');
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-type ListingTab = 'overview' | 'checklist' | 'offers' | 'documents' | 'messages' | 'details';
+type ListingTab = 'overview' | 'checklist' | 'offers' | 'documents' | 'messages' | 'automation' | 'tracker' | 'details';
 const ALL_LISTING_TABS: { id: ListingTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'checklist', label: 'Checklist' },
   { id: 'offers', label: 'Offers & showings' },
   { id: 'documents', label: 'Documents' },
   { id: 'messages', label: 'Messages' },
+  { id: 'automation', label: 'Automation' },
+  { id: 'tracker', label: 'Tracker' },
   { id: 'details', label: 'Details' },
 ];
 const LISTING_TABS = ALL_LISTING_TABS;
@@ -189,7 +192,9 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
   const [pickAgent, setPickAgent] = useState<null | 'primary' | 'contact'>(null);
   // Agent-only controls (who the listing agent is, sharing, portal, invoicing) stay hidden from agents and from invited coordinators.
   const agentHidden = ownerView || isWorkspaceAgent || data?.coordinated === true;
-  const tabs = ownerView ? LISTING_TABS.filter((t) => t.id !== 'messages') : LISTING_TABS;
+  // Automation is the owner's own tool: not shown to a brokerage owner looking in, to an agent, or when the feature is off.
+  const automationHidden = ownerView || !isFeatureOnClient('automation') || data?.shared === true || (isWorkspaceAgent && !data?.coordinated);
+  const tabs = LISTING_TABS.filter((t) => !(ownerView && t.id === 'messages') && !((t.id === 'automation' || t.id === 'tracker') && automationHidden));
   const loadCoordInvites = useCallback(async () => {
     try {
       const res = await authFetch(`/api/listings/${id}/coordinator`);
@@ -1437,7 +1442,6 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
               </button>
             </form>
           </OverviewCard>
-          {!speaksAsAgent && <AssistantPanel listingId={id} />}
           {/* Ready to list: what is still missing before go-live */}
           {['preparing', 'active'].includes(listing.status) && (
             <ListingReadinessCard
@@ -2142,6 +2146,13 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
           )}
           </div>
         </div>
+
+        {!automationHidden && tab === 'automation' && (
+          <div className="max-w-3xl" data-testid="automation-tab"><AssistantPanel listingId={id} /></div>
+        )}
+        {!automationHidden && tab === 'tracker' && (
+          <div className="max-w-3xl" data-testid="tracker-tab"><AutomationTracker listingId={id} /></div>
+        )}
 
         <div className={tab === 'details' ? 'space-y-6' : 'hidden'}>
       {/* Key details at the top, like the transaction page. These inputs belong to the "More details" form below

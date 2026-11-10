@@ -41,6 +41,7 @@ import ChatBubbles, { type ChatLine } from '@/components/chat/ChatBubbles';
 import { DealCoordinatorInvoices } from '@/components/CoordinatorInvoices';
 import { isClosedMessage, parseClosedMessage } from '@/lib/dealClosedMarker';
 import AssistantPanel from '@/components/AssistantPanel';
+import AutomationTracker from '@/components/AutomationTracker';
 
 interface Transaction {
   id: string;
@@ -233,7 +234,7 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-type TxTab = 'overview' | 'checklist' | 'documents' | 'messages' | 'people' | 'automation';
+type TxTab = 'overview' | 'checklist' | 'documents' | 'messages' | 'people' | 'automation' | 'tracker';
 const TX_TABS: { id: TxTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'checklist', label: 'Checklist' },
@@ -241,6 +242,7 @@ const TX_TABS: { id: TxTab; label: string }[] = [
   { id: 'messages', label: 'Messages' },
   { id: 'people', label: 'Contacts' },
   { id: 'automation', label: 'Automation' },
+  { id: 'tracker', label: 'Tracker' },
 ];
 
 /**
@@ -3055,7 +3057,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             Every panel stays mounted (just hidden) so drafts, uploads and
             polling keep their state when you switch tabs. */}
         <div role="tablist" aria-label="Transaction sections" className="flex gap-1 overflow-x-auto mb-8 p-1 bg-white/5 border border-white/10 rounded-2xl">
-          {TX_TABS.filter((t) => !(ownerView && t.id === 'messages') && !(t.id === 'automation' && (ownerView || !isFeatureOnClient('automation')))).map((t) => (
+          {TX_TABS.filter((t) => !(ownerView && t.id === 'messages') && !((t.id === 'automation' || t.id === 'tracker') && (ownerView || !isFeatureOnClient('automation')))).map((t) => (
             <button
               key={t.id}
               type="button"
@@ -4028,6 +4030,11 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
         {tab === 'automation' && !ownerView && transaction?.id && (
           <div className="max-w-3xl" data-testid="automation-tab">
             <AssistantPanel transactionId={transaction.id} />
+          </div>
+        )}
+        {tab === 'tracker' && !ownerView && transaction?.id && (
+          <div className="max-w-3xl" data-testid="tracker-tab">
+            <AutomationTracker transactionId={transaction.id} />
           </div>
         )}
 

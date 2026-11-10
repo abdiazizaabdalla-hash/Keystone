@@ -261,6 +261,25 @@ const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00
 const GRACE_MS = 60 * 60 * 1000; // a step due just before the copy was applied (e.g. "right away" at creation) still counts
 const MAX_LATE_DAYS = 3; // after an outage, anything this old is skipped instead of firing in a burst
 
+type Phase = 'future' | 'ready' | 'stale';
+/** When a step is due relative to an anchor, and whether that moment is still ahead, now fireable, or too old to fire. */
+function timing(step: Step, anchor: Anchor, f: InstanceFacts, now: Date): { due: string; phase: Phase } {
+  const sign = step.when.direction === 'before' ? -1 : 1;
+  const created = Date.parse(f.createdAt);
+  if (anchor.kind === 'time') {
+    const due = Date.parse(anchor.at) + sign * step.when.days * 86_400_000;
+    const phase: Phase = now.getTime() < due ? 'future' : due < created - GRACE_MS || now.getTime() - due > MAX_LATE_DAYS * 86_400_000 ? 'stale' : 'ready';
+    return { due: new Date(due).toISOString(), phase };
+  }
+  const today = localDayOf(now, f.timeZone);
+  const createdDay = localDayOf(new Date(created), f.timeZone);
+  const dueDay = addDays(anchor.day, sign * step.when.days);
+  const phase: Phase = today < dueDay ? 'future' : dueDay < createdDay || Date.parse(`${today}T00:00:00Z`) - Date.parse(`${dueDay}T00:00:00Z`) > MAX_LATE_DAYS * 86_400_000 ? 'stale' : 'ready';
+  return { due: dueDay, phase };
+}
+
+const anchorKey = (a: Anchor) => (a.kind === 'time' ? a.at : a.day);
+
 /**
  * Which steps should fire now. A step fires once per anchor (the idempotency key carries the anchor, so a changed closing
  * date schedules its steps again). Steps whose time passed before the copy was applied, or more than a few days ago, are
@@ -270,23 +289,89 @@ export function dueSteps(instanceId: string, triggerType: string, steps: Step[],
   const anchor = triggerAnchor(triggerType, f);
   if (!anchor) return [];
   const out: { step: Step; key: string }[] = [];
-  const created = Date.parse(f.createdAt);
-  const today = localDayOf(now, f.timeZone);
-  const createdDay = localDayOf(new Date(created), f.timeZone);
   for (const step of steps) {
-    const sign = step.when.direction === 'before' ? -1 : 1;
-    const key = `inst:${instanceId}:${step.id}:${anchor.kind === 'time' ? anchor.at : anchor.day}`;
+    const key = `inst:${instanceId}:${step.id}:${anchorKey(anchor)}`;
     if (fired.has(key)) continue;
-    if (anchor.kind === 'time') {
-      const due = Date.parse(anchor.at) + sign * step.when.days * 86_400_000;
-      if (now.getTime() < due || due < created - GRACE_MS || now.getTime() - due > MAX_LATE_DAYS * 86_400_000) continue;
-    } else {
-      const dueDay = addDays(anchor.day, sign * step.when.days);
-      if (today < dueDay || dueDay < createdDay || Date.parse(`${today}T00:00:00Z`) - Date.parse(`${dueDay}T00:00:00Z`) > MAX_LATE_DAYS * 86_400_000) continue;
-    }
+    if (timing(step, anchor, f, now).phase !== 'ready') continue;
     out.push({ step, key });
   }
   return out;
+}
+
+// ---- Progress (what the tracker shows) --------------------------------------------------------------------------------
+
+export type StepState =
+  | 'done' // it ran
+  | 'needs_ok' // a draft is waiting for the person
+  | 'waiting' // held (quiet hours) and will go out later
+  | 'not_done' // Relay's rules stopped it (for example nobody to send to)
+  | 'failed'
+  | 'cancelled'
+  | 'scheduled' // due in the future
+  | 'due' // due now; goes at the next hourly check
+  | 'held' // due, but its "only if" is not true right now
+  | 'skipped' // its moment passed before the automation was added, or too long ago to send
+  | 'waiting_trigger'; // the date or event it counts from does not exist yet
+
+export interface SeenAction {
+  stepId: string | null;
+  key: string | null;
+  status: string;
+  at: string; // executed_at, else created_at
+  reason: string | null;
+}
+
+export interface StepProgress {
+  stepId: string;
+  state: StepState;
+  /** ISO day or time the step is (or was) due; null when it has no date yet. */
+  due: string | null;
+  /** Plain-language reason or detail. */
+  note: string;
+  /** When the last attempt happened, if any. */
+  lastAt: string | null;
+  manual: boolean;
+}
+
+const ACTION_STATE: Record<string, StepState> = { executed: 'done', awaiting_approval: 'needs_ok', deferred: 'waiting', refused: 'not_done', failed: 'failed', cancelled: 'cancelled', pending: 'waiting', running: 'waiting' };
+
+/**
+ * For each step of a copy: what happened, or when it will. An action for this step (from the current date or run by hand) wins;
+ * otherwise the schedule decides. `conditionOk` is the "only if" check for steps that are due.
+ */
+export function stepProgress(
+  instanceId: string,
+  triggerType: string,
+  steps: Step[],
+  f: InstanceFacts,
+  now: Date,
+  actions: SeenAction[],
+  conditionOk: (s: Step) => boolean,
+  reasonText: (code: string | null) => string = (c) => c ?? ''
+): StepProgress[] {
+  const anchor = triggerAnchor(triggerType, f);
+  const trig = triggerOf(triggerType);
+  return steps.map((step) => {
+    const prefix = `inst:${instanceId}:${step.id}:`;
+    const currentKey = anchor ? `${prefix}${anchorKey(anchor)}` : null;
+    const mine = actions.filter((a) => a.key && a.key.startsWith(prefix) && (a.key === currentKey || a.key.startsWith(`${prefix}manual:`)));
+    const latest = [...mine].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
+    const due = anchor ? timing(step, anchor, f, now) : null;
+    if (latest) {
+      const state = ACTION_STATE[latest.status] ?? 'waiting';
+      const manual = latest.key!.startsWith(`${prefix}manual:`);
+      const note = state === 'not_done' || state === 'cancelled' ? reasonText(latest.reason) : state === 'waiting' ? reasonText(latest.reason) || 'Held for now and will go out later.' : '';
+      return { stepId: step.id, state, due: due?.due ?? null, note, lastAt: latest.at, manual };
+    }
+    if (!anchor || !due) {
+      const what = trig?.kind === 'event' ? `Waiting for: ${trig.label.toLowerCase()}.` : trig?.kind === 'date' ? `Needs a date: ${trig.label.toLowerCase()} is not set on this file${f.keyDates && KEY_DATE_KIND_OF[triggerType] && f.keyDates[KEY_DATE_KIND_OF[triggerType]]?.completed ? ' (or it is marked done)' : ''}.` : 'Waiting to start.';
+      return { stepId: step.id, state: 'waiting_trigger' as StepState, due: null, note: what, lastAt: null, manual: false };
+    }
+    if (due.phase === 'future') return { stepId: step.id, state: 'scheduled' as StepState, due: due.due, note: '', lastAt: null, manual: false };
+    if (due.phase === 'stale') return { stepId: step.id, state: 'skipped' as StepState, due: due.due, note: 'Its time passed before this automation was added, or too long ago to send now. You can still run it yourself.', lastAt: null, manual: false };
+    if (!conditionOk(step)) return { stepId: step.id, state: 'held' as StepState, due: due.due, note: step.condition ? `Only if ${describeCondition(step.condition)}, which is not true right now. It will go if that changes.` : '', lastAt: null, manual: false };
+    return { stepId: step.id, state: 'due' as StepState, due: due.due, note: 'Due now. It goes at the next check, within the hour.', lastAt: null, manual: false };
+  });
 }
 
 // ---- Filling in a step --------------------------------------------------------------------------------------------

@@ -155,3 +155,14 @@ Financial automation (commission amounts, invoices, payments) only prepares reco
 - Conditions ("only if") are still deals-only. No new SQL needed.
 - Still not built for listings: showing triggers, status-change triggers, offer details in email text (placeholders are still the four known ones), listing-to-transaction handoff.
 - Verified: tsc clean, 521 unit tests, 30 integration tests on relay-test (new: an offer arrives -> task added, seller email waits for approval, email to a role nobody holds is refused, a second run does nothing new), and a live Sonnet 5.5 draft for "when an offer comes in, email the seller and add a task".
+
+### Auto-1c: Tracker tab on every deal and listing (BUILT, committed locally, not pushed)
+
+- New **Tracker** tab on transactions and on listings (listings also get their own **Automation** tab now; the panel used to sit inside Overview). Hidden for a brokerage owner looking in, for agents, and when the flag is off.
+- Per automation: progress bar, then every step with what it does, when it is due (a real date), and its state: Done, Needs your OK, Held (quiet hours), Not done (with the reason in words), Failed, Cancelled, Scheduled, Due now, Held back ("only if" is false), Skipped (too old or before the copy was added), Waiting to start (the date/event does not exist yet).
+- Actions: **Run now** / **Run again** on any step, **Run what is left now** (skips what is done or waiting for approval), Approve/Reject a draft in place, Pause/Resume a copy (pausing cancels what it had queued), Remove, **Add an automation** (any saved one not yet on the file), turn the assistant on from the banner when it is Off.
+- Manual runs ignore the schedule and the "only if" but NOT the guard (mode, allowed recipients, daily cap, Draft approval). A manual run uses key `inst:<id>:<step>:manual:<ms>`; a second click within 15 s is refused as `already_running`. Manual runs show as "run by you".
+- Code: `stepProgress` (pure, library.ts, unit-tested), `progressFor` / `runNow` / `setInstanceStatus` (instances.ts), routes `GET /api/automation/progress`, `POST /api/automation/instances/[id]/run`, `PATCH /api/automation/instances/[id]`; `src/components/AutomationTracker.tsx`.
+- Verified: tsc, 530 unit tests, 31 integration tests on relay-test (new: progress states, run once, double click, pause blocks run, resume, run what is left, other account gets 404). Not verified in a browser.
+- Not built: edit-before-approve inside the Tracker (use the Automation tab), a cross-deal overview, notifications when a step fails.
+
