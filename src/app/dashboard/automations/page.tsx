@@ -7,7 +7,6 @@ import { TRIGGERS, type Category, type Step } from '@/lib/automation/library';
 import AutomationBuilder, { blankAutomation, type BuilderValue } from '@/components/AutomationBuilder';
 import { summarizeSteps } from '@/components/ApplyAutomations';
 import PresetLibrary from '@/components/PresetLibrary';
-import type { Preset } from '@/lib/automation/presets';
 
 interface Template {
   id: string;
@@ -43,6 +42,8 @@ export default function AutomationsPage() {
   const [builderError, setBuilderError] = useState<string | null>(null);
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [showActivity, setShowActivity] = useState(false);
+  const [tab, setTab] = useState<'mine' | 'library'>('mine');
+  const [libError, setLibError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -93,18 +94,19 @@ export default function AutomationsPage() {
     }
   };
 
-  const presetValue = (p: Preset): BuilderValue => ({ name: p.name, description: p.summary, category: p.category, triggerType: p.triggerType, steps: p.steps.map((x) => ({ ...x })) });
-  const addPreset = async (p: Preset) => {
+  const addFromLibrary = async (v: BuilderValue): Promise<boolean> => {
     setSaving(true);
-    setNotice(null);
+    setLibError(null);
     try {
-      const res = await authFetch('/api/automation/templates', { method: 'POST', headers: json, body: JSON.stringify(presetValue(p)) });
+      const res = await authFetch('/api/automation/templates', { method: 'POST', headers: json, body: JSON.stringify(v) });
       if (!res.ok) throw new Error(await errorOf(res, 'Could not add it'));
-      setError(null);
-      setNotice(`Added "${p.name}" to your list below. Apply it when you create a transaction or listing, or from a deal's Automation tab.`);
+      setNotice(`Added "${v.name}". Apply it when you create a transaction or listing, or from a deal's Automation tab.`);
+      setTab('mine');
       await load();
+      return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add it');
+      setLibError(e instanceof Error ? e.message : 'Could not add it');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -183,10 +185,17 @@ export default function AutomationsPage() {
         </section>
       ) : (
         <>
+          <div className="flex gap-6 border-b border-white/10" role="tablist">
+            {([['mine', 'Your automations'], ['library', 'Library']] as const).map(([id, label]) => (
+              <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
+                className={`-mb-px border-b-2 pb-2 text-sm font-medium ${tab === id ? 'border-blue-400 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>{label}</button>
+            ))}
+          </div>
+
+          {tab === 'mine' ? (
           <section className="space-y-4" data-testid="your-automations">
-            <h2 className="text-lg font-semibold text-white">Your automations</h2>
             {templates === null ? <p className="text-sm text-slate-500">Loading…</p> : !hasAny ? (
-              <p className="rounded-2xl border border-dashed border-white/15 p-5 text-sm text-slate-400">Nothing here yet. Add a ready-made automation below, or create your own.</p>
+              <p className="rounded-2xl border border-dashed border-white/15 p-5 text-sm text-slate-400">Nothing here yet. Browse the Library for a ready-made one, or create your own.</p>
             ) : (
               <>
                 {group('transaction', 'Transactions')}
@@ -215,7 +224,9 @@ export default function AutomationsPage() {
             </details>
           </section>
 
-          <PresetLibrary busy={saving} owned={new Set((templates ?? []).map((t) => t.name))} onAdd={(p) => void addPreset(p)} onCustomize={(p) => { setBuilderError(null); setEditing({ id: null, value: presetValue(p) }); window.scrollTo({ top: 0 }); }} />
+          ) : (
+            <PresetLibrary owned={new Set((templates ?? []).map((t) => t.name))} saving={saving} error={libError} onSave={addFromLibrary} onFullEditor={(v) => { setBuilderError(null); setEditing({ id: null, value: v }); window.scrollTo({ top: 0 }); }} />
+          )}
         </>
       )}
     </div>

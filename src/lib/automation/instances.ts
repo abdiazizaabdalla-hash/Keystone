@@ -1,7 +1,7 @@
 import { supabaseServer } from '../supabase';
 import { loadDealForTemplates, recipientsOf } from '../templateContext';
 import { submitAutomationAction } from './actions';
-import { KEY_DATE_KIND_OF, dueSteps, fillVars, localDayOf, resolveRecipients, triggerOf, validateDefinition, type Definition, type InstanceFacts, type Step } from './library';
+import { KEY_DATE_KIND_OF, dueSteps, fillVars, missingRecipientRoles, localDayOf, resolveRecipients, triggerOf, validateDefinition, type Definition, type InstanceFacts, type Step } from './library';
 import { DEFAULT_SETTINGS } from './server';
 
 // Database side of the Automation Library: templates, the independent copies applied to deals and listings, and the engine
@@ -164,7 +164,11 @@ export async function listInstances(ownerId: string, scope: { transactionId?: st
   const col = scope.transactionId ? 'transaction_id' : 'listing_id';
   const { data, error } = await supabaseServer.from('automation_instances').select(INSTANCE_COLS).eq(col, (scope.transactionId ?? scope.listingId)!).eq('owner_user_id', ownerId).neq('status', 'removed').order('created_at', { ascending: true });
   if (error) throw error;
-  return (data ?? []) as InstanceRow[];
+  const rows = (data ?? []) as InstanceRow[];
+  // Live check against the people on the deal right now, so a missing Lender shows up (and goes away) as contacts change.
+  const deal = scope.transactionId && rows.some((r) => r.steps.some((s) => s.type === 'send_email')) ? await loadDealForTemplates(scope.transactionId) : null;
+  const people = deal ? recipientsOf(deal) : [];
+  return rows.map((r) => ({ ...r, missingRoles: deal ? missingRecipientRoles(r.steps, people) : [] }));
 }
 
 export async function removeInstance(ownerId: string, id: string): Promise<boolean> {

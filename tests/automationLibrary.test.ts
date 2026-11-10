@@ -129,3 +129,18 @@ describe('critical-date triggers', () => {
     expect(dueSteps('i1', 'earnest_money_due', [step], facts(), new Date('2026-11-13T17:00:00Z'), new Set())).toEqual([]);
   });
 });
+
+import { missingRecipientRoles } from '@/lib/automation/library';
+
+describe('missingRecipientRoles', () => {
+  const mail = (to: string[]): Step => ({ id: 'm', type: 'send_email', when: { days: 0, direction: 'after' }, to, subject: 's', message: 'm' });
+  const people = [
+    { name: 'Ann', email: 'ann@x.com', role: 'Agent', category: 'Agent' },
+    { name: 'Bo', email: 'bo@x.com', role: 'Buyer', category: 'Buyer' },
+  ];
+  it('names the roles nobody on the deal can receive, and ignores non-email steps', () => {
+    expect(missingRecipientRoles([mail(['buyer', 'lender', 'title'])], people)).toEqual(['Lender', 'Title / escrow']);
+    expect(missingRecipientRoles([mail(['agent']), { id: 'n', type: 'notify_me', when: { days: 0, direction: 'after' }, title: 't' }], people)).toEqual([]);
+    expect(missingRecipientRoles([mail(['everyone'])], [])).toEqual(['Everyone on the deal']);
+  });
+});

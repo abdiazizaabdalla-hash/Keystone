@@ -29,7 +29,7 @@ interface Data {
   settings: { mode: Mode };
   activity: Item[];
 }
-interface Applied { id: string; template_id: string | null; name: string; trigger_type: string; steps: Parameters<typeof summarizeSteps>[0]; status: string }
+interface Applied { id: string; template_id: string | null; name: string; trigger_type: string; steps: Parameters<typeof summarizeSteps>[0]; status: string; missingRoles?: string[] }
 interface Template { id: string; name: string; category: string; active: boolean; trigger_type: string; steps: Parameters<typeof summarizeSteps>[0] }
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
@@ -130,6 +130,9 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
                   <div className="min-w-0">
                     <p className="truncate text-sm text-white">{r.name}</p>
                     <p className="truncate text-xs text-slate-400">{TRIGGERS.find((t) => t.id === r.trigger)?.label} · {summarizeSteps(r.steps)}{r.copy?.status === 'paused' ? ' · paused' : ''}</p>
+                    {r.copy?.missingRoles && r.copy.missingRoles.length > 0 && (
+                      <p className="mt-1 text-xs text-amber-300" data-testid="missing-roles">No {r.copy.missingRoles.join(' or ')} with an email on this deal, so that email will be skipped. Add them in Contacts.</p>
+                    )}
                   </div>
                   <button type="button" role="switch" aria-checked={on} aria-label={`${r.name} on this ${category}`} disabled={busy !== null}
                     onClick={() => (r.tpl ? void toggle(r.tpl, r.copy) : r.copy && void call(r.key, `/api/automation/instances/${r.copy.id}`, 'DELETE'))}

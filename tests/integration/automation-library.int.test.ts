@@ -20,7 +20,7 @@ const def = (over: Record<string, unknown> = {}) => ({ name: 'Onboarding', descr
 const post = (who: Actor, path: string, body: unknown, handler: unknown, params?: Record<string, string>) => call(h(handler), who, { method: 'POST', path, body, params });
 const create = async (who: Actor, over?: Record<string, unknown>) => ((await post(who, '/api/automation/templates', def(over), createTemplate)).json as { template: { id: string } }).template.id;
 const apply = (who: Actor, d: Deal, templateIds: string[]) => post(who, '/api/automation/instances', { transactionId: d.transactionId, templateIds }, applyInstances);
-const copies = async (who: Actor, d: Deal) => ((await call(h(listInstances), who, { method: 'GET', path: `/api/automation/instances?transactionId=${d.transactionId}` })).json as { instances: { id: string; name: string; template_version: number; status: string; steps: { title?: string }[] }[] }).instances;
+const copies = async (who: Actor, d: Deal) => ((await call(h(listInstances), who, { method: 'GET', path: `/api/automation/instances?transactionId=${d.transactionId}` })).json as { instances: { id: string; name: string; missingRoles: string[]; template_version: number; status: string; steps: { title?: string }[] }[] }).instances;
 const actions = async (instanceId: string) => (await admin.from('automation_actions').select('status, kind, refusal_reason, instance_id, step_id').eq('instance_id', instanceId)).data ?? [];
 
 let tc: Actor, other: Actor, collab: Actor;
@@ -102,6 +102,9 @@ describe('applying and running', () => {
     const cs = await copies(tc, d2);
     const lender = cs.find((c) => c.name === 'Lender email')!;
     const toAgent = cs.find((c) => c.name === 'Agent email')!;
+    // the deal tab warns up front: nobody on this deal is a Lender, but the agent exists
+    expect(lender.missingRoles).toEqual(['Lender']);
+    expect(toAgent.missingRoles).toEqual([]);
     expect((await actions(lender.id))[0]).toMatchObject({ status: 'refused', refusal_reason: 'no_recipients' });
     expect((await actions(toAgent.id))[0].status).toBe('awaiting_approval');
 

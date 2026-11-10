@@ -266,6 +266,20 @@ export function resolveRecipients(tokens: string[], people: Person[]): string[] 
   return [...out.values()];
 }
 
+/**
+ * Roles an automation emails that nobody on the deal can receive (no one with that role, or no email address for them).
+ * Shown to the person so a step that would be skipped is never a surprise.
+ */
+export function missingRecipientRoles(steps: Step[], people: Person[]): string[] {
+  const tokens = new Set<string>();
+  for (const s of steps) if (s.type === 'send_email') for (const t of s.to ?? []) tokens.add(t);
+  const missing: string[] = [];
+  for (const t of tokens) {
+    if (resolveRecipients([t], people).length === 0) missing.push(RECIPIENT_ROLES.find((r) => r.id === t)?.label ?? t);
+  }
+  return missing;
+}
+
 export function fillVars(text: string, vars: Record<string, string>): string {
   return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (m, k: string) => vars[k.toLowerCase()] ?? m);
 }
