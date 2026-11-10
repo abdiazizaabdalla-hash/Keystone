@@ -33,6 +33,7 @@ Working agreements: direct, critical feedback; inspect code first; Abdi pushes; 
 
 - Broker is not notified when a coordinator-run deal closes (`notifyDealClosed` in `src/lib/dealClosed.ts` keys on the deal owner). Add it commission-only, not by widening `canOverseeDeal`.
 - The commissions list on an agent's page links each row to `/dashboard/collaborate/deals/<id>`, which a broker cannot open for coordinator-run deals.
+- **Build later (requested by Abdi, 2026-11-10):** make sending a document for signature on a listing work the same way it does on a transaction. Listings use `ListingSignModal.tsx`; transactions use the flow in `TransactionDetail.tsx`. Compare the two, then bring the listing flow up to the transaction behaviour. Not started.
 - Pre-existing lint errors in `ListingDetail.tsx` (two set-state-in-effect errors, one unused variable).
 
 ## 4. Local setup (localhost)
