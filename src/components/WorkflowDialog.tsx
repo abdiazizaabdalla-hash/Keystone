@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { RECIPIENT_ROLES, VARIABLES, describeWhen, triggerOf, type Category, type Step } from '@/lib/automation/library';
 import type { BuilderValue } from '@/components/AutomationBuilder';
+import { AiEmailAssist, ConditionPicker } from '@/components/StepExtras';
 
 // A small popup for one automation: a picture of the workflow (click a step to edit it), then Save. Used by both the Library
 // (adding a ready-made one) and Your automations (changing one you already have).
@@ -61,6 +62,7 @@ export default function WorkflowDialog({ preset, saving, error, saveLabel, banne
                   className={`flex h-full w-28 flex-col items-center rounded-xl border p-3 text-center transition ${sel === s.id ? 'border-blue-400 bg-blue-500/20' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
                   <span className="text-lg" aria-hidden>{GLYPH[s.type]}</span>
                   <span className="text-xs font-semibold text-white">{i + 1}. {WORD[s.type]}</span>
+                  {s.condition && <span className="text-[10px] text-violet-300">if…</span>}
                   <span className="mt-0.5 text-[11px] text-slate-400">{s.when.days === 0 && s.when.direction === 'after' ? 'Right away' : `${s.when.days}d ${s.when.direction}`}</span>
                 </button>
               </li>
@@ -86,6 +88,8 @@ export default function WorkflowDialog({ preset, saving, error, saveLabel, banne
             <button type="button" disabled={steps.length === 1} onClick={() => { const rest = steps.filter((s) => s.id !== step.id); setSteps(rest); setSel(rest[0].id); }} className="ml-auto pb-2 text-xs text-red-300 hover:text-red-200 disabled:opacity-30">Remove step</button>
           </div>
 
+          {preset.category === 'transaction' && <ConditionPicker key={step.id} value={step.condition} onChange={(c) => patch({ condition: c })} />}
+
           {step.type === 'send_email' && (
             <>
               <fieldset>
@@ -103,6 +107,7 @@ export default function WorkflowDialog({ preset, saving, error, saveLabel, banne
                 </div>
                 <p className="mt-1 text-xs text-slate-500">Matched against the people on each deal when it runs. If a role has no one on the deal, you will see a warning there.</p>
               </fieldset>
+              <AiEmailAssist subject={step.subject ?? ''} message={step.message ?? ''} context={`${trigger?.label ?? 'a deal event'}; sent to ${(step.to ?? []).join(', ') || 'people on the deal'}`} onResult={(r) => patch({ subject: r.subject, message: r.message })} />
               <div><label className={lab} htmlFor="pd-subject">Subject</label><input id="pd-subject" className={field} value={step.subject ?? ''} maxLength={200} onChange={(e) => patch({ subject: e.target.value })} /></div>
               <div><label className={lab} htmlFor="pd-message">Message</label><textarea id="pd-message" rows={7} className={field} value={step.message ?? ''} maxLength={5000} onChange={(e) => patch({ message: e.target.value })} /></div>
               <p className="text-xs text-slate-500">You can use {VARIABLES.map((v) => `{{${v.id}}}`).join(' ')}</p>

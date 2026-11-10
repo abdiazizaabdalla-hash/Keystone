@@ -2,7 +2,7 @@ import { isFeatureOn } from '../features';
 import { supabaseServer } from '../supabase';
 import { loadDealForTemplates } from '../templateContext';
 import { resumeAutomationAction, submitAutomationAction } from './actions';
-import { buildBriefing, daysBetween, evaluateDealRules, localDay, type BriefingDeal, type DealSnapshot } from './rules';
+import { buildBriefing, daysBetween, evaluateDealRules, findStalled, localDay, weekKey, type BriefingDeal, type DealSnapshot } from './rules';
 import { localHour } from './guard';
 import { runInstances } from './instances';
 
@@ -20,6 +20,7 @@ export interface TickReport {
   dealsChecked: number;
   proposed: number;
   briefings: number;
+  stalledNotices: number;
   automations: number;
   outcomes: Record<string, number>;
   errors: string[];
@@ -61,7 +62,7 @@ async function loadSnapshot(transactionId: string, followUpDays: number): Promis
 }
 
 export async function runTick(now: Date = new Date(), opts: { budgetMs?: number } = {}): Promise<TickReport> {
-  const report: TickReport = { resumed: 0, events: 0, dealsChecked: 0, proposed: 0, briefings: 0, automations: 0, outcomes: {}, errors: [] };
+  const report: TickReport = { resumed: 0, events: 0, dealsChecked: 0, proposed: 0, briefings: 0, stalledNotices: 0, automations: 0, outcomes: {}, errors: [] };
   if (!isFeatureOn('automation')) return { ...report, skipped: 'automation is off' };
   const started = Date.now();
   const outOfTime = () => Date.now() - started > (opts.budgetMs ?? 45_000);
@@ -189,6 +190,38 @@ export async function runTick(now: Date = new Date(), opts: { budgetMs?: number 
       }
     } catch (err) {
       fail(`briefing ${ownerId}`, err);
+    }
+  }
+
+  // 5. Weekly "these deals have gone quiet" notice, once per owner per week, for deals with the assistant on.
+  for (const [ownerId, rows] of owners) {
+    if (outOfTime()) break;
+    try {
+      const tz = rows[0].time_zone;
+      const ids = rows.map((r) => r.transaction_id);
+      const since = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+      const [{ data: deals }, { data: events }] = await Promise.all([
+        supabaseServer.from('transactions').select('id, property_address, status, created_at, updated_at').in('id', ids),
+        supabaseServer.from('transaction_events').select('transaction_id, occurred_at').in('transaction_id', ids).gte('occurred_at', since),
+      ]);
+      const lastEvent = new Map<string, string>();
+      for (const e of events ?? []) {
+        const id = e.transaction_id as string;
+        if (!lastEvent.has(id) || (e.occurred_at as string) > lastEvent.get(id)!) lastEvent.set(id, e.occurred_at as string);
+      }
+      const quiet = findStalled((deals ?? []).map((d) => ({ address: (d.property_address as string) || 'A deal', status: (d.status as string) || '', createdAt: d.created_at as string, updatedAt: (d.updated_at as string | null) ?? null, lastEventAt: lastEvent.get(d.id as string) ?? null })), now);
+      if (quiet.length === 0) continue;
+      const out = await submitAutomationAction({
+        ownerUserId: ownerId, kind: 'notify_user',
+        inputs: { title: `${quiet.length} ${quiet.length === 1 ? 'deal has' : 'deals have'} gone quiet this week`, body: quiet.slice(0, 3).join('; ') + (quiet.length > 3 ? ` and ${quiet.length - 3} more` : '') },
+        idempotencyKey: `stalled:${ownerId}:${weekKey(localDay(now, tz))}`,
+      });
+      if (!out.duplicate) {
+        report.stalledNotices++;
+        count(out.status);
+      }
+    } catch (err) {
+      fail(`stalled ${ownerId}`, err);
     }
   }
   return report;

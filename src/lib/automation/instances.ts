@@ -1,7 +1,7 @@
 import { supabaseServer } from '../supabase';
 import { loadDealForTemplates, recipientsOf } from '../templateContext';
 import { submitAutomationAction } from './actions';
-import { KEY_DATE_KIND_OF, dueSteps, fillVars, missingRecipientRoles, localDayOf, resolveRecipients, triggerOf, validateDefinition, type Definition, type InstanceFacts, type Step } from './library';
+import { KEY_DATE_KIND_OF, conditionMet, dueSteps, fillVars, missingRecipientRoles, localDayOf, resolveRecipients, triggerOf, validateDefinition, type Definition, type InstanceFacts, type Step } from './library';
 import { DEFAULT_SETTINGS } from './server';
 
 // Database side of the Automation Library: templates, the independent copies applied to deals and listings, and the engine
@@ -267,7 +267,19 @@ export async function runInstances(now: Date, outOfTime: () => boolean, limit = 
             closing_date: deal?.closingDate ?? '',
             client_name: people.find((p) => /buyer|seller/i.test(p.category))?.name ?? '',
           };
+          // "Only if" conditions are checked now, against the deal as it is. A step whose condition is false is simply not done;
+          // it is checked again on later runs until it is too old to send.
+          const needsCtx = due.some((d) => d.step.condition);
+          let ctx = { keyDates: [] as { kind: string; completed: boolean }[], people, documents: [] as string[] };
+          if (needsCtx && inst.transaction_id) {
+            const [{ data: kds }, { data: docs }] = await Promise.all([
+              supabaseServer.from('transaction_key_dates').select('kind, completed').eq('transaction_id', inst.transaction_id),
+              supabaseServer.from('documents').select('document_type, file_name').eq('transaction_id', inst.transaction_id),
+            ]);
+            ctx = { keyDates: (kds ?? []).map((k) => ({ kind: k.kind as string, completed: Boolean(k.completed) })), people, documents: (docs ?? []).map((d) => `${d.document_type ?? ''} ${d.file_name ?? ''}`.toLowerCase()) };
+          }
           for (const { step, key } of due) {
+            if (!conditionMet(step.condition, ctx)) continue;
             const request = stepToRequest(step, vars, people, loaded.timeZone, now);
             const out = await submitAutomationAction({ ownerUserId: inst.owner_user_id, transactionId: inst.transaction_id, listingId: inst.listing_id, instanceId: inst.id, stepId: step.id, ...request, fromApprovedTemplate: true, idempotencyKey: key });
             if (!out.duplicate) {

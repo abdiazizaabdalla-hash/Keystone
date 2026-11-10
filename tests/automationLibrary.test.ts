@@ -144,3 +144,27 @@ describe('missingRecipientRoles', () => {
     expect(missingRecipientRoles([mail(['everyone'])], [])).toEqual(['Everyone on the deal']);
   });
 });
+
+import { conditionMet, describeCondition } from '@/lib/automation/library';
+
+describe('conditions', () => {
+  const ctx = { keyDates: [{ kind: 'appraisal', completed: true }, { kind: 'financing', completed: false }], people: [{ name: 'Ann', email: 'ann@x.com', role: 'Agent', category: 'Agent' }], documents: ['purchase contract contract.pdf'] };
+  it('checks a Critical date, a role and a document', () => {
+    expect(conditionMet(null, ctx)).toBe(true);
+    expect(conditionMet({ type: 'key_date_open', kind: 'appraisal' }, ctx)).toBe(false); // marked done
+    expect(conditionMet({ type: 'key_date_open', kind: 'financing' }, ctx)).toBe(true);
+    expect(conditionMet({ type: 'key_date_open', kind: 'inspection' }, ctx)).toBe(true); // no such date: nothing marked done
+    expect(conditionMet({ type: 'role_missing', role: 'lender' }, ctx)).toBe(true);
+    expect(conditionMet({ type: 'role_present', role: 'agent' }, ctx)).toBe(true);
+    expect(conditionMet({ type: 'no_document', text: 'Appraisal' }, ctx)).toBe(true);
+    expect(conditionMet({ type: 'no_document', text: 'purchase contract' }, ctx)).toBe(false);
+  });
+  it('validates conditions and describes them in words', () => {
+    const base = { name: 'x', description: '', category: 'transaction', triggerType: 'appraisal_deadline', steps: [{ id: 's1', type: 'notify_me', when: { days: 2, direction: 'before' }, title: 't', condition: { type: 'key_date_open', kind: 'appraisal' } }] };
+    const ok = validateDefinition(base);
+    expect(ok.ok && ok.value.steps[0].condition).toEqual({ type: 'key_date_open', kind: 'appraisal' });
+    expect(validateDefinition({ ...base, steps: [{ ...base.steps[0], condition: { type: 'run_sql', text: 'x' } }] }).ok).toBe(false);
+    expect(validateDefinition({ ...base, steps: [{ ...base.steps[0], condition: { type: 'role_missing', role: 'everyone' } }] }).ok).toBe(false);
+    expect(describeCondition({ type: 'role_missing', role: 'lender' })).toBe('the deal has no Lender');
+  });
+});

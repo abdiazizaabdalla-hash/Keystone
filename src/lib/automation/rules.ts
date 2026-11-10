@@ -162,3 +162,36 @@ export function buildBriefing(date: string, deals: BriefingDeal[], pendingDrafts
     message: `${head}${lines.length ? `What needs attention today:\n\n${lines.join('\n\n')}` : 'Nothing else needs attention today.'}`,
   };
 }
+
+// ---- Stalled deals ------------------------------------------------------------------------------------------------
+
+export interface ActivitySnapshot {
+  address: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string | null;
+  /** Latest recorded event on the deal (document added, step ticked, date changed...). */
+  lastEventAt: string | null;
+}
+
+export const STALLED_AFTER_DAYS = 7;
+
+/**
+ * Open deals that have been quiet for a week: nothing recorded on them and no edits, and they are old enough that quiet means
+ * something. This is a prompt to look, not a verdict; it changes nothing.
+ */
+export function findStalled(deals: ActivitySnapshot[], now: Date): string[] {
+  const cutoff = now.getTime() - STALLED_AFTER_DAYS * 86_400_000;
+  return deals
+    .filter((d) => !/^(closed|cancel)/i.test(d.status))
+    .filter((d) => Date.parse(d.createdAt) < cutoff)
+    .filter((d) => Math.max(d.updatedAt ? Date.parse(d.updatedAt) : 0, d.lastEventAt ? Date.parse(d.lastEventAt) : 0) < cutoff)
+    .map((d) => d.address);
+}
+
+/** Monday of the week containing `day` (YYYY-MM-DD), used to send the stalled-deals notice once a week. */
+export function weekKey(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  const back = (d.getUTCDay() + 6) % 7;
+  return new Date(d.getTime() - back * 86_400_000).toISOString().slice(0, 10);
+}

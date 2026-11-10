@@ -127,6 +127,19 @@ describe('applying and running', () => {
     expect((await copies(tc, d1)).some((c) => c.name === 'Off switch')).toBe(false);
   });
 
+  it('an "only if" condition holds a step back while false and lets it through once true', async () => {
+    const id = await create(tc, { name: 'Conditional', steps: [{ ...notify('Appraisal?'), condition: { type: 'key_date_open', kind: 'appraisal' } }] });
+    await admin.from('transaction_key_dates').delete().eq('transaction_id', d1.transactionId);
+    const { data: kd } = await admin.from('transaction_key_dates').insert({ transaction_id: d1.transactionId, kind: 'appraisal', label: 'Appraisal', due_date: '2027-03-01', completed: true }).select('id').single();
+    await apply(tc, d1, [id]);
+    const inst = (await copies(tc, d1)).find((c) => c.name === 'Conditional')!;
+    await runInstances(new Date(), () => false);
+    expect(await actions(inst.id)).toHaveLength(0); // the appraisal is marked done, so nothing is sent
+    await admin.from('transaction_key_dates').update({ completed: false }).eq('id', kd!.id);
+    await runInstances(new Date(), () => false);
+    expect(await actions(inst.id)).toHaveLength(1);
+  });
+
   it('a listing automation applies to a listing and a listing cannot take a transaction automation', async () => {
     const { data: listing } = await admin.from('listings').insert({ tc_user_id: tc.id, property_address: '1 Lib St', status: 'preparing' }).select('id').single();
     const li = await create(tc, { name: 'Listing hello', category: 'listing', triggerType: 'listing_created', steps: [notify('New listing')] });

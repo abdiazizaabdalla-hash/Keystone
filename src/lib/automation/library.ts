@@ -53,8 +53,38 @@ export const RECIPIENT_ROLES = [
   { id: 'everyone', label: 'Everyone on the deal' },
 ] as const;
 
+/** "Only if..." on a step, checked when the step is due. Kept small and fixed on purpose. */
+export type Condition =
+  | { type: 'key_date_open'; kind: string } // the deal's Critical date of this kind is not marked done
+  | { type: 'role_present'; role: string } // someone with this role and an email is on the deal
+  | { type: 'role_missing'; role: string } // nobody with this role and an email is on the deal
+  | { type: 'no_document'; text: string }; // no document on the deal whose type or name contains this text
+
+export const CONDITION_KEY_KINDS = [
+  { id: 'earnest_money', label: 'earnest money' },
+  { id: 'inspection', label: 'inspection' },
+  { id: 'appraisal', label: 'appraisal' },
+  { id: 'financing', label: 'financing' },
+  { id: 'title_commitment', label: 'title commitment' },
+] as const;
+
+export function describeCondition(c: Condition): string {
+  switch (c.type) {
+    case 'key_date_open':
+      return `the ${CONDITION_KEY_KINDS.find((k) => k.id === c.kind)?.label ?? c.kind} date is not marked done`;
+    case 'role_present':
+      return `the deal has a ${RECIPIENT_ROLES.find((r) => r.id === c.role)?.label ?? c.role}`;
+    case 'role_missing':
+      return `the deal has no ${RECIPIENT_ROLES.find((r) => r.id === c.role)?.label ?? c.role}`;
+    default:
+      return `no "${c.text}" document has been uploaded`;
+  }
+}
+
 export interface Step {
   id: string;
+  /** Optional: the step only happens if this is true when it is due. */
+  condition?: Condition | null;
   type: StepType;
   when: { days: number; direction: 'after' | 'before' };
   to?: string[];
@@ -80,6 +110,17 @@ export const triggerOf = (id: string) => TRIGGERS.find((t) => t.id === id);
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const intIn = (v: unknown, min: number, max: number) => (typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max ? v : null);
+
+function parseCondition(raw: unknown, category: Category): Condition | null | 'bad' {
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (typeof raw !== 'object') return 'bad';
+  const c = raw as Record<string, unknown>;
+  if (category !== 'transaction') return 'bad'; // conditions read the deal's dates, people and documents
+  if (c.type === 'key_date_open' && CONDITION_KEY_KINDS.some((k) => k.id === c.kind)) return { type: 'key_date_open', kind: c.kind as string };
+  if ((c.type === 'role_present' || c.type === 'role_missing') && RECIPIENT_ROLES.some((r) => r.id === c.role && r.id !== 'everyone')) return { type: c.type, role: c.role as string };
+  if (c.type === 'no_document' && typeof c.text === 'string' && c.text.trim()) return { type: 'no_document', text: c.text.trim().slice(0, 60) };
+  return 'bad';
+}
 
 export type Validated = { ok: true; value: Definition } | { ok: false; error: string };
 
@@ -112,6 +153,9 @@ export function validateDefinition(input: unknown): Validated {
     while (seen.has(id)) id = `${id}x`;
     seen.add(id);
     const step: Step = { id, type: spec.id, when: { days, direction } };
+    const cond = parseCondition(r.condition, category);
+    if (cond === 'bad') return { ok: false, error: `Step ${n}: that "only if" condition is not available.` };
+    if (cond) step.condition = cond;
     if (spec.id === 'send_email') {
       const to = Array.isArray(r.to) ? [...new Set((r.to as unknown[]).filter((t): t is string => typeof t === 'string' && RECIPIENT_ROLES.some((x) => x.id === t)))] : [];
       if (to.length === 0) return { ok: false, error: `Step ${n}: choose who the email goes to.` };
@@ -291,3 +335,28 @@ export const VARIABLES = [
   { id: 'closing_date', label: 'Closing date' },
   { id: 'client_name', label: 'Buyer or seller name' },
 ] as const;
+
+// ---- Conditions ---------------------------------------------------------------------------------------------------
+
+export interface ConditionContext {
+  /** Every Critical date on the deal, by kind. */
+  keyDates: { kind: string; completed: boolean }[];
+  people: Person[];
+  /** "type name" strings of the deal's documents, lowercased. */
+  documents: string[];
+}
+
+export function conditionMet(c: Condition | null | undefined, ctx: ConditionContext): boolean {
+  if (!c) return true;
+  switch (c.type) {
+    case 'key_date_open':
+      // Only false when a date of that kind exists and it is marked done; with no such date, nothing has been marked done.
+      return !ctx.keyDates.some((k) => k.kind === c.kind && k.completed) || ctx.keyDates.some((k) => k.kind === c.kind && !k.completed);
+    case 'role_present':
+      return resolveRecipients([c.role], ctx.people).length > 0;
+    case 'role_missing':
+      return resolveRecipients([c.role], ctx.people).length === 0;
+    default:
+      return !ctx.documents.some((d) => d.includes(c.text.toLowerCase()));
+  }
+}

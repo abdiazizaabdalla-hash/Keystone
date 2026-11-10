@@ -86,3 +86,22 @@ describe('daily briefing', () => {
     expect(buildBriefing('2026-11-09', [{ address: 'x', overdue: [], dueToday: [], closingInDays: 40, openWaiting: [] }], 0)).toBeNull();
   });
 });
+
+import { findStalled, weekKey } from '@/lib/automation/rules';
+
+describe('stalled deals', () => {
+  const now = new Date('2026-11-09T12:00:00Z');
+  const d = (over: Partial<Parameters<typeof findStalled>[0][number]> = {}) => ({ address: '1 Main', status: 'Active', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-05T00:00:00Z', lastEventAt: null, ...over });
+  it('flags open deals with nothing recorded for a week, and nothing else', () => {
+    expect(findStalled([d()], now)).toEqual(['1 Main']);
+    expect(findStalled([d({ lastEventAt: '2026-11-07T00:00:00Z' })], now)).toEqual([]); // something happened
+    expect(findStalled([d({ updatedAt: '2026-11-08T00:00:00Z' })], now)).toEqual([]); // edited recently
+    expect(findStalled([d({ status: 'Closed' })], now)).toEqual([]);
+    expect(findStalled([d({ createdAt: '2026-11-05T00:00:00Z' })], now)).toEqual([]); // too new to call quiet
+  });
+  it('sends once a week: the key is the Monday of that week', () => {
+    expect(weekKey('2026-11-09')).toBe('2026-11-09');
+    expect(weekKey('2026-11-15')).toBe('2026-11-09');
+    expect(weekKey('2026-11-16')).toBe('2026-11-16');
+  });
+});
