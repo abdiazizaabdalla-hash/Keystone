@@ -7,6 +7,7 @@ import { GET as listInstances, POST as applyInstances } from '@/app/api/automati
 import { DELETE as removeInstance, PATCH as patchInstance } from '@/app/api/automation/instances/[id]/route';
 import { POST as runStep } from '@/app/api/automation/instances/[id]/run/route';
 import { GET as getProgress } from '@/app/api/automation/progress/route';
+import { GET as getAlerts, POST as ackAlerts } from '@/app/api/automation/alerts/route';
 import { GET as getHistory } from '@/app/api/automation/history/route';
 import { runInstances } from '@/lib/automation/instances';
 import { admin, call, cleanup, createActor, createCollaborator, seedDeal, type Actor, type Deal } from './helpers';
@@ -243,6 +244,50 @@ describe('applying and running', () => {
     await admin.from('automation_actions').delete().eq('listing_id', lid);
     await admin.from('automation_instances').delete().eq('listing_id', lid);
     await admin.from('automation_settings').delete().eq('listing_id', lid);
+    await admin.from('listings').delete().eq('id', lid);
+  });
+  it('banners: a draft email and reminders appear, reminders go away when acknowledged, drafts when decided', async () => {
+    const { data: listing } = await admin.from('listings').insert({ tc_user_id: tc.id, property_address: '4 Banner St', status: 'preparing' }).select('id').single();
+    const lid = listing!.id as string;
+    await admin.from('listing_contacts').insert([{ listing_id: lid, role: 'Seller', name: 'Sam', email: 'sam.banner@example.com', position: 0 }]);
+    const steps = [
+      { id: 's1', type: 'notify_me', when: { days: 0, direction: 'after' }, title: 'Reminder one' },
+      { id: 's2', type: 'notify_me', when: { days: 0, direction: 'after' }, title: 'Reminder two' },
+      { id: 's3', type: 'send_email', when: { days: 0, direction: 'after' }, to: ['seller'], subject: 'Hello {{address}}', message: 'Hi' },
+      { id: 's4', type: 'create_task', when: { days: 0, direction: 'after' }, name: 'A quiet task' },
+    ];
+    const t = await create(tc, { name: 'Banners', category: 'listing', triggerType: 'listing_created', steps });
+    await post(tc, '/api/automation/instances', { listingId: lid, templateIds: [t] }, applyInstances);
+    await runInstances(new Date(Date.now() + 5000), () => false);
+    type A = { alerts: { id: string; kind: string; title: string }[]; count: number };
+    const get = async (who: Actor = tc) => call(h(getAlerts), who, { method: 'GET', path: `/api/automation/alerts?listingId=${lid}` });
+    const first = (await get()).json as A;
+    expect(first.alerts.map((a) => a.kind)).toEqual(['approval', 'reminder', 'reminder']); // the task made no banner; the approval comes first
+    expect(first.count).toBe(3);
+
+    const reminder = first.alerts.find((a) => a.kind === 'reminder')!;
+    expect((await post(tc, '/api/automation/alerts', { actionId: reminder.id }, ackAlerts)).status).toBe(200);
+    expect(((await get()).json as A).count).toBe(2);
+    expect((await post(other, '/api/automation/alerts', { actionId: reminder.id }, ackAlerts)).status).toBe(404); // not theirs
+    expect((await get(other)).status).toBe(404);
+
+    const draft = first.alerts.find((a) => a.kind === 'approval')!;
+    expect((await post(tc, '/api/automation/alerts', { actionId: draft.id }, ackAlerts)).status).toBe(404); // a draft is decided, not dismissed
+    expect(((await get()).json as A).alerts.some((a) => a.kind === 'approval')).toBe(true);
+
+    expect(((await post(tc, '/api/automation/alerts', { listingId: lid, all: true }, ackAlerts)).json as { acknowledged: number }).acknowledged).toBe(1);
+    const left = (await get()).json as A;
+    expect(left.alerts.map((a) => a.kind)).toEqual(['approval']);
+
+    const inst = (await admin.from('automation_instances').select('id').eq('listing_id', lid)).data![0].id as string;
+    await call(h(removeInstance), tc, { method: 'DELETE', path: `/api/automation/instances/${inst}`, params: { id: inst } });
+    expect(((await get()).json as A).count).toBe(0); // removing the automation takes its banners with it
+
+    await admin.from('automation_actions').delete().eq('listing_id', lid);
+    await admin.from('automation_instances').delete().eq('listing_id', lid);
+    await admin.from('automation_settings').delete().eq('listing_id', lid);
+    await admin.from('listing_tasks').delete().eq('listing_id', lid);
+    await admin.from('listing_contacts').delete().eq('listing_id', lid);
     await admin.from('listings').delete().eq('id', lid);
   });
 });

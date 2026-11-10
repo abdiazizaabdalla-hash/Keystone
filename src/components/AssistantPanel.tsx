@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
+import { notifyAutomationChanged } from '@/components/AutomationAlerts';
 import { isFeatureOnClient } from '@/lib/features';
 import { TRIGGERS } from '@/lib/automation/library';
 import { summarizeSteps } from '@/components/ApplyAutomations';
@@ -81,6 +82,7 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
       if (!res.ok) throw new Error(out.error || 'That did not work');
       setError(out.skipped?.[0]?.reason ?? null);
       await load();
+      notifyAutomationChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work');
     } finally {

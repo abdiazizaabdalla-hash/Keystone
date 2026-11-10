@@ -2,6 +2,11 @@
 
 Newest first. One entry per working session: commit, what changed, what was verified, what remains.
 
+## 2026-11-10 - Automation: banners
+
+- BUILT: dismissable banners on deals and listings (draft waiting, reminders, emails that did not go) and a count on the Tracker tab. HANDOFF "Auto-1d".
+- Verified: tsc, 538 unit + 32 integration tests. Not verified: browser. Nothing pushed.
+
 ## 2026-11-10 - Automation: Tracker tab
 
 - BUILT: Tracker tab on deals and listings (step-by-step state, run now, run what is left, approve/reject, pause/resume, add another); listings got an Automation tab. HANDOFF "Auto-1c".

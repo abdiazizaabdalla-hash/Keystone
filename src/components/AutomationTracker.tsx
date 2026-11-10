@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
+import { notifyAutomationChanged } from '@/components/AutomationAlerts';
 import { isFeatureOnClient } from '@/lib/features';
 import { summarizeSteps } from '@/components/ApplyAutomations';
 
@@ -73,6 +74,7 @@ export default function AutomationTracker({ transactionId, listingId }: { transa
       setError(null);
       setMessage(after ? after(out) : null);
       await load();
+      notifyAutomationChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That did not work');
     } finally {

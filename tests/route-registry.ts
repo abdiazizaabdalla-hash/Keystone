@@ -243,6 +243,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/automation/instances': { kind: 'session', methods: ['GET', 'POST'], why: 'Applies or lists automations on a deal or listing the caller owns (anyone else gets 404); templates must be the caller\'s own.' },
   '/api/automation/instances/[id]': { kind: 'session', methods: ['DELETE', 'PATCH'], why: "Takes one of the caller's automations off a deal or listing, or pauses and resumes it; matched on owner_user_id." },
   '/api/automation/instances/[id]/run': { kind: 'session', methods: ['POST'], why: "Runs one step of the caller's own automation now; matched on owner_user_id and still subject to the guard (mode, recipients, cap, approval)." },
+  '/api/automation/alerts': { kind: 'session', methods: ['GET', 'POST'], why: 'Banners for a deal or listing the caller owns (anyone else gets 404); acknowledging matches owner_user_id and an automation action.' },
   '/api/automation/progress': { kind: 'session', methods: ['GET'], why: 'Per-step progress of the automations on a deal or listing the caller owns (anyone else gets 404).' },
   '/api/automation/history': { kind: 'session', methods: ['GET'], why: "What the caller's saved automations did; only the caller's own runs." },
   '/api/automation/ai/draft': { kind: 'session', methods: ['POST'], why: "Drafts an automation from plain English for the caller to review; saves and runs nothing; limited to the catalog and the caller's monthly AI allowance." },

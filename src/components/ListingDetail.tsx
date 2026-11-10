@@ -30,6 +30,7 @@ import SellerUpdateModal from '@/components/SellerUpdateModal';
 import ListingReadinessCard from '@/components/ListingReadinessCard';
 import AssistantPanel from '@/components/AssistantPanel';
 import AutomationTracker from '@/components/AutomationTracker';
+import AutomationBanners, { useAutomationAlerts } from '@/components/AutomationAlerts';
 import ListingFeeInvoiceCard from '@/components/ListingFeeInvoiceCard';
 import ListingSignModal, { type ListingSigningRequest } from '@/components/ListingSignModal';
 import { computeReadiness } from '@/lib/listingReadiness';
@@ -194,6 +195,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
   const agentHidden = ownerView || isWorkspaceAgent || data?.coordinated === true;
   // Automation is the owner's own tool: not shown to a brokerage owner looking in, to an agent, or when the feature is off.
   const automationHidden = ownerView || !isFeatureOnClient('automation') || data?.shared === true || (isWorkspaceAgent && !data?.coordinated);
+  const autoAlerts = useAutomationAlerts({ listingId: id, enabled: !automationHidden });
   const tabs = LISTING_TABS.filter((t) => !(ownerView && t.id === 'messages') && !((t.id === 'automation' || t.id === 'tracker') && automationHidden));
   const loadCoordInvites = useCallback(async () => {
     try {
@@ -1100,6 +1102,8 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
       {notice && <p className="mb-4 text-sm text-green-400">{notice}</p>}
 
+      {!automationHidden && <AutomationBanners alerts={autoAlerts.alerts} scope={{ listingId: id }} onChanged={() => void autoAlerts.reload()} onOpenTracker={() => selectTab('tracker')} />}
+
       {/* Tabs: one focused section at a time. Panels stay mounted (just hidden) so nothing is lost on switch. */}
       <div role="tablist" aria-label="Listing sections" className="flex gap-1 overflow-x-auto mb-8 p-1 bg-white/5 border border-white/10 rounded-2xl">
         {tabs.map((t) => (
@@ -1115,6 +1119,9 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
             }`}
           >
             {t.label}
+            {t.id === 'tracker' && autoAlerts.count > 0 && (
+              <span className="ml-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-xs font-bold text-slate-900" data-testid="tracker-count" aria-label={`${autoAlerts.count} need a look`}>{autoAlerts.count}</span>
+            )}
             {t.id === 'checklist' && tasks.length > 0 && (
               <span className={`ml-2 text-xs font-medium ${tab === 'checklist' ? 'text-blue-100' : 'text-slate-400'}`}>{tasks.filter((x) => x.completed).length}/{tasks.length}</span>
             )}

@@ -42,6 +42,7 @@ import { DealCoordinatorInvoices } from '@/components/CoordinatorInvoices';
 import { isClosedMessage, parseClosedMessage } from '@/lib/dealClosedMarker';
 import AssistantPanel from '@/components/AssistantPanel';
 import AutomationTracker from '@/components/AutomationTracker';
+import AutomationBanners, { useAutomationAlerts } from '@/components/AutomationAlerts';
 
 interface Transaction {
   id: string;
@@ -253,6 +254,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   const router = useRouter();
   const resolvedParams = { id };
   const [tab, setTab] = useState<TxTab>('overview');
+  const autoAlerts = useAutomationAlerts({ transactionId: id, enabled: !ownerView && isFeatureOnClient('automation') });
   const selectTab = (next: TxTab) => {
     setTab(next);
     try {
@@ -3050,6 +3052,10 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           </div>
         )}
 
+        {!ownerView && isFeatureOnClient('automation') && transaction?.id && (
+          <AutomationBanners alerts={autoAlerts.alerts} scope={{ transactionId: transaction.id }} onChanged={() => void autoAlerts.reload()} onOpenTracker={() => selectTab('tracker')} />
+        )}
+
         {/* The brokerage owner sees the commission up top, where they act on it, on every tab. */}
         {ownerView && isFeatureOnClient('brokerage') && transaction?.id && <CommissionBox transactionId={transaction.id} banner />}
 
@@ -3070,6 +3076,9 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               }`}
             >
               {t.label}
+              {t.id === 'tracker' && autoAlerts.count > 0 ? (
+                <span className="ml-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-xs font-bold text-slate-900" data-testid="tracker-count" aria-label={`${autoAlerts.count} need a look`}>{autoAlerts.count}</span>
+              ) : null}
               {t.id === 'checklist' && tasks.length > 0 ? (
                 <span className={`ml-2 text-xs ${tab === t.id ? 'text-blue-100' : 'text-slate-400'}`}>
                   {completedCount}/{tasks.length}

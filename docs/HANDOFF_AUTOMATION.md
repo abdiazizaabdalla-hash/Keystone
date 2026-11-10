@@ -166,3 +166,13 @@ Financial automation (commission amounts, invoices, payments) only prepares reco
 - Verified: tsc, 530 unit tests, 31 integration tests on relay-test (new: progress states, run once, double click, pause blocks run, resume, run what is left, other account gets 404). Not verified in a browser.
 - Not built: edit-before-approve inside the Tracker (use the Automation tab), a cross-deal overview, notifications when a step fails.
 
+### Auto-1d: banners and the Tracker count (BUILT, committed locally, not pushed)
+
+- What needs approval: only emails (Draft mode) plus the always-approve kinds (contract dates, suggestions, document filing). Notifications, checklist steps and notes just happen. Unchanged; confirmed against the user's own Verify Agent test.
+- **Banners** above the tabs of every deal and listing (`AutomationAlerts.tsx`, `src/lib/automation/alerts.ts`, pure `alertCore.ts`): a draft email waiting ("Needs your OK": Approve / Review), a reminder an automation raised (from `notify_me` steps, so "N days before X" reminders show up on the day), and an email that did not go ("Did not go", with the reason). Reminders and problems stay until **Got it** (or "Got it for all"); drafts leave when decided; removing an automation removes its banners. Shows 3, "N more in the Tracker".
+- Whole-account refusals (assistant Off, paused, no plan) do not make a banner per step; the Tracker's Off banner covers them.
+- **Count on the Tracker tab** (amber number) = banners open. Refreshes on focus, every 60 s while visible, and instantly after anything is changed in the Tracker or Automation tab (`relay:automation-changed` event).
+- Acknowledged is stored inside the action's `result` (`acknowledgedAt`); no SQL needed. Reminders still also go to the Relay bell as before; acknowledging a banner does not mark the bell item read (not built).
+- Banners are not shown to a brokerage owner looking in, or to agents.
+- Verified: tsc, 538 unit, 32 integration tests on relay-test. Not verified in a browser.
+
