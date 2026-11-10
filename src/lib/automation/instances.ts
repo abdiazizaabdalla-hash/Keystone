@@ -1,5 +1,6 @@
 import { loadListingParties } from './listingContext';
 import { supabaseServer } from '../supabase';
+import { isFeatureOn } from '../features';
 import { loadDealForTemplates, recipientsOf, type DealPerson as Person } from '../templateContext';
 import { submitAutomationAction } from './actions';
 import { refusalText, summarizeAction } from './describe';
@@ -327,9 +328,12 @@ async function stepContext(inst: InstanceRow, withConditions: boolean): Promise<
 }
 
 /** Fires whatever is due for every active copy. Safe to run any number of times: each step has a key that includes its anchor. */
-export async function runInstances(now: Date, outOfTime: () => boolean, limit = 300): Promise<InstancesReport> {
+export async function runInstances(now: Date, outOfTime: () => boolean, limit = 300, only?: { transactionId?: string | null; listingId?: string | null }): Promise<InstancesReport> {
   const report: InstancesReport = { instances: 0, proposed: 0, outcomes: {}, errors: [] };
-  const { data, error } = await supabaseServer.from('automation_instances').select(INSTANCE_COLS).eq('status', 'active').order('updated_at', { ascending: true }).limit(limit);
+  let q = supabaseServer.from('automation_instances').select(INSTANCE_COLS).eq('status', 'active');
+  if (only?.transactionId) q = q.eq('transaction_id', only.transactionId);
+  if (only?.listingId) q = q.eq('listing_id', only.listingId);
+  const { data, error } = await q.order('updated_at', { ascending: true }).limit(limit);
   if (error) throw error;
   for (const inst of (data ?? []) as InstanceRow[]) {
     if (outOfTime()) break;
@@ -505,3 +509,24 @@ export function stepToRequest(step: Step, vars: Record<string, string>, people: 
 }
 
 export { validateDefinition };
+
+/**
+ * Runs what is due on ONE deal or listing right now, so a draft email reaches the owner for approval the moment something happens
+ * (an automation is added, a contract or document arrives, an offer comes in) instead of at the next hourly check. Never throws:
+ * the hourly check will catch anything this misses.
+ */
+export async function runInstancesFor(scope: { transactionId?: string | null; listingId?: string | null }): Promise<void> {
+  try {
+    if (!isFeatureOn('automation') || (!scope.transactionId && !scope.listingId)) return;
+    await runInstances(new Date(), () => false, 25, scope);
+  } catch (err) {
+    console.error('Immediate automation run failed:', err);
+  }
+}
+
+/** The same, for the file one copy lives on (after it is edited or resumed). */
+export async function runInstancesForCopy(ownerId: string, instanceId: string): Promise<void> {
+  const { data } = await supabaseServer.from('automation_instances').select('transaction_id, listing_id').eq('id', instanceId).eq('owner_user_id', ownerId).maybeSingle();
+  if (data) await runInstancesFor({ transactionId: data.transaction_id as string | null, listingId: data.listing_id as string | null });
+}
+

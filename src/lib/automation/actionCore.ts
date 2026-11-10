@@ -161,7 +161,7 @@ export async function approveAction(
     inputs,
     idempotencyKey: '',
   };
-  const decision = evaluateGuard({ kind: row.kind, recipients }, await deps.loadGuardContext(req));
+  const decision = evaluateGuard({ kind: row.kind, recipients, approvedByPerson: true }, await deps.loadGuardContext(req));
   await deps.store.decideApproval(actionId, 'approved', decidedBy, opts.editedInputs);
   const nowIso = (deps.now ?? (() => new Date()))().toISOString();
   if (decision.outcome === 'refuse') {
@@ -199,7 +199,7 @@ export async function resumeAction(actionId: string, deps: ActionDeps): Promise<
     fromApprovedTemplate: row.inputs[TEMPLATE_FLAG] === true,
     idempotencyKey: '',
   };
-  const decision = evaluateGuard({ kind: row.kind, recipients: recipientsOfInputs(row.inputs), fromApprovedTemplate: req.fromApprovedTemplate }, await deps.loadGuardContext(req));
+  const decision = evaluateGuard({ kind: row.kind, recipients: recipientsOfInputs(row.inputs), fromApprovedTemplate: req.fromApprovedTemplate, approvedByPerson: Boolean(row.approved_by) }, await deps.loadGuardContext(req));
   const now = (deps.now ?? (() => new Date()))();
   if (decision.outcome === 'refuse') {
     await deps.store.update(row.id, { status: 'refused', refusal_reason: decision.detail ? `${decision.reason}:${decision.detail}` : decision.reason });

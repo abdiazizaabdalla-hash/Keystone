@@ -38,7 +38,12 @@ export async function emitDealEvent(
   if (!isFeatureOn('automation')) return;
   try {
     const ownerUserId = await dealAutomationOwner(transactionId);
-    if (ownerUserId) await emitEvent({ ownerUserId, transactionId, type, payload, dedupeKey }, { store: supabaseEventStore });
+    if (ownerUserId) {
+      await emitEvent({ ownerUserId, transactionId, type, payload, dedupeKey }, { store: supabaseEventStore });
+      // So a draft email reaches the owner for approval now, not at the next hourly check. (Imported late: instances.ts imports this file.)
+      const { runInstancesFor } = await import('./instances');
+      await runInstancesFor({ transactionId });
+    }
   } catch (err) {
     console.error('Automation event failed:', err);
   }

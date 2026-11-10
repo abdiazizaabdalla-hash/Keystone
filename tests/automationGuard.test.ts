@@ -75,9 +75,21 @@ describe('automation guard: quiet hours (fake clock)', () => {
     expect(inQuietHours(early, q)).toBe(true);
     expect(inQuietHours(noon, q)).toBe(false);
   });
-  it('defers an external send at night but not an internal task', () => {
-    expect(evaluateGuard(email(['buyer@x.com']), { ...base, now: night })).toEqual({ outcome: 'defer', reason: 'quiet_hours' });
+  it('holds an Auto send at night (nobody is deciding), but not an internal task', () => {
+    expect(evaluateGuard(email(['buyer@x.com'], { fromApprovedTemplate: true }), { ...base, mode: 'auto', now: night })).toEqual({ outcome: 'defer', reason: 'quiet_hours' });
     expect(evaluateGuard({ kind: 'create_task' }, { ...base, now: night })).toMatchObject({ outcome: 'allow', requiresApproval: false });
+  });
+  it('never holds the question: a draft is put to the owner at once, night or day', () => {
+    expect(evaluateGuard(email(['buyer@x.com'], { fromApprovedTemplate: true }), { ...base, mode: 'draft', now: night })).toEqual({ outcome: 'allow', requiresApproval: true, approvalReason: 'draft_mode' });
+    expect(evaluateGuard(email(['buyer@x.com']), { ...base, mode: 'auto', now: night })).toEqual({ outcome: 'allow', requiresApproval: true, approvalReason: 'not_template' });
+  });
+  it('an email the owner has just approved goes now, even at night', () => {
+    expect(evaluateGuard(email(['buyer@x.com'], { approvedByPerson: true }), { ...base, now: night })).toMatchObject({ outcome: 'allow' });
+    expect(evaluateGuard(email(['buyer@x.com'], { approvedByPerson: true, fromApprovedTemplate: true }), { ...base, mode: 'auto', now: night })).toMatchObject({ outcome: 'allow' });
+  });
+  it('approval does not skip the other rules (cap, strangers) at night', () => {
+    expect(evaluateGuard(email(['stranger@x.com'], { approvedByPerson: true }), { ...base, now: night })).toMatchObject({ reason: 'recipient_not_on_deal' });
+    expect(evaluateGuard(email(['buyer@x.com'], { approvedByPerson: true }), { ...base, sentToday: 5, now: night })).toMatchObject({ reason: 'over_daily_cap' });
   });
   it('a bad time zone falls back instead of throwing', () => {
     expect(() => localHour(noon, 'Not/AZone')).not.toThrow();

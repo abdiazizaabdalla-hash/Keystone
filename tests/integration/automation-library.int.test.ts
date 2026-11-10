@@ -8,6 +8,9 @@ import { DELETE as removeInstance, PATCH as patchInstance } from '@/app/api/auto
 import { POST as runStep } from '@/app/api/automation/instances/[id]/run/route';
 import { GET as getProgress } from '@/app/api/automation/progress/route';
 import { GET as getAlerts, POST as ackAlerts } from '@/app/api/automation/alerts/route';
+import { GET as listApprovals } from '@/app/api/automation/approvals/route';
+import { POST as decideAction } from '@/app/api/automation/actions/[id]/decide/route';
+import { localHour } from '@/lib/automation/guard';
 import { GET as listTransactions } from '@/app/api/transactions/route';
 import { GET as getListing } from '@/app/api/listings/[id]/route';
 import { GET as getHistory } from '@/app/api/automation/history/route';
@@ -343,6 +346,39 @@ describe('applying and running', () => {
     expect((row.steps as { id: string }[]).map((x) => x.id)).toEqual(['s2']);
     expect((await actions(inst.id as string)).find((a) => a.step_id === 's1')).toMatchObject({ status: 'cancelled' });
 
+    await admin.from('automation_actions').delete().eq('listing_id', lid);
+    await admin.from('automation_instances').delete().eq('listing_id', lid);
+    await admin.from('automation_settings').delete().eq('listing_id', lid);
+    await admin.from('listing_contacts').delete().eq('listing_id', lid);
+    await admin.from('listings').delete().eq('id', lid);
+  });
+  it('a draft email reaches you for approval the moment the automation is added, even in quiet hours, and approving sends it now', async () => {
+    const { data: listing } = await admin.from('listings').insert({ tc_user_id: tc.id, property_address: '6 Popup St', status: 'preparing' }).select('id').single();
+    const lid = listing!.id as string;
+    await admin.from('listing_contacts').insert([{ listing_id: lid, role: 'Seller', name: 'Sam', email: 'sam.popup@example.com', position: 0 }]);
+    const steps = [{ id: 's1', type: 'send_email', when: { days: 0, direction: 'after' }, to: ['seller'], subject: 'Welcome to {{address}}', message: 'Hello {{client_name}}' }];
+    const t = await create(tc, { name: 'Popup', category: 'listing', triggerType: 'listing_created', steps });
+    // Make "now" quiet hours for this listing: the old behaviour held the draft until morning.
+    await admin.from('automation_settings').insert({ owner_user_id: tc.id, listing_id: lid, mode: 'draft', quiet_start_hour: localHour(new Date(), 'America/Chicago'), quiet_end_hour: (localHour(new Date(), 'America/Chicago') + 1) % 24, time_zone: 'America/Chicago' });
+
+    await post(tc, '/api/automation/instances', { listingId: lid, templateIds: [t] }, applyInstances); // no runInstances call: applying runs it
+    const inst = (await admin.from('automation_instances').select('id').eq('listing_id', lid)).data![0].id as string;
+    const acts = await actions(inst);
+    expect(acts).toHaveLength(1);
+    expect(acts[0].status).toBe('awaiting_approval');
+
+    const pending = (await call(h(listApprovals), tc, { method: 'GET', path: '/api/automation/approvals' })).json as { approvals: { actionId: string; listingId: string | null; deal: { address: string } | null; inputs: { to: string[]; subject: string } }[] };
+    const mine = pending.approvals.find((a) => a.listingId === lid)!;
+    expect(mine.deal?.address).toBe('6 Popup St');
+    expect(mine.inputs).toMatchObject({ to: ['sam.popup@example.com'], subject: 'Welcome to 6 Popup St' });
+
+    const before = (await admin.from('email_outbox').select('id').eq('owner_user_id', tc.id)).data?.length ?? 0;
+    const ok = await post(tc, `/api/automation/actions/${mine.actionId}/decide`, { decision: 'approve' }, decideAction, { id: mine.actionId });
+    expect(ok.status).toBe(200);
+    expect((await actions(inst))[0].status).toBe('executed'); // went now, in quiet hours, because the owner approved it
+    expect(((await admin.from('email_outbox').select('id').eq('owner_user_id', tc.id)).data?.length ?? 0)).toBe(before + 1);
+
+    await admin.from('email_outbox').delete().eq('owner_user_id', tc.id).like('subject', 'Welcome to 6 Popup%');
     await admin.from('automation_actions').delete().eq('listing_id', lid);
     await admin.from('automation_instances').delete().eq('listing_id', lid);
     await admin.from('automation_settings').delete().eq('listing_id', lid);

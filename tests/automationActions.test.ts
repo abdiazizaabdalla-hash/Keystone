@@ -127,29 +127,38 @@ describe('submitAction', () => {
 });
 
 describe('resumeAction', () => {
-  it('an unapproved action held for quiet hours goes to approval when the window ends (Draft mode)', async () => {
-    const t = setup({ now: new Date('2026-11-10T04:30:00Z') });
-    const held = await submitAction(email(['buyer@x.com']), t.deps);
-    expect(held.status).toBe('deferred');
-    t.setCtx({ now: new Date('2026-11-10T14:00:00Z') });
-    expect((await resumeAction(held.actionId, t.deps) as { status: string }).status).toBe('awaiting_approval');
+  // The real store keeps the template flag inside the saved inputs (actions.ts); this in-memory one needs it given.
+  const fromTemplate = (to: string[]): ActionRequest => ({ ...email(to), fromApprovedTemplate: true, inputs: { to, subject: 'Hi', message: 'Body', _fromApprovedTemplate: true } });
+  const night = new Date('2026-11-10T04:30:00Z');
+  const morning = new Date('2026-11-10T14:00:00Z');
+  it('Draft mode at night puts the draft to the owner straight away (not held until morning)', async () => {
+    const t = setup({ now: night });
+    const out = await submitAction(email(['buyer@x.com']), t.deps);
+    expect(out.status).toBe('awaiting_approval');
     expect(t.sent).toHaveLength(0);
   });
 
-  it('an approved action held for quiet hours sends once the window ends, and only once', async () => {
-    const t = setup();
+  it('approving at night sends now, once', async () => {
+    const t = setup({ now: night });
     const q = await submitAction(email(['buyer@x.com']), t.deps);
-    t.setCtx({ now: new Date('2026-11-10T04:30:00Z') });
-    expect((await approveAction(q.actionId, owner, t.deps) as { status: string }).status).toBe('deferred');
-    t.setCtx({ now: new Date('2026-11-10T14:00:00Z') });
-    expect((await resumeAction(q.actionId, t.deps) as { status: string }).status).toBe('executed');
-    expect(await resumeAction(q.actionId, t.deps)).toEqual({ error: 'not_deferred' });
+    expect((await approveAction(q.actionId, owner, t.deps) as { status: string }).status).toBe('executed');
+    expect(await approveAction(q.actionId, owner, t.deps)).toEqual({ error: 'not_pending' });
+    expect(t.sent).toHaveLength(1);
+  });
+
+  it('an Auto send held for quiet hours goes out when the window ends, and only once', async () => {
+    const t = setup({ mode: 'auto', now: night });
+    const held = await submitAction(fromTemplate(['buyer@x.com']), t.deps);
+    expect(held.status).toBe('deferred');
+    t.setCtx({ now: morning });
+    expect((await resumeAction(held.actionId, t.deps) as { status: string }).status).toBe('executed');
+    expect(await resumeAction(held.actionId, t.deps)).toEqual({ error: 'not_deferred' });
     expect(t.sent).toHaveLength(1);
   });
 
   it('is refused on resume if the world changed (kill switch)', async () => {
-    const t = setup({ now: new Date('2026-11-10T04:30:00Z') });
-    const held = await submitAction(email(['buyer@x.com']), t.deps);
+    const t = setup({ mode: 'auto', now: new Date('2026-11-10T04:30:00Z') });
+    const held = await submitAction(fromTemplate(['buyer@x.com']), t.deps);
     t.setCtx({ killSwitch: true, now: new Date('2026-11-10T14:00:00Z') });
     expect((await resumeAction(held.actionId, t.deps) as { status: string }).status).toBe('refused');
   });

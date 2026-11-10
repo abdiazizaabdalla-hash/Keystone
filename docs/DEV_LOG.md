@@ -2,6 +2,11 @@
 
 Newest first. One entry per working session: commit, what changed, what was verified, what remains.
 
+## 2026-11-10 - Automation: approvals now, one tab
+
+- BUILT: quiet hours no longer hold approval requests or approved emails; automations run at once on apply/edit/events/offers; approval popup anywhere in the app; Tracker merged into the Automation tab. HANDOFF "Auto-1f".
+- Verified: tsc, 542 unit + 34 integration tests. Not verified: browser. Nothing pushed.
+
 ## 2026-11-10 - Automation: owner-only tabs, quick create and edit on a file
 
 - BUILT: Automation/Tracker tabs and banners only for the owner (server `canAutomate`); create or edit an automation from inside a deal or listing and apply it. HANDOFF "Auto-1e". Tests no longer depend on the time of day (quiet hours).

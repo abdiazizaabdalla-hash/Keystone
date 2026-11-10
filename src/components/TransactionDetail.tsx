@@ -40,8 +40,7 @@ import { FIELD_LABEL, type SigningField } from '@/lib/signingFields';
 import ChatBubbles, { type ChatLine } from '@/components/chat/ChatBubbles';
 import { DealCoordinatorInvoices } from '@/components/CoordinatorInvoices';
 import { isClosedMessage, parseClosedMessage } from '@/lib/dealClosedMarker';
-import AssistantPanel from '@/components/AssistantPanel';
-import AutomationTracker from '@/components/AutomationTracker';
+import AutomationTab from '@/components/AutomationTab';
 import AutomationBanners, { useAutomationAlerts } from '@/components/AutomationAlerts';
 
 interface Transaction {
@@ -237,7 +236,7 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-type TxTab = 'overview' | 'checklist' | 'documents' | 'messages' | 'people' | 'automation' | 'tracker';
+type TxTab = 'overview' | 'checklist' | 'documents' | 'messages' | 'people' | 'automation';
 const TX_TABS: { id: TxTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'checklist', label: 'Checklist' },
@@ -245,7 +244,6 @@ const TX_TABS: { id: TxTab; label: string }[] = [
   { id: 'messages', label: 'Messages' },
   { id: 'people', label: 'Contacts' },
   { id: 'automation', label: 'Automation' },
-  { id: 'tracker', label: 'Tracker' },
 ];
 
 /**
@@ -267,7 +265,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   // Deep links like /dashboard/transactions/<id>#documents open that tab.
   useEffect(() => {
     const h = window.location.hash.replace('#', '');
-    if (TX_TABS.some((t) => t.id === h) && !(ownerView && h === 'messages')) setTab(h as TxTab);
+    if (h === 'tracker') setTab('automation');
+    else if (TX_TABS.some((t) => t.id === h) && !(ownerView && h === 'messages')) setTab(h as TxTab);
   }, [ownerView]);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   // Automations belong to the account that owns the deal: nobody it is shared with, no teammate, no brokerage owner looking in.
@@ -3057,7 +3056,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
         )}
 
         {canAutomate && transaction?.id && (
-          <AutomationBanners alerts={autoAlerts.alerts} scope={{ transactionId: transaction.id }} onChanged={() => void autoAlerts.reload()} onOpenTracker={() => selectTab('tracker')} />
+          <AutomationBanners alerts={autoAlerts.alerts} scope={{ transactionId: transaction.id }} onChanged={() => void autoAlerts.reload()} onOpenTracker={() => selectTab('automation')} />
         )}
 
         {/* The brokerage owner sees the commission up top, where they act on it, on every tab. */}
@@ -3067,7 +3066,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             Every panel stays mounted (just hidden) so drafts, uploads and
             polling keep their state when you switch tabs. */}
         <div role="tablist" aria-label="Transaction sections" className="flex gap-1 overflow-x-auto mb-8 p-1 bg-white/5 border border-white/10 rounded-2xl">
-          {TX_TABS.filter((t) => !(ownerView && t.id === 'messages') && !((t.id === 'automation' || t.id === 'tracker') && !canAutomate)).map((t) => (
+          {TX_TABS.filter((t) => !(ownerView && t.id === 'messages') && !(t.id === 'automation' && !canAutomate)).map((t) => (
             <button
               key={t.id}
               type="button"
@@ -3080,7 +3079,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
               }`}
             >
               {t.label}
-              {t.id === 'tracker' && autoAlerts.count > 0 ? (
+              {t.id === 'automation' && autoAlerts.count > 0 ? (
                 <span className="ml-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-xs font-bold text-slate-900" data-testid="tracker-count" aria-label={`${autoAlerts.count} need a look`}>{autoAlerts.count}</span>
               ) : null}
               {t.id === 'checklist' && tasks.length > 0 ? (
@@ -4041,13 +4040,8 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
         </div>
 
         {tab === 'automation' && canAutomate && transaction?.id && (
-          <div className="max-w-3xl" data-testid="automation-tab">
-            <AssistantPanel transactionId={transaction.id} />
-          </div>
-        )}
-        {tab === 'tracker' && canAutomate && transaction?.id && (
-          <div className="max-w-3xl" data-testid="tracker-tab">
-            <AutomationTracker transactionId={transaction.id} />
+          <div className="max-w-3xl">
+            <AutomationTab transactionId={transaction.id} />
           </div>
         )}
 

@@ -184,3 +184,12 @@ Financial automation (commission amounts, invoices, payments) only prepares reco
 - Test-suite fix: integration tests now switch quiet hours off so they do not depend on the time of day (the default 9pm-7am Central holds emails as `deferred`, which is correct product behaviour).
 - Verified: tsc, 538 unit, 33 integration tests on relay-test. Not verified in a browser.
 
+### Auto-1f: approvals now (popup), no night-time holding, one Automation tab (BUILT, committed locally, not pushed)
+
+- **Why emails were "held":** the guard checked quiet hours (default 9pm-7am, America/Chicago, per file) BEFORE asking for approval, so a draft made at night waited until 7am before it even asked. Fixed in `guard.ts`: quiet hours now hold only a send that would go out with nobody deciding (Auto mode + approved template). Asking the owner (Draft) is never held, and an email the owner just approved goes immediately (`approvedByPerson`; the other rules, strangers and the daily cap, still apply). Drafts already held are put to the owner at the next hourly check.
+- **Immediate:** adding an automation to a file, editing/resuming one, a deal event (`emitDealEvent`: contract/document/closed) and a new listing offer now run that file's automations at once (`runInstancesFor`), so the approval popup appears right away instead of at the next hourly check. The hourly check remains the safety net.
+- **Approval popup** (`ApprovalPopup.tsx`, mounted in the dashboard layout, so it shows wherever you are): the email's To / Subject / message, with Approve and send, Edit (change the text, then Save and send), Reject, or Later (hidden for this visit only). Polls every 30 s, on window focus and on `relay:automation-changed`. Uses `GET /api/automation/approvals` (now includes listings).
+- **One Automation tab** on deals and listings (`AutomationTab.tsx`): Tracker first, "Settings & activity" (mode, switches, activity list) second; the open-items count sits on the tab. Old `#tracker` links open it.
+- Verified: tsc, 542 unit, 34 integration tests (new: a draft appears on apply, in quiet hours, approving sends now). Not verified in a browser.
+- Not built: a global approvals page; editing quiet hours in the UI (the settings route accepts them).
+

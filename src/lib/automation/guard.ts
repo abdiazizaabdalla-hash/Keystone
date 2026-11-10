@@ -5,7 +5,8 @@ import { ALWAYS_APPROVE_ACTIONS, EXTERNAL_ACTIONS, RESTRICTED_ACTIONS, ACTION_KI
 // clock) at EXECUTION time and passes them in, so a saved workflow can never stand in for a permission check.
 //
 // Decision order matters and is tested: feature off, kill switch, entitlement, restricted, unknown action, mode off,
-// recipients, cap, quiet hours, then whether a person must approve.
+// recipients, cap, quiet hours, then whether a person must approve. Quiet hours only hold an email that would go out with
+// nobody deciding (Auto mode); asking the owner to approve is never held, and an email the owner has just approved goes now.
 
 export interface QuietHours {
   startHour: number; // 0-23, local, inclusive
@@ -19,6 +20,8 @@ export interface GuardRequest {
   recipients?: string[];
   /** True only for an approved template's routine reminder; the one thing Auto mode may send without approval. */
   fromApprovedTemplate?: boolean;
+  /** The owner has just approved exactly this: it goes now, even in quiet hours. */
+  approvedByPerson?: boolean;
 }
 
 export interface GuardContext {
@@ -90,7 +93,10 @@ export function evaluateGuard(req: GuardRequest, ctx: GuardContext): GuardDecisi
     const stranger = to.find((a) => !allowed.has(a));
     if (stranger) return { outcome: 'refuse', reason: 'recipient_not_on_deal', detail: stranger };
     if (ctx.sentToday + to.length > ctx.dailySendCap) return { outcome: 'refuse', reason: 'over_daily_cap' };
-    if (ctx.quietHours && inQuietHours(ctx.now, ctx.quietHours)) return { outcome: 'defer', reason: 'quiet_hours' };
+    // Quiet hours protect the person receiving an email from one arriving at night. A draft only asks the owner (nothing is sent),
+    // and the owner's own approval is their decision, so neither waits for morning. Only an Auto send with nobody deciding does.
+    const nobodyDecides = ctx.mode !== 'draft' && req.fromApprovedTemplate === true;
+    if (nobodyDecides && !req.approvedByPerson && ctx.quietHours && inQuietHours(ctx.now, ctx.quietHours)) return { outcome: 'defer', reason: 'quiet_hours' };
   }
 
   if (ALWAYS_APPROVE_ACTIONS.includes(req.kind)) return { outcome: 'allow', requiresApproval: true, approvalReason: req.kind === 'set_date' ? 'contract_dates' : 'suggestion' };

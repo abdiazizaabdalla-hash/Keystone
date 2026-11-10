@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { automationError, requireAutomationUser, requireOwnedScope } from '@/lib/automation/server';
 import { AuthError } from '@/lib/auth';
-import { assignTemplates, createFileAutomation, listInstances } from '@/lib/automation/instances';
+import { assignTemplates, createFileAutomation, listInstances, runInstancesFor } from '@/lib/automation/instances';
 
 // GET ?transactionId|listingId: the automations running on one deal or listing the caller owns.
 // POST { transactionId | listingId, templateIds: [] }: applies saved automations to it. Each becomes its own copy.
@@ -25,10 +25,13 @@ export async function POST(request: NextRequest) {
     if (body.definition !== undefined) {
       const made = await createFileAutomation(user.id, scope, body.definition);
       if (!made.ok) throw new AuthError(made.error, 400);
+      await runInstancesFor(scope); // what is due right away goes now (a draft email pops up for approval)
       return NextResponse.json({ applied: [], created: made.id, skipped: [] });
     }
     const ids = Array.isArray(body.templateIds) ? body.templateIds.filter((x: unknown): x is string => typeof x === 'string') : [];
-    return NextResponse.json(await assignTemplates(user.id, scope, ids));
+    const result = await assignTemplates(user.id, scope, ids);
+    if (result.applied.length) await runInstancesFor(scope);
+    return NextResponse.json(result);
   } catch (error) {
     return automationError(error, 'apply the automations');
   }

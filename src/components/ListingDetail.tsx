@@ -28,8 +28,7 @@ import OverviewCard from '@/components/OverviewCard';
 import QuickMessageComposer from '@/components/QuickMessageComposer';
 import SellerUpdateModal from '@/components/SellerUpdateModal';
 import ListingReadinessCard from '@/components/ListingReadinessCard';
-import AssistantPanel from '@/components/AssistantPanel';
-import AutomationTracker from '@/components/AutomationTracker';
+import AutomationTab from '@/components/AutomationTab';
 import AutomationBanners, { useAutomationAlerts } from '@/components/AutomationAlerts';
 import ListingFeeInvoiceCard from '@/components/ListingFeeInvoiceCard';
 import ListingSignModal, { type ListingSigningRequest } from '@/components/ListingSignModal';
@@ -155,7 +154,7 @@ const OFFER_LABEL: Record<string, string> = { received: 'Received', countered: '
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '');
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-type ListingTab = 'overview' | 'checklist' | 'offers' | 'documents' | 'messages' | 'automation' | 'tracker' | 'details';
+type ListingTab = 'overview' | 'checklist' | 'offers' | 'documents' | 'messages' | 'automation' | 'details';
 const ALL_LISTING_TABS: { id: ListingTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'checklist', label: 'Checklist' },
@@ -163,7 +162,6 @@ const ALL_LISTING_TABS: { id: ListingTab; label: string }[] = [
   { id: 'documents', label: 'Documents' },
   { id: 'messages', label: 'Messages' },
   { id: 'automation', label: 'Automation' },
-  { id: 'tracker', label: 'Tracker' },
   { id: 'details', label: 'Details' },
 ];
 const LISTING_TABS = ALL_LISTING_TABS;
@@ -186,7 +184,8 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
   };
   useEffect(() => {
     const h = window.location.hash.replace('#', '');
-    if (LISTING_TABS.some((t) => t.id === h)) setTab(h as ListingTab);
+    if (h === 'tracker') setTab('automation');
+    else if (LISTING_TABS.some((t) => t.id === h)) setTab(h as ListingTab);
   }, []);
   const [data, setData] = useState<Detail | null>(null);
   const [coordInvites, setCoordInvites] = useState<Array<{ email: string; status: string }>>([]);
@@ -198,7 +197,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
   // Automation belongs to the account that owns the listing (the server says so): not an agent, a coordinator it is shared with, a brokerage owner looking in, or an admin.
   const automationHidden = ownerView || !isFeatureOnClient('automation') || data?.canAutomate !== true;
   const autoAlerts = useAutomationAlerts({ listingId: id, enabled: !automationHidden });
-  const tabs = LISTING_TABS.filter((t) => !(ownerView && t.id === 'messages') && !((t.id === 'automation' || t.id === 'tracker') && automationHidden));
+  const tabs = LISTING_TABS.filter((t) => !(ownerView && t.id === 'messages') && !(t.id === 'automation' && automationHidden));
   const loadCoordInvites = useCallback(async () => {
     try {
       const res = await authFetch(`/api/listings/${id}/coordinator`);
@@ -1104,7 +1103,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
       {notice && <p className="mb-4 text-sm text-green-400">{notice}</p>}
 
-      {!automationHidden && <AutomationBanners alerts={autoAlerts.alerts} scope={{ listingId: id }} onChanged={() => void autoAlerts.reload()} onOpenTracker={() => selectTab('tracker')} />}
+      {!automationHidden && <AutomationBanners alerts={autoAlerts.alerts} scope={{ listingId: id }} onChanged={() => void autoAlerts.reload()} onOpenTracker={() => selectTab('automation')} />}
 
       {/* Tabs: one focused section at a time. Panels stay mounted (just hidden) so nothing is lost on switch. */}
       <div role="tablist" aria-label="Listing sections" className="flex gap-1 overflow-x-auto mb-8 p-1 bg-white/5 border border-white/10 rounded-2xl">
@@ -1121,7 +1120,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
             }`}
           >
             {t.label}
-            {t.id === 'tracker' && autoAlerts.count > 0 && (
+            {t.id === 'automation' && autoAlerts.count > 0 && (
               <span className="ml-2 rounded-full bg-amber-400 px-1.5 py-0.5 text-xs font-bold text-slate-900" data-testid="tracker-count" aria-label={`${autoAlerts.count} need a look`}>{autoAlerts.count}</span>
             )}
             {t.id === 'checklist' && tasks.length > 0 && (
@@ -2157,10 +2156,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
         </div>
 
         {!automationHidden && tab === 'automation' && (
-          <div className="max-w-3xl" data-testid="automation-tab"><AssistantPanel listingId={id} /></div>
-        )}
-        {!automationHidden && tab === 'tracker' && (
-          <div className="max-w-3xl" data-testid="tracker-tab"><AutomationTracker listingId={id} /></div>
+          <div className="max-w-3xl"><AutomationTab listingId={id} /></div>
         )}
 
         <div className={tab === 'details' ? 'space-y-6' : 'hidden'}>

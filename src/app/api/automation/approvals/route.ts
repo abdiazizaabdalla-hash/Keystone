@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
     const { data: actions } = ids.length ? await supabaseServer.from('automation_actions').select('id, kind, transaction_id, listing_id, inputs').in('id', ids).eq('owner_user_id', user.id) : { data: [] };
     const txIds = [...new Set((actions ?? []).map((a) => a.transaction_id as string | null).filter((x): x is string => !!x))];
     const { data: tx } = txIds.length ? await supabaseServer.from('transactions').select('id, file_number, property_address').in('id', txIds) : { data: [] };
+    const liIds = [...new Set((actions ?? []).map((a) => a.listing_id as string | null).filter((x): x is string => !!x))];
+    const { data: li } = liIds.length ? await supabaseServer.from('listings').select('id, property_address').in('id', liIds).eq('tc_user_id', user.id) : { data: [] };
+    const listings = new Map((li ?? []).map((l) => [l.id as string, l.property_address as string]));
     const deals = new Map((tx ?? []).map((t) => [t.id as string, t]));
     const byId = new Map((actions ?? []).map((a) => [a.id as string, a]));
     return NextResponse.json({
@@ -26,7 +29,7 @@ export async function GET(request: NextRequest) {
         if (!a) return [];
         const inputs = (ap.draft ?? a.inputs ?? {}) as Record<string, unknown>;
         const deal = a.transaction_id ? deals.get(a.transaction_id as string) : null;
-        return [{ actionId: a.id, kind: a.kind, label: kindLabel(a.kind as string), summary: summarizeAction(a.kind as string, inputs), inputs, createdAt: ap.created_at, transactionId: a.transaction_id, listingId: a.listing_id, deal: deal ? { fileNumber: deal.file_number, address: deal.property_address } : null }];
+        return [{ actionId: a.id, kind: a.kind, label: kindLabel(a.kind as string), summary: summarizeAction(a.kind as string, inputs), inputs, createdAt: ap.created_at, transactionId: a.transaction_id, listingId: a.listing_id, deal: deal ? { fileNumber: deal.file_number, address: deal.property_address } : a.listing_id && listings.has(a.listing_id as string) ? { fileNumber: null, address: listings.get(a.listing_id as string) } : null }];
       }),
     });
   } catch (error) {

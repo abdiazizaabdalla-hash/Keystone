@@ -1,5 +1,6 @@
 'use client';
 
+import ApprovalPopup from '@/components/ApprovalPopup';
 import ListingAddedNotice from '@/components/ListingAddedNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
@@ -701,6 +702,7 @@ export default function DashboardLayout({
         {children}
       <ToastHost />
       </div>
+      {isFeatureOnClient('automation') && !(isAgentAccount && !hasWorkspace) && <ApprovalPopup />}
       {guideKind && <FirstRunGuide key={`${guideKind}-${guideRestartKey}`} kind={guideKind} restartKey={guideRestartKey} onFinished={handleGuideFinished} onHintSeen={markHintSeen} />}
       {hintsEligible && <PageHint seen={seenHints} suspended={guideKind !== null || tutorialMenuOpen} onSeen={markHintSeen} />}
       {tutorialMenuOpen && (
