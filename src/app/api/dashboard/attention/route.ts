@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
         .from('transactions')
         .select('tc_user_id')
         .neq('status', 'Closed')
+        .is('archived_at', null)
         .not('tc_user_id', 'is', null);
       tcUserIds = Array.from(new Set((allOpenTx || []).map((t) => t.tc_user_id as string)));
     } else {

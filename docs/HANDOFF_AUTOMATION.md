@@ -204,3 +204,12 @@ Financial automation (commission amounts, invoices, payments) only prepares reco
 - Stored as `comp_ends_at` in app_metadata (no SQL). Pure logic in `src/lib/compPeriod.ts`; enforcement in `assertTrialActive` (`src/lib/trial.ts`): after the date, a non-Starter account without an active subscription on that plan gets the same 402 "add payment" lock as an expired Starter trial. Paying for that plan lifts it. Never touches Stripe.
 - Admin page: changing a plan to Pro/Team asks for "free until" (default 30 days, blank = no end); the Trial column shows "Free until <date>" with "Change free-until date". `/api/auth/me` returns the banner info (plan name and price); the dashboard banner and checkout button use that plan.
 - Not verified in a browser; not on production (needs deploy, then set the date on the account).
+
+## Archive (built locally, not deployed)
+- Deals that do not close can be archived with a reason + note (`lib/archive.ts`, `POST/DELETE /api/transactions/[id]/archive`, owner only). Restore clears it.
+- Columns (not status): `archived_at, archive_reason, archive_note, archived_by` — SQL: `add-transaction-archive.sql`. Run on relay-test, then prod BEFORE deploying this code.
+- Archived deals are excluded from: dashboard, attention, key-dates, due-date reminders, calendar + ICS, compliance export, automation tick/engine. Transactions list has an "Archived" filter.
+- Not done: Google Calendar push sync exclusion; integration test (needs SQL on relay-test).
+
+## Other invoices (built locally)
+- Coordinators (flag `agent_workspace`) can create one-off invoices to anyone, any amount, from Invoices → "Other invoices". Not synced to QuickBooks.

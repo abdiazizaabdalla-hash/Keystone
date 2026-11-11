@@ -73,6 +73,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       supabaseServer
         .from('transactions')
         .select('id, file_number, property_address, closing_date, status')
+        .is('archived_at', null)
         .in('tc_user_id', visibleTcIds.length ? visibleTcIds : [userId])
         .limit(500),
       supabaseServer.from('transaction_agents').select('transaction_id').eq('agent_user_id', userId).limit(500),
@@ -86,6 +87,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       const { data } = await supabaseServer
         .from('transactions')
         .select('id, file_number, property_address, closing_date, status')
+        .is('archived_at', null)
         .in('id', agentOnlyIds);
       agentTx = (data || []) as typeof agentTx;
     }

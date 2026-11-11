@@ -160,7 +160,8 @@ export default function Dashboard() {
         const txData = await txRes.json();
         const agentsData = await agentsRes.json();
         const invoicesData = await invoicesRes.json();
-        setTransactions(Array.isArray(txData) ? txData : []);
+        // Archived deals (did not close) are out of everyday numbers; they live under Transactions → Archived.
+        setTransactions(Array.isArray(txData) ? txData.filter((t: { archived_at?: string | null }) => !t.archived_at) : []);
         setAgents(Array.isArray(agentsData) ? agentsData : []);
         setInvoices(Array.isArray(invoicesData) ? invoicesData : []);
       }

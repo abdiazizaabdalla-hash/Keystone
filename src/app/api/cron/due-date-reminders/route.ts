@@ -103,7 +103,8 @@ export async function GET(request: NextRequest) {
     .from('transactions')
     .select('id, file_number, property_address, status, agent_id')
     .in('id', transactionIds)
-    .neq('status', 'Closed');
+    .neq('status', 'Closed')
+    .is('archived_at', null);
 
   if (txError) {
     console.error('due-date-reminders: failed to load transactions', txError);

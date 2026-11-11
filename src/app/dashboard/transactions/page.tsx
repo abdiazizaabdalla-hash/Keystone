@@ -1,5 +1,6 @@
 'use client';
 
+import { archiveLabel, isArchived } from '@/lib/archive';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -34,6 +35,9 @@ interface Transaction {
   shared?: boolean;
   limited?: boolean;
   shared_agent?: { name: string | null } | null;
+  /** Set when the deal did not close and was archived (see lib/archive.ts). */
+  archived_at?: string | null;
+  archive_reason?: string | null;
 }
 
 // Deals saved by the QuickBooks import (also recognised before the source column exists: closed, named after an invoice number).
@@ -54,7 +58,7 @@ function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
   const isWorkspaceAgent = useWorkspaceAgent();
   const [query, setQuery] = useState('');
   // Deals an agent has invited this account to coordinate, waiting to be accepted.
-  const [view, setView] = useState<'active' | 'attention' | 'closed' | 'quickbooks' | 'all'>('active');
+  const [view, setView] = useState<'active' | 'attention' | 'closed' | 'quickbooks' | 'archived' | 'all'>('active');
   useEffect(() => {
     fetchData();
   }, []);
@@ -149,8 +153,10 @@ function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
       .filter((tx) => {
         const isClosed = tx.status === 'Closed';
         const qb = isQb(tx);
-        // QuickBooks imports have their own filter; the everyday views leave them out (All shows everything).
-        if (view === 'quickbooks' ? !qb : view !== 'all' && qb) return false;
+        const archived = isArchived(tx);
+        // Archived deals (did not close) and QuickBooks imports each have their own filter; the everyday views leave them out (All shows everything).
+        if (view === 'archived' ? !archived : view !== 'all' && archived) return false;
+        if (view === 'quickbooks' ? !qb : view !== 'all' && view !== 'archived' && qb) return false;
         if (view === 'active' && isClosed) return false;
         if (view === 'closed' && !isClosed) return false;
         if (view === 'attention' && (isClosed || !(tx.overdue_count && tx.overdue_count > 0))) return false;
@@ -168,14 +174,16 @@ function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
   }, [transactions, agents, query, view]);
 
   const totals = useMemo(() => {
-    const own = transactions.filter((t) => !isQb(t));
+    const archivedCount = transactions.filter((t) => isArchived(t)).length;
+    const own = transactions.filter((t) => !isQb(t) && !isArchived(t));
     const active = own.filter((t) => t.status !== 'Closed');
     return {
       all: transactions.length,
       active: active.length,
       closed: own.length - active.length,
       overdue: active.filter((t) => (t.overdue_count || 0) > 0).length,
-      quickbooks: transactions.length - own.length,
+      quickbooks: transactions.filter((t) => isQb(t) && !isArchived(t)).length,
+      archived: archivedCount,
     };
   }, [transactions]);
 
@@ -206,6 +214,7 @@ function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
     ...(totals.overdue > 0 ? [{ id: 'attention' as const, label: `Needs attention (${totals.overdue})` }] : []),
     { id: 'closed', label: `Closed (${totals.closed})` },
     ...(totals.quickbooks > 0 ? [{ id: 'quickbooks' as const, label: `QuickBooks (${totals.quickbooks})` }] : []),
+    ...(totals.archived > 0 ? [{ id: 'archived' as const, label: `Archived (${totals.archived})` }] : []),
     { id: 'all', label: 'All' },
   ];
 
@@ -321,6 +330,7 @@ function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
+                        {isArchived(tx) && <span className="rounded-full border border-amber-600/50 bg-amber-900/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">Archived · {archiveLabel(tx.archive_reason)}</span>}
                         {isQb(tx) && <span className="rounded-full border border-emerald-600/50 bg-emerald-900/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">QuickBooks</span>}
                         <span className={`text-xs px-2.5 py-0.5 rounded-full border ${STATUS_STYLE[tx.status] || 'bg-slate-500/10 text-slate-300 border-slate-500/40'}`}>{tx.status}</span>
                       </div>

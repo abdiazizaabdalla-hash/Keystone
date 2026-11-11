@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
       .from('transactions')
       .select('id, file_number, property_address')
       .in('tc_user_id', tcUserIds)
-      .neq('status', 'Closed');
+      .neq('status', 'Closed')
+      .is('archived_at', null);
     if (txError) throw txError;
     if (!transactions || transactions.length === 0) return NextResponse.json({ items: [] });
 

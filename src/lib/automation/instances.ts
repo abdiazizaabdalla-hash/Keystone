@@ -270,11 +270,13 @@ async function loadFacts(inst: InstanceRow): Promise<{ facts: InstanceFacts; tim
   const [{ data: settings }, record] = await Promise.all([
     supabaseServer.from('automation_settings').select('time_zone').eq(col, scopeId).maybeSingle(),
     inst.transaction_id
-      ? supabaseServer.from('transactions').select('created_at, closing_date, acceptance_date').eq('id', inst.transaction_id).maybeSingle()
+      ? supabaseServer.from('transactions').select('*').eq('id', inst.transaction_id).maybeSingle()
       : supabaseServer.from('listings').select('created_at, planned_list_date, expiration_date').eq('id', inst.listing_id!).maybeSingle(),
   ]);
   const r = record.data as Record<string, string | null> | null;
   if (!r) return null;
+  // An archived deal is no longer being worked: its automations do nothing until it is restored.
+  if (inst.transaction_id && r.archived_at) return null;
   const events: Record<string, string | undefined> = {};
   if (inst.transaction_id && EVENT_TRIGGERS.has(inst.trigger_type)) {
     const { data: ev } = await supabaseServer.from('transaction_events').select('occurred_at').eq('transaction_id', inst.transaction_id).eq('type', inst.trigger_type).gte('occurred_at', inst.created_at).order('occurred_at', { ascending: false }).limit(1).maybeSingle();

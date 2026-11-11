@@ -41,7 +41,8 @@ export async function GET(request: NextRequest) {
         .from('transactions')
         .select('id', { count: 'exact', head: true })
         .in('tc_user_id', visibleIds)
-        .neq('status', CLOSED_STATUS);
+        .neq('status', CLOSED_STATUS)
+        .is('archived_at', null);
       if (activeError) throw activeError;
       const activeTransactions = activeCount || 0;
 

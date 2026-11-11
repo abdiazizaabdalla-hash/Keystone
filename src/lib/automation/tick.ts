@@ -201,7 +201,7 @@ export async function runTick(now: Date = new Date(), opts: { budgetMs?: number 
       const ids = rows.map((r) => r.transaction_id);
       const since = new Date(now.getTime() - 7 * 86_400_000).toISOString();
       const [{ data: deals }, { data: events }] = await Promise.all([
-        supabaseServer.from('transactions').select('id, property_address, status, created_at, updated_at').in('id', ids),
+        supabaseServer.from('transactions').select('*').in('id', ids),
         supabaseServer.from('transaction_events').select('transaction_id, occurred_at').in('transaction_id', ids).gte('occurred_at', since),
       ]);
       const lastEvent = new Map<string, string>();
@@ -209,7 +209,7 @@ export async function runTick(now: Date = new Date(), opts: { budgetMs?: number 
         const id = e.transaction_id as string;
         if (!lastEvent.has(id) || (e.occurred_at as string) > lastEvent.get(id)!) lastEvent.set(id, e.occurred_at as string);
       }
-      const quiet = findStalled((deals ?? []).map((d) => ({ address: (d.property_address as string) || 'A deal', status: (d.status as string) || '', createdAt: d.created_at as string, updatedAt: (d.updated_at as string | null) ?? null, lastEventAt: lastEvent.get(d.id as string) ?? null })), now);
+      const quiet = findStalled((deals ?? []).filter((d) => !d.archived_at).map((d) => ({ address: (d.property_address as string) || 'A deal', status: (d.status as string) || '', createdAt: d.created_at as string, updatedAt: (d.updated_at as string | null) ?? null, lastEventAt: lastEvent.get(d.id as string) ?? null })), now);
       if (quiet.length === 0) continue;
       const out = await submitAutomationAction({
         ownerUserId: ownerId, kind: 'notify_user',

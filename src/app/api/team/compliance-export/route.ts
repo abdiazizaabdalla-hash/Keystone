@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
       .select('id, tc_user_id, agent_id, file_number, property_address, status, acceptance_date, closing_date')
       .in('tc_user_id', memberIds)
       .neq('status', CLOSED_STATUS)
+      .is('archived_at', null)
       .limit(5000);
     if (txError) throw txError;
     const rows = txs || [];

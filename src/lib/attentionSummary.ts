@@ -82,7 +82,8 @@ async function computeDealAttention(tcUserIds: string[], extraTransactionIds: st
   let dealQuery = supabaseServer
     .from('transactions')
     .select('id, file_number, property_address, closing_date, tc_user_id')
-    .neq('status', 'Closed');
+    .neq('status', 'Closed')
+    .is('archived_at', null);
   if (extraTransactionIds.length && tcUserIds.length) dealQuery = dealQuery.or(`tc_user_id.in.(${tcUserIds.join(',')}),id.in.(${extraTransactionIds.join(',')})`);
   else if (extraTransactionIds.length) dealQuery = dealQuery.in('id', extraTransactionIds);
   else dealQuery = dealQuery.in('tc_user_id', tcUserIds);

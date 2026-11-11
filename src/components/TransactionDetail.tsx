@@ -42,6 +42,7 @@ import { DealCoordinatorInvoices } from '@/components/CoordinatorInvoices';
 import { isClosedMessage, parseClosedMessage } from '@/lib/dealClosedMarker';
 import AutomationTab from '@/components/AutomationTab';
 import AutomationBanners, { useAutomationAlerts } from '@/components/AutomationAlerts';
+import { ARCHIVE_REASONS, archiveLabel, isArchived, type ArchiveReason } from '@/lib/archive';
 
 interface Transaction {
   id: string;
@@ -61,6 +62,10 @@ interface Transaction {
   canAutomate?: boolean;
   /** A shared deal seen by a coordinator whose trial ended: view and light updates only until they subscribe. */
   limited?: boolean;
+  /** Set when the deal did not close and was archived (lib/archive.ts). */
+  archived_at?: string | null;
+  archive_reason?: string | null;
+  archive_note?: string | null;
   shared_agent?: Agent | null;
   /** For a deal shared with you: your own record for that agent (your fees). */
   tc_agent?: Agent | null;
@@ -269,6 +274,12 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
     else if (TX_TABS.some((t) => t.id === h) && !(ownerView && h === 'messages')) setTab(h as TxTab);
   }, [ownerView]);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
+  // Archiving a deal that did not close: pick a reason, optionally add a note. Nothing is deleted and it can be restored.
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveReason, setArchiveReason] = useState<ArchiveReason>('fell_through');
+  const [archiveNote, setArchiveNote] = useState('');
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   // Automations belong to the account that owns the deal: nobody it is shared with, no teammate, no brokerage owner looking in.
   const canAutomate = !ownerView && isFeatureOnClient('automation') && transaction?.canAutomate === true;
   const autoAlerts = useAutomationAlerts({ transactionId: id, enabled: canAutomate });
@@ -1839,6 +1850,52 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
     }
   };
 
+  const handleArchive = async () => {
+    if (!transaction) return;
+    setArchiveBusy(true);
+    setArchiveError(null);
+    try {
+      const response = await authFetch(`/api/transactions/${transaction.id}/archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: archiveReason, note: archiveNote }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Could not archive this transaction');
+      setTransaction((prev) => (prev ? { ...prev, archived_at: result.archived_at, archive_reason: result.archive_reason, archive_note: result.archive_note } : prev));
+      setArchiveOpen(false);
+      setArchiveNote('');
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setArchiveError(error instanceof Error ? error.message : 'Could not archive this transaction');
+    } finally {
+      setArchiveBusy(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!transaction) return;
+    setArchiveBusy(true);
+    setArchiveError(null);
+    try {
+      const response = await authFetch(`/api/transactions/${transaction.id}/archive`, { method: 'DELETE' });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Could not restore this transaction');
+      setTransaction((prev) => (prev ? { ...prev, archived_at: null, archive_reason: null, archive_note: null } : prev));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setArchiveError(error instanceof Error ? error.message : 'Could not restore this transaction');
+    } finally {
+      setArchiveBusy(false);
+    }
+  };
+
   const handleDeleteTransaction = async () => {
     if (!transaction) return;
     if (
@@ -3055,6 +3112,23 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           </div>
         )}
 
+        {isArchived(transaction) && (
+          <div className="mb-4 px-4 py-3 rounded-xl border border-amber-700/60 bg-amber-900/20 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-amber-200">Archived · {archiveLabel(transaction?.archive_reason)}</p>
+              <p className="text-xs text-amber-200/80">
+                {transaction?.archive_note ? `${transaction.archive_note} · ` : ''}Out of open work, the calendar, reminders and automations. Nothing was deleted.
+              </p>
+              {archiveError && <p className="text-xs text-red-300 mt-1">{archiveError}</p>}
+            </div>
+            {!transaction?.shared && !ownerView && (
+              <button type="button" onClick={handleRestore} disabled={archiveBusy} className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-600/60 text-amber-100 disabled:opacity-50">
+                {archiveBusy ? 'Restoring…' : 'Restore'}
+              </button>
+            )}
+          </div>
+        )}
+
         {canAutomate && transaction?.id && (
           <AutomationBanners alerts={autoAlerts.alerts} scope={{ transactionId: transaction.id }} onChanged={() => void autoAlerts.reload()} onOpenTracker={() => selectTab('automation')} />
         )}
@@ -3461,6 +3535,39 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
 
             <div className="lg:order-1 min-w-0">{tab === 'overview' ? documentsCard : null}</div>
           </div>
+
+        {!transaction?.shared && !ownerView && !isArchived(transaction) && (
+        <OverviewSection title="Archive this deal">
+          <p className="text-sm text-slate-400 mb-4">
+            The deal did not close? Archive it instead of deleting it. It leaves your open work, calendar, reminders and automations, and keeps its checklist, documents and messages. You can restore it any time.
+          </p>
+          {!archiveOpen ? (
+            <button type="button" onClick={() => { setArchiveOpen(true); setArchiveError(null); }} className="px-4 py-2 bg-amber-900/30 hover:bg-amber-900/50 border border-amber-700/70 text-amber-200 rounded-xl transition font-medium">
+              Archive transaction…
+            </button>
+          ) : (
+            <div className="space-y-3 max-w-md">
+              <label className="block text-sm text-slate-300">
+                Why is it being archived?
+                <select value={archiveReason} onChange={(e) => setArchiveReason(e.target.value as ArchiveReason)} className="mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100">
+                  {ARCHIVE_REASONS.map((r) => (<option key={r.id} value={r.id}>{r.label}</option>))}
+                </select>
+              </label>
+              <label className="block text-sm text-slate-300">
+                Note {archiveReason === 'other' ? '(required)' : '(optional)'}
+                <textarea value={archiveNote} onChange={(e) => setArchiveNote(e.target.value)} maxLength={500} rows={2} className="mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100" placeholder="For example: buyer's loan was denied" />
+              </label>
+              {archiveError && <p className="text-sm text-red-300">{archiveError}</p>}
+              <div className="flex gap-2">
+                <button type="button" onClick={handleArchive} disabled={archiveBusy} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-semibold disabled:opacity-50">
+                  {archiveBusy ? 'Archiving…' : 'Archive'}
+                </button>
+                <button type="button" onClick={() => setArchiveOpen(false)} disabled={archiveBusy} className="px-4 py-2 border border-slate-600 text-slate-300 rounded-xl hover:bg-white/5">Cancel</button>
+              </div>
+            </div>
+          )}
+        </OverviewSection>
+        )}
 
         {!transaction?.shared && !ownerView && (
         <OverviewSection title="Delete this deal" tone="danger">

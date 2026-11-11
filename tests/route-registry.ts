@@ -203,6 +203,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/transaction-contacts/[id]': { kind: 'session', methods: ['DELETE', 'PATCH'] },
   '/api/transactions': { kind: 'session', methods: ['DELETE', 'GET', 'POST'] },
   '/api/transactions/[id]': { kind: 'session', methods: ['PATCH'] },
+  '/api/transactions/[id]/archive': { kind: 'session', methods: ['DELETE', 'POST'], why: 'Archives or restores one deal; authorizeDeal limits it to the deal\'s owner, their team owner, or a full participant, and free agent logins are refused.' },
   '/api/transactions/[id]/calendar-invite': { kind: 'session', methods: ['POST'] },
   '/api/transactions/[id]/calendar-sync': { kind: 'session', methods: ['GET', 'POST'] },
   '/api/transactions/[id]/checklist-template': { kind: 'session', methods: ['PATCH'] },

@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     // Deals this login owns.
     // Plus the deals other people added this login to (a paid or in-trial participant).
     const sharedIds = await sharedDealIdsFor(user);
-    let txQuery = supabaseServer.from('transactions').select('id, file_number, property_address, closing_date, status').limit(1000);
+    let txQuery = supabaseServer.from('transactions').select('id, file_number, property_address, closing_date, status, archived_at').is('archived_at', null).limit(1000);
     txQuery = sharedIds.length ? txQuery.or(`tc_user_id.eq.${user.id},id.in.(${sharedIds.join(',')})`) : txQuery.eq('tc_user_id', user.id);
     const { data: txs, error: txError } = await txQuery;
     if (txError) throw txError;
