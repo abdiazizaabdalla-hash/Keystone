@@ -161,9 +161,11 @@ export async function PATCH(request: NextRequest) {
 
     }
 
+    if (!nowCompleted) await emitDealEvent(task.transaction_id as string, 'task_reopened', { taskId, name: task.name });
     if (nowCompleted) {
       // Automation event (inert unless the `automation` flag is on).
       await emitDealEvent(task.transaction_id as string, 'step_ticked', { taskId, name: task.name });
+      await emitDealEvent(task.transaction_id as string, 'task_completed', { taskId, name: task.name });
       queueDealNotification({
         transactionId: task.transaction_id as string,
         actorUserId: user.id,

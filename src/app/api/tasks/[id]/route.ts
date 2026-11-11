@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { emitDealEvent } from '@/lib/automation/events';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
@@ -95,6 +96,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       .single();
 
     if (updateError) throw updateError;
+
+    // Automation event (inert unless the flag is on): a step newly marked waiting on someone.
+    if (hasWaitingOn && updates.waiting_on && !task.waiting_on) {
+      await emitDealEvent(task.transaction_id as string, 'task_waiting', { taskId, name: task.name, waitingOn: updates.waiting_on });
+    }
 
     if (hasDueDate) {
       queueDealNotification({

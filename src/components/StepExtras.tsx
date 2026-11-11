@@ -14,6 +14,7 @@ export function ConditionPicker({ value, onChange }: { value: Condition | null |
     if (!t) return onChange(null);
     if (t === 'key_date_open') onChange({ type: 'key_date_open', kind: 'appraisal' });
     else if (t === 'no_document') onChange({ type: 'no_document', text: '' });
+    else if (t === 'task_done' || t === 'task_open') onChange({ type: t, text: '' });
     else onChange({ type: t as 'role_present' | 'role_missing', role: 'lender' });
   };
   return (
@@ -25,6 +26,8 @@ export function ConditionPicker({ value, onChange }: { value: Condition | null |
         <option value="role_missing">nobody has this role on the deal</option>
         <option value="role_present">someone has this role on the deal</option>
         <option value="no_document">no document like this is uploaded</option>
+        <option value="task_done">a checklist step is completed</option>
+        <option value="task_open">a checklist step is still open</option>
       </select>
       {value?.type === 'key_date_open' && (
         <select aria-label="Which date" className={field} value={value.kind} onChange={(e) => onChange({ type: 'key_date_open', kind: e.target.value })}>
@@ -36,6 +39,7 @@ export function ConditionPicker({ value, onChange }: { value: Condition | null |
           {roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
         </select>
       )}
+      {(value?.type === 'task_done' || value?.type === 'task_open') && <input aria-label="Step name" className={`${field} w-48`} placeholder="e.g. Closing prep" maxLength={80} value={value.text} onChange={(e) => onChange({ type: value.type, text: e.target.value })} />}
       {value?.type === 'no_document' && <input aria-label="Document name or type" className={`${field} w-48`} placeholder="e.g. Appraisal" maxLength={60} value={value.text} onChange={(e) => onChange({ type: 'no_document', text: e.target.value })} />}
     </div>
   );

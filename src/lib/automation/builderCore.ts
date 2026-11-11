@@ -44,6 +44,7 @@ export const DRAFT_TOOL = {
       description: { type: 'string' },
       category: { type: 'string', enum: ['transaction', 'listing'] },
       triggerType: { type: 'string', enum: TRIGGERS.map((t) => t.id) },
+      triggerTask: { type: 'string' },
       steps: {
         type: 'array',
         maxItems: 12,
@@ -113,7 +114,7 @@ export function parseDraft(raw: unknown): DraftResult {
   const unsupported = list(o.unsupported, 6);
   const steps = Array.isArray(o.steps) ? o.steps : [];
   if (steps.length === 0) return { draft: null, questions, unsupported, problem: questions.length || unsupported.length ? null : 'The assistant could not draft anything from that.' };
-  const checked = validateDefinition({ name: text(o.name, 120) || 'New automation', description: text(o.description, 500), category: o.category, triggerType: o.triggerType, steps });
+  const checked = validateDefinition({ name: text(o.name, 120) || 'New automation', description: text(o.description, 500), category: o.category, triggerType: o.triggerType, triggerTask: text(o.triggerTask, 80), steps });
   if (!checked.ok) return { draft: null, questions, unsupported, problem: `The draft was not usable (${checked.error.replace(/\.$/, '')}). Try rewording the request.` };
   return { draft: checked.value, questions, unsupported, problem: null };
 }

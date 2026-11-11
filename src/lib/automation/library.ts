@@ -12,6 +12,8 @@ export interface TriggerDef {
   /** created = the deal/listing was created; event = a real event row in transaction_events; date = a date on the record. */
   kind: 'created' | 'event' | 'date';
   help: string;
+  /** The trigger watches a checklist step: the automation also names the step (part of its name is enough). */
+  needsTask?: boolean;
 }
 
 export const TRIGGERS: readonly TriggerDef[] = [
@@ -26,19 +28,25 @@ export const TRIGGERS: readonly TriggerDef[] = [
   { id: 'financing_deadline', category: 'transaction', kind: 'date', label: 'Financing contingency deadline', help: "Counted from the deal's Critical dates. Stops once you mark that date done." },
   { id: 'title_commitment_due', category: 'transaction', kind: 'date', label: 'Title commitment due date', help: "Counted from the deal's Critical dates. Stops once you mark that date done." },
   { id: 'closing_date', category: 'transaction', kind: 'date', label: 'Closing date', help: "Counted from the deal's closing date. It follows the date if it changes." },
+  { id: 'task_completed', category: 'transaction', kind: 'event', needsTask: true, label: 'A checklist step is completed', help: 'Each time the step you name is ticked off. The next steps can create the next task, send an email or notify you.' },
+  { id: 'task_reopened', category: 'transaction', kind: 'event', needsTask: true, label: 'A checklist step is reopened', help: 'When a completed step you name is unticked again.' },
+  { id: 'task_waiting', category: 'transaction', kind: 'event', needsTask: true, label: 'A step is marked waiting on someone', help: 'When the step you name is set to waiting on a person or company.' },
+  { id: 'task_due', category: 'transaction', kind: 'date', needsTask: true, label: "A checklist step's due date", help: "Counted from the due date of the open step you name. Use 'after' to escalate when it is overdue. Stops once the step is completed." },
   { id: 'listing_created', category: 'listing', kind: 'created', label: 'Listing created', help: 'When the listing is created.' },
   { id: 'listing_planned_list_date', category: 'listing', kind: 'date', label: 'Planned list date', help: "Counted from the listing's planned list date." },
   { id: 'offer_received', category: 'listing', kind: 'event', label: 'Offer received', help: 'Each time an offer is added to the listing.' },
   { id: 'listing_expiration', category: 'listing', kind: 'date', label: 'Listing expiration date', help: "Counted from the listing's expiration date." },
 ];
 
-export type StepType = 'send_email' | 'create_task' | 'notify_me' | 'add_note';
+export type StepType = 'send_email' | 'create_task' | 'notify_me' | 'add_note' | 'set_task_due' | 'reopen_task';
 
 export const STEP_TYPES: readonly { id: StepType; label: string; categories: Category[]; help: string }[] = [
   { id: 'send_email', label: 'Send an email', categories: ['transaction', 'listing'], help: 'To people on the deal or listing, by role. Drafts wait for your approval unless the deal is on Auto.' },
   { id: 'create_task', label: 'Add a checklist step', categories: ['transaction', 'listing'], help: 'Adds a step to the checklist.' },
   { id: 'notify_me', label: 'Notify me', categories: ['transaction', 'listing'], help: 'Puts a notification in your Relay bell.' },
   { id: 'add_note', label: 'Add a note', categories: ['transaction', 'listing'], help: 'Writes a note on the Activity list.' },
+  { id: 'set_task_due', label: 'Set a step due date', categories: ['transaction'], help: 'Sets the due date of an existing checklist step you name. A date already set by hand is left alone.' },
+  { id: 'reopen_task', label: 'Reopen a step', categories: ['transaction'], help: 'Unticks a completed checklist step you name so it is open again.' },
 ];
 
 /** Who an email can go to. Matched against the people on the deal; anyone who is not on the deal can never be reached. */
@@ -59,7 +67,9 @@ export type Condition =
   | { type: 'key_date_open'; kind: string } // the deal's Critical date of this kind is not marked done
   | { type: 'role_present'; role: string } // someone with this role and an email is on the deal
   | { type: 'role_missing'; role: string } // nobody with this role and an email is on the deal
-  | { type: 'no_document'; text: string }; // no document on the deal whose type or name contains this text
+  | { type: 'no_document'; text: string } // no document on the deal whose type or name contains this text
+  | { type: 'task_done'; text: string } // a checklist step whose name contains this text is completed
+  | { type: 'task_open'; text: string }; // a checklist step whose name contains this text is not completed yet
 
 export const CONDITION_KEY_KINDS = [
   { id: 'earnest_money', label: 'earnest money' },
@@ -77,6 +87,10 @@ export function describeCondition(c: Condition): string {
       return `the deal has a ${RECIPIENT_ROLES.find((r) => r.id === c.role)?.label ?? c.role}`;
     case 'role_missing':
       return `the deal has no ${RECIPIENT_ROLES.find((r) => r.id === c.role)?.label ?? c.role}`;
+    case 'task_done':
+      return `the "${c.text}" step is completed`;
+    case 'task_open':
+      return `the "${c.text}" step is still open`;
     default:
       return `no "${c.text}" document has been uploaded`;
   }
@@ -96,6 +110,14 @@ export interface Step {
   title?: string;
   body?: string;
   text?: string;
+  /** set_task_due / reopen_task: part of the checklist step's name. */
+  taskName?: string;
+  /** create_task / set_task_due: what dueInDays counts from. Default is today. */
+  dueFrom?: 'today' | 'closing' | 'trigger';
+  /** Count dueInDays in business days (Monday to Friday) instead of calendar days. */
+  businessDays?: boolean;
+  /** With dueFrom: count backwards (days BEFORE closing or before the trigger date). */
+  dueBefore?: boolean;
 }
 
 export interface Definition {
@@ -103,6 +125,8 @@ export interface Definition {
   description: string;
   category: Category;
   triggerType: string;
+  /** Only for step-watching triggers: part of the step's name. */
+  triggerTask?: string;
   steps: Step[];
 }
 
@@ -120,7 +144,14 @@ function parseCondition(raw: unknown, category: Category): Condition | null | 'b
   if (c.type === 'key_date_open' && CONDITION_KEY_KINDS.some((k) => k.id === c.kind)) return { type: 'key_date_open', kind: c.kind as string };
   if ((c.type === 'role_present' || c.type === 'role_missing') && RECIPIENT_ROLES.some((r) => r.id === c.role && r.id !== 'everyone')) return { type: c.type, role: c.role as string };
   if (c.type === 'no_document' && typeof c.text === 'string' && c.text.trim()) return { type: 'no_document', text: c.text.trim().slice(0, 60) };
+  if ((c.type === 'task_done' || c.type === 'task_open') && typeof c.text === 'string' && c.text.trim()) return { type: c.type, text: c.text.trim().slice(0, 80) };
   return 'bad';
+}
+
+function applyDueOptions(step: Step, r: Record<string, unknown>): void {
+  if (r.dueFrom === 'closing' || r.dueFrom === 'trigger') step.dueFrom = r.dueFrom;
+  if (r.businessDays === true) step.businessDays = true;
+  if (r.dueBefore === true && step.dueFrom) step.dueBefore = true;
 }
 
 export type Validated = { ok: true; value: Definition } | { ok: false; error: string };
@@ -134,6 +165,8 @@ export function validateDefinition(input: unknown): Validated {
   if (!category) return { ok: false, error: 'Choose Transaction or Listing.' };
   const trigger = triggerOf(str(o.triggerType, 60));
   if (!trigger || trigger.category !== category) return { ok: false, error: 'Choose a trigger that fits this type of automation.' };
+  const triggerTask = str(o.triggerTask, 80);
+  if (trigger.needsTask && triggerTask.length < 2) return { ok: false, error: 'Name the checklist step this automation watches (part of its name is enough).' };
   const rawSteps = Array.isArray(o.steps) ? o.steps : [];
   if (rawSteps.length === 0) return { ok: false, error: 'Add at least one step.' };
   if (rawSteps.length > MAX_STEPS) return { ok: false, error: `An automation can have at most ${MAX_STEPS} steps.` };
@@ -170,6 +203,17 @@ export function validateDefinition(input: unknown): Validated {
       const due = r.dueInDays === null || r.dueInDays === undefined || r.dueInDays === '' ? null : intIn(r.dueInDays, 0, 365);
       if (r.dueInDays !== null && r.dueInDays !== undefined && r.dueInDays !== '' && due === null) return { ok: false, error: `Step ${n}: the due date must be 0 to 365 days.` };
       step.dueInDays = due;
+      applyDueOptions(step, r);
+    } else if (spec.id === 'set_task_due') {
+      step.taskName = str(r.taskName, 80);
+      if (step.taskName.length < 2) return { ok: false, error: `Step ${n}: name the checklist step to set a due date on.` };
+      const due = intIn(r.dueInDays, 0, 365);
+      if (due === null) return { ok: false, error: `Step ${n}: the due date must be 0 to 365 days.` };
+      step.dueInDays = due;
+      applyDueOptions(step, r);
+    } else if (spec.id === 'reopen_task') {
+      step.taskName = str(r.taskName, 80);
+      if (step.taskName.length < 2) return { ok: false, error: `Step ${n}: name the checklist step to reopen.` };
     } else if (spec.id === 'notify_me') {
       step.title = str(r.title, 160);
       if (!step.title) return { ok: false, error: `Step ${n}: write the notification.` };
@@ -180,7 +224,7 @@ export function validateDefinition(input: unknown): Validated {
     }
     steps.push(step);
   }
-  return { ok: true, value: { name, description: str(o.description, 500), category, triggerType: trigger.id, steps } };
+  return { ok: true, value: { name, description: str(o.description, 500), category, triggerType: trigger.id, ...(trigger.needsTask ? { triggerTask } : {}), steps } };
 }
 
 /** "3 days after Contract uploaded", "2 days before Closing date". */
@@ -204,6 +248,8 @@ export interface InstanceFacts {
   events: Record<string, string | undefined>;
   /** The deal's Critical dates by kind (earliest open one). A completed date is done: nothing more is sent for it. */
   keyDates?: Record<string, { date: string; completed: boolean } | undefined>;
+  /** For a step-watching date trigger: the due date of the earliest open step it names. */
+  taskDue?: string | null;
 }
 
 /** Which Critical date kind (src/lib/keyDates.ts) each deadline trigger reads. */
@@ -227,7 +273,12 @@ export function triggerAnchor(triggerType: string, f: InstanceFacts): Anchor | n
     case 'document_added':
     case 'deal_closed':
     case 'offer_received':
+    case 'task_completed':
+    case 'task_reopened':
+    case 'task_waiting':
       return f.events[triggerType] ? { kind: 'time', at: f.events[triggerType]! } : null;
+    case 'task_due':
+      return day(f.taskDue ?? null);
     case 'closing_date':
       return day(f.closingDate);
     case 'earnest_money_due':
@@ -431,6 +482,8 @@ export interface ConditionContext {
   people: Person[];
   /** "type name" strings of the deal's documents, lowercased. */
   documents: string[];
+  /** The deal's checklist steps (name lowercased), for "only if a step is done / open". */
+  tasks?: { name: string; completed: boolean }[];
 }
 
 export function conditionMet(c: Condition | null | undefined, ctx: ConditionContext): boolean {
@@ -443,6 +496,12 @@ export function conditionMet(c: Condition | null | undefined, ctx: ConditionCont
       return resolveRecipients([c.role], ctx.people).length > 0;
     case 'role_missing':
       return resolveRecipients([c.role], ctx.people).length === 0;
+    case 'task_done': {
+      const hits = (ctx.tasks ?? []).filter((t) => t.name.includes(c.text.toLowerCase()));
+      return hits.length > 0 && hits.every((t) => t.completed);
+    }
+    case 'task_open':
+      return (ctx.tasks ?? []).some((t) => t.name.includes(c.text.toLowerCase()) && !t.completed);
     default:
       return !ctx.documents.some((d) => d.includes(c.text.toLowerCase()));
   }

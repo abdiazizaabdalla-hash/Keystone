@@ -1,4 +1,6 @@
 import { loadListingParties } from './listingContext';
+import { findRecentDuplicate, logSentEmail, recentEmails } from '../emailLog';
+import { logListingActivity } from '../listings';
 import { userMayAutomate } from './plan';
 import { isFeatureOn } from '../features';
 import { supabaseServer } from '../supabase';
@@ -9,7 +11,7 @@ import { loadDealForTemplates, recipientsOf, displayNameOf } from '../templateCo
 import { outboxOnly, plainToHtml, sendDealEmail } from '../dealEmail';
 import { getResendClient, INVOICE_FROM_EMAIL } from '../resendClient';
 import { getMutedTypes } from '../notifications';
-import { completeTask, setDealDate } from '../dealActions';
+import { completeTask, reopenStep, setDealDate } from '../dealActions';
 import { isValidCategory, isValidDocumentType } from '../documentTaxonomy';
 import { dealAutomationOwner } from './events';
 import { approveAction, resumeAction, submitAction, TEMPLATE_FLAG, type ActionDeps, type ActionOutcome, type ActionRequest, type ActionRow, type ActionStore, type Executor } from './actionCore';
@@ -140,6 +142,10 @@ export async function loadGuardContext(req: ActionRequest): Promise<GuardContext
     sentToday = (sent ?? []).reduce((n, r) => n + (Array.isArray((r.result as { to?: unknown } | null)?.to) ? ((r.result as { to: unknown[] }).to.length) : 1), 0);
   }
 
+  // The daily cap counts emails a person sent from the deal too, so one account's limit means the same thing everywhere.
+  const manual = (await recentEmails({ transactionId: req.transactionId, listingId: req.listingId }, 24)).filter((r) => r.source !== 'automation');
+  sentToday += manual.reduce((n, r) => n + r.to_emails.length, 0);
+
   return {
     featureOn: isFeatureOn('automation'),
     killSwitch: process.env.AUTOMATION_KILL_SWITCH === '1' || control?.paused === true,
@@ -200,6 +206,12 @@ const sendEmail: Executor = async (action) => {
   if (!subject || !message) throw new Error('An email needs a subject and a message');
   const { data } = await supabaseServer.auth.admin.getUserById(action.owner_user_id);
   if (!data.user) throw new Error('Account not found');
+  // One email, once: if a person (the step's Email button or a template) or another automation already emailed one of these
+  // people about the same step or subject a few hours ago, this one is skipped. The step still counts as done.
+  const taskId = typeof action.inputs.taskId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(action.inputs.taskId) ? action.inputs.taskId : null;
+  const scope = { transactionId, listingId: transactionId ? null : action.listing_id };
+  const dup = await findRecentDuplicate(scope, { taskId, to, subject });
+  if (dup) return { skipped: 'duplicate', to: to.map((a) => a.toLowerCase()), subject, alreadySentAt: dup.sent_at };
   // D4: from Relay under the user's display name, Reply-To the deal's inbound address; outbox-only on a dev machine.
   const sent = await sendDealEmail({
     ownerUserId: action.owner_user_id,
@@ -213,6 +225,8 @@ const sendEmail: Executor = async (action) => {
     copySender: true,
     copyHidden: true,
   });
+  await logSentEmail({ ownerUserId: action.owner_user_id, ...scope, taskId, source: 'automation', to, subject, mode: sent.mode });
+  if (!transactionId && action.listing_id) await logListingActivity(action.listing_id, data.user, `Assistant emailed ${to.length === 1 ? to[0] : `${to.length} people`}: ${subject.slice(0, 120)}`);
   return { to: to.map((a) => a.toLowerCase()), mode: sent.mode, subject, ...(sent.copiedTo.length ? { copiedTo: sent.copiedTo } : {}) };
 };
 
@@ -244,6 +258,37 @@ const notifyUser: Executor = async (action) => {
   });
   if (error) throw error;
   return { delivered: true };
+};
+
+/** The one open (or, for reopening, completed) checklist step whose name contains the text. More than one match is refused, never guessed. */
+async function findStep(transactionId: string, taskName: string, completed: boolean): Promise<{ id: string; name: string; due_date: string | null }> {
+  const want = taskName.trim().toLowerCase();
+  if (want.length < 2) throw new Error('Name the checklist step');
+  const { data } = await supabaseServer.from('tasks').select('id, name, due_date, completed').eq('transaction_id', transactionId).eq('completed', completed).limit(500);
+  const hits = (data ?? []).filter((t) => String(t.name ?? '').toLowerCase().includes(want));
+  if (hits.length === 0) throw new Error(`No ${completed ? 'completed' : 'open'} step matches "${taskName}"`);
+  if (hits.length > 1) throw new Error(`More than one step matches "${taskName}". Use more of its name.`);
+  return { id: hits[0].id as string, name: hits[0].name as string, due_date: (hits[0].due_date as string | null) ?? null };
+}
+
+/** Sets a step's due date, but only when it has none: a date a person or the deal's date rules already set is never overwritten. */
+const setTaskDue: Executor = async (action) => {
+  const transactionId = await assertOwnsDeal(action);
+  const date = clip(action.inputs.dueDate, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) throw new Error('A valid due date is needed');
+  const step = await findStep(transactionId, clip(action.inputs.taskName, 80), false);
+  if (step.due_date) return { taskId: step.id, skipped: 'already_has_due_date', dueDate: step.due_date };
+  const { error } = await supabaseServer.from('tasks').update({ due_date: date }).eq('id', step.id).eq('transaction_id', transactionId);
+  if (error) throw error;
+  return { taskId: step.id, dueDate: date };
+};
+
+/** Unticks a completed step and keeps the deal's stage in step with the checklist, the same as a person unticking it. */
+const reopenTask: Executor = async (action) => {
+  const transactionId = await assertOwnsDeal(action);
+  const step = await findStep(transactionId, clip(action.inputs.taskName, 80), true);
+  await reopenStep(transactionId, step.id, action.owner_user_id);
+  return { taskId: step.id, name: step.name };
 };
 
 const suggestTick: Executor = async (action) => {
@@ -322,6 +367,8 @@ export const actionDeps: ActionDeps = {
     send_deal_email: sendEmail,
     send_step_email: sendStepEmail,
     send_briefing: sendBriefing,
+    set_task_due: setTaskDue,
+    reopen_task: reopenTask,
   },
 };
 

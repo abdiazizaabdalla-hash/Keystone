@@ -12,6 +12,8 @@ export interface BuilderValue {
   description: string;
   category: Category;
   triggerType: string;
+  /** For step-watching triggers: part of the checklist step's name. */
+  triggerTask?: string;
   steps: Step[];
 }
 
@@ -40,7 +42,7 @@ export default function AutomationBuilder({ initial, editing, saving, error, onS
     });
   const changeCategory = (category: Category) => setV((x) => ({ ...blankAutomation(category), name: x.name, description: x.description }));
   const changeTrigger = (triggerType: string) =>
-    setV((x) => ({ ...x, triggerType, steps: x.steps.map((s) => (triggerOf(triggerType)?.kind === 'date' ? s : { ...s, when: { ...s.when, direction: 'after' } })) }));
+    setV((x) => ({ ...x, triggerType, triggerTask: triggerOf(triggerType)?.needsTask ? x.triggerTask ?? '' : undefined, steps: x.steps.map((s) => (triggerOf(triggerType)?.kind === 'date' ? s : { ...s, when: { ...s.when, direction: 'after' } })) }));
   const nextId = () => `s${Math.max(0, ...[...v.steps.map((s) => s.id), ...reservedIds].map((id) => Number(id.replace(/\D/g, '')) || 0)) + 1}`;
 
   return (
@@ -69,6 +71,13 @@ export default function AutomationBuilder({ initial, editing, saving, error, onS
         <select aria-label="Trigger" className={`${input} mt-2`} value={v.triggerType} disabled={lockTrigger} onChange={(e) => changeTrigger(e.target.value)}>
           {triggers.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
+        {trigger?.needsTask && (
+          <div className="mt-3">
+            <label className={label} htmlFor="auto-trigger-task">Which checklist step?</label>
+            <input id="auto-trigger-task" className={input} value={v.triggerTask ?? ''} maxLength={80} disabled={lockTrigger} onChange={(e) => setV({ ...v, triggerTask: e.target.value })} placeholder="Inspection scheduling" />
+            <p className="mt-1 text-xs text-slate-500">Part of the step&apos;s name is enough, such as &quot;inspection&quot;. It matches steps on each deal whose name contains this.</p>
+          </div>
+        )}
         {trigger && <p className="mt-1 text-xs text-slate-400">{lockTrigger ? 'This is fixed on a file. To start from something else, create a new automation.' : trigger.help}</p>}
       </div>
 
@@ -133,6 +142,29 @@ export default function AutomationBuilder({ initial, editing, saving, error, onS
                 <div><label className={label}>Checklist step</label><input className={input} value={s.name ?? ''} maxLength={255} onChange={(e) => setStep(i, { name: e.target.value })} placeholder="Verify earnest money delivery" /></div>
                 <div><label className={label}>Due in (days, optional)</label><input type="number" min={0} max={365} className={`${input} md:w-28`} value={s.dueInDays ?? ''} onChange={(e) => setStep(i, { dueInDays: e.target.value === '' ? null : Math.max(0, Math.min(365, Math.trunc(Number(e.target.value) || 0))) })} /></div>
               </div>
+            )}
+            {(s.type === 'create_task' || s.type === 'set_task_due') && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-300">
+                <label className="flex items-center gap-2">Count from
+                  <select className={input + ' w-auto'} value={s.dueFrom ?? 'today'} onChange={(e) => setStep(i, { dueFrom: e.target.value === 'closing' || e.target.value === 'trigger' ? e.target.value : undefined, ...(e.target.value === 'today' ? { dueBefore: undefined } : {}) })}>
+                    <option value="today">the day it runs</option>
+                    <option value="trigger">the trigger date</option>
+                    <option value="closing">the closing date</option>
+                  </select>
+                </label>
+                {s.dueFrom && <label className="flex items-center gap-1"><input type="checkbox" checked={s.dueBefore === true} onChange={(e) => setStep(i, { dueBefore: e.target.checked || undefined })} /> days before</label>}
+                <label className="flex items-center gap-1"><input type="checkbox" checked={s.businessDays === true} onChange={(e) => setStep(i, { businessDays: e.target.checked || undefined })} /> business days (Mon to Fri)</label>
+              </div>
+            )}
+            {s.type === 'set_task_due' && (
+              <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+                <div><label className={label}>Checklist step</label><input className={input} value={s.taskName ?? ''} maxLength={80} onChange={(e) => setStep(i, { taskName: e.target.value })} placeholder="Inspection report" /></div>
+                <div><label className={label}>Due in (days)</label><input type="number" min={0} max={365} className={`${input} md:w-28`} value={s.dueInDays ?? ''} onChange={(e) => setStep(i, { dueInDays: e.target.value === '' ? undefined : Math.max(0, Math.min(365, Math.trunc(Number(e.target.value) || 0))) })} /></div>
+                <p className="md:col-span-2 text-xs text-slate-500">Only fills a step that has no due date yet. A date already set is never changed.</p>
+              </div>
+            )}
+            {s.type === 'reopen_task' && (
+              <div className="mt-3"><label className={label}>Checklist step to reopen</label><input className={input} value={s.taskName ?? ''} maxLength={80} onChange={(e) => setStep(i, { taskName: e.target.value })} placeholder="Appraisal ordered" /></div>
             )}
             {s.type === 'notify_me' && (
               <div className="mt-3 grid gap-3 md:grid-cols-2">

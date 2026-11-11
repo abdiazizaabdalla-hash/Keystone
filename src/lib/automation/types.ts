@@ -9,6 +9,9 @@ export const EVENT_TYPES = [
   'step_ticked',
   'date_changed',
   'deal_closed',
+  'task_completed',
+  'task_reopened',
+  'task_waiting',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -24,6 +27,8 @@ export const ACTION_KINDS = [
   'send_deal_email',
   'notify_user',
   'send_briefing',
+  'set_task_due',
+  'reopen_task',
 ] as const;
 export type ActionKind = (typeof ACTION_KINDS)[number];
 

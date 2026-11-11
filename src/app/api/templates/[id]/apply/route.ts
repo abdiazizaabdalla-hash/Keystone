@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logSentEmail } from '@/lib/emailLog';
 import { AuthError } from '@/lib/auth';
 import { authorizeDeal } from '@/lib/authorize';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         copySender: true,
         source: 'template',
       });
+      await logSentEmail({ ownerUserId: user.id, transactionId, source: 'template', to, subject, mode: result.mode });
       await logAudit(request, { id: user.id, email: user.email }, 'transaction.template_email_sent', { entityType: 'transaction', entityId: transactionId, metadata: { templateId: id, recipients: to.length, mode: result.mode } });
       if (!template.from_brokerage) await markTemplateUsed(id, user.id);
       return NextResponse.json({ ok: true, mode: result.mode });

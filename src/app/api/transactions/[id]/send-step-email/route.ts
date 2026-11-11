@@ -3,9 +3,9 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { canAccessTransactionDates } from '@/lib/keyDates';
-import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { sendDealEmail } from '@/lib/dealEmail';
+import { logSentEmail } from '@/lib/emailLog';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { escapeHtml } from '@/lib/escapeHtml';
 import { logAudit } from '@/lib/audit';
 import { EMAIL_RE, LIMITS } from '@/lib/stepEmailTemplates';
 import { supabaseServer } from '@/lib/supabase';
@@ -14,17 +14,6 @@ import { supabaseServer } from '@/lib/supabase';
 // people they picked on a deal. It goes out from Relay's sending address with the
 // TC's name, replies go straight to the TC, and the TC is copied so the message
 // also lands in their own inbox.
-
-function plainToHtml(text: string, signature: string): string {
-  const paragraphs = text
-    .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 14px;">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
-    .join('');
-  return (
-    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1f;">${paragraphs}` +
-    `<p style="margin:22px 0 0;font-size:12px;color:#7a7a85;">${escapeHtml(signature)}</p></div>`
-  );
-}
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -68,41 +57,34 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const tcName = (meta.full_name || '').trim() || user.email || 'Your transaction coordinator';
     const tcEmail = user.email || null;
 
-    // Blind-copy the deal's own inbound address so the email is filed on the
-    // transaction's Communication card automatically (on unless the TC unticks it).
-    const logToDeal = body.logToDeal !== false;
-    let dealAddress: string | null = null;
-    const inboundDomain = process.env.NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN;
-    if (logToDeal && inboundDomain) {
-      const { data: tx } = await supabaseServer.from('transactions').select('inbound_token').eq('id', transactionId).maybeSingle();
-      if (tx?.inbound_token) dealAddress = `deal-${tx.inbound_token}@${inboundDomain}`;
-    }
-
-    const fromAddress = INVOICE_FROM_EMAIL.match(/<([^>]+)>/)?.[1] ?? INVOICE_FROM_EMAIL;
-    const safeName = tcName.replace(/["<>\r\n,;]/g, '').slice(0, 60);
-    const from = `${safeName} via Relay TC <${fromAddress}>`;
-
-    const { error } = await getResendClient().emails.send({
-      from,
+    // Same sending service as templates and automation (outbox on a developer machine). The deal's own inbound address is
+    // blind-copied so the email is filed on the transaction's Communication card, unless the TC unticks it.
+    const result = await sendDealEmail({
+      ownerUserId: user.id,
+      ownerName: tcName,
+      ownerEmail: tcEmail,
+      transactionId,
       to,
-      ...(tcEmail ? { cc: [tcEmail], replyTo: tcEmail } : {}),
-      ...(dealAddress ? { bcc: [dealAddress] } : {}),
       subject,
-      html: plainToHtml(message, `Sent by ${tcName} using Relay TC. Reply to this email to reach them directly.`),
-      text: `${message}\n\n-- Sent by ${tcName} using Relay TC. Reply to this email to reach them directly.`,
+      message,
+      copySender: true,
+      replyToSender: true,
+      logToDeal: body.logToDeal !== false,
+      source: 'template',
+    }).catch((err) => {
+      console.error('Step email failed:', err);
+      return null;
     });
-    if (error) {
-      console.error('Resend rejected a step email:', error);
-      return NextResponse.json({ error: 'The email could not be sent. Please try again.' }, { status: 502 });
-    }
+    if (!result) return NextResponse.json({ error: 'The email could not be sent. Please try again.' }, { status: 502 });
+    await logSentEmail({ ownerUserId: user.id, transactionId, taskId: typeof body.taskId === 'string' ? body.taskId : null, source: 'step_button', to, subject, mode: result.mode });
 
     await logAudit(request, { id: user.id, email: user.email }, 'transaction.step_email_sent', {
       entityType: 'transaction',
       entityId: transactionId,
-      metadata: { recipients: to.length, loggedToDeal: Boolean(dealAddress), taskId: typeof body.taskId === 'string' ? body.taskId : null },
+      metadata: { recipients: to.length, loggedToDeal: result.loggedToDeal, taskId: typeof body.taskId === 'string' ? body.taskId : null },
     });
 
-    return NextResponse.json({ success: true, loggedToDeal: Boolean(dealAddress) });
+    return NextResponse.json({ success: true, loggedToDeal: result.loggedToDeal });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TrialExpiredError) {

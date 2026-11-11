@@ -219,3 +219,12 @@ Financial automation (commission amounts, invoices, payments) only prepares reco
 - Invoices editor: "add a saved fee from one of your agents" (transaction fee, listing fee, any named charge from agent pricing) or type any custom line/amount.
 - Listing fee invoice (TC → agent, on the listing) and the deal invoice are separate records; converting a listing to a deal does not touch the listing invoice.
 - TODO: confirm automation is limited to Pro/Team in code (plan gate) before turning the flag on.
+
+## Automation redesign: Phase 1 + 2 (built locally, not deployed)
+SQL (relay-test first, additive): `add-deal-email-log.sql`, `add-task-automation.sql`.
+- One email path: step Email button (deal + listing), templates and automation all send through `sendDealEmail` (outbox on dev machines). Every send is written to `deal_email_log`; listing sends also write listing_activity.
+- Duplicate guard: an automatic email is skipped (result.skipped = 'duplicate', step counts as done) when a person or automation emailed one of the same people about the same step (or same subject) in the last 20h. Manual sends are never blocked. Manual sends count toward the daily cap.
+- New triggers (need a step name, `trigger_task`): task_completed, task_reopened, task_waiting, task_due (overdue = "N days after"). New actions: set_task_due (fills empty dates only), reopen_task. New condition: a step is done / still open. create_task due dates can count from today / trigger / closing, before or after, in business days (Mon-Fri; no holidays).
+- Closed deals stop all automations except "after the deal closes"; archived deals stop everything.
+- Existing, kept as-is: changing contract dates recalculates checklist due dates silently (lib/dealActions.recomputeTaskDueDates). No preview/approval yet.
+- NOT built yet: task priority/assignment, dependency graph (chaining + conditions only), deactivate task, document-to-step matching (Phase 3), listing workflows (Phase 4), action queue (Phase 5).

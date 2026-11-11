@@ -56,6 +56,7 @@ export async function completeTask(transactionId: string, taskId: string, actorU
     if (error && (error.code === '42703' || /completed_at/.test(error.message || ''))) ({ error } = await supabaseServer.from('tasks').update({ completed: true }).eq('id', taskId));
     if (error) throw error;
     await emitDealEvent(transactionId, 'step_ticked', { taskId, name: task.name });
+    await emitDealEvent(transactionId, 'task_completed', { taskId, name: task.name });
     await notifyDeal({ transactionId, actorUserId, type: 'task_completed', title: 'Step completed', body: task.name as string });
   }
   const { data: all } = await supabaseServer.from('tasks').select('name, completed').eq('transaction_id', transactionId).order('sort_order', { ascending: true });
@@ -66,6 +67,29 @@ export async function completeTask(transactionId: string, taskId: string, actorU
       await supabaseServer.from('transactions').update({ status: next, updated_at: new Date().toISOString() }).eq('id', transactionId);
       await notifyDeal({ transactionId, actorUserId, type: 'stage_changed', title: `Stage moved to ${next}` });
       if (next === 'Closed') await emitDealEvent(transactionId, 'deal_closed', {}, `deal_closed:${transactionId}`);
+    }
+  }
+  queueCalendarSync(transactionId);
+  return true;
+}
+
+/** Unticks a completed step, rolls the deal's stage back to match the checklist, and records the reopening. */
+export async function reopenStep(transactionId: string, taskId: string, actorUserId: string): Promise<boolean> {
+  const { data: task } = await supabaseServer.from('tasks').select('id, name, completed').eq('id', taskId).eq('transaction_id', transactionId).maybeSingle();
+  if (!task) return false;
+  if (task.completed) {
+    let { error } = await supabaseServer.from('tasks').update({ completed: false, completed_at: null }).eq('id', taskId);
+    if (error && (error.code === '42703' || /completed_at/.test(error.message || ''))) ({ error } = await supabaseServer.from('tasks').update({ completed: false }).eq('id', taskId));
+    if (error) throw error;
+    await emitDealEvent(transactionId, 'task_reopened', { taskId, name: task.name });
+  }
+  const { data: all } = await supabaseServer.from('tasks').select('name, completed').eq('transaction_id', transactionId).order('sort_order', { ascending: true });
+  const { data: tx } = await supabaseServer.from('transactions').select('status').eq('id', transactionId).single();
+  if (all && tx) {
+    const next = statusFromTasks(all as { name: string; completed: boolean }[]);
+    if (next && tx.status !== next) {
+      await supabaseServer.from('transactions').update({ status: next, updated_at: new Date().toISOString() }).eq('id', transactionId);
+      await notifyDeal({ transactionId, actorUserId, type: 'stage_changed', title: `Stage moved to ${next}` });
     }
   }
   queueCalendarSync(transactionId);

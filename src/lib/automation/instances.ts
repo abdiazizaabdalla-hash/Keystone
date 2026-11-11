@@ -1,10 +1,12 @@
 import { loadListingParties } from './listingContext';
+import { addDays } from '../businessDays';
+import { stepToRequest } from './stepRequest';
 import { supabaseServer } from '../supabase';
 import { isFeatureOn } from '../features';
 import { loadDealForTemplates, recipientsOf, type DealPerson as Person } from '../templateContext';
 import { submitAutomationAction } from './actions';
 import { refusalText, summarizeAction } from './describe';
-import { KEY_DATE_KIND_OF, conditionMet, describeWhen, dueSteps, stepProgress, type SeenAction, type StepProgress, fillVars, missingRecipientRoles, localDayOf, resolveRecipients, triggerOf, validateDefinition, type Definition, type InstanceFacts, type Step } from './library';
+import { KEY_DATE_KIND_OF, conditionMet, describeWhen, dueSteps, stepProgress, type SeenAction, type StepProgress, fillVars, missingRecipientRoles, localDayOf, resolveRecipients, triggerAnchor, triggerOf, validateDefinition, type Definition, type InstanceFacts, type Step } from './library';
 import { DEFAULT_SETTINGS } from './server';
 
 // Database side of the Automation Library: templates, the independent copies applied to deals and listings, and the engine
@@ -17,6 +19,7 @@ export interface TemplateRow {
   description: string;
   category: 'transaction' | 'listing';
   trigger_type: string;
+  trigger_task?: string | null;
   steps: Step[];
   active: boolean;
   version: number;
@@ -32,14 +35,15 @@ export interface InstanceRow {
   name: string;
   category: 'transaction' | 'listing';
   trigger_type: string;
+  trigger_task?: string | null;
   steps: Step[];
   template_version: number;
   status: 'active' | 'paused' | 'removed';
   created_at: string;
 }
 
-const TEMPLATE_COLS = 'id, owner_user_id, name, description, category, trigger_type, steps, active, version, created_at, updated_at';
-const INSTANCE_COLS = 'id, template_id, owner_user_id, transaction_id, listing_id, name, category, trigger_type, steps, template_version, status, created_at';
+const TEMPLATE_COLS = 'id, owner_user_id, name, description, category, trigger_type, trigger_task, steps, active, version, created_at, updated_at';
+const INSTANCE_COLS = 'id, template_id, owner_user_id, transaction_id, listing_id, name, category, trigger_type, trigger_task, steps, template_version, status, created_at';
 const PENDING = ['proposed', 'awaiting_approval', 'approved', 'deferred'];
 
 export async function listTemplates(ownerId: string) {
@@ -74,7 +78,7 @@ export async function getTemplate(ownerId: string, id: string): Promise<Template
 }
 
 export async function saveTemplate(ownerId: string, def: Definition, existingId?: string): Promise<TemplateRow> {
-  const fields = { name: def.name, description: def.description, category: def.category, trigger_type: def.triggerType, steps: def.steps, updated_at: new Date().toISOString() };
+  const fields = { name: def.name, description: def.description, category: def.category, trigger_type: def.triggerType, trigger_task: def.triggerTask ?? null, steps: def.steps, updated_at: new Date().toISOString() };
   if (!existingId) {
     const { data, error } = await supabaseServer.from('automation_templates').insert({ ...fields, owner_user_id: ownerId }).select(TEMPLATE_COLS).single();
     if (error) throw error;
@@ -150,7 +154,7 @@ export async function assignTemplates(ownerId: string, scope: { transactionId?: 
     else if (taken.has(t.id)) skipped.push({ id: t.id, reason: 'Already applied.' });
     else {
       const { error } = await supabaseServer.from('automation_instances').insert({
-        template_id: t.id, owner_user_id: ownerId, [col]: scopeId, name: t.name, category: t.category, trigger_type: t.trigger_type, steps: t.steps, template_version: t.version,
+        template_id: t.id, owner_user_id: ownerId, [col]: scopeId, name: t.name, category: t.category, trigger_type: t.trigger_type, trigger_task: t.trigger_task ?? null, steps: t.steps, template_version: t.version,
       });
       if (error) {
         if (error.code === '23505') skipped.push({ id: t.id, reason: 'Already applied.' });
@@ -175,7 +179,7 @@ export async function createFileAutomation(ownerId: string, scope: { transaction
   if (def.category !== category) return { ok: false, error: `This is a ${category}; that is a ${def.category} automation.` };
   const col = scope.transactionId ? 'transaction_id' : 'listing_id';
   const scopeId = (scope.transactionId ?? scope.listingId)!;
-  const { data, error } = await supabaseServer.from('automation_instances').insert({ template_id: null, owner_user_id: ownerId, [col]: scopeId, name: def.name, category, trigger_type: def.triggerType, steps: def.steps, template_version: 1 }).select('id').single();
+  const { data, error } = await supabaseServer.from('automation_instances').insert({ template_id: null, owner_user_id: ownerId, [col]: scopeId, name: def.name, category, trigger_type: def.triggerType, trigger_task: def.triggerTask ?? null, steps: def.steps, template_version: 1 }).select('id').single();
   if (error) throw error;
   await ensureSettings(ownerId, scope);
   return { ok: true, id: data.id as string };
@@ -194,7 +198,7 @@ export async function updateInstanceDefinition(ownerId: string, id: string, inpu
   if (!checked.ok) return checked;
   const def = checked.value;
   if (def.category !== inst.category) return { ok: false, error: 'The type of an automation cannot change.' };
-  if (def.triggerType !== inst.trigger_type) return { ok: false, error: 'What an automation starts from cannot be changed on a file. Create a new one instead.' };
+  if (def.triggerType !== inst.trigger_type || (def.triggerTask ?? null) !== (inst.trigger_task ?? null)) return { ok: false, error: 'What an automation starts from cannot be changed on a file. Create a new one instead.' };
   const { error } = await supabaseServer.from('automation_instances').update({ name: def.name, steps: def.steps, updated_at: new Date().toISOString() }).eq('id', id).eq('owner_user_id', ownerId);
   if (error) throw error;
   const keep = new Set(def.steps.map((x) => x.id));
@@ -232,7 +236,7 @@ export async function removeInstance(ownerId: string, id: string): Promise<boole
 export async function updateCopiesFromTemplate(ownerId: string, templateId: string): Promise<number> {
   const t = await getTemplate(ownerId, templateId);
   if (!t) return 0;
-  const { data } = await supabaseServer.from('automation_instances').update({ name: t.name, trigger_type: t.trigger_type, steps: t.steps, template_version: t.version, updated_at: new Date().toISOString() }).eq('template_id', templateId).eq('owner_user_id', ownerId).neq('status', 'removed').lt('template_version', t.version).select('id');
+  const { data } = await supabaseServer.from('automation_instances').update({ name: t.name, trigger_type: t.trigger_type, trigger_task: t.trigger_task ?? null, steps: t.steps, template_version: t.version, updated_at: new Date().toISOString() }).eq('template_id', templateId).eq('owner_user_id', ownerId).neq('status', 'removed').lt('template_version', t.version).select('id');
   return data?.length ?? 0;
 }
 
@@ -263,6 +267,7 @@ export interface InstancesReport {
 }
 
 const EVENT_TRIGGERS = new Set(['contract_uploaded', 'document_added', 'deal_closed']);
+const TASK_EVENT_TRIGGERS = new Set(['task_completed', 'task_reopened', 'task_waiting']);
 
 async function loadFacts(inst: InstanceRow): Promise<{ facts: InstanceFacts; timeZone: string } | null> {
   const col = inst.transaction_id ? 'transaction_id' : 'listing_id';
@@ -277,10 +282,27 @@ async function loadFacts(inst: InstanceRow): Promise<{ facts: InstanceFacts; tim
   if (!r) return null;
   // An archived deal is no longer being worked: its automations do nothing until it is restored.
   if (inst.transaction_id && r.archived_at) return null;
+  // A closed deal stops its reminders and chasing; only the "after the deal closes" automations carry on.
+  if (inst.transaction_id && r.status === 'Closed' && inst.trigger_type !== 'deal_closed') return null;
   const events: Record<string, string | undefined> = {};
   if (inst.transaction_id && EVENT_TRIGGERS.has(inst.trigger_type)) {
     const { data: ev } = await supabaseServer.from('transaction_events').select('occurred_at').eq('transaction_id', inst.transaction_id).eq('type', inst.trigger_type).gte('occurred_at', inst.created_at).order('occurred_at', { ascending: false }).limit(1).maybeSingle();
     if (ev) events[inst.trigger_type] = ev.occurred_at as string;
+  }
+  let taskDue: string | null = null;
+  if (inst.transaction_id && inst.trigger_task && TASK_EVENT_TRIGGERS.has(inst.trigger_type)) {
+    // The latest time the named step did this since the copy was applied (the step's name must contain the text).
+    const { data: evs } = await supabaseServer.from('transaction_events').select('occurred_at, payload').eq('transaction_id', inst.transaction_id).eq('type', inst.trigger_type).gte('occurred_at', inst.created_at).order('occurred_at', { ascending: false }).limit(25);
+    const want = inst.trigger_task.toLowerCase();
+    const hit = (evs ?? []).find((e) => String((e.payload as { name?: unknown } | null)?.name ?? '').toLowerCase().includes(want));
+    if (hit) events[inst.trigger_type] = hit.occurred_at as string;
+  }
+  if (inst.transaction_id && inst.trigger_task && inst.trigger_type === 'task_due') {
+    // The earliest due date among the open steps with that name. Completed steps are done, so nothing more is sent for them.
+    const { data: ts } = await supabaseServer.from('tasks').select('name, due_date, completed').eq('transaction_id', inst.transaction_id).eq('completed', false).not('due_date', 'is', null).order('due_date', { ascending: true }).limit(200);
+    const want = inst.trigger_task.toLowerCase();
+    const open = (ts ?? []).find((t) => String(t.name ?? '').toLowerCase().includes(want));
+    taskDue = open ? String(open.due_date).slice(0, 10) : null;
   }
   if (inst.listing_id && inst.trigger_type === 'offer_received') {
     // Offers have no event log of their own; the offer rows are the record. The latest one added after this copy was applied.
@@ -297,14 +319,14 @@ async function loadFacts(inst: InstanceRow): Promise<{ facts: InstanceFacts; tim
   const timeZone = (settings?.time_zone as string | undefined) ?? DEFAULT_SETTINGS.time_zone;
   return {
     timeZone,
-    facts: { createdAt: inst.created_at, timeZone, dealCreatedAt: r.created_at ?? null, closingDate: r.closing_date ?? null, acceptanceDate: r.acceptance_date ?? null, plannedListDate: r.planned_list_date ?? null, expirationDate: r.expiration_date ?? null, events, keyDates },
+    facts: { createdAt: inst.created_at, timeZone, dealCreatedAt: r.created_at ?? null, closingDate: r.closing_date ?? null, acceptanceDate: r.acceptance_date ?? null, plannedListDate: r.planned_list_date ?? null, expirationDate: r.expiration_date ?? null, events, keyDates, taskDue },
   };
 }
 
 interface StepContext {
   vars: Record<string, string>;
   people: Person[];
-  ctx: { keyDates: { kind: string; completed: boolean }[]; people: Person[]; documents: string[] };
+  ctx: { keyDates: { kind: string; completed: boolean }[]; people: Person[]; documents: string[]; tasks?: { name: string; completed: boolean }[] };
 }
 
 /** What a copy's steps are filled in from, and what their "only if" conditions are checked against, as the file is right now. */
@@ -316,15 +338,17 @@ async function stepContext(inst: InstanceRow, withConditions: boolean): Promise<
     address: deal?.address ?? listing?.address ?? '',
     file_number: deal?.fileNumber ?? '',
     closing_date: deal?.closingDate ?? '',
+    closing_iso: deal?.closingDate ? String(deal.closingDate).slice(0, 10) : '', // used only for due dates, never shown
     client_name: people.find((p) => /buyer|seller/i.test(p.category))?.name ?? listing?.sellerName ?? '',
   };
   let ctx: StepContext['ctx'] = { keyDates: [], people, documents: [] };
   if (withConditions && inst.transaction_id) {
-    const [{ data: kds }, { data: docs }] = await Promise.all([
+    const [{ data: kds }, { data: docs }, { data: tks }] = await Promise.all([
       supabaseServer.from('transaction_key_dates').select('kind, completed').eq('transaction_id', inst.transaction_id),
       supabaseServer.from('documents').select('document_type, file_name').eq('transaction_id', inst.transaction_id),
+      supabaseServer.from('tasks').select('name, completed').eq('transaction_id', inst.transaction_id).limit(500),
     ]);
-    ctx = { keyDates: (kds ?? []).map((k) => ({ kind: k.kind as string, completed: Boolean(k.completed) })), people, documents: (docs ?? []).map((d) => `${d.document_type ?? ''} ${d.file_name ?? ''}`.toLowerCase()) };
+    ctx = { tasks: (tks ?? []).map((t) => ({ name: String(t.name ?? '').toLowerCase(), completed: Boolean(t.completed) })), keyDates: (kds ?? []).map((k) => ({ kind: k.kind as string, completed: Boolean(k.completed) })), people, documents: (docs ?? []).map((d) => `${d.document_type ?? ''} ${d.file_name ?? ''}`.toLowerCase()) };
   }
   return { vars, people, ctx };
 }
@@ -352,7 +376,9 @@ export async function runInstances(now: Date, outOfTime: () => boolean, limit = 
           const { vars, people, ctx } = await stepContext(inst, due.some((d) => d.step.condition));
           for (const { step, key } of due) {
             if (!conditionMet(step.condition, ctx)) continue;
-            const request = stepToRequest(step, vars, people, loaded.timeZone, now);
+            const anchor = triggerAnchor(inst.trigger_type, loaded.facts);
+            const anchorIso = anchor ? (anchor.kind === 'day' ? anchor.day : localDayOf(new Date(anchor.at), loaded.timeZone)) : '';
+            const request = stepToRequest(step, { ...vars, anchor_iso: anchorIso }, people, loaded.timeZone, now);
             const out = await submitAutomationAction({ ownerUserId: inst.owner_user_id, transactionId: inst.transaction_id, listingId: inst.listing_id, instanceId: inst.id, stepId: step.id, ...request, fromApprovedTemplate: true, idempotencyKey: key });
             if (!out.duplicate) {
               report.proposed++;
@@ -423,7 +449,7 @@ export async function progressFor(ownerId: string, scope: { transactionId?: stri
     const tz = loaded?.timeZone ?? DEFAULT_SETTINGS.time_zone;
     const progress: StepProgress[] = loaded
       ? stepProgress(inst.id, inst.trigger_type, inst.steps, loaded.facts, now, seen, (st) => conditionMet(st.condition, sc.ctx), refusalText)
-      : inst.steps.map((st) => ({ stepId: st.id, state: 'waiting_trigger' as const, due: null, note: 'This file could not be read.', lastAt: null, manual: false }));
+      : inst.steps.map((st) => ({ stepId: st.id, state: 'waiting_trigger' as const, due: null, note: 'This file is closed or archived (or could not be read), so this automation is stopped.', lastAt: null, manual: false }));
     const steps: TrackedStep[] = inst.steps.map((st) => {
       const pr = progress.find((x) => x.stepId === st.id)!;
       const req = stepToRequest(st, sc.vars, sc.people, tz, now);
@@ -497,24 +523,7 @@ export async function setInstanceStatus(ownerId: string, id: string, status: 'ac
   return true;
 }
 
-export function stepToRequest(step: Step, vars: Record<string, string>, people: { name: string; email: string | null; role: string; category: string }[], timeZone: string, now: Date): { kind: string; inputs: Record<string, unknown> } {
-  switch (step.type) {
-    case 'send_email':
-      return { kind: 'send_deal_email', inputs: { to: resolveRecipients(step.to ?? [], people), subject: fillVars(step.subject ?? '', vars), message: fillVars(step.message ?? '', vars) } };
-    case 'create_task': {
-      const inputs: Record<string, unknown> = { name: fillVars(step.name ?? '', vars) };
-      if (typeof step.dueInDays === 'number') {
-        const base = localDayOf(now, timeZone);
-        inputs.dueDate = new Date(Date.parse(`${base}T00:00:00Z`) + step.dueInDays * 86_400_000).toISOString().slice(0, 10);
-      }
-      return { kind: 'create_task', inputs };
-    }
-    case 'notify_me':
-      return { kind: 'notify_user', inputs: { title: fillVars(step.title ?? '', vars), body: fillVars(step.body ?? '', vars) } };
-    default:
-      return { kind: 'add_note', inputs: { text: fillVars(step.text ?? '', vars) } };
-  }
-}
+export { stepToRequest };
 
 export { validateDefinition };
 

@@ -37,6 +37,10 @@ export interface DealEmail {
   copySender?: boolean;
   /** With copySender: put the copy in Bcc so other recipients do not see it. */
   copyHidden?: boolean;
+  /** Replies go straight to the sender (the checklist Email button), not to the deal's inbound address. */
+  replyToSender?: boolean;
+  /** Blind-copy the deal's own inbound address so the email is filed on the deal. On unless false. */
+  logToDeal?: boolean;
   /** Where this came from, for the outbox: 'template' (a person pressed send) or 'rule' (automation). */
   source: string;
 }
@@ -51,8 +55,8 @@ export async function dealInboundAddress(transactionId: string): Promise<string 
 export async function sendDealEmail(input: DealEmail): Promise<{ mode: 'sent' | 'outbox'; loggedToDeal: boolean; copiedTo: string[] }> {
   const to = [...new Set(input.to.map((a) => a.trim().toLowerCase()))].filter((a) => EMAIL_RE.test(a));
   if (to.length === 0) throw new Error('No valid recipients');
-  const dealAddress = input.transactionId ? await dealInboundAddress(input.transactionId) : null;
-  const replyTo = dealAddress ?? input.ownerEmail ?? undefined;
+  const dealAddress = input.transactionId && input.logToDeal !== false ? await dealInboundAddress(input.transactionId) : null;
+  const replyTo = input.replyToSender ? (input.ownerEmail ?? undefined) : (dealAddress ?? input.ownerEmail ?? undefined);
   const copy = input.copySender && input.ownerEmail && !to.includes(input.ownerEmail.trim().toLowerCase()) ? [input.ownerEmail.trim().toLowerCase()] : [];
   const cc = input.copyHidden ? [] : copy;
   const bcc = [...(dealAddress ? [dealAddress] : []), ...(input.copyHidden ? copy : [])];

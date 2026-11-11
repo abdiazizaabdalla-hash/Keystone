@@ -8,6 +8,8 @@ const KIND_LABELS: Record<string, string> = {
   file_document: 'Move a document',
   set_date: 'Change a contract date',
   send_step_email: 'Send a step email',
+  set_task_due: 'Set a step due date',
+  reopen_task: 'Reopen a step',
   send_deal_email: 'Send an email',
   send_briefing: 'Send your daily briefing',
   notify_user: 'Notify you',
@@ -58,6 +60,10 @@ export function summarizeAction(kind: string, inputs: Record<string, unknown>): 
       return str(inputs.name) || str(inputs.reason) || 'Step';
     case 'set_date':
       return `${str(inputs.field) === 'acceptance_date' ? 'Acceptance' : 'Closing'} date to ${str(inputs.date)}`;
+    case 'set_task_due':
+      return `Due date for "${str(inputs.taskName)}" to ${str(inputs.dueDate)}`;
+    case 'reopen_task':
+      return `Reopen "${str(inputs.taskName)}"`;
     case 'notify_user':
       return str(inputs.title) || 'Notification';
     case 'send_briefing':
