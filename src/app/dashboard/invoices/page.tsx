@@ -539,7 +539,7 @@ export default function InvoicesPage() {
   }, []);
   if (mode === 'unknown') return null;
   if (mode === 'agent') return <AgentInvoices initialTransactionId={dealId} startNew={startNew} commissionTransactionId={commissionDeal} />;
-  if (!owner) return isFeatureOnClient('agent_workspace') ? <CoordinatorWithOtherInvoices /> : <CoordinatorInvoicesPage />;
+  if (!owner) return (isFeatureOnClient('other_invoices') || isFeatureOnClient('agent_workspace')) ? <CoordinatorWithOtherInvoices /> : <CoordinatorInvoicesPage />;
   return (
     <div>
       <div className="px-4 pt-6 md:px-6 md:pt-12 max-w-7xl mx-auto">

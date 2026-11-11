@@ -6,6 +6,7 @@ import { useAgentAccess } from '@/lib/useAgentAccess';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { invoiceTotals } from '@/lib/workspaceInvoiceMath';
+import { agentFeeOptions, type FeeAgent } from '@/lib/agentFees';
 import { INVOICE_TEMPLATES } from '@/lib/workspaceInvoiceTemplates';
 import AgentCommissionInvoiceForm from './AgentCommissionInvoiceForm';
 import CommissionInvoicePanel, { type PanelRow } from './CommissionInvoicePanel';
@@ -416,6 +417,9 @@ function InvoiceEditor({ invoice, onClose, onChanged, backLabel = '← All invoi
   const [lines, setLines] = useState<Line[]>(invoice.lines && invoice.lines.length > 0 ? invoice.lines : [{ description: '', quantity: 1, unitPrice: 0 }]);
   const [contacts, setContacts] = useState<ContactRow[] | null>(null);
   const [contactQuery, setContactQuery] = useState('');
+  // A coordinator's saved agents, with the fees set on each (transaction fee, listing fee, other charges), to add as lines.
+  const [feeAgents, setFeeAgents] = useState<FeeAgent[] | null>(null);
+  const [feeAgentId, setFeeAgentId] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -432,6 +436,30 @@ function InvoiceEditor({ invoice, onClose, onChanged, backLabel = '← All invoi
       setContacts(Array.isArray(data) ? data : []);
     } catch {
       setContacts([]);
+    }
+  };
+
+  const loadFeeAgents = async () => {
+    if (feeAgents) return;
+    try {
+      const res = await authFetch('/api/agents');
+      const data = res.ok ? await res.json() : [];
+      setFeeAgents(Array.isArray(data) ? data : []);
+    } catch {
+      setFeeAgents([]);
+    }
+  };
+  const feeAgent = (feeAgents || []).find((a) => a.id === feeAgentId);
+  const feeOptions = feeAgent ? agentFeeOptions(feeAgent) : [];
+  const addFeeLine = (opt: { label: string; amount: number }) => {
+    setLines((prev) => {
+      const blank = prev.length === 1 && !prev[0].description.trim() && !(prev[0].unitPrice > 0);
+      const next = { description: opt.label, quantity: 1, unitPrice: opt.amount };
+      return blank ? [next] : [...prev, next];
+    });
+    if (feeAgent && !billToName.trim()) {
+      setBillToName(feeAgent.name);
+      setBillToEmail(feeAgent.email || '');
     }
   };
 
@@ -611,6 +639,25 @@ function InvoiceEditor({ invoice, onClose, onChanged, backLabel = '← All invoi
           <button type="button" onClick={() => setLines((prev) => [...prev, { description: '', quantity: 1, unitPrice: 0 }])} className="mt-3 text-xs text-blue-400 hover:text-blue-300 font-medium">
             + Add a line
           </button>
+          {(feeAgents === null || feeAgents.length > 0) && (
+            <div className="mt-4 pt-3 border-t border-white/10">
+              <p className="text-xs text-slate-400 mb-2">Or add a saved fee from one of your agents</p>
+              <select className={`${inputCls} max-w-xs`} value={feeAgentId} onFocus={loadFeeAgents} onChange={(e) => { setFeeAgentId(e.target.value); loadFeeAgents(); }}>
+                <option value="">Choose an agent…</option>
+                {(feeAgents || []).map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
+              </select>
+              {feeAgent && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {feeOptions.length === 0 && <p className="text-xs text-slate-500">No fees set for {feeAgent.name}. Add them in the agent&apos;s pricing.</p>}
+                  {feeOptions.map((o) => (
+                    <button key={o.key} type="button" onClick={() => addFeeLine(o)} className="px-3 py-1.5 text-xs rounded-full border border-white/15 text-slate-200 hover:bg-white/10">
+                      + {o.label} · {money(o.amount)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <div className="mt-4 flex flex-col items-end gap-1 text-sm">
             <div className="flex items-center gap-2">
               <label className="text-xs text-slate-400" htmlFor="tax">

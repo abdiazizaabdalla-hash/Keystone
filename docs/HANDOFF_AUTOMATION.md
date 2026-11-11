@@ -213,3 +213,9 @@ Financial automation (commission amounts, invoices, payments) only prepares reco
 
 ## Other invoices (built locally)
 - Coordinators (flag `agent_workspace`) can create one-off invoices to anyone, any amount, from Invoices → "Other invoices". Not synced to QuickBooks.
+
+## Launch plan (TCs first)
+- Release 1 (TCs): templates for everyone; automation for Pro/Team only; Other invoices for all coordinators via new flag `other_invoices` (independent of `agent_workspace`, which stays OFF until the agent/brokerage announcement).
+- Invoices editor: "add a saved fee from one of your agents" (transaction fee, listing fee, any named charge from agent pricing) or type any custom line/amount.
+- Listing fee invoice (TC → agent, on the listing) and the deal invoice are separate records; converting a listing to a deal does not touch the listing invoice.
+- TODO: confirm automation is limited to Pro/Team in code (plan gate) before turning the flag on.

@@ -30,7 +30,7 @@ export function assertWorkspaceAgent(user: WithAppMetadata): void {
 export function assertInvoiceSender(user: WithAppMetadata): void {
   const kind = getEntitlements(user).kind;
   if (kind === 'agent_workspace') return;
-  if (kind === 'coordinator' && isFeatureOn('agent_workspace')) return;
+  if (kind === 'coordinator' && (isFeatureOn('other_invoices') || isFeatureOn('agent_workspace'))) return;
   if (isFeatureOn('brokerage') && isTeamPlan(getUserPlan(user))) return;
   throw new AuthError('Invoices to anyone are available on a coordinator, agent workspace or brokerage account', 403);
 }

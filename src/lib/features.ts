@@ -9,9 +9,10 @@
 //
 // Names: agent_workspace (agent workspace screens and routing), automation (the AI assistant),
 // templates (state-filtered document and email templates, and rules that generate them),
-// brokerage (a brokerage owner oversees the deals of agents who accept an invite).
+// brokerage (a brokerage owner oversees the deals of agents who accept an invite),
+// other_invoices (a coordinator's invoices to anyone, for anything: Invoices → Other invoices).
 
-export type FeatureName = 'agent_workspace' | 'automation' | 'templates' | 'brokerage';
+export type FeatureName = 'agent_workspace' | 'automation' | 'templates' | 'brokerage' | 'other_invoices';
 
 function parse(list: string | undefined): Set<string> {
   return new Set(
