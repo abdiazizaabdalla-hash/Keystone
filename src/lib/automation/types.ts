@@ -12,6 +12,7 @@ export const EVENT_TYPES = [
   'task_completed',
   'task_reopened',
   'task_waiting',
+  'task_received',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

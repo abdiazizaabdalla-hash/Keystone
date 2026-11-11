@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { syncDocumentToChecklist } from '@/lib/documentSync';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
@@ -265,6 +266,7 @@ export async function POST(request: NextRequest) {
     });
     // Automation events (inert unless the `automation` flag is on; never fail this request).
     await emitDealEvent(transactionId, 'document_added', { documentId: docRow.id, category, documentType });
+    await syncDocumentToChecklist(transactionId as string, { id: docRow.id as string, file_name: file.name, file_size: file.size, document_type: documentType as string, task_id: (docRow.task_id as string | null) ?? null });
     if (category === 'contract_disclosures' && documentType === 'Purchase Contract') {
       await emitDealEvent(transactionId, 'contract_uploaded', { documentId: docRow.id });
     }

@@ -119,6 +119,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (updateError) throw updateError;
+    // Completing a step settles any pending document review on it. Best effort: the column exists once add-task-documents.sql has run.
+    if (nowCompleted) await supabaseServer.from('tasks').update({ needs_review: false }).eq('id', taskId).eq('needs_review', true);
 
     // Auto-advance (or roll back) the transaction status to match the
     // checklist, so the two stay in sync without a manual status change.

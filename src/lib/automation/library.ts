@@ -31,6 +31,7 @@ export const TRIGGERS: readonly TriggerDef[] = [
   { id: 'task_completed', category: 'transaction', kind: 'event', needsTask: true, label: 'A checklist step is completed', help: 'Each time the step you name is ticked off. The next steps can create the next task, send an email or notify you.' },
   { id: 'task_reopened', category: 'transaction', kind: 'event', needsTask: true, label: 'A checklist step is reopened', help: 'When a completed step you name is unticked again.' },
   { id: 'task_waiting', category: 'transaction', kind: 'event', needsTask: true, label: 'A step is marked waiting on someone', help: 'When the step you name is set to waiting on a person or company.' },
+  { id: 'task_received', category: 'transaction', kind: 'event', needsTask: true, label: 'A document arrives for a checklist step', help: 'When an uploaded document is matched to the step you name. The step is marked received and waits for your review; it is not completed for you.' },
   { id: 'task_due', category: 'transaction', kind: 'date', needsTask: true, label: "A checklist step's due date", help: "Counted from the due date of the open step you name. Use 'after' to escalate when it is overdue. Stops once the step is completed." },
   { id: 'listing_created', category: 'listing', kind: 'created', label: 'Listing created', help: 'When the listing is created.' },
   { id: 'listing_planned_list_date', category: 'listing', kind: 'date', label: 'Planned list date', help: "Counted from the listing's planned list date." },
@@ -276,6 +277,7 @@ export function triggerAnchor(triggerType: string, f: InstanceFacts): Anchor | n
     case 'task_completed':
     case 'task_reopened':
     case 'task_waiting':
+    case 'task_received':
       return f.events[triggerType] ? { kind: 'time', at: f.events[triggerType]! } : null;
     case 'task_due':
       return day(f.taskDue ?? null);

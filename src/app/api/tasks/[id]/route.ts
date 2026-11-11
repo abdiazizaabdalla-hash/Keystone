@@ -27,8 +27,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const hasDueDate = Boolean(body && typeof body === 'object' && 'dueDate' in body);
     const hasWaitingOn = Boolean(body && typeof body === 'object' && 'waitingOn' in body);
+    const clearsReview = Boolean(body && typeof body === 'object' && body.needsReview === false);
 
-    if (!hasDueDate && !hasWaitingOn) {
+    if (!hasDueDate && !hasWaitingOn && !clearsReview) {
       return NextResponse.json({ error: 'dueDate or waitingOn is required' }, { status: 400 });
     }
 
@@ -60,6 +61,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (callerIsAgent) await assertTrialForOwnWork(user, isAdmin, transaction.id as string);
 
     const updates: Record<string, unknown> = {};
+    if (clearsReview) updates.needs_review = false; // "Mark reviewed": the document has been looked at
 
     if (hasDueDate) {
       const dueDate = normalizeDueDateSpec(body.dueDate);

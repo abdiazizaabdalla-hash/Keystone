@@ -100,6 +100,9 @@ interface Task {
   waiting_on?: string | null;
   waiting_on_since?: string | null;
   client_visible?: boolean;
+  /** A document arrived for this step and nobody has reviewed it yet (set by the assistant; never completes the step). */
+  needs_review?: boolean;
+  received_at?: string | null;
 }
 
 interface Agent {
@@ -1302,6 +1305,21 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   };
 
   const cancelEditWaitingOn = () => setEditingWaitingOnTaskId(null);
+
+  // The document that arrived for a step has been looked at. The step itself stays open until the person completes it.
+  const markReviewed = async (taskId: string) => {
+    try {
+      const response = await authFetch(`/api/tasks/${taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ needsReview: false }) });
+      if (!response.ok) throw new Error('Could not update the step');
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, needs_review: false } : t)));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error marking reviewed:', error);
+    }
+  };
 
   const saveWaitingOn = async (taskId: string, valueOverride?: string | null) => {
     const value = (valueOverride !== undefined ? valueOverride ?? '' : editingWaitingOnValue).trim();
@@ -3486,6 +3504,18 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                               {'\u23F3'} Waiting on {task.waiting_on}
                               {task.waiting_on_since ? ` \u00b7 ${daysSince(task.waiting_on_since)}d` : ''}
                             </span>
+                          </div>
+                        )}
+                        {!task.completed && task.needs_review && (
+                          <div className="mt-1.5 pl-7 flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-medium text-sky-300 bg-sky-400/10 border border-sky-400/30 rounded-full px-2 py-0.5">
+                              Document received · needs your review
+                            </span>
+                            {!ownerView && (
+                              <button type="button" onClick={() => void markReviewed(task.id)} className="text-xs text-slate-300 hover:text-white underline">
+                                Mark reviewed
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

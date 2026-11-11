@@ -33,7 +33,18 @@ describe('follow-up timers', () => {
   it('repeats every interval with a new key, the same day proposes the same key, and stops after five chases', () => {
     expect(evaluateDealRules(waiting('2026-11-01'), '2026-11-09')[0].idempotencyKey).toBe('followup:t1:2026-11-01:2');
     expect(evaluateDealRules(waiting('2026-11-01'), '2026-11-09')[0].idempotencyKey).toBe(evaluateDealRules(waiting('2026-11-01'), '2026-11-09')[0].idempotencyKey);
-    expect(evaluateDealRules(waiting('2026-10-01'), '2026-11-09')).toEqual([]); // 39 days = 13 intervals
+    // 39 days = 13 intervals: no more emails, but the TC is told once that the chasing is over
+    const out = evaluateDealRules(waiting('2026-10-01'), '2026-11-09');
+    expect(out.map((o) => o.kind)).toEqual(['notify_user']);
+    expect(out[0].idempotencyKey).toBe('followup-exhausted:t1:2026-10-01');
+  });
+  it('tells the TC once when a step you are waiting on is due within three days', () => {
+    const d = deal({ tasks: [task({ waitingOn: 'Title company', waitingSince: '2026-11-08', dueDate: '2026-11-11' })] });
+    const out = evaluateDealRules(d, '2026-11-09');
+    const warn = out.find((o) => o.idempotencyKey === 'waiting-deadline:t1:2026-11-11');
+    expect(warn?.kind).toBe('notify_user');
+    expect(evaluateDealRules(deal({ tasks: [task({ waitingOn: 'Title company', waitingSince: '2026-11-08', dueDate: '2026-12-30' })] }), '2026-11-09').some((o) => o.idempotencyKey.startsWith('waiting-deadline'))).toBe(false);
+    expect(evaluateDealRules(deal({ tasks: [task({ completed: true, waitingOn: 'Title company', dueDate: '2026-11-11' })] }), '2026-11-09')).toEqual([]);
   });
   it('only tells you when nobody on the deal matches or the match has no email', () => {
     const d = deal({ tasks: [task({ waitingOn: 'Surveyor', waitingSince: '2026-11-01' })] });

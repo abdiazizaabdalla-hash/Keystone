@@ -76,7 +76,12 @@ function followUps(d: DealSnapshot, today: string): RuleProposal[] {
     if (t.completed || !t.waitingOn || !t.waitingSince) continue;
     const waited = daysBetween(t.waitingSince, today);
     const interval = Math.floor(waited / d.followUpDays);
-    if (interval < 1 || interval > MAX_CHASES) continue;
+    if (interval > MAX_CHASES) {
+      // Out of follow-ups: a person has to decide. Told once, not every hour.
+      out.push({ kind: 'notify_user', idempotencyKey: `followup-exhausted:${t.id}:${t.waitingSince}`, inputs: { title: clip(`No answer after ${MAX_CHASES} follow-ups: ${t.name}`, 120), body: `Still waiting on ${t.waitingOn} (${waited} days). Call them or change the plan.` } });
+      continue;
+    }
+    if (interval < 1) continue;
     const who = peopleWaitedOn(t.waitingOn, d.people);
     if (who.length > 0) {
       out.push({
@@ -97,6 +102,19 @@ function followUps(d: DealSnapshot, today: string): RuleProposal[] {
         inputs: { title: clip(`Still waiting on ${t.waitingOn} (${waited} days)`, 120), body: `${t.name}. No one on this deal matches "${t.waitingOn}", so nothing was sent.` },
       });
     }
+  }
+  return out;
+}
+
+/** Waiting on someone and the step is due soon: tell the TC once, whatever the follow-up schedule says. */
+function waitingNearDeadline(d: DealSnapshot, today: string): RuleProposal[] {
+  const out: RuleProposal[] = [];
+  for (const t of d.tasks) {
+    if (t.completed || !t.waitingOn || !t.dueDate) continue;
+    const left = daysBetween(today, t.dueDate);
+    if (left > 3) continue;
+    const when = left < 0 ? `${-left} day${left === -1 ? '' : 's'} overdue` : left === 0 ? 'due today' : `due in ${left} day${left === 1 ? '' : 's'}`;
+    out.push({ kind: 'notify_user', idempotencyKey: `waiting-deadline:${t.id}:${t.dueDate}`, inputs: { title: clip(`Still waiting on ${t.waitingOn}: ${t.name} (${when})`, 120), body: `Follow up by phone if you need it before the deadline.` } });
   }
   return out;
 }
@@ -133,7 +151,7 @@ function missingDocuments(d: DealSnapshot, today: string): RuleProposal[] {
 /** Everything the rules propose for one open deal today. Closed or cancelled deals propose nothing. */
 export function evaluateDealRules(d: DealSnapshot, today: string): RuleProposal[] {
   if (/^(closed|cancel)/i.test(d.status)) return [];
-  return [...followUps(d, today), ...deadlineGuard(d, today), ...missingDocuments(d, today)];
+  return [...followUps(d, today), ...waitingNearDeadline(d, today), ...deadlineGuard(d, today), ...missingDocuments(d, today)];
 }
 
 export interface BriefingDeal {

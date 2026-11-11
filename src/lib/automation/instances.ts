@@ -267,7 +267,7 @@ export interface InstancesReport {
 }
 
 const EVENT_TRIGGERS = new Set(['contract_uploaded', 'document_added', 'deal_closed']);
-const TASK_EVENT_TRIGGERS = new Set(['task_completed', 'task_reopened', 'task_waiting']);
+const TASK_EVENT_TRIGGERS = new Set(['task_completed', 'task_reopened', 'task_waiting', 'task_received']);
 
 async function loadFacts(inst: InstanceRow): Promise<{ facts: InstanceFacts; timeZone: string } | null> {
   const col = inst.transaction_id ? 'transaction_id' : 'listing_id';

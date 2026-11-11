@@ -108,3 +108,60 @@ describe('task-driven automation', () => {
     expect(((await admin.from('tasks').select('id').eq('transaction_id', d.transactionId).eq('name', 'Should not appear')).data ?? [])).toHaveLength(0);
   });
 });
+
+describe('documents and the checklist', () => {
+  // Needs add-task-documents.sql on relay-test.
+  const upload = async (d: Deal, name: string, type: string, extra: Record<string, string> = {}) => {
+    const { NextRequest } = await import('next/server');
+    const { POST: uploadDocument } = await import('@/app/api/documents/route');
+    const form = new FormData();
+    form.set('file', new File(['%PDF-1.4 ' + name], name, { type: 'application/pdf' }));
+    form.set('transactionId', d.transactionId);
+    form.set('category', 'title_escrow');
+    form.set('documentType', type);
+    for (const [k, v] of Object.entries(extra)) form.set(k, v);
+    return uploadDocument(new NextRequest('http://localhost/api/documents', { method: 'POST', headers: { authorization: `Bearer ${tc.token}` }, body: form }));
+  };
+  const task = async (id: string) => (await admin.from('tasks').select('completed, waiting_on, needs_review, received_document_id').eq('id', id).single()).data!;
+
+  it('a title commitment arriving for a step we are waiting on marks it received, not complete, and stops the chasing', async () => {
+    const d = await seedDeal(tc, 'AE6');
+    await admin.from('tasks').update({ name: 'Request title commitment', waiting_on: 'Title company', waiting_on_since: '2026-11-01' }).eq('id', d.taskId);
+    await admin.from('tasks').insert({ transaction_id: d.transactionId, name: 'Closing' });
+    expect((await upload(d, 'commitment.pdf', 'Title Commitment')).status).toBe(201);
+    const t = await task(d.taskId);
+    expect(t).toEqual(expect.objectContaining({ completed: false, waiting_on: null, needs_review: true }));
+    expect(t.received_document_id).toBeTruthy();
+    expect((await admin.from('transaction_events').select('type').eq('transaction_id', d.transactionId).eq('type', 'task_received')).data).toHaveLength(1);
+    expect((await admin.from('notifications').select('title').eq('transaction_id', d.transactionId).eq('event_type', 'assistant')).data?.map((n) => n.title)).toContain('Document received: review it');
+  });
+
+  it('an unclear match changes nothing and asks; a scheduling step is never matched', async () => {
+    const d = await seedDeal(tc, 'AE7');
+    await admin.from('tasks').update({ name: 'Schedule inspection' }).eq('id', d.taskId);
+    await upload(d, 'report.pdf', 'Inspection Report');
+    expect(await task(d.taskId)).toEqual(expect.objectContaining({ needs_review: false, completed: false }));
+  });
+
+  it('the same file uploaded twice raises a duplicate notice', async () => {
+    const d = await seedDeal(tc, 'AE8');
+    await upload(d, 'same.pdf', 'Survey');
+    await upload(d, 'same.pdf', 'Survey');
+    expect((await admin.from('notifications').select('title').eq('transaction_id', d.transactionId).eq('event_type', 'assistant')).data?.map((n) => n.title)).toContain('Possible duplicate document');
+  });
+
+  it('a Starter account gets no automatic matching', async () => {
+    const starter = await createActor('ae-starter', { plan: 'starter' });
+    const d = await seedDeal(starter, 'AE9');
+    await admin.from('tasks').update({ name: 'Request title commitment', waiting_on: 'Title company' }).eq('id', d.taskId);
+    const { NextRequest } = await import('next/server');
+    const { POST: uploadDocument } = await import('@/app/api/documents/route');
+    const form = new FormData();
+    form.set('file', new File(['%PDF-1.4 x'], 'c.pdf', { type: 'application/pdf' }));
+    form.set('transactionId', d.transactionId);
+    form.set('category', 'title_escrow');
+    form.set('documentType', 'Title Commitment');
+    await uploadDocument(new NextRequest('http://localhost/api/documents', { method: 'POST', headers: { authorization: `Bearer ${starter.token}` }, body: form }));
+    expect(await task(d.taskId)).toEqual(expect.objectContaining({ needs_review: false, waiting_on: 'Title company' }));
+  });
+});
