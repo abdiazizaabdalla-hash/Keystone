@@ -1,4 +1,5 @@
 import { loadListingParties } from './listingContext';
+import { userMayAutomate } from './plan';
 import { isFeatureOn } from '../features';
 import { supabaseServer } from '../supabase';
 import { getEntitlements } from '../entitlements';
@@ -82,6 +83,7 @@ async function ownerIsEntitled(ownerUserId: string): Promise<boolean> {
   const { data } = await supabaseServer.auth.admin.getUserById(ownerUserId);
   const user = data.user;
   if (!user) return false;
+  if (!userMayAutomate(user)) return false; // plan gate, checked now: a downgraded account stops at once
   const ent = getEntitlements(user);
   if (!ent.canOwnWorkspace) return false; // a free collaborator owns nothing, so automation does not run for them
   if (ent.agentLevel && !agentHas(ent.agentLevel, 'automation')) return false;

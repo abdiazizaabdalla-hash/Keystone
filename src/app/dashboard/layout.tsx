@@ -174,6 +174,7 @@ export default function DashboardLayout({
   const [isLoading, setIsLoading] = useState(true);
   const [userName, setUserName] = useState('');
   const [plan, setPlan] = useState<string | null>(null);
+  const [automationAllowed, setAutomationAllowed] = useState(false);
   // Presentation only (see lib/accountType.ts): an agent running their own deals does not see coordinator-only items.
   const [isAgentAccount, setIsAgentAccount] = useState(false);
   // An agent with their own workspace keeps the Invoices tab (their own invoices, not the coordinator's).
@@ -347,6 +348,7 @@ export default function DashboardLayout({
             return;
           }
           setPlan(data.plan || 'starter');
+          setAutomationAllowed(data.automationAllowed === true);
           setIsAgentAccount(data.accountType === 'agent');
           // An agent has no agents list or agent profiles to manage (they are the agent); send them back if they land there.
           if ((data.accountType === 'agent' || data.agentWorkspace) && window.location.pathname.startsWith('/dashboard/agents')) {
@@ -420,7 +422,7 @@ export default function DashboardLayout({
   // Automations is last, and only where the feature is on and the account can use it (not a free or Basic agent login).
   const primaryNav = PRIMARY_NAV.filter((i) => {
     if (i.href === '/dashboard/invoices') return !(isAgentAccount && !hasWorkspace);
-    if (i.href === '/dashboard/automations') return isFeatureOnClient('automation') && !(isAgentAccount && !hasWorkspace);
+    if (i.href === '/dashboard/automations') return isFeatureOnClient('automation') && automationAllowed && !(isAgentAccount && !hasWorkspace);
     return true;
   });
 
@@ -706,7 +708,7 @@ export default function DashboardLayout({
         {children}
       <ToastHost />
       </div>
-      {isFeatureOnClient('automation') && !(isAgentAccount && !hasWorkspace) && <ApprovalPopup />}
+      {isFeatureOnClient('automation') && automationAllowed && !(isAgentAccount && !hasWorkspace) && <ApprovalPopup />}
       {guideKind && <FirstRunGuide key={`${guideKind}-${guideRestartKey}`} kind={guideKind} restartKey={guideRestartKey} onFinished={handleGuideFinished} onHintSeen={markHintSeen} />}
       {hintsEligible && <PageHint seen={seenHints} suspended={guideKind !== null || tutorialMenuOpen} onSeen={markHintSeen} />}
       {tutorialMenuOpen && (

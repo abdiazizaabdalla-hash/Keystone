@@ -18,8 +18,8 @@ const activity = (who: Actor, d: Deal) => call(h(getActivity), who, { method: 'G
 const mode = (who: Actor, d: Deal, m: string) => call(h(putSettings), who, { method: 'PUT', path: '/api/automation/settings', body: { transactionId: d.transactionId, mode: m } });
 
 beforeAll(async () => {
-  tc = await createActor('aui-tc');
-  other = await createActor('aui-other');
+  tc = await createActor('aui-tc', { plan: 'pro' });
+  other = await createActor('aui-other', { plan: 'pro' });
   collab = await createCollaborator('aui-collab');
   d1 = await seedDeal(tc, 'AUI1');
   dOther = await seedDeal(other, 'AUIO');

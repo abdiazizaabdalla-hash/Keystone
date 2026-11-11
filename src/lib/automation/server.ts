@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuthError, getUserFromRequest } from '../auth';
 import { assertNotCollaborator } from '../workspaceGuard';
 import { assertAgentHas } from '../agentGates';
+import { AUTOMATION_PLAN_MESSAGE, userMayAutomate } from './plan';
 import { isFeatureOn } from '../features';
 import { supabaseServer } from '../supabase';
 import { dealAutomationOwner } from './events';
@@ -14,6 +15,7 @@ export async function requireAutomationUser(request: NextRequest) {
   if (!isFeatureOn('automation')) throw new AuthError('Not found', 404);
   assertNotCollaborator(user);
   assertAgentHas(user, 'automation');
+  if (!userMayAutomate(user)) throw new AuthError(AUTOMATION_PLAN_MESSAGE, 403);
   return { user, isAdmin };
 }
 

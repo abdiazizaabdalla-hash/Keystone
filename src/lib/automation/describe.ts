@@ -16,7 +16,7 @@ const KIND_LABELS: Record<string, string> = {
 const REFUSALS: Record<string, string> = {
   feature_off: 'Automation is switched off.',
   kill_switch: 'Automation is paused for your account.',
-  not_entitled: 'Your plan or trial does not include automation.',
+  not_entitled: 'Automation is included in Relay Pro and Team. Your plan or trial does not include it.',
   restricted_action: 'Relay never does this on its own.',
   unknown_action: 'Relay does not know this action.',
   mode_off: 'The assistant is Off for this deal.',

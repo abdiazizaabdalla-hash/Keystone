@@ -32,8 +32,8 @@ let d1: Deal, d2: Deal, dOther: Deal;
 const withFlags = process.env.RELAY_FEATURES;
 
 beforeAll(async () => {
-  tc = await createActor('au-tc');
-  other = await createActor('au-other');
+  tc = await createActor('au-tc', { plan: 'pro' });
+  other = await createActor('au-other', { plan: 'pro' });
   [d1, d2, dOther] = [await seedDeal(tc, 'AU1'), await seedDeal(tc, 'AU2'), await seedDeal(other, 'AUO')];
 }, 90_000);
 afterAll(async () => {
@@ -158,5 +158,14 @@ describe('the action pipeline on the real database', () => {
     const out = await submitAutomationAction({ ownerUserId: tc.id, transactionId: d1.transactionId, kind: 'record_payment', inputs: {}, idempotencyKey: 'au-restricted-1' });
     expect(out.status).toBe('refused');
     expect((await admin.from('automation_actions').select('refusal_reason').eq('id', out.actionId).single()).data?.refusal_reason).toContain('restricted_action');
+  });
+
+  it('a Starter account is refused automation (plan gate), checked at run time', async () => {
+    const starter = await createActor('au-starter', { plan: 'starter' });
+    const sd = await seedDeal(starter, 'AUS');
+    await admin.from('automation_settings').upsert({ owner_user_id: starter.id, transaction_id: sd.transactionId, mode: 'auto' } as never);
+    const out = await submitAutomationAction({ ownerUserId: starter.id, transactionId: sd.transactionId, kind: 'send_deal_email', inputs: { to: [agentEmail(sd)], subject: 'Hi', message: 'Hello' }, idempotencyKey: 'au-starter-1' });
+    expect(out.status).toBe('refused');
+    expect((await admin.from('automation_actions').select('refusal_reason').eq('idempotency_key', 'au-starter-1').single()).data?.refusal_reason).toContain('not_entitled');
   });
 });

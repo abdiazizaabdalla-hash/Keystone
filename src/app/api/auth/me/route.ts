@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { userMayAutomate } from '@/lib/automation/plan';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
@@ -39,6 +40,8 @@ function shapeUser(user: {
     // True for an agent the admin has given a workspace (and only while the feature is switched on).
     agentWorkspace: getEntitlements(user).kind === 'agent_workspace',
     agentLevel: getEntitlements(user).agentLevel,
+    // Automation is part of Pro and Team (see lib/automation/plan.ts); the screens hide it for everyone else.
+    automationAllowed: userMayAutomate(user),
     readOnly: isBrokerageReadOnly(user),
     coordinationMode: getCoordinationMode(meta),
     defaultFlatFee:

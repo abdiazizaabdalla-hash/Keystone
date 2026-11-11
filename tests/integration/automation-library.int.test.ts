@@ -36,8 +36,8 @@ const noQuietHours = (listingId: string) => admin.from('automation_settings').up
 let tc: Actor, other: Actor, collab: Actor;
 let d1: Deal, d2: Deal, dOther: Deal;
 beforeAll(async () => {
-  tc = await createActor('lib-tc');
-  other = await createActor('lib-other');
+  tc = await createActor('lib-tc', { plan: 'pro' });
+  other = await createActor('lib-other', { plan: 'pro' });
   collab = await createCollaborator('lib-collab');
   [d1, d2, dOther] = [await seedDeal(tc, 'LIB1'), await seedDeal(tc, 'LIB2'), await seedDeal(other, 'LIBO')];
 }, 90_000);
