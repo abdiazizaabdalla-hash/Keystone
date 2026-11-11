@@ -37,6 +37,8 @@ interface TCUser {
   last_active_what?: string | null;
   suspended?: boolean;
   trial?: { applies: boolean; expired: boolean; trialEndsAt: string | null } | null;
+  // A paid plan given for free until a date: after it, payment is needed. Null = no end date.
+  comp?: { expired: boolean; endsAt: string | null } | null;
   subscription_status?: string | null;
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
@@ -188,6 +190,51 @@ export default function AdminPage() {
     }
   };
 
+  // Set, change or clear "free until" on a Pro or Team account. Blank = no end date (free until you change it).
+  const saveCompEnd = async (user: TCUser, compEndsAt: string | null) => {
+    setActionError(null);
+    setActionLoadingId(user.id);
+    try {
+      const response = await authFetch(`/api/admin/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_comp_end', compEndsAt }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to update the free-until date');
+      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, comp: data.comp } : u)));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error updating comp end:', error);
+      setActionError(error instanceof Error ? error.message : 'Failed to update the free-until date');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleCompEdit = async (user: TCUser) => {
+    const current = user.comp?.endsAt ? new Date(user.comp.endsAt).toISOString().slice(0, 10) : '';
+    const typed = window.prompt(
+      `${getPlan(user.plan).name} is free for ${user.email} until (YYYY-MM-DD).\n\nAfter that date they must add payment to keep creating and editing. Leave blank for no end date.`,
+      current
+    );
+    if (typed === null) return;
+    const trimmed = typed.trim();
+    let compEndsAt: string | null = null;
+    if (trimmed) {
+      const parsed = new Date(`${trimmed}T23:59:59`);
+      if (Number.isNaN(parsed.getTime())) {
+        setActionError('Enter the date as YYYY-MM-DD');
+        return;
+      }
+      compEndsAt = parsed.toISOString();
+    }
+    await saveCompEnd(user, compEndsAt);
+  };
+
   const handlePlanChange = async (user: TCUser, newPlan: string) => {
     if (newPlan === (user.plan || 'starter')) return;
     const billingNote = user.stripe_subscription_id
@@ -196,19 +243,39 @@ export default function AdminPage() {
     if (!window.confirm(`Change ${user.email} from ${getPlan(user.plan).name} to ${getPlan(newPlan).name}?${billingNote}`)) {
       return;
     }
+    // Upgrading by hand: optionally free only until a date, then payment is needed (default 30 days from today).
+    let compEndsAt: string | null = null;
+    if (newPlan !== 'starter') {
+      const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const suggested = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const typed = window.prompt(
+        `${getPlan(newPlan).name} is free for ${user.email} until (YYYY-MM-DD).\n\nAfter that date they must add payment to keep creating and editing. Leave blank for no end date.`,
+        suggested
+      );
+      if (typed === null) return;
+      const trimmed = typed.trim();
+      if (trimmed) {
+        const parsed = new Date(`${trimmed}T23:59:59`);
+        if (Number.isNaN(parsed.getTime())) {
+          setActionError('Enter the date as YYYY-MM-DD');
+          return;
+        }
+        compEndsAt = parsed.toISOString();
+      }
+    }
     setActionError(null);
     setActionLoadingId(user.id);
     try {
       const response = await authFetch(`/api/admin/users/${user.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'set_plan', plan: newPlan }),
+        body: JSON.stringify({ action: 'set_plan', plan: newPlan, compEndsAt }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.error || 'Failed to change plan');
       }
-      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, plan: data.plan } : u)));
+      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, plan: data.plan, comp: data.comp ?? null } : u)));
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
@@ -480,6 +547,21 @@ export default function AdminPage() {
                       </span>
                     ) : (
                       <span className="text-slate-500">—</span>
+                    )}
+                    {(user.plan || 'starter') !== 'starter' && user.comp && (
+                      <span className={`block text-xs ${user.comp.expired ? 'text-red-400' : 'text-emerald-300'}`}>
+                        {user.comp.expired ? 'Free period ended' : 'Free until'} {user.comp.endsAt ? new Date(user.comp.endsAt).toLocaleDateString() : ''}
+                      </span>
+                    )}
+                    {(user.plan || 'starter') !== 'starter' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCompEdit(user)}
+                        disabled={actionLoadingId === user.id}
+                        className="mt-1 block text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                      >
+                        {user.comp ? 'Change free-until date' : 'Set free-until date'}
+                      </button>
                     )}
                     {(user.plan || 'starter') === 'starter' && (
                       <button

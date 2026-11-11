@@ -198,3 +198,9 @@ Financial automation (commission amounts, invoices, payments) only prepares reco
 
 - On a developer machine `RELAY_OUTBOX_ONLY=1` (and `check-local-env.mjs` refuses a real Resend key), so an approved or automatic email is recorded in `email_outbox` (`result.mode = 'outbox'`) and goes to no one. The Tracker used to say just "Done". Now: a prominent amber test-environment banner; each sent email shows "Saved to the test outbox (not sent)" (or "Sent to ...") with **View email** (To, subject, body, from the action's inputs); the approval popup says approving saves to the outbox. Nothing about real sending changed: production (no `RELAY_OUTBOX_ONLY`) sends through Resend.
 
+
+### Admin: "free until a date" on Pro/Team (BUILT, committed locally, not pushed; not part of automation)
+- Requested 2026-11-10 (upgrade a coordinator to Pro, payment required after 30 days). An admin upgrade used to be open-ended; the trial/paywall only existed for Starter.
+- Stored as `comp_ends_at` in app_metadata (no SQL). Pure logic in `src/lib/compPeriod.ts`; enforcement in `assertTrialActive` (`src/lib/trial.ts`): after the date, a non-Starter account without an active subscription on that plan gets the same 402 "add payment" lock as an expired Starter trial. Paying for that plan lifts it. Never touches Stripe.
+- Admin page: changing a plan to Pro/Team asks for "free until" (default 30 days, blank = no end); the Trial column shows "Free until <date>" with "Change free-until date". `/api/auth/me` returns the banner info (plan name and price); the dashboard banner and checkout button use that plan.
+- Not verified in a browser; not on production (needs deploy, then set the date on the account).

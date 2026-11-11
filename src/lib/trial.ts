@@ -1,4 +1,5 @@
-import { DEFAULT_PLAN } from './plans';
+import { DEFAULT_PLAN, getPlan } from './plans';
+import { compStatus } from './compPeriod';
 import { getStripeCustomerByUserId } from './stripeCustomers';
 import { getUserPlan } from './privileged';
 import { assertNotCollaborator } from './workspaceGuard';
@@ -125,7 +126,19 @@ export async function assertTrialActive(
   // An agent whose workspace comes from their brokerage (Agent Basic) is free: the Starter trial and its paywall do not apply.
   if (hasBrokerageAccess(user)) return;
   const planId = (getUserPlan(user) as string | undefined) || DEFAULT_PLAN;
-  if (planId !== 'starter') return;
+  if (planId !== 'starter') {
+    // A paid plan an admin gave for free until a date ("comp"): fine until that date, then payment is needed.
+    const comp = compStatus(user.app_metadata);
+    if (!comp.applies || !comp.expired) return;
+    const paid = await getStripeCustomerByUserId(user.id);
+    if (paid?.plan === planId && !!paid.stripe_subscription_id && ['active', 'trialing'].includes(paid.subscription_status || '')) return;
+    const plan = getPlan(planId);
+    throw new TrialExpiredError(
+      `Your complimentary ${plan.name} period has ended. Add payment (${plan.price}/month) to keep creating and editing on Relay.`,
+      comp.endsAt,
+      'time'
+    );
+  }
 
   const billing = await getStripeCustomerByUserId(user.id);
   const hasActivePaidStarter =

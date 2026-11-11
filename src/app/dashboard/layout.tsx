@@ -189,6 +189,10 @@ export default function DashboardLayout({
     expired: boolean;
     endedBy: 'time' | null;
     daysLeft: number | null;
+    // Set when an admin gave a paid plan free until a date (so the banner names that plan and its price).
+    plan?: string;
+    planName?: string;
+    price?: string;
   } | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -391,7 +395,7 @@ export default function DashboardLayout({
       const res = await authFetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: 'starter' }),
+        body: JSON.stringify({ plan: trial?.plan || 'starter' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
@@ -674,14 +678,14 @@ export default function DashboardLayout({
         {trial?.applies && trial.expired && (
           <div className="px-6 py-3 bg-red-900/40 border-b border-red-700 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-red-200">
-              Your free trial has ended. Add payment to keep creating and editing on Relay.
+              {trial.planName ? `Your free ${trial.planName} period has ended.` : 'Your free trial has ended.'} Add payment to keep creating and editing on Relay.
             </p>
             <button
               onClick={startStarterCheckout}
               disabled={startingCheckout}
               className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap"
             >
-              {startingCheckout ? 'Redirecting…' : 'Add payment — $19/month'}
+              {startingCheckout ? 'Redirecting…' : `Add payment — ${trial?.price || '$19'}/month`}
             </button>
           </div>
         )}
@@ -689,9 +693,9 @@ export default function DashboardLayout({
           <div className="px-6 py-2.5 bg-blue-900/30 border-b border-blue-700/60 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-blue-200">
               {trial.daysLeft === 0
-                ? 'Your free trial ends today.'
-                : `Your free trial ends in ${trial.daysLeft} day${trial.daysLeft === 1 ? '' : 's'}.`}{' '}
-              Then it&apos;s $19/month to keep going.
+                ? `Your free ${trial.planName ? `${trial.planName} period` : 'trial'} ends today.`
+                : `Your free ${trial.planName ? `${trial.planName} period` : 'trial'} ends in ${trial.daysLeft} day${trial.daysLeft === 1 ? '' : 's'}.`}{' '}
+              Then it&apos;s {trial.price || '$19'}/month to keep going.
             </p>
             <Link href="/dashboard/account" className="text-xs text-blue-300 hover:text-blue-200 font-medium whitespace-nowrap">
               Manage billing

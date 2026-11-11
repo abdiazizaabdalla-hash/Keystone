@@ -4,6 +4,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getTrialStatus } from '@/lib/trial';
+import { compStatus } from '@/lib/compPeriod';
 import { getUserPlan, isPlatformAdmin, hasAgentRole } from '@/lib/privileged';
 import { hasAgentWorkspace } from '@/lib/entitlements';
 import { loadActivity } from '@/lib/adminActivity';
@@ -223,6 +224,11 @@ export async function GET(request: NextRequest) {
         trial: trial
           ? { applies: trial.applies, expired: trial.expired, trialEndsAt: trial.trialEndsAt }
           : null,
+        comp: (() => {
+          if (plan === 'starter') return null;
+          const c = compStatus(u.app_metadata as Record<string, unknown> | null);
+          return c.applies ? { expired: c.expired, endsAt: c.endsAt ? c.endsAt.toISOString() : null } : null;
+        })(),
         subscription_status: stripeRow?.subscription_status || null,
         stripe_customer_id: stripeRow?.stripe_customer_id || null,
         stripe_subscription_id: stripeRow?.stripe_subscription_id || null,

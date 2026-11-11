@@ -7,10 +7,11 @@ import { hasBrokerageAccess, isBrokerageReadOnly } from '@/lib/brokerageAccessMe
 import { assertAgentHas } from '@/lib/agentGates';
 import { activeLinkForAgent, brokerageOn } from '@/lib/oversight';
 import { mergeUserMetadata } from '@/lib/userMetadata';
-import { DEFAULT_PLAN } from '@/lib/plans';
+import { DEFAULT_PLAN, getPlan } from '@/lib/plans';
 import { getUserPlan, isPlatformAdmin } from '@/lib/privileged';
 import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
+import { compStatus } from '@/lib/compPeriod';
 import { needsOnboarding } from '@/lib/onboarding';
 import { getAccountType, getCoordinationMode } from '@/lib/accountType';
 import { normalizeDueDateSpec } from '@/lib/dueDates';
@@ -112,7 +113,31 @@ export async function GET(request: NextRequest) {
     // grandfathered in, or already paying for Starter post-trial. Mirrors
     // the same "already paying" check assertTrialActive uses server-side,
     // and the fuller version account/summary exposes for the Account page.
-    let trial = null;
+    let trial: Record<string, unknown> | null = null;
+    // A paid plan an admin gave for free until a date: show the same banner, with that plan's price, until they pay.
+    if (shaped.plan !== 'starter' && !hasBrokerageAccess(user) && !inBrokerage) {
+      const comp = compStatus(user.app_metadata as Record<string, unknown> | null);
+      if (comp.applies) {
+        const billing = await getStripeCustomerByUserId(user.id);
+        const paying =
+          billing?.plan === shaped.plan &&
+          !!billing.stripe_subscription_id &&
+          ['active', 'trialing'].includes(billing.subscription_status || '');
+        if (!paying) {
+          const plan = getPlan(shaped.plan);
+          trial = {
+            applies: true,
+            trialEndsAt: comp.endsAt ? comp.endsAt.toISOString() : null,
+            expired: comp.expired,
+            endedBy: 'time',
+            daysLeft: comp.daysLeft,
+            plan: shaped.plan,
+            planName: plan.name,
+            price: plan.price,
+          };
+        }
+      }
+    }
     if (shaped.plan === 'starter' && !hasBrokerageAccess(user) && !inBrokerage) {
       const billing = await getStripeCustomerByUserId(user.id);
       const hasActivePaidStarter =
