@@ -310,6 +310,8 @@ export const localDayOf = (now: Date, timeZone: string): string => {
 const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 const GRACE_MS = 60 * 60 * 1000; // a step due just before the copy was applied (e.g. "right away" at creation) still counts
+// Our clock and the database's can differ by a second or two: an event stamped by the database "just now" must not look like the future.
+const CLOCK_SKEW_MS = 2 * 60 * 1000;
 const MAX_LATE_DAYS = 3; // after an outage, anything this old is skipped instead of firing in a burst
 
 type Phase = 'future' | 'ready' | 'stale';
@@ -319,7 +321,7 @@ function timing(step: Step, anchor: Anchor, f: InstanceFacts, now: Date): { due:
   const created = Date.parse(f.createdAt);
   if (anchor.kind === 'time') {
     const due = Date.parse(anchor.at) + sign * step.when.days * 86_400_000;
-    const phase: Phase = now.getTime() < due ? 'future' : due < created - GRACE_MS || now.getTime() - due > MAX_LATE_DAYS * 86_400_000 ? 'stale' : 'ready';
+    const phase: Phase = now.getTime() + CLOCK_SKEW_MS < due ? 'future' : due < created - GRACE_MS || now.getTime() - due > MAX_LATE_DAYS * 86_400_000 ? 'stale' : 'ready';
     return { due: new Date(due).toISOString(), phase };
   }
   const today = localDayOf(now, f.timeZone);

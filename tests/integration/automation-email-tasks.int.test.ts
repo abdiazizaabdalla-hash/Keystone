@@ -75,6 +75,7 @@ describe('task-driven automation', () => {
   it('completing the watched step creates the next step with a business-day due date; completing it again does not repeat when nothing new happened', async () => {
     const d = await seedDeal(tc, 'AE4');
     await admin.from('tasks').update({ name: 'Inspection scheduling' }).eq('id', d.taskId);
+    await admin.from('tasks').insert({ transaction_id: d.transactionId, name: 'Closing' }); // ticking the only step would close the deal, which (correctly) stops reminders
     const tpl = await call(h(createTemplate), tc, {
       method: 'POST',
       path: '/api/automation/templates',
@@ -100,9 +101,9 @@ describe('task-driven automation', () => {
     const d = await seedDeal(tc, 'AE5');
     const tpl = await call(h(createTemplate), tc, { method: 'POST', path: '/api/automation/templates', body: { name: 'Reminder', description: '', category: 'transaction', triggerType: 'transaction_created', steps: [{ id: 's1', type: 'create_task', name: 'Should not appear', when: { days: 0, direction: 'after' } }] } });
     const templateId = (tpl.json as { template: { id: string } }).template.id;
+    await admin.from('transactions').update({ status: 'Closed' }).eq('id', d.transactionId); // closed before it is applied: applying also runs it at once
     await call(h(applyInstances), tc, { method: 'POST', path: '/api/automation/instances', body: { transactionId: d.transactionId, templateIds: [templateId] } });
     await setMode(tc, d, 'auto');
-    await admin.from('transactions').update({ status: 'Closed' }).eq('id', d.transactionId);
     await runInstances(new Date(), () => false, 50, { transactionId: d.transactionId });
     expect(((await admin.from('tasks').select('id').eq('transaction_id', d.transactionId).eq('name', 'Should not appear')).data ?? [])).toHaveLength(0);
   });
