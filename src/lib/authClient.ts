@@ -194,5 +194,11 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     }
   }
 
+  // The host rejects a request body over about 4.5 MB before our code runs, with a plain-text page instead of JSON. Say what
+  // happened instead of letting every caller choke on "Unexpected token 'R'".
+  if (response.status === 413) {
+    return new Response(JSON.stringify({ error: 'That file is too large to upload here (the limit is about 4 MB). Compress or split the PDF and try again.' }), { status: 413, headers: { 'Content-Type': 'application/json' } });
+  }
+
   return response;
 }
