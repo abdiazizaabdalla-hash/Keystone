@@ -106,6 +106,28 @@ export async function getValidToken(): Promise<string | null> {
   return refreshPromise;
 }
 
+// The host stops request bodies at about 4.5 MB. A file over this size is sent straight to storage first and the request
+// then only names where it is (the routes accept either form; see lib/incomingUploads.ts), so one contract PDF of any size
+// up to 25 MB works from every upload button without each page having to know.
+const DIRECT_UPLOAD_OVER = 3 * 1024 * 1024;
+const DIRECT_UPLOAD_ROUTES = ['/api/documents', '/api/transactions/extract-contract'];
+
+async function sendLargeFileDirect(url: string, options: RequestInit): Promise<RequestInit> {
+  if ((options.method || 'GET').toUpperCase() !== 'POST') return options;
+  const body = options.body;
+  if (typeof FormData === 'undefined' || !(body instanceof FormData)) return options;
+  if (!DIRECT_UPLOAD_ROUTES.includes(url.split('?')[0])) return options;
+  const file = body.get('file');
+  if (!(file instanceof File) || file.size <= DIRECT_UPLOAD_OVER) return options;
+  const { uploadIncoming } = await import('./incomingUploadClient');
+  const [uploaded] = await uploadIncoming([file], 'document');
+  const json: Record<string, unknown> = { uploads: [{ path: uploaded.path, name: uploaded.name }] };
+  body.forEach((value, key) => {
+    if (key !== 'file' && typeof value === 'string') json[key] = value;
+  });
+  return { ...options, body: JSON.stringify(json), headers: { ...(options.headers || {}), 'Content-Type': 'application/json' } };
+}
+
 /**
  * fetch() wrapper that attaches a valid Bearer token, auto-refreshing it
  * beforehand when it's expired/expiring, and retrying once more on an
@@ -113,11 +135,12 @@ export async function getValidToken(): Promise<string | null> {
  * AuthRequiredError when there's no way to get a valid token (caller should
  * redirect to /auth).
  */
-export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+export async function authFetch(url: string, optionsIn: RequestInit = {}): Promise<Response> {
   const token = await getValidToken();
   if (!token) {
     throw new AuthRequiredError();
   }
+  const options = await sendLargeFileDirect(url, optionsIn);
 
   const doFetch = (accessToken: string) =>
     fetch(url, {
@@ -147,6 +170,12 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
       clearSession();
       throw new AuthRequiredError('Two-factor verification required');
     }
+  }
+
+  // The host rejects a request body over about 4.5 MB before our code runs, with a plain-text page instead of JSON. Say what
+  // happened instead of letting every caller choke on "Unexpected token 'R'".
+  if (response.status === 413) {
+    return new Response(JSON.stringify({ error: 'That file is too large to upload here (the limit is about 4 MB). Compress or split the file and try again.' }), { status: 413, headers: { 'Content-Type': 'application/json' } });
   }
 
   return response;

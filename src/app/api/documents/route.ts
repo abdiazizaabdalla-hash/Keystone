@@ -7,6 +7,7 @@ import { getVisibleTcUserIds } from '@/lib/team';
 import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
 import { logAudit } from '@/lib/audit';
 import { queueDealNotification } from '@/lib/notifications';
+import { IncomingError, parseUploadRequest, removeIncoming } from '@/lib/incomingUploads';
 
 const BUCKET = 'transaction-documents';
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
@@ -173,6 +174,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Files over the host's ~4.5 MB body limit arrive already in storage (see lib/incomingUploads.ts); clean them up when done.
+  let incomingPaths: string[] = [];
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
     const callerIsAgent = isAgentUser(user);
@@ -183,15 +186,17 @@ export async function POST(request: NextRequest) {
       await assertTrialActive(user);
     }
 
-    const formData = await request.formData();
-    const file = formData.get('file');
-    const transactionId = formData.get('transactionId');
-    const taskId = formData.get('taskId'); // optional — associates with a checklist stage
-    const categoryRaw = formData.get('category');
-    const documentTypeRaw = formData.get('documentType');
-    const requiresSignatureRaw = formData.get('requiresSignature'); // optional — defaults to true
+    // Either a small multipart upload or JSON naming a file already sent straight to storage.
+    const parsed = await parseUploadRequest(request, user.id, ALLOWED_UPLOAD_TYPES, 1);
+    incomingPaths = parsed.incomingPaths;
+    const file = parsed.files[0];
+    const transactionId = parsed.field('transactionId');
+    const taskId = parsed.field('taskId'); // optional — associates with a checklist stage
+    const categoryRaw = parsed.field('category');
+    const documentTypeRaw = parsed.field('documentType');
+    const requiresSignatureRaw = parsed.field('requiresSignature'); // optional — defaults to true
 
-    if (!(file instanceof File)) {
+    if (!file) {
       return NextResponse.json({ error: 'file is required' }, { status: 400 });
     }
     if (typeof transactionId !== 'string' || !transactionId) {
@@ -222,7 +227,7 @@ export async function POST(request: NextRequest) {
     // deal. Message attachments never do: only the Documents uploaders set
     // fromDocuments.
     let shareWithClient = false;
-    if (formData.get('fromDocuments') === 'true' && typeof transactionId === 'string') {
+    if (parsed.field('fromDocuments') === 'true' && typeof transactionId === 'string') {
       const { data: shareRow } = await supabaseServer
         .from('transactions')
         .select('client_share_new_documents')
@@ -309,9 +314,14 @@ export async function POST(request: NextRequest) {
         { status: error.status }
       );
     }
+    if (error instanceof IncomingError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error('Error uploading document:', error);
     const msg = error instanceof Error ? error.message : 'Failed to upload document';
     return NextResponse.json({ error: msg }, { status: 500 });
+  } finally {
+    await removeIncoming(incomingPaths);
   }
 }
 

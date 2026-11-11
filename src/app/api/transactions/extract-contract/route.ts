@@ -3,6 +3,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { readContractPdf } from '@/lib/contractExtraction';
+import { IncomingError, parseUploadRequest, removeIncoming } from '@/lib/incomingUploads';
 
 // Matches the 25MB cap used for the regular document upload route
 // (src/app/api/documents/route.ts) -- no reason for this one to be
@@ -10,6 +11,8 @@ import { readContractPdf } from '@/lib/contractExtraction';
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
+  // A PDF over the host's ~4.5 MB body limit arrives already in storage (see lib/incomingUploads.ts); clean it up when done.
+  let incomingPaths: string[] = [];
   try {
     const { user } = await getUserFromRequest(request);
     await assertTrialActive(user);
@@ -27,10 +30,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const formData = await request.formData();
-    const file = formData.get('file');
+    const parsed = await parseUploadRequest(request, user.id, { pdf: 'application/pdf' }, 1);
+    incomingPaths = parsed.incomingPaths;
+    const file = parsed.files[0];
 
-    if (!(file instanceof File)) {
+    if (!file) {
       return NextResponse.json({ error: 'file is required' }, { status: 400 });
     }
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
@@ -79,9 +83,14 @@ export async function POST(request: NextRequest) {
         { status: 503 }
       );
     }
+    if (error instanceof IncomingError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error('Error extracting contract:', error);
     const msg = error instanceof Error ? error.message : 'Failed to read the contract';
     return NextResponse.json({ error: msg }, { status: 500 });
+  } finally {
+    await removeIncoming(incomingPaths);
   }
 }
 

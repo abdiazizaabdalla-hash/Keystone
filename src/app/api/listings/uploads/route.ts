@@ -10,13 +10,16 @@ import { IncomingError, MAX_INCOMING_WAITING, countIncoming, createIncomingUploa
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
-    await assertTrialActive(user);
+    const body = await request.json().catch(() => ({}));
+    // Invited agents may send deal documents (the Documents route checks their access to the deal); the listing tools stay coordinator-only.
+    const forDocument = body.purpose === 'document';
+    if (isAgentUser(user) && !forDocument) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    // Same rule as the Documents route: an agent's upload is not gated on a coordinator trial.
+    if (!(forDocument && isAgentUser(user))) await assertTrialActive(user);
 
     if (!(await checkRateLimit(`incoming-upload:${user.id}`, 120, 60 * 60))) {
       return NextResponse.json({ error: 'Too many uploads in a short time. Please wait a bit and try again.' }, { status: 429 });
     }
-    const body = await request.json().catch(() => ({}));
     const files: unknown[] = Array.isArray(body.files) ? body.files : [];
     if (files.length === 0 || files.length > 10) return NextResponse.json({ error: 'Add between 1 and 10 files' }, { status: 400 });
 

@@ -12,12 +12,12 @@ const BUCKET = 'transaction-documents';
  * Sends files straight to private storage (no size limit from the app server) and returns where they landed.
  * Pass the result's `path`/`name` pairs to the route that reads them (offers, documents, listing agreement).
  */
-export async function uploadIncoming(files: File[]): Promise<UploadedFile[]> {
+export async function uploadIncoming(files: File[], purpose?: 'document'): Promise<UploadedFile[]> {
   if (files.length === 0) return [];
   const res = await authFetch('/api/listings/uploads', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files: files.map((f) => ({ name: f.name, size: f.size })) }),
+    body: JSON.stringify({ files: files.map((f) => ({ name: f.name, size: f.size })), ...(purpose ? { purpose } : {}) }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Could not start the upload');
