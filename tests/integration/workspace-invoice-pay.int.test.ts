@@ -221,8 +221,37 @@ describe('QuickBooks files for an agent', () => {
     const again = await call(h(qbImport), agentWs, { method: 'POST', path: '/x', body: { mode: 'preview', rows } });
     expect((again.json as { rows: Array<{ status: string }> }).rows.map((r) => r.status)).toEqual(['duplicate', 'duplicate']);
     // Someone else cannot undo their import, but they can.
-    expect(((await call(h(qbUndo), outsider, { method: 'DELETE', path: '/x', body: { invoiceIds: made.createdInvoiceIds } })).status)).toBe(403);
+    const foreign = await call(h(qbUndo), outsider, { method: 'DELETE', path: '/x', body: { invoiceIds: made.createdInvoiceIds } });
+    expect((foreign.json as { removed?: number }).removed ?? 0).toBe(0);
+    expect(((await call(h(qbUndo), await createCollaborator('wp-undo-free'), { method: 'DELETE', path: '/x', body: { invoiceIds: made.createdInvoiceIds } })).status)).toBe(403);
     const undone = await call(h(qbUndo), agentWs, { method: 'DELETE', path: '/x', body: { invoiceIds: made.createdInvoiceIds } });
     expect((undone.json as { removed: number }).removed).toBe(2);
+  });
+});
+
+describe('a coordinator invoices anyone, for anything', () => {
+  it('creates, edits and lists a free-form invoice that is not tied to a deal, and only they see it', async () => {
+    const made = await call(h(createWs), outsider, {
+      method: 'POST',
+      path: '/api/workspace-invoices',
+      body: { title: 'Photography', billToName: 'Sunrise Photo Co', billToEmail: 'billing@sunrise.example.test', lines: [{ description: 'Listing photos', quantity: 1, unitPrice: 1234.56 }] },
+    });
+    expect(made.status).toBe(201);
+    const inv = made.json as { id: string; invoice_number: string; transaction_id: string | null; total?: number };
+    expect(inv.transaction_id).toBeNull();
+    const mine = await call(h(listWs), outsider, { method: 'GET', path: '/api/workspace-invoices' });
+    const rows = mine.json as Array<{ id: string; bill_to_name: string; total: number }>;
+    const row = rows.find((r) => r.id === inv.id);
+    expect(row?.bill_to_name).toBe('Sunrise Photo Co');
+    expect(row?.total).toBeCloseTo(1234.56, 2);
+    // Another coordinator does not see it.
+    const theirs = await call(h(listWs), tc, { method: 'GET', path: '/api/workspace-invoices' });
+    expect((theirs.json as Array<{ id: string }>).some((r) => r.id === inv.id)).toBe(false);
+  });
+
+  it('turns a free agent login away', async () => {
+    const free = await createCollaborator('wp-free-inv');
+    const res = await call(h(createWs), free, { method: 'POST', path: '/api/workspace-invoices', body: { title: 'x', billToName: 'y', lines: [{ description: 'z', quantity: 1, unitPrice: 5 }] } });
+    expect(res.status).toBe(403);
   });
 });

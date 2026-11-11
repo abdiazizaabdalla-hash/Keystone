@@ -23,13 +23,16 @@ export function assertWorkspaceAgent(user: WithAppMetadata): void {
 }
 
 /**
- * Who may write free-form invoices: an agent with a workspace, or a brokerage owner (Team/Brokerage plan, brokerage
- * feature on) who bills agents, vendors or anyone else from the Invoices page.
+ * Who may write free-form invoices (to anyone, for anything, any amount): an agent with a workspace, a coordinator (a TC)
+ * once the workspace invoices are switched on, or a brokerage owner (Team/Brokerage plan, brokerage feature on).
+ * Free agent logins (collaborators) never can.
  */
 export function assertInvoiceSender(user: WithAppMetadata): void {
-  if (getEntitlements(user).kind === 'agent_workspace') return;
+  const kind = getEntitlements(user).kind;
+  if (kind === 'agent_workspace') return;
+  if (kind === 'coordinator' && isFeatureOn('agent_workspace')) return;
   if (isFeatureOn('brokerage') && isTeamPlan(getUserPlan(user))) return;
-  throw new AuthError('Invoices are available on an agent workspace or a brokerage account', 403);
+  throw new AuthError('Invoices to anyone are available on a coordinator, agent workspace or brokerage account', 403);
 }
 
 /** The next free number for this owner, such as INV-0007. */

@@ -11,6 +11,7 @@ import AgentInvoices from '@/components/AgentInvoices';
 import AgentBilledInvoices from '@/components/AgentBilledInvoices';
 import BrokerageInvoices from '@/components/BrokerageInvoices';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { isFeatureOnClient } from '@/lib/features';
 
 interface Agent {
   name: string;
@@ -499,6 +500,27 @@ function CoordinatorInvoicesPage() {
   );
 }
 
+// A coordinator's everyday invoices (agent fees on deals and listings), plus a tab to invoice anyone for anything:
+// a vendor, a client, an agent for something not tied to a deal. Same engine and screens as an agent's own invoices.
+function CoordinatorWithOtherInvoices() {
+  const [tab, setTab] = useState<'agents' | 'other'>('agents');
+  return (
+    <div>
+      <div className="px-4 pt-6 md:px-6 md:pt-12 max-w-7xl mx-auto">
+        <div className="flex flex-wrap gap-2 text-sm" role="tablist" aria-label="Invoices">
+          {([['agents', 'Agent invoices'], ['other', 'Other invoices']] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full border transition ${tab === id ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {tab === 'other' && <p className="text-xs text-slate-500 mt-3 max-w-3xl">Invoice anyone, for anything and any amount: a client, a vendor, an agent, a one-off job. Not tied to a deal. Send by email with an online pay link, or download the PDF.</p>}
+      </div>
+      {tab === 'agents' ? <CoordinatorInvoicesPage /> : <AgentInvoices />}
+    </div>
+  );
+}
+
 // An agent with their own workspace gets their own invoices (templates, contacts); everyone else sees the coordinator's.
 // A brokerage owner gets three tabs: commissions by agent, the agent fee invoices, and free-form invoices to anyone.
 export default function InvoicesPage() {
@@ -517,7 +539,7 @@ export default function InvoicesPage() {
   }, []);
   if (mode === 'unknown') return null;
   if (mode === 'agent') return <AgentInvoices initialTransactionId={dealId} startNew={startNew} commissionTransactionId={commissionDeal} />;
-  if (!owner) return <CoordinatorInvoicesPage />;
+  if (!owner) return isFeatureOnClient('agent_workspace') ? <CoordinatorWithOtherInvoices /> : <CoordinatorInvoicesPage />;
   return (
     <div>
       <div className="px-4 pt-6 md:px-6 md:pt-12 max-w-7xl mx-auto">
