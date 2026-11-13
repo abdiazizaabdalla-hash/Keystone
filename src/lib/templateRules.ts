@@ -3,7 +3,6 @@ import { outboxOnly } from './dealEmail';
 import { buildMergeContext, displayNameOf, loadDealForTemplates, recipientsOf, type DealForTemplates, type DealPerson } from './templateContext';
 import { renderTemplate } from './templateMerge';
 import { templateFitsState } from './usStates';
-import { userMayUseTemplates } from './automation/plan';
 
 // Automatic rules for templates: "when a deal closes, draft this email for the buyer and seller". A rule never sends
 // anything. It creates a draft (a template_run, status pending) that waits in the approvals list until the person
@@ -40,9 +39,6 @@ interface RuleRow extends RuleShape {
  */
 export async function evaluateTemplateRules(ownerId: string, opts: { transactionId?: string; today?: string } = {}): Promise<number> {
   const today = opts.today ?? isoDay(new Date());
-  // Plan gate, checked now: an account whose plan does not include templates (or that was downgraded) gets no drafts.
-  const { data: ownerRow } = await supabaseServer.auth.admin.getUserById(ownerId);
-  if (!ownerRow.user || !userMayUseTemplates(ownerRow.user)) return 0;
   const { data: rules } = await supabaseServer.from('template_rules').select('*').eq('owner_user_id', ownerId).eq('enabled', true);
   if (!rules || rules.length === 0) return 0;
   const templateIds = [...new Set(rules.map((r) => r.template_id as string))];

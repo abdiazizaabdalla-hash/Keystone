@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { useAgentAccess } from '@/lib/useAgentAccess';
 import { isFeatureOnClient } from '@/lib/features';
-import { useTemplatesAccess } from '@/lib/useTemplatesAllowed';
 import { MERGE_FIELDS } from '@/lib/templateMerge';
 import { US_STATES } from '@/lib/usStates';
 import TemplateRules from '@/components/TemplateRules';
@@ -69,8 +68,7 @@ async function readError(res: Response, fallback: string) {
 
 export default function TemplatesPage() {
   const { readOnly: readOnlyAgent } = useAgentAccess();
-  const access = useTemplatesAccess();
-  const enabled = access.allowed;
+  const enabled = isFeatureOnClient('templates');
   const [view, setView] = useState<Section | 'approvals'>('documents');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [counts, setCounts] = useState({ documents: 0, emails: 0 });
@@ -205,14 +203,7 @@ export default function TemplatesPage() {
     }
   };
 
-  if (!access.ready) return <div className="p-6 text-slate-400">Loading…</div>;
-  if (!enabled) {
-    return (
-      <div className="p-6 text-slate-400">
-        {isFeatureOnClient('templates') ? 'Templates are included in Relay Pro and Team. Upgrade your plan to use them.' : 'Templates are not available yet.'}
-      </div>
-    );
-  }
+  if (!enabled) return <div className="p-6 text-slate-400">Templates are not available yet.</div>;
 
   const wrap = (children: React.ReactNode) => (
     <div className="min-h-screen px-4 py-6 md:px-6 md:py-10">

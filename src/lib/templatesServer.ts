@@ -9,7 +9,6 @@ import { brokerageOwnersFor } from './oversight';
 import { assertAgentHas } from './agentGates';
 import { isValidCategory, isValidDocumentType, resolveDocumentPlacement } from './documentTaxonomy';
 import type { AgentFeature } from './tiers';
-import { TEMPLATES_PLAN_MESSAGE, userMayUseTemplates } from './automation/plan';
 
 export const TEMPLATE_BUCKET = 'transaction-documents';
 export const TEMPLATE_KINDS = ['email', 'letter', 'form'] as const;
@@ -21,8 +20,6 @@ export async function requireTemplatesUser(request: NextRequest, needs?: AgentFe
   const { user, isAdmin } = await getUserFromRequest(request);
   if (!isFeatureOn('templates')) throw new AuthError('Not found', 404);
   assertNotCollaborator(user);
-  // Plan gate: Pro, Team or Brokerage coordinators only (admins always; agent workspaces by tier). A downgrade stops access at once.
-  if (!userMayUseTemplates(user)) throw new AuthError(TEMPLATES_PLAN_MESSAGE, 403);
   // Saving templates and building rules is not part of a brokerage-provided workspace (Agent Basic); using them is.
   if (needs) assertAgentHas(user, needs);
   return { user, isAdmin };

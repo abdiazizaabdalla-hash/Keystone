@@ -9,6 +9,7 @@ import { useAgentAccess } from '@/lib/useAgentAccess';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import AutomationSettingsCard from '@/components/AutomationSettingsCard';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { DueDateSpec, normalizeDueDateSpec } from '@/lib/dueDates';
 import { TASK_TEMPLATE } from '@/lib/transactionStages';
@@ -590,6 +591,8 @@ function SettingsContent() {
           </button>
         </div>
         )}
+
+        {!isAgentAcct && <AutomationSettingsCard />}
 
         <div id="checklist-templates" className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 scroll-mt-6">
           <div className="flex items-start justify-between gap-4 mb-1">

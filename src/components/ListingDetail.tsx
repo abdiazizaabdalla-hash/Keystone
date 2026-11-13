@@ -11,7 +11,6 @@ import { uploadIncoming } from '@/lib/incomingUploadClient';
 import LibraryPicker from '@/components/LibraryPicker';
 import { useAgentAccess } from '@/lib/useAgentAccess';
 import { isFeatureOnClient } from '@/lib/features';
-import { useTemplatesAllowed } from '@/lib/useTemplatesAllowed';
 import { stateFromAddress } from '@/lib/usStates';
 import DragHandle from '@/components/DragHandle';
 import MoveMenu from '@/components/MoveMenu';
@@ -172,7 +171,6 @@ const LISTING_TABS = ALL_LISTING_TABS;
  * conversations with the seller and the coordinator. It reads from /api/oversight/listings/[id]/view.
  */
 export default function ListingDetail({ id, ownerView = false }: { id: string; ownerView?: boolean }) {
-  const templatesOn = useTemplatesAllowed(); // the flag AND a Pro/Team plan
   const router = useRouter();
   const isWorkspaceAgent = useWorkspaceAgent();
   const [tab, setTab] = useState<ListingTab>('overview');
@@ -1959,7 +1957,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
             />
             <div className="flex items-start justify-between gap-3 mb-2">
               <h2 className="text-2xl font-bold text-slate-100">Documents</h2>
-              {templatesOn && !readOnlyAgent && (
+              {isFeatureOnClient('templates') && !readOnlyAgent && (
                 <button type="button" onClick={() => setLibraryOpen(true)} className="shrink-0 px-4 py-2 border border-slate-600 hover:border-blue-500 text-slate-200 hover:text-blue-300 font-semibold rounded-lg text-sm transition" title="Pick PDFs from your template library, by state">
                   Add from Library
                 </button>

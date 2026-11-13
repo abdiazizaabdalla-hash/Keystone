@@ -175,7 +175,6 @@ export default function DashboardLayout({
   const [userName, setUserName] = useState('');
   const [plan, setPlan] = useState<string | null>(null);
   const [automationAllowed, setAutomationAllowed] = useState(false);
-  const [templatesAllowed, setTemplatesAllowed] = useState(false);
   // Presentation only (see lib/accountType.ts): an agent running their own deals does not see coordinator-only items.
   const [isAgentAccount, setIsAgentAccount] = useState(false);
   // An agent with their own workspace keeps the Invoices tab (their own invoices, not the coordinator's).
@@ -350,7 +349,6 @@ export default function DashboardLayout({
           }
           setPlan(data.plan || 'starter');
           setAutomationAllowed(data.automationAllowed === true);
-          setTemplatesAllowed(data.templatesAllowed === true);
           setIsAgentAccount(data.accountType === 'agent');
           // An agent has no agents list or agent profiles to manage (they are the agent); send them back if they land there.
           if ((data.accountType === 'agent' || data.agentWorkspace) && window.location.pathname.startsWith('/dashboard/agents')) {
@@ -431,7 +429,7 @@ export default function DashboardLayout({
   const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
     { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
     ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }] : []),
-    ...(isFeatureOnClient('templates') && templatesAllowed && !(isAgentAccount && !hasWorkspace) ? [{ href: '/dashboard/templates', label: 'Templates', icon: 'templates' }] : []),
+    ...(isFeatureOnClient('templates') && !(isAgentAccount && !hasWorkspace) ? [{ href: '/dashboard/templates', label: 'Templates', icon: 'templates' }] : []),
     { href: '/dashboard/search', label: 'Search', icon: 'search' },
     ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: collaborateUnread }] : []),
     { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },

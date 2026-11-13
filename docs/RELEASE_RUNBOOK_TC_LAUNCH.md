@@ -1,18 +1,19 @@
 # Release runbook: TC launch (templates, other invoices, archive, email log, automation)
 
-Scope: ship to TCs first, with **templates and automation for Pro and Team plans only** (Starter does not get either). Other invoices and archive stay available to every TC. Agent workspace and brokerage code ships **dark** (flags off, no menu entries, APIs answer 404). Announce paid agent and brokerage tiers and rewrite the website later.
+Scope: ship to TCs first. Agent workspace and brokerage code ships **dark** (flags off, no menu entries, APIs answer 404). Announce paid agent and brokerage tiers and rewrite the website later.
 
 BUILT vs PLANNED is kept separate below. Nothing here has been run against production. Nothing is pushed on the preview branch.
 
 ## What is in this release (BUILT)
 | Feature | Flag | Who sees it |
 |---|---|---|
-| Templates (state-filtered documents and emails, rules and drafts) | `templates` | **Pro and Team only** (also needs the flag). Starter: no Templates tab, no template buttons on deals, every templates API answers 403 "included in Relay Pro and Team"; a downgrade stops rule drafts at once |
+| Templates (state-filtered documents and emails) | `templates` | every TC plan |
 | Other invoices + agent fee picker + listing invoices | `other_invoices` | every TC plan |
 | Archive deals | none (always on) | every TC |
 | Step "Email" buttons: logged to a per-deal email log, duplicate-send protection | none | every TC |
 | Large file uploads (up to 25 MB) | none | **already live** (PR #11) |
-| Automations tab (templates, per-deal instances, task triggers, Draft/Auto, approvals) | `automation` | **Pro and Team only** (also needs the flag) |
+| Automations tab (templates, per-deal instances, task triggers, Draft/Auto, approvals) | `automation` | **Pro and Team only** (also needs the flag). Starter: no Automations tab and no automation controls on deals |
+| Settings > Automation card (account-wide on/off switch + "Customize automations" link; Starter sees "Upgrade to Pro/Team to use this feature") | `automation` | every coordinator account, once the flag is on |
 | Agent workspace, brokerage oversight | `agent_workspace`, `brokerage` | nobody (stay OFF) |
 
 PLANNED, not built: listing automations (Phase 4), all-deals action queue + library rewrite + history (Phase 5), brokerage templates, quiet-hours UI, AI seller updates.
@@ -40,10 +41,10 @@ Branch `preview/agent-invoices-and-stripe` is ~165 commits ahead of `main`. Do n
 3. Merge. Wait for **Ready** + **Production** in Vercel.
 Rollback: Vercel > Deployments > previous deployment > Promote to Production (database additions can stay; they are additive).
 
-## Step 4. Turn on templates (Pro/Team) + other invoices (all TCs)
+## Step 4. Turn on templates + other invoices
 Vercel > Settings > Environment Variables (Production): set both
 `RELAY_FEATURES=templates,other_invoices` and `NEXT_PUBLIC_RELAY_FEATURES=templates,other_invoices`, then **Redeploy** (the NEXT_PUBLIC copy is baked in at build time).
-Check as a Starter account and as a Pro account. Starter: no Templates tab, no "Add from Library" or template buttons on deals; Invoices > Other invoices works. Pro: Templates tab present, a template applies to a deal. The plan rule is `userMayUseTemplates` in `src/lib/automation/plan.ts` (same rule as automation) and is enforced on the server, not just hidden in the screens.
+Check as a Starter account and as a Pro account: Templates tab present, Invoices > Other invoices works, a template applies to a deal.
 
 ## Step 5. Automation: pilot, Draft mode, Pro/Team only
 Cost and safety controls (all exist):
@@ -62,7 +63,7 @@ Vercel is on the Hobby plan: Vercel crons run once a day. Task-based triggers (t
 Also decide: Vercel Hobby is intended for non-commercial use; upgrade to Pro before relying on this commercially.
 
 ## Step 7. Announce to TCs, update the website for TCs
-Pricing/features: Templates and Automation are Pro and Team features; Other invoices and Archive are included for every TC. FAQ upload limit "25 MB" is now accurate.
+Pricing/features: Starter vs Pro vs Team now include Templates (all), Other invoices (all), Archive (all), Automation (Pro/Team). FAQ upload limit "25 MB" is now accurate.
 
 ## Later (PLANNED): agent and brokerage launch
 Turn on `agent_workspace` / `brokerage`, review Stripe plans and prices (needs your approval: no Stripe change has been made), rewrite the website for the wider scope. Their tables are already in the database after Step 2.
