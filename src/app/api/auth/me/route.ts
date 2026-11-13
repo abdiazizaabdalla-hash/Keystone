@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { userMayAutomate } from '@/lib/automation/plan';
+import { userMayAutomate, userMayUseTemplates } from '@/lib/automation/plan';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { isCollaboratorOnly } from '@/lib/agentPortal';
@@ -42,6 +42,8 @@ function shapeUser(user: {
     agentLevel: getEntitlements(user).agentLevel,
     // Automation is part of Pro and Team (see lib/automation/plan.ts); the screens hide it for everyone else.
     automationAllowed: userMayAutomate(user),
+    // Templates are Pro and Team too (same rule); the screens hide them for everyone else.
+    templatesAllowed: userMayUseTemplates(user),
     readOnly: isBrokerageReadOnly(user),
     coordinationMode: getCoordinationMode(meta),
     defaultFlatFee:

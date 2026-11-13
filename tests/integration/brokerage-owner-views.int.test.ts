@@ -224,13 +224,15 @@ describe('agents snapshot', () => {
 });
 
 describe('invoices to anyone', () => {
-  it('a brokerage owner can write and list free-form invoices; a Pro coordinator still cannot', async () => {
+  it('a brokerage owner can write and list free-form invoices; a Pro coordinator can too (other invoices), and sees only their own', async () => {
     const made = await call(h(createInvoice), broker, { method: 'POST', path: '/api/workspace-invoices', body: { templateKey: 'commission_split', billToName: 'Agent A', billToEmail: 'a@example.test' } });
     expect(made.status, JSON.stringify(made.json)).toBe(201);
     const list = await call(h(listInvoices), broker, { method: 'GET', path: '/api/workspace-invoices' });
     expect(list.status).toBe(200);
     expect((list.json as unknown[]).length).toBe(1);
-    expect((await call(h(createInvoice), pro, { method: 'POST', path: '/api/workspace-invoices', body: { templateKey: 'blank' } })).status).toBe(403);
+    // A coordinator may invoice anyone once `other_invoices` (or the agent workspace) is on; the flag-off case is in tests/integration/other-invoices-gate.int.test.ts.
+    expect((await call(h(createInvoice), pro, { method: 'POST', path: '/api/workspace-invoices', body: { templateKey: 'blank' } })).status).toBe(201);
+    expect(((await call(h(listInvoices), pro, { method: 'GET', path: '/api/workspace-invoices' })).json as unknown[]).length).toBe(1);
     // Another owner never sees it.
     expect(((await call(h(listInvoices), otherBroker, { method: 'GET', path: '/api/workspace-invoices' })).json as unknown[]).length).toBe(0);
   });

@@ -32,6 +32,7 @@ import OverviewSection from '@/components/OverviewSection';
 import QuickMessageComposer from '@/components/QuickMessageComposer';
 import { readPersona } from '@/lib/persona';
 import { isFeatureOnClient } from '@/lib/features';
+import { useTemplatesAllowed } from '@/lib/useTemplatesAllowed';
 import { useAgentAccess } from '@/lib/useAgentAccess';
 import { US_STATES, stateFromAddress } from '@/lib/usStates';
 import SignatureFieldPlacer from '@/components/SignatureFieldPlacer';
@@ -425,7 +426,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   const { readOnly: readOnlyAgent } = useAgentAccess();
   const [recentTemplates, setRecentTemplates] = useState<Array<{ id: string; kind: 'email' | 'letter' | 'form'; name: string; description: string | null; states: string[] }>>([]);
   const [recentKey, setRecentKey] = useState(0);
-  const templatesOn = isFeatureOnClient('templates');
+  const templatesOn = useTemplatesAllowed(); // the flag AND a Pro/Team plan
   useEffect(() => {
     if (!templatesOn || ownerView) return;
     let cancelled = false;
@@ -2978,7 +2979,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                       </button>
                     );
                   })()}
-                  {isFeatureOnClient('templates') && !ownerView && (
+                  {templatesOn && !ownerView && (
                     <button
                       type="button"
                       onClick={() => setUseTemplate({ mode: 'all' })}
@@ -3221,7 +3222,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                 className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
               />
             </div>
-            {isFeatureOnClient('templates') && (
+            {templatesOn && (
               <div>
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Property State</p>
                 <select
