@@ -3096,17 +3096,17 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
             </div>
 
             {/* Status Dropdown */}
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Status</p>
               <select
                 value={transaction.status}
                 onChange={(e) => handleStatusChange(e.target.value)}
                 disabled={isUpdatingStatus || locked}
-                className="bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50 cursor-pointer"
+                className="w-full max-w-full truncate bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-slate-100 focus:border-blue-500 focus:outline-none disabled:opacity-50 cursor-pointer"
               >
                 {stagesForTaskNames(tasks.map((t) => t.name)).map((status) => (
-                  <option key={status} value={status}>
-                    {status}
+                  <option key={status} value={status} title={status}>
+                    {status.length > 34 ? `${status.slice(0, 33).trimEnd()}…` : status}
                   </option>
                 ))}
               </select>
