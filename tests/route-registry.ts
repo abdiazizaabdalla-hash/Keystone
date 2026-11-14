@@ -75,7 +75,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/agent/transactions/seen': { kind: 'agent', methods: ['POST'] },
   '/api/agents': { kind: 'session', methods: ['DELETE', 'GET', 'PATCH', 'POST'] },
   '/api/agents/[id]/contact': { kind: 'session', methods: ['GET'] },
-  '/api/agents/[id]/portal-access': { kind: 'session', methods: ['POST'] },
+  '/api/agents/[id]/portal-access': { kind: 'session', methods: ['GET', 'POST', 'PUT'] },
   '/api/auth/forgot-password': { kind: 'public', methods: ['POST'], why: "Sends a reset email; rate limited." },
   '/api/auth/me': { kind: 'session', methods: ['GET', 'PATCH'] },
   '/api/auth/mfa/activate': { kind: 'session', methods: ['POST'], collaboratorWrites: "Personal sign-in security for the caller only." },
