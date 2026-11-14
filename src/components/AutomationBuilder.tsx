@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AiEmailAssist, ConditionPicker } from '@/components/StepExtras';
+import { ConditionPicker } from '@/components/StepExtras';
 import { RECIPIENT_ROLES, STEP_TYPES, TRIGGERS, VARIABLES, describeWhen, triggerOf, type Category, type Step, type StepType } from '@/lib/automation/library';
 
 // The manual workflow builder: a trigger, then steps with timing. The same shape the server validates; nothing outside the
@@ -132,7 +132,6 @@ export default function AutomationBuilder({ initial, editing, saving, error, onS
                   </div>
                   <p className="mt-1 text-xs text-slate-500">Only people already on the deal can receive it. If nobody matches, nothing is sent and the history says why.</p>
                 </fieldset>
-                <AiEmailAssist subject={s.subject ?? ''} message={s.message ?? ''} context={`${trigger?.label ?? 'a deal event'}; sent to ${(s.to ?? []).join(', ') || 'people on the deal'}`} onResult={(r) => setStep(i, { subject: r.subject, message: r.message })} />
                 <div><label className={label}>Subject</label><input className={input} value={s.subject ?? ''} maxLength={200} onChange={(e) => setStep(i, { subject: e.target.value })} /></div>
                 <div><label className={label}>Message</label><textarea rows={5} className={input} value={s.message ?? ''} maxLength={5000} onChange={(e) => setStep(i, { message: e.target.value })} /></div>
               </div>

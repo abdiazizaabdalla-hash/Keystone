@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { RECIPIENT_ROLES, VARIABLES, describeWhen, triggerOf, type Category, type Step } from '@/lib/automation/library';
 import type { BuilderValue } from '@/components/AutomationBuilder';
-import { AiEmailAssist, ConditionPicker } from '@/components/StepExtras';
+import { ConditionPicker } from '@/components/StepExtras';
 
 // A small popup for one automation: a picture of the workflow (click a step to edit it), then Save. Used by both the Library
 // (adding a ready-made one) and Your automations (changing one you already have).
@@ -107,7 +107,6 @@ export default function WorkflowDialog({ preset, saving, error, saveLabel, banne
                 </div>
                 <p className="mt-1 text-xs text-slate-500">Matched against the people on each deal when it runs. If a role has no one on the deal, you will see a warning there.</p>
               </fieldset>
-              <AiEmailAssist subject={step.subject ?? ''} message={step.message ?? ''} context={`${trigger?.label ?? 'a deal event'}; sent to ${(step.to ?? []).join(', ') || 'people on the deal'}`} onResult={(r) => patch({ subject: r.subject, message: r.message })} />
               <div><label className={lab} htmlFor="pd-subject">Subject</label><input id="pd-subject" className={field} value={step.subject ?? ''} maxLength={200} onChange={(e) => patch({ subject: e.target.value })} /></div>
               <div><label className={lab} htmlFor="pd-message">Message</label><textarea id="pd-message" rows={7} className={field} value={step.message ?? ''} maxLength={5000} onChange={(e) => patch({ message: e.target.value })} /></div>
               <p className="text-xs text-slate-500">You can use {VARIABLES.map((v) => `{{${v.id}}}`).join(' ')}</p>

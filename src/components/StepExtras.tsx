@@ -1,7 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-import { authFetch } from '@/lib/authClient';
 import { CONDITION_KEY_KINDS, RECIPIENT_ROLES, type Condition } from '@/lib/automation/library';
 
 const field = 'rounded-lg bg-slate-900 border border-white/10 px-3 py-2 text-sm text-white';
@@ -41,38 +39,6 @@ export function ConditionPicker({ value, onChange }: { value: Condition | null |
       )}
       {(value?.type === 'task_done' || value?.type === 'task_open') && <input aria-label="Step name" className={`${field} w-48`} placeholder="e.g. Closing prep" maxLength={80} value={value.text} onChange={(e) => onChange({ type: value.type, text: e.target.value })} />}
       {value?.type === 'no_document' && <input aria-label="Document name or type" className={`${field} w-48`} placeholder="e.g. Appraisal" maxLength={60} value={value.text} onChange={(e) => onChange({ type: 'no_document', text: e.target.value })} />}
-    </div>
-  );
-}
-
-/** "Write with AI" for an email step: type what you want, get a draft into the fields. You still read and edit it. */
-export function AiEmailAssist({ subject, message, context, onResult }: { subject: string; message: string; context: string; onResult: (r: { subject: string; message: string }) => void }) {
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const go = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await authFetch('/api/automation/ai/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instruction: text, subject, message, context }) });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || 'Could not write it');
-      onResult({ subject: body.subject, message: body.message });
-      setText('');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not write it');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="rounded-lg border border-violet-400/30 bg-violet-500/10 p-3" data-testid="ai-email-assist">
-      <div className="flex flex-wrap gap-2">
-        <input aria-label="Tell the assistant what to write" className={`${field} min-w-0 flex-1`} placeholder={message ? 'e.g. make it shorter and friendlier' : 'e.g. remind the buyer to send proof of funds'} value={text} maxLength={600} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && text.trim().length >= 3 && !busy) { e.preventDefault(); void go(); } }} />
-        <button type="button" disabled={busy || text.trim().length < 3} onClick={() => void go()} className="rounded-lg bg-violet-500 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-400 disabled:opacity-50">{busy ? 'Writing…' : message ? 'Rewrite with AI' : 'Write with AI'}</button>
-      </div>
-      {error && <p role="alert" className="mt-2 text-xs text-red-300">{error}</p>}
-      <p className="mt-1 text-xs text-slate-400">It replaces the subject and message above. Read it before saving; it can only use placeholders like {'{{address}}'}.</p>
     </div>
   );
 }
