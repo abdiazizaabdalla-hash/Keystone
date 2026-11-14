@@ -110,13 +110,12 @@ export default function AutomationTracker({ transactionId, listingId }: { transa
         <div>
           <h3 className="text-lg font-semibold text-white">Automation tracker</h3>
           <p className="text-sm text-slate-400">
-            {data ? (data.automations.length === 0 ? 'Nothing is running on this file yet.' : `${data.automations.length} automation${data.automations.length === 1 ? '' : 's'} · ${stepsDone} of ${stepsAll} steps done${waiting ? ` · ${waiting} waiting for you` : ''}`) : 'Loading…'}
+            {data ? (data.automations.length === 0 ? 'Nothing is running on this file yet. Tap Apply an automation to start one.' : `${data.automations.length} automation${data.automations.length === 1 ? '' : 's'} · ${stepsDone} of ${stepsAll} steps done${waiting ? ` · ${waiting} waiting for you` : ''}`) : 'Loading…'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={btn} onClick={() => void load()} disabled={busy !== null}>Refresh</button>
-          <button type="button" className={btn} onClick={() => setQuick({ edit: null })} data-testid="tracker-create">Create new</button>
-          <button type="button" className="rounded-lg bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-400" onClick={() => setAdding((v) => !v)} data-testid="tracker-add">{adding ? 'Close' : 'Add from my library'}</button>
+          <button type="button" className="rounded-lg bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-400" onClick={() => setAdding((v) => !v)} data-testid="tracker-add">{adding ? 'Close' : 'Apply an automation'}</button>
         </div>
       </div>
 
@@ -135,7 +134,7 @@ export default function AutomationTracker({ transactionId, listingId }: { transa
       {adding && (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3" data-testid="tracker-add-panel">
           {templates === null ? <p className="text-sm text-slate-500">Loading…</p> : available.length === 0 ? (
-            <p className="text-sm text-slate-400">Every {category} automation you have is already on this file. <button type="button" className="text-blue-300 hover:text-blue-200" onClick={() => setQuick({ edit: null })}>Create a new one here</button> or <Link href="/dashboard/automations" className="text-blue-300 hover:text-blue-200">browse the Library</Link>.</p>
+            <p className="text-sm text-slate-400">{(templates ?? []).length === 0 ? `You have no ${category} automations yet.` : `Every ${category} automation you have is already on this file.`} <Link href="/dashboard/automations" className="text-blue-300 hover:text-blue-200">Make a new one on the Automations page</Link>.</p>
           ) : (
             <ul className="divide-y divide-white/10">
               {available.map((t) => (

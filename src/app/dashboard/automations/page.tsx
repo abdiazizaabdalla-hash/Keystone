@@ -192,7 +192,7 @@ export default function AutomationsPage() {
       ) : (
         <>
           <div className="flex gap-6 border-b border-white/10" role="tablist">
-            {([['mine', 'Your automations'], ['library', 'Library']] as const).map(([id, label]) => (
+            {([['mine', 'Your automations'], ['library', 'Ready-made']] as const).map(([id, label]) => (
               <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
                 className={`-mb-px border-b-2 pb-2 text-sm font-medium ${tab === id ? 'border-blue-400 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>{label}</button>
             ))}
@@ -201,7 +201,7 @@ export default function AutomationsPage() {
           {tab === 'mine' ? (
           <section className="space-y-4" data-testid="your-automations">
             {templates === null ? <p className="text-sm text-slate-500">Loading…</p> : !hasAny ? (
-              <p className="rounded-2xl border border-dashed border-white/15 p-5 text-sm text-slate-400">Nothing here yet. Browse the Library for a ready-made one, or create your own.</p>
+              <p className="rounded-2xl border border-dashed border-white/15 p-5 text-sm text-slate-400">Nothing here yet. Open Ready-made for a starting point, or create your own.</p>
             ) : (
               <>
                 {group('transaction', 'Transactions')}

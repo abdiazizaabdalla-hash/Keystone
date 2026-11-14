@@ -126,7 +126,6 @@ export default function AssistantPanel({ transactionId, listingId }: { transacti
       <div>
         <div className="mb-2 flex items-center justify-between gap-2">
           <h4 className="text-sm font-semibold text-slate-200">Your automations</h4>
-          <button type="button" onClick={() => setQuick({ edit: null })} className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-slate-200 hover:bg-white/5" data-testid="assistant-create">New automation here</button>
         </div>
         {templates === null ? <p className="text-sm text-slate-500">Loading…</p> : rows.length === 0 ? (
           <p className="text-sm text-slate-500">You have no {category} automations yet. <Link href="/dashboard/automations" className="text-blue-300 hover:text-blue-200">Add one</Link>.</p>
