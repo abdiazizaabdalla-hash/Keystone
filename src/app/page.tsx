@@ -74,7 +74,7 @@ export default function Home() {
             </Link>
             <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
             <Link
-              href="/auth?mode=signup&plan=starter"
+              href="/get-started"
               className="px-3 sm:px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
             >
               Start free
@@ -102,7 +102,7 @@ export default function Home() {
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <Link
-              href="/auth?mode=signup&plan=starter"
+              href="/get-started"
               className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10"
             >
               Get started
@@ -494,7 +494,7 @@ export default function Home() {
           <h2 className="font-display text-3xl font-semibold text-slate-100">Run your next closing in Relay.</h2>
           <div className="flex flex-wrap items-center gap-4">
             <Link
-              href="/auth?mode=signup&plan=starter"
+              href="/get-started"
               className="inline-block px-8 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
             >
               Start free

@@ -14,6 +14,7 @@ const TRACKED_PATHS = new Set([
   '/faq',
   '/for-agents',
   '/for-brokerages',
+  '/get-started',
   '/for-tcs',
   '/terms',
   '/privacy',

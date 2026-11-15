@@ -38,7 +38,7 @@ export default function PublicHeader({ active }: { active?: string }) {
           </Link>
           <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
           <Link
-            href="/auth?mode=signup&plan=starter"
+            href="/get-started"
             className="px-3 sm:px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
           >
             Get started
