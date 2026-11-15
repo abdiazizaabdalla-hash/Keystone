@@ -25,6 +25,8 @@ interface ListingRow {
   list_price: number | null;
   planned_list_date: string | null;
   status: ListingStatus;
+  archived_at?: string | null;
+  archive_reason?: string | null;
   agent_name: string | null;
   /** Added by the agent's coordinator and shared with them. */
   shared?: boolean;
@@ -86,7 +88,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
   const [skipPortal, setSkipPortal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState<'open' | 'all'>('open');
+  const [filter, setFilter] = useState<'open' | 'all' | 'archived'>('open');
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [automationIds, setAutomationIds] = useState<string[]>([]);
@@ -172,7 +174,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
   const importer = useListingsImport(load);
 
   const visible = useMemo(
-    () => (filter === 'all' ? listings : listings.filter((l) => l.status === 'preparing' || l.status === 'active' || l.status === 'under_offer')),
+    () => (filter === 'all' ? listings : filter === 'archived' ? listings.filter((l) => l.archived_at) : listings.filter((l) => !l.archived_at && (l.status === 'preparing' || l.status === 'active' || l.status === 'under_offer'))),
     [listings, filter]
   );
 
@@ -355,14 +357,14 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 
       <div className="mb-4 flex items-center gap-2 text-sm">
-        {(['open', 'all'] as const).map((f) => (
+        {(['open', 'all', ...(listings.some((l) => l.archived_at) ? ['archived' as const] : [])] as const).map((f) => (
           <button
             key={f}
             type="button"
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-full border ${filter === f ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-slate-600 text-slate-400 hover:text-slate-200'}`}
           >
-            {f === 'open' ? 'Open listings' : 'All'}
+            {f === 'open' ? 'Open listings' : f === 'archived' ? 'Archived' : 'All'}
           </button>
         ))}
       </div>

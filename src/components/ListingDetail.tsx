@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { ARCHIVE_REASONS, archiveLabel, type ArchiveReason } from '@/lib/archive';
 import { uploadIncoming } from '@/lib/incomingUploadClient';
 import LibraryPicker from '@/components/LibraryPicker';
 import { useAgentAccess } from '@/lib/useAgentAccess';
@@ -50,6 +51,9 @@ import {
 } from '@/lib/listingsShared';
 
 interface Listing {
+  archived_at?: string | null;
+  archive_reason?: string | null;
+  archive_note?: string | null;
   id: string;
   agent_id: string | null;
   property_address: string;
@@ -214,6 +218,11 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
   const [agents, setAgents] = useState<{ id: string; name: string; email?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Archiving a listing that did not go anywhere: pick a reason, optionally add a note. Nothing is deleted and it can be restored.
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveReason, setArchiveReason] = useState<ArchiveReason>('listing_ended');
+  const [archiveNote, setArchiveNote] = useState('');
+  const [archiveBusy, setArchiveBusy] = useState(false);
   const [notice, setNotice] = useState('');
 
   // Details form
@@ -923,6 +932,36 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
     }
   };
 
+  const archiveListing = async () => {
+    setArchiveBusy(true);
+    setError('');
+    try {
+      await call('POST', `/api/listings/${id}/archive`, { reason: archiveReason, note: archiveNote });
+      setArchiveOpen(false);
+      setArchiveNote('');
+      applyDetail(await call('GET', `/api/listings/${id}`));
+      flash('Listing archived');
+    } catch (err) {
+      if (!handleAuth(err)) setError(err instanceof Error ? err.message : 'Could not archive this listing');
+    } finally {
+      setArchiveBusy(false);
+    }
+  };
+
+  const restoreListing = async () => {
+    setArchiveBusy(true);
+    setError('');
+    try {
+      await call('DELETE', `/api/listings/${id}/archive`);
+      applyDetail(await call('GET', `/api/listings/${id}`));
+      flash('Listing restored');
+    } catch (err) {
+      if (!handleAuth(err)) setError(err instanceof Error ? err.message : 'Could not restore this listing');
+    } finally {
+      setArchiveBusy(false);
+    }
+  };
+
   const deleteListing = async () => {
     if (!confirm(`Delete the listing for ${listing.property_address}? Its checklist, offers and notes will be removed.`)) return;
     try {
@@ -961,6 +1000,20 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
         </svg>
         {ownerView ? 'Back' : 'Back to Listings'}
       </Link>
+
+      {listing.archived_at && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-700/50 bg-amber-900/20 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-amber-200">Archived · {archiveLabel(listing.archive_reason)}</p>
+            <p className="text-xs text-amber-200/70">{listing.archive_note ? `${listing.archive_note} · ` : ''}Out of open work, the calendar and reminders. Nothing was deleted.</p>
+          </div>
+          {!data?.shared && !data?.coordinated && (
+            <button type="button" onClick={restoreListing} disabled={archiveBusy} className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 disabled:opacity-50">
+              {archiveBusy ? 'Restoring…' : 'Restore'}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Main Card */}
       <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-8 mb-8">
@@ -2432,6 +2485,30 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
             )}
           </div>
 
+          {!data?.shared && !data?.coordinated && !listing.archived_at && listing.status !== 'converted' && (
+            <div className="mb-6 rounded-xl border border-slate-700 p-4">
+              <p className="text-sm font-semibold text-slate-200 mb-1">Archive this listing</p>
+              <p className="text-sm text-slate-400 mb-3">Did it not go anywhere? Archive it instead of deleting it. It leaves your open work, calendar and reminders, and keeps its checklist, offers and documents. You can restore it any time.</p>
+              {!archiveOpen ? (
+                <button type="button" onClick={() => setArchiveOpen(true)} className="px-4 py-2 bg-amber-900/30 hover:bg-amber-900/50 border border-amber-800 text-amber-200 rounded-xl text-sm font-medium transition">Archive listing…</button>
+              ) : (
+                <div className="space-y-3 max-w-md">
+                  <label className="block text-xs text-slate-400">Why is it being archived?
+                    <select value={archiveReason} onChange={(e) => setArchiveReason(e.target.value as ArchiveReason)} className="mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100">
+                      {ARCHIVE_REASONS.map((r) => (<option key={r.id} value={r.id}>{r.label}</option>))}
+                    </select>
+                  </label>
+                  <label className="block text-xs text-slate-400">Note {archiveReason === 'other' ? '(required)' : '(optional)'}
+                    <textarea value={archiveNote} onChange={(e) => setArchiveNote(e.target.value)} maxLength={500} rows={2} className="mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100" placeholder="A few words for your own records" />
+                  </label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={archiveListing} disabled={archiveBusy} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium disabled:opacity-50">{archiveBusy ? 'Archiving…' : 'Archive'}</button>
+                    <button type="button" onClick={() => setArchiveOpen(false)} disabled={archiveBusy} className="px-4 py-2 border border-slate-600 text-slate-300 rounded-xl text-sm">Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {!data?.shared && !data?.coordinated && <button type="button" onClick={deleteListing} className="text-sm text-slate-500 hover:text-red-300">
             Delete this listing
           </button>}
