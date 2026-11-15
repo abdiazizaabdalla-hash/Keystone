@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
 import { agentLabels, listOwnerLinks, loadOversightDeals } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
-import { compareAgents, lastMonths, monthlySeries, percentChange, totalsOf } from '@/lib/oversightTrends';
+import { compareAgents, lastMonths, monthlySeries, percentChange, periodKpis, pipelineNow, totalsOf } from '@/lib/oversightTrends';
 
 // Trends for the brokerage owner. ?months=12 (6, 12 or 24): closed deals and volume by month, brokerage-wide and for any one agent
 // (?agent=id). ?period=3 (1, 3, 6 or 12): each agent's last period against the period before. Only agents with an active link.
@@ -37,6 +37,8 @@ export async function GET(request: NextRequest) {
       agentId: agentId ?? null,
       agents: ids.map((id) => ({ id, name: labels.get(id)?.name ?? 'Agent' })).sort((a, b) => a.name.localeCompare(b.name)),
       comparison,
+      kpis: periodKpis(deals, today, period),
+      pipeline: pipelineNow(deals, today),
       totals: { ...t, volumeChange: percentChange(t.volume, t.prevVolume), closedChange: percentChange(t.closedDeals, t.prevClosedDeals) },
     });
   } catch (error) {

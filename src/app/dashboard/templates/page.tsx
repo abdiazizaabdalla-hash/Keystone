@@ -8,6 +8,8 @@ import { MERGE_FIELDS } from '@/lib/templateMerge';
 import { US_STATES } from '@/lib/usStates';
 import TemplateRules from '@/components/TemplateRules';
 import TemplateApprovals from '@/components/TemplateApprovals';
+import BrokerageTemplates from '@/components/BrokerageTemplates';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 import DocumentsLibrary from '@/components/DocumentsLibrary';
 import UploadPdfDialog from '@/components/UploadPdfDialog';
 import { DOCUMENT_CATEGORIES, typesForCategory } from '@/lib/documentTaxonomy';
@@ -68,8 +70,9 @@ async function readError(res: Response, fallback: string) {
 
 export default function TemplatesPage() {
   const { readOnly: readOnlyAgent } = useAgentAccess();
+  const brokerOwner = useBrokerageOwner();
   const enabled = isFeatureOnClient('templates');
-  const [view, setView] = useState<Section | 'approvals'>('documents');
+  const [view, setView] = useState<Section | 'approvals' | 'shared'>('documents');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [counts, setCounts] = useState({ documents: 0, emails: 0 });
   const [starters, setStarters] = useState<Starter[]>([]);
@@ -227,10 +230,11 @@ export default function TemplatesPage() {
     );
   }
 
-  const tabs: { id: Section | 'approvals'; label: string; sub: string; count: number | null; alert?: boolean }[] = [
+  const tabs: { id: Section | 'approvals' | 'shared'; label: string; sub: string; count: number | null; alert?: boolean }[] = [
     { id: 'documents', label: 'Library', sub: 'PDF templates and state resources', count: counts.documents },
     { id: 'emails', label: 'Emails', sub: 'Emails and letters you send from a deal', count: counts.emails },
     { id: 'approvals', label: 'Approvals', sub: 'Drafts waiting for your OK', count: pending, alert: pending > 0 },
+    ...(brokerOwner === true ? [{ id: 'shared' as const, label: 'Shared', sub: 'Pinned for your agents', count: null }] : []),
   ];
 
   return wrap(
@@ -282,7 +286,9 @@ export default function TemplatesPage() {
       {notice && <div className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2.5">{notice}</div>}
       {error && <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2.5">{error}</div>}
 
-      {view === 'approvals' ? (
+      {view === 'shared' ? (
+        <BrokerageTemplates isOwner />
+      ) : view === 'approvals' ? (
         <TemplateApprovals onChanged={reload} onGoToTemplates={(s) => setView(s)} />
       ) : (
         <>

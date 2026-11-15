@@ -29,7 +29,10 @@ const allTypes: string[] = DOCUMENT_CATEGORIES.filter((c) => c.key !== 'other').
 const card = 'bg-white/5 border border-white/10 rounded-2xl';
 const date = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No closing date');
 
-export default function BrokerageFileReview() {
+/** `part` lets the Compliance page show the files and the document rules on separate tabs; without it both show together. */
+export default function BrokerageFileReview({ part }: { part?: 'files' | 'requirements' } = {}) {
+  const showRules = part !== 'files';
+  const showFiles = part !== 'requirements';
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
@@ -93,7 +96,7 @@ export default function BrokerageFileReview() {
     <div className="space-y-5">
       {error && <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</p>}
 
-      <div className={`${card} p-5`}>
+      {showRules && <div className={`${card} p-5`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-slate-100 font-semibold">Required documents</p>
@@ -134,10 +137,11 @@ export default function BrokerageFileReview() {
             </button>
           </div>
         )}
-      </div>
+      </div>}
 
-      <BrokerageDocumentLists onSaved={() => { load().catch(() => undefined); }} />
+      {showRules && <BrokerageDocumentLists onSaved={() => { load().catch(() => undefined); }} />}
 
+      {showFiles && <>
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: 'Need review', value: data.totals.needsReview, tone: data.totals.needsReview > 0 ? 'text-amber-300' : '' },
@@ -200,6 +204,7 @@ export default function BrokerageFileReview() {
           ))}
         </ul>
       )}
+      </>}
     </div>
   );
 }

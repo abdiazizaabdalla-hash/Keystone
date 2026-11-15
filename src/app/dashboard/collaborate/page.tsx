@@ -8,16 +8,12 @@ import TeamMessaging from '@/components/TeamMessaging';
 import MessagesInbox from '@/components/MessagesInbox';
 import BrokerageMembership from '@/components/BrokerageMembership';
 import { readPersona } from '@/lib/persona';
-import BrokerageCommissions from '@/components/BrokerageCommissions';
 import TeamContacts from '@/components/TeamContacts';
 import BrokerageAccountBanner from '@/components/BrokerageAccountBanner';
-import BrokerageFileReview from '@/components/BrokerageFileReview';
-import BrokerageReports from '@/components/BrokerageReports';
 import BrokerageAdmins from '@/components/BrokerageAdmins';
 import BrokerageRoster from '@/components/BrokerageRoster';
 import BrokerageTemplates from '@/components/BrokerageTemplates';
 import TeamReports from '@/components/TeamReports';
-import ComplianceReportMenu from '@/components/ComplianceReportMenu';
 import { isFeatureOnClient } from '@/lib/features';
 import type { ContactRow } from '@/lib/contactsCrm';
 
@@ -87,6 +83,9 @@ export default function CollaboratePage() {
   useEffect(() => {
     const t = setTimeout(async () => {
       const wanted = window.location.hash.replace('#', '');
+      // Old links to what moved out of Collaborate go to its new home.
+      const moved: Record<string, string> = { filereview: '/dashboard/compliance', reports: '/dashboard/reports', commissions: '/dashboard/invoices', messages: '', contacts: '', templates: '' };
+      if (isFeatureOnClient('brokerage') && wanted in moved && moved[wanted]) { router.replace(moved[wanted]); return; }
       if (['overview', 'messages', 'contacts', 'people', 'agents', 'filereview', 'reports', 'commissions', 'templates', 'settings', 'brokerage'].includes(wanted)) setTabState(wanted as Tab);
       try {
         const [sum, list] = await Promise.all([authFetch('/api/team/messages/summary'), authFetch('/api/contacts')]);
@@ -287,17 +286,20 @@ export default function CollaboratePage() {
         { id: 'templates', label: 'Templates' },
         { id: 'brokerage', label: 'Membership' },
       ]
+    : brokerageMode && isOwner
+    ? [
+        // For the broker, Collaborate is only about the agents: who they are, their seats and the brokerage's settings.
+        // Messages, Contacts, Templates, Compliance, Reports and Commissions have their own pages.
+        { id: 'agents', label: 'Agents' },
+        { id: 'people', label: 'People' },
+        { id: 'settings', label: 'Settings' },
+      ]
     : brokerageMode
     ? [
-        ...(isOwner ? [{ id: 'agents' as Tab, label: 'Agents' }] : []),
         { id: 'messages', label: 'Messages' },
         { id: 'contacts', label: 'Contacts', badge: undefined },
         { id: 'people', label: 'People' },
-        ...(isOwner ? [{ id: 'filereview' as Tab, label: 'File review' }] : []),
-        ...(isOwner ? [{ id: 'reports' as Tab, label: 'Reports' }] : []),
-        ...(isOwner ? [{ id: 'commissions' as Tab, label: 'Commissions' }] : []),
         { id: 'templates', label: 'Templates' },
-        ...(isOwner ? [{ id: 'settings' as Tab, label: 'Settings' }] : []),
       ]
     : [
         { id: 'overview', label: 'Overview' },
@@ -317,8 +319,7 @@ export default function CollaboratePage() {
       <div className="flex flex-wrap items-center gap-3 mb-1">
         <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100">{teamLabel}</h1>
         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 capitalize">{data.role}</span>
-        {isOwner && brokerageMode && <div className="ml-auto"><ComplianceReportMenu /></div>}
-      </div>
+              </div>
       <p className="text-slate-400 mb-6 max-w-3xl">
         {isAgentMember
           ? 'Your brokerage: who is in it, the team board and your private messages with your broker, and the templates and contacts it shares. Your own contacts and clients stay private.'
@@ -577,12 +578,6 @@ export default function CollaboratePage() {
       )}
 
       {activeTab === 'agents' && isOwner && brokerageMode && <BrokerageRoster />}
-
-      {activeTab === 'filereview' && isOwner && brokerageMode && <BrokerageFileReview />}
-
-      {activeTab === 'reports' && isOwner && brokerageMode && <BrokerageReports />}
-
-      {activeTab === 'commissions' && isOwner && brokerageMode && <BrokerageCommissions mode="owner" />}
 
       {activeTab === 'templates' && brokerageMode && <BrokerageTemplates isOwner={isOwner} />}
 

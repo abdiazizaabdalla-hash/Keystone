@@ -8,6 +8,7 @@ import { formatDisplayDate } from '@/lib/dueDates';
 import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 import CriticalDatesCard from '@/components/CriticalDatesCard';
 import ListingsOverviewCard from '@/components/ListingsOverviewCard';
+import BrokerageTrendsSummary from '@/components/BrokerageTrendsSummary';
 import BrokerageHome from '@/components/BrokerageHome';
 import AgentBrokerageStrip from '@/components/AgentBrokerageStrip';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
@@ -422,6 +423,7 @@ export default function Dashboard() {
               </div>
             </div>
             <BrokerageHome />
+            <BrokerageTrendsSummary />
           </div>
         </div>
       </div>
@@ -772,6 +774,7 @@ export default function Dashboard() {
       )}
       </div>
       </div>
+      {brokerageOwner && <BrokerageTrendsSummary />}
     </div>
   );
 }

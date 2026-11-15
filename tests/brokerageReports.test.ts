@@ -64,3 +64,23 @@ describe('brokerage administrators', () => {
     expect(looksLikeEmail('nope')).toBe(false);
   });
 });
+
+import { periodKpis, pipelineNow } from '@/lib/oversightTrends';
+
+describe('period headline numbers and pipeline', () => {
+  const closedDeal = deal({ acceptance_date: '2026-09-20', closing_date: '2026-10-10' });
+  it('averages price and days to close for the period', () => {
+    const { current, previous } = periodKpis([closedDeal, deal({ id: 'z', acceptance_date: '2026-09-30', closing_date: '2026-10-20', purchase_price: 500000 })], '2026-11-15', 3);
+    expect(current.closedDeals).toBe(2);
+    expect(current.avgPrice).toBe(400000);
+    expect(current.avgDaysToClose).toBe(20);
+    expect(previous.closedDeals).toBe(0);
+    expect(previous.avgPrice).toBeNull();
+  });
+  it('counts what is open and closing in the next 30 days', () => {
+    const open = deal({ id: 'o', status: 'Active', closing_date: '2026-12-01' });
+    const late = deal({ id: 'l', status: 'Active', closing_date: '2027-03-01', health: { openTasks: 2, overdueTasks: 1, nextDue: null, flags: [] } });
+    const p = pipelineNow([closedDeal, open, late], '2026-11-15');
+    expect(p).toMatchObject({ openDeals: 2, closingNext30: 1, withOverdueSteps: 1, openVolume: 600000 });
+  });
+});

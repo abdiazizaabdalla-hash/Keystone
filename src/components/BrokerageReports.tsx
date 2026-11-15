@@ -3,14 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 
-// Reports for a brokerage owner (Collaborate → Reports): trends and comparisons across agents and time, and a deal-level report
+// Reports for a brokerage owner (the Reports tab): trends and comparisons across agents and time, and a deal-level report
 // you configure yourself (columns and filters) and download as a CSV. Read-only: nothing here changes an agent's deals.
 
 interface Point { month: string; closedDeals: number; volume: number }
 interface CompareRow { agentId: string; name: string; closedDeals: number; volume: number; prevClosedDeals: number; prevVolume: number; newDeals: number; prevNewDeals: number; volumeChange: number | null; closedChange: number | null }
-interface Trends {
+interface Kpis { closedDeals: number; volume: number; avgPrice: number | null; avgDaysToClose: number | null; newDeals: number }
+export interface Trends {
   months: number; period: number; series: Point[]; agentId: string | null; agents: { id: string; name: string }[];
   comparison: CompareRow[];
+  kpis: { current: Kpis; previous: Kpis };
+  pipeline: { openDeals: number; openVolume: number; closingNext30: number; closingNext30Volume: number; withOverdueSteps: number };
   totals: { closedDeals: number; volume: number; prevClosedDeals: number; prevVolume: number; newDeals: number; prevNewDeals: number; volumeChange: number | null; closedChange: number | null };
 }
 interface ReportData {
@@ -20,18 +23,47 @@ interface ReportData {
 
 const card = 'bg-white/5 border border-white/10 rounded-2xl';
 const input = 'bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-100';
-const money = (n: number) => (n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `$${Math.round(n / 1000)}K` : `$${Math.round(n)}`);
+export const money = (n: number) => (n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `$${Math.round(n / 1000)}K` : `$${Math.round(n)}`);
 const monthLabel = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 const DEFAULT_COLS = ['address', 'agent', 'status', 'price', 'closing', 'checklist', 'overdue'];
 const COLS_KEY = 'relay.brokerageReport.columns';
 
-function Change({ value }: { value: number | null }) {
+export function Change({ value }: { value: number | null }) {
   if (value === null) return <span className="text-slate-500">New</span>;
   if (value === 0) return <span className="text-slate-400">No change</span>;
   return <span className={value > 0 ? 'text-emerald-300' : 'text-red-300'}>{value > 0 ? '+' : ''}{value}%</span>;
 }
 
-function TrendsSection() {
+const pct = (cur: number, prev: number) => (prev === 0 ? (cur === 0 ? 0 : null) : Math.round(((cur - prev) / prev) * 100));
+
+/** The numbers a broker looks at first: what closed, what is open, what closes soon, and what is running late. */
+export function KpiTiles({ data, period }: { data: Trends; period: number }) {
+  const { current: c, previous: p } = data.kpis;
+  const pl = data.pipeline;
+  const label = period === 1 ? 'last month' : `last ${period} months`;
+  const tiles: { label: string; value: string; sub: React.ReactNode; tone?: string }[] = [
+    { label: `Closed, ${label}`, value: String(c.closedDeals), sub: <Change value={pct(c.closedDeals, p.closedDeals)} /> },
+    { label: 'Sales volume', value: money(c.volume), sub: <Change value={pct(c.volume, p.volume)} /> },
+    { label: 'Average sale price', value: c.avgPrice === null ? '—' : money(c.avgPrice), sub: <span className="text-slate-500">{p.avgPrice === null ? 'No sales before' : `was ${money(p.avgPrice)}`}</span> },
+    { label: 'Days to close', value: c.avgDaysToClose === null ? '—' : String(c.avgDaysToClose), sub: <span className="text-slate-500">{p.avgDaysToClose === null ? 'Acceptance to closing' : `was ${p.avgDaysToClose}`}</span> },
+    { label: 'Open now', value: String(pl.openDeals), sub: <span className="text-slate-500">{money(pl.openVolume)} in play</span> },
+    { label: 'Closing in 30 days', value: String(pl.closingNext30), sub: <span className="text-slate-500">{money(pl.closingNext30Volume)}</span> },
+    { label: 'With late steps', value: String(pl.withOverdueSteps), sub: <span className="text-slate-500">open deals</span>, tone: pl.withOverdueSteps > 0 ? 'text-amber-300' : '' },
+  ];
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+      {tiles.map((t) => (
+        <div key={t.label} className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+          <p className="text-[11px] uppercase tracking-wider text-slate-500 leading-tight">{t.label}</p>
+          <p className={`text-2xl font-semibold mt-1 ${t.tone || 'text-slate-100'}`}>{t.value}</p>
+          <p className="text-xs mt-0.5">{t.sub}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function TrendsSection() {
   const [months, setMonths] = useState(12);
   const [period, setPeriod] = useState(3);
   const [agent, setAgent] = useState('');
@@ -76,6 +108,8 @@ function TrendsSection() {
           </select>
         </div>
       </div>
+
+      <div className="mb-5"><KpiTiles data={data} period={period} /></div>
 
       <svg viewBox={`0 0 ${w} ${h + 28}`} className="w-full h-auto" role="img" aria-label={`${metric === 'volume' ? 'Sales volume' : 'Closed deals'} by month`}>
         {data.series.map((p, i) => {
@@ -124,7 +158,7 @@ function TrendsSection() {
   );
 }
 
-function DealReportSection() {
+export function DealReportSection() {
   const [cols, setCols] = useState<string[]>(() => {
     try {
       const saved = typeof window === 'undefined' ? null : JSON.parse(localStorage.getItem(COLS_KEY) || 'null');
