@@ -9,6 +9,7 @@ import DemoRequestButton from '@/components/DemoRequestButton';
 import ShotRow from '@/components/ShotRow';
 import HomeVideo from '@/components/HomeVideo';
 import PublicMobileMenu from '@/components/PublicMobileMenu';
+import { DealFlowIllustration, AutomationFlowIllustration, PayFlowIllustration } from '@/components/marketing/Illustrations';
 
 export default function Home() {
   const router = useRouter();
@@ -54,11 +55,12 @@ export default function Home() {
             </Link>
           </div>
           <nav className="hidden sm:flex items-center gap-8 text-sm text-slate-300">
+            <Link href="/" className="hover:text-slate-100 transition">Home</Link>
+            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
+            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-100 transition">For Brokerages</Link>
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
-            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
-            <Link href="/for-brokerages" className="hover:text-slate-100 transition">For Brokerages</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
@@ -419,34 +421,33 @@ export default function Home() {
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-8">Everything you need to run the deal</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Everything you need to run the deal</h2>
+        <p className="text-slate-400 mb-8 max-w-2xl">Six things, done well. The rest is inside the app.</p>
+        <DealFlowIllustration />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-8">
           {[
-            { title: "Listings to deals", body: 'Track a listing, its offers and showings, then convert it to a transaction in one click.' },
-            { title: "AI contract intake", body: 'Upload the contract and AI fills out and creates the transaction or listing for you, including the key dates.' },
-            { title: "Critical dates", body: 'Dates are read from the contract, shown on your dashboard, and sent to agents as reminders.' },
-            { title: "Built-in e-signatures", body: 'Send a document for signature from the transaction or listing. No separate DocuSign account.' },
-            { title: "Calendar links", body: 'Connect Google Calendar and dates update within seconds. Outlook and Apple use your private Relay link.' },
-            { title: "CSV deal import", body: 'Bring in your open deals from a spreadsheet, with a preview and no duplicates.' },
-            { title: "Contacts", body: 'An address book that builds itself from your deals, with CSV import, export and a newsletter list.' },
-            { title: "Document organization", body: 'Documents sorted into categories and linked to checklist steps.' },
-            { title: "Email-to-transaction", body: 'Forward or CC an email to the deal and it lands on the transaction, attachments included.' },
-            { title: "Daily digest", body: 'A morning email with overdue and due-today steps.' },
-            { title: "Templates", body: 'Ready-made document and email templates on every plan, and your own checklists for each deal type on Pro and Team.' },
-            { title: "Automations", body: 'Reminders and follow-ups that run for you, from a library of ready-made ones. Pro and Team.' },
-            { title: "Compliance report", body: 'Export a timestamped PDF of a deal’s documents, messages and checklist.' },
-            { title: "Team workspaces", body: 'Share a workspace and team messaging with other coordinators. Everyone’s deals, agents and contacts stay private to their own login.' },
-            { title: "Payment tracking", body: 'See which invoices are paid and which are still outstanding.' },
-            { title: "QuickBooks import and export", body: 'Download invoices, payments and agents for QuickBooks Online, or upload a QuickBooks export to bring invoices in.' },
-            { title: "Calendar preferences", body: 'Pick which dates reach your calendar: critical dates, closing day, checklists or listing dates.' },
-            { title: "Editable listing checklists", body: 'Rename and reorder steps, and mark the whole checklist done in one click.' },
-            { title: "Duplicate protection", body: 'A warning before the same property or file number is added twice.' },
+            { title: "Contracts, read for you", body: 'Upload a contract and AI fills out and creates the transaction or listing for you.' },
+            { title: "Dates and checklists", body: 'Critical dates, a dated checklist and reminders on every deal. Sync to your calendar.' },
+            { title: "Templates and automations", body: 'Ready-made emails and forms on every plan. Automations send the reminders for you on Pro and Team.' },
+            { title: "Listings and transactions", body: 'Each has its own page. Convert a listing to a transaction in one click.' },
+            { title: "Invoices and e-signatures", body: 'Invoice agents, get paid, export to QuickBooks, and send documents for signature.' },
+            { title: "Teams and agent logins", body: 'Share a workspace with other TCs, and give agents a login for the deals you choose.' },
           ].map((f) => (
-            <div key={f.title} className="p-5 bg-slate-800/60 border border-slate-700 rounded-xl">
-              <h3 className="font-semibold text-slate-100 text-sm mb-1.5">{f.title}</h3>
+            <div key={f.title} className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl">
+              <h3 className="font-semibold text-slate-100 mb-2">{f.title}</h3>
               <p className="text-sm text-slate-400">{f.body}</p>
             </div>
           ))}
+        </div>
+        <div className="grid md:grid-cols-2 gap-5 mt-8">
+          <div>
+            <p className="text-sm text-slate-400 mb-3">Automations: a reminder that sends itself.</p>
+            <AutomationFlowIllustration />
+          </div>
+          <div>
+            <p className="text-sm text-slate-400 mb-3">Invoices: from the deal to paid to your books.</p>
+            <PayFlowIllustration />
+          </div>
         </div>
       </section>
 
@@ -506,11 +507,11 @@ export default function Home() {
             <span className="font-brand font-extrabold text-sm text-slate-300">Relay TC</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-slate-500">
+            <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
+            <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-200 transition">For Brokerages</Link>
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
-            <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
-            <Link href="/for-brokerages" className="hover:text-slate-200 transition">For Brokerages</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>

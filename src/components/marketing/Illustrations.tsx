@@ -226,3 +226,51 @@ export function BrokerageHubIllustration() {
     </svg>
   );
 }
+
+/** A simple three-step flow: something happens, a template is chosen, the message goes out. */
+export function AutomationFlowIllustration() {
+  const steps = [
+    { x: 40, title: 'Something happens', sub: 'New transaction, earnest money due' },
+    { x: 300, title: 'A template is used', sub: 'Your email, ready to go' },
+    { x: 560, title: 'It goes out', sub: 'The reminder sends itself' },
+  ];
+  return (
+    <svg viewBox="0 0 800 150" className={frame} role="img" aria-label="An automation: an event happens, a template is used, and the reminder is sent">
+      <defs>
+        <marker id="arrow2" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" className="fill-slate-500" /></marker>
+      </defs>
+      {steps.map((s, i) => (
+        <g key={s.title}>
+          <rect x={s.x} y="30" width="200" height="90" rx="14" className={i === 1 ? hot : box} strokeWidth="1.5" />
+          <text x={s.x + 18} y="64" className={t1}>{s.title}</text>
+          <text x={s.x + 18} y="88" className={t2}>{s.sub}</text>
+          {i < steps.length - 1 && <path d={`M${s.x + 206} 75 h48`} className={line} strokeWidth="2" markerEnd="url(#arrow2)" />}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+/** Invoice to paid to accounting: how money moves for a TC. */
+export function PayFlowIllustration() {
+  const steps = [
+    { x: 40, title: 'Invoice the agent', sub: 'From the deal, with your logo' },
+    { x: 300, title: 'Get paid', sub: 'Stripe, Zelle or check' },
+    { x: 560, title: 'Export', sub: 'QuickBooks files and reports' },
+  ];
+  return (
+    <svg viewBox="0 0 800 150" className={frame} role="img" aria-label="Invoices go from the deal to the agent, get paid, and export to QuickBooks">
+      <defs>
+        <marker id="arrow3" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" className="fill-slate-500" /></marker>
+      </defs>
+      {steps.map((s, i) => (
+        <g key={s.title}>
+          <rect x={s.x} y="30" width="200" height="90" rx="14" className={i === 1 ? hot : box} strokeWidth="1.5" />
+          <text x={s.x + 18} y="64" className={t1}>{s.title}</text>
+          <text x={s.x + 18} y="88" className={t2}>{s.sub}</text>
+          {i < steps.length - 1 && <path d={`M${s.x + 206} 75 h48`} className={line} strokeWidth="2" markerEnd="url(#arrow3)" />}
+        </g>
+      ))}
+    </svg>
+  );
+}
