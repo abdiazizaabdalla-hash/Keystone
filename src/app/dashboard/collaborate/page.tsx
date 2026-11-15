@@ -607,8 +607,8 @@ export default function CollaboratePage() {
             </form>
           </div>
 
-
-          <TeamReports />
+          {/* With the brokerage feature on, team reports live in Reports. */}
+          {!brokerageMode && <TeamReports />}
         </div>
       )}
     </div>
