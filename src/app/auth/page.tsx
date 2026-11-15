@@ -191,7 +191,7 @@ function AuthContent() {
                 {isSignUp && plan && (
                   <p className="text-sm text-blue-400 mb-5">Signing up for the {planLabel(plan)} plan</p>
                 )}
-                {!isSignUp && <p className="text-sm text-slate-400 mb-6">One sign-in for TCs, agents and brokerages. Invited to a deal by a TC? Use Portal Login above.</p>}
+                {!isSignUp && <p className="text-sm text-slate-400 mb-6">One sign-in for TCs, agents and brokerages. Invited to a deal by a TC or agent? Use Portal Login above.</p>}
                 {isSignUp && !plan && <div className="mb-6" />}
 
                 {error && (
