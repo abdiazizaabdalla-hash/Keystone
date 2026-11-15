@@ -1,3 +1,4 @@
+import { applyRequiredStepsToNewFile } from '@/lib/brokerageRequiredSteps';
 import { coordinatedListingIds } from '@/lib/listingCoordinators';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
@@ -159,6 +160,8 @@ export async function POST(request: NextRequest) {
       const { error: tErr } = await supabaseServer.from('listing_tasks').insert(rows);
       if (tErr) throw tErr;
     }
+    // A brokerage's required steps are added to its agents' new listings (a no-op for everyone else).
+    await applyRequiredStepsToNewFile('listing', listing.id as string, user.id, planned);
 
     // Everyone on the listing: the seller first, then anyone else (e.g. found by reading the agreement).
     const people: { role: string | null; name: string | null; email: string | null; phone: string | null }[] = [];

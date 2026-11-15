@@ -6,13 +6,14 @@ import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 import { useBrokerageAdminAccess } from '@/lib/useBrokerageAdminAccess';
 import BrokerageComplianceOverview from '@/components/BrokerageComplianceOverview';
 import BrokerageFileReview from '@/components/BrokerageFileReview';
+import BrokerageRequiredSteps from '@/components/BrokerageRequiredSteps';
 
 // The broker's compliance desk: what needs attention, the files to review, and the documents every file must hold.
 type Tab = 'overview' | 'files' | 'requirements';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'files', label: 'File review' },
-  { id: 'requirements', label: 'Required documents' },
+  { id: 'requirements', label: 'Checklists & documents' },
 ];
 
 export default function CompliancePage() {
@@ -42,7 +43,16 @@ export default function CompliancePage() {
       </div>
       {tab === 'overview' && <BrokerageComplianceOverview goTo={setTab} showCommissions={owner === true} />}
       {tab === 'files' && <BrokerageFileReview part="files" />}
-      {tab === 'requirements' && <BrokerageFileReview part="requirements" />}
+      {tab === 'requirements' && (
+        <div className="space-y-8">
+          <BrokerageRequiredSteps canEdit={owner === true || (admin.scopes ?? []).includes('compliance')} />
+          <div>
+            <h2 className="text-slate-100 font-semibold mb-1">Required documents</h2>
+            <p className="text-sm text-slate-400 mb-3 max-w-2xl">The documents every file must hold. The default list applies to all agents; add lists for particular deal types below it.</p>
+            <BrokerageFileReview part="requirements" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

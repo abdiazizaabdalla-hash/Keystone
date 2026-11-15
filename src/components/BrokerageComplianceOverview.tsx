@@ -75,9 +75,9 @@ export default function BrokerageComplianceOverview({ goTo, showCommissions }: {
 
       <div className="grid md:grid-cols-3 gap-3">
         <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-          <p className="text-sm font-semibold text-slate-100">Required documents</p>
-          <p className="text-xs text-slate-400 mt-1 mb-3">What every file must hold, by deal type.</p>
-          <button type="button" onClick={() => goTo('requirements')} className="text-sm text-blue-400 hover:text-blue-300">Edit the lists →</button>
+          <p className="text-sm font-semibold text-slate-100">Checklists & documents</p>
+          <p className="text-xs text-slate-400 mt-1 mb-3">The steps and documents every file must have, for every agent.</p>
+          <button type="button" onClick={() => goTo('requirements')} className="text-sm text-blue-400 hover:text-blue-300">Set them up →</button>
         </div>
         {showCommissions && (
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5">

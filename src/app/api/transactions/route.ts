@@ -1,3 +1,4 @@
+import { applyRequiredStepsToNewFile } from '@/lib/brokerageRequiredSteps';
 import { NextRequest, NextResponse } from 'next/server';
 import { userMayAutomate } from '@/lib/automation/plan';
 import { supabaseServer } from '@/lib/supabase';
@@ -392,6 +393,8 @@ export async function POST(request: NextRequest) {
       .select();
 
     if (tasksError) throw tasksError;
+    // A brokerage's required steps are added to its agents' new deals (a no-op for everyone else).
+    await applyRequiredStepsToNewFile('transaction', transaction.id, user.id, acceptanceDate || null);
 
     // Put the new checklist's due dates on a connected calendar (after the
     // response; a no-op if the TC hasn't connected one).
