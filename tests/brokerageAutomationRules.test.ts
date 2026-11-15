@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AUTOMATIONS, cleanParams, closingFlags, defaultParams, digestText, documentFlags, lateStepFlags, monthlyText, paramNumber, quietAgents, stalledFlags, type DealLite } from '@/lib/brokerageAutomationRules';
+import { AUTOMATIONS, agentNoticeText, kindsFor, triggersFor, cleanParams, closingFlags, defaultParams, digestText, documentFlags, lateStepFlags, monthlyText, paramNumber, quietAgents, stalledFlags, type DealLite } from '@/lib/brokerageAutomationRules';
 
 const deal = (o: Partial<DealLite> = {}): DealLite => ({ id: 'd1', tc_user_id: 'a1', property_address: '1 Main St', status: 'Contract Pending', closing_date: null, acceptance_date: null, updated_at: '2026-11-01T10:00:00Z', health: { overdueTasks: 0 }, ...o });
 
@@ -102,5 +102,22 @@ describe('managing accounts', () => {
   it('is available on Basic as well as Pro', () => {
     expect(allowedRoles('basic')).toEqual(['manager', 'managing']);
     expect(allowedRoles('pro')).toContain('managing');
+  });
+});
+
+describe('TC team mode', () => {
+  it('limits a team to the status-only rules', () => {
+    expect(kindsFor('team')).toEqual(['stalled', 'deadlines', 'digest', 'reporting']);
+    expect(kindsFor('brokerage')).toContain('documents');
+    expect(kindsFor('brokerage')).toContain('onboarding');
+  });
+  it('drops the document trigger for a team', () => {
+    expect(triggersFor('team')).not.toContain('missing_docs');
+    expect(triggersFor('brokerage')).toContain('missing_docs');
+  });
+  it('words notices for a team owner, not a brokerage', () => {
+    const flag = { key: 'k', dealId: 'd', agentId: 'a', address: '1 Main St', reason: '6 days quiet' };
+    expect(agentNoticeText('stalled', [flag], 'team').paragraphs[0]).toContain('Your team owner');
+    expect(agentNoticeText('stalled', [flag]).paragraphs[0]).toContain('Your brokerage');
   });
 });

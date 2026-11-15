@@ -48,6 +48,7 @@ interface TeamResponse {
   pendingInvites: PendingInvite[];
   /** True when the caller is an agent who joined this brokerage (read-only roster, board and shared items). */
   viaBrokerage?: boolean;
+  ownerKind?: 'brokerage' | 'team' | null;
   brokerageAgents?: { linkId: string; userId: string | null; name: string; email: string; status: string }[];
 }
 
@@ -277,7 +278,8 @@ export default function CollaboratePage() {
   const teamLabel = data.team.name || (isBrokerage || isAgentMember ? 'Your brokerage' : 'Your team');
 
   // With the brokerage feature on, Collaborate is the brokerage's home: Agents first, no coordinator-team overview.
-  const brokerageMode = isFeatureOnClient('brokerage');
+  // A TC team owner keeps the coordinator-team view even with the feature on; only a brokerage (account or invited agents) gets the agents view.
+  const brokerageMode = isFeatureOnClient('brokerage') && !(isOwner && data.ownerKind === 'team');
   const tabs: { id: Tab; label: string; badge?: number }[] = isAgentMember
     ? [
         { id: 'messages', label: 'Messages' },

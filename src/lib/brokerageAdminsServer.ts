@@ -2,6 +2,9 @@ import { supabaseServer } from './supabase';
 import { AuthError } from './auth';
 import { assertBrokerageOwner, brokerageOn } from './oversight';
 import type { WithAppMetadata } from './appMetadata';
+import { getUserPlan } from './appMetadata';
+import { isTeamPlan } from './plans';
+import { getTeamForUser } from './team';
 import { roleAllows, type AdminRole, type AdminScope, isAdminRole } from './brokerageAdmins';
 
 // Who is acting for a brokerage. The owner acts as themselves. An administrator the owner added acts on the owner's brokerage,
@@ -48,6 +51,20 @@ export async function resolveBrokerageActor(caller: CallerUser, scope: AdminScop
     await assertBrokerageOwner(owner);
     return { owner, delegated: true, role: link.role };
   }
+}
+
+/**
+ * Like resolveBrokerageActor, but also works for the owner of a TC team when the brokerage feature is off, so a team gets its own
+ * status oversight (workload, checklist defaults, automations) without a brokerage. Not for inviting agents ('roster').
+ */
+export async function resolveOversightActor(caller: CallerUser, scope: AdminScope): Promise<{ owner: BrokerageOwnerUser; delegated: boolean; role: AdminRole | null }> {
+  if (brokerageOn()) return resolveBrokerageActor(caller, scope);
+  if (scope === 'roster') throw new AuthError('Not found', 404);
+  const plan = getUserPlan(caller);
+  if (!isTeamPlan(plan)) throw new AuthError('This is part of the Team plan.', 403);
+  const membership = await getTeamForUser(caller.id);
+  if (membership && membership.role !== 'owner') throw new AuthError('Only the owner of the team can use this.', 403);
+  return { owner: caller as BrokerageOwnerUser, delegated: false, role: null };
 }
 
 /** Owner-only actions (their plan, upgrade requests, administrators): no delegation. */

@@ -1,7 +1,8 @@
-import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
+import { resolveOversightActor } from '@/lib/brokerageAdminsServer';
+import { rosterFor } from '@/lib/oversightRoster';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
-import { agentLabels, listOwnerLinks, loadOversightDeals } from '@/lib/oversight';
+import { agentLabels, loadOversightDeals } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { compareAgents, lastMonths, monthlySeries, percentChange, periodKpis, pipelineNow, totalsOf } from '@/lib/oversightTrends';
 
@@ -12,13 +13,13 @@ const pick = (value: string | null, allowed: number[], fallback: number) => (all
 export async function GET(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
-    const { owner: user } = await resolveBrokerageActor(caller, 'view');
+    const { owner: user } = await resolveOversightActor(caller, 'view');
     const q = request.nextUrl.searchParams;
     const months = pick(q.get('months'), [6, 12, 24], 12);
     const period = pick(q.get('period'), [1, 3, 6, 12], 3);
     const today = todayIso();
-    const links = await listOwnerLinks(user.id);
-    const ids = links.filter((l) => l.status === 'active' && l.agent_user_id).map((l) => l.agent_user_id as string);
+    const roster = await rosterFor(user.id);
+    const ids = roster.userIds;
     const [labels, deals] = await Promise.all([agentLabels(ids), loadOversightDeals(ids, today)]);
     const agentParam = q.get('agent');
     const agentId = agentParam && ids.includes(agentParam) ? agentParam : undefined;
@@ -30,16 +31,22 @@ export async function GET(request: NextRequest) {
       closedChange: percentChange(r.closedDeals, r.prevClosedDeals),
     }));
     const t = totalsOf(comparison);
+    // A TC team owner sees counts and status only, so every money figure is left out for a team.
+    const showMoney = roster.mode === 'brokerage';
+    const noMoney = <T extends { volume: number }>(r: T) => (showMoney ? r : { ...r, volume: 0 });
+    const kp = periodKpis(deals, today, period);
     return NextResponse.json({
+      mode: roster.mode,
+      showMoney,
       months,
       period,
-      series: monthlySeries(deals, lastMonths(today, months), today, agentId),
+      series: monthlySeries(deals, lastMonths(today, months), today, agentId).map(noMoney),
       agentId: agentId ?? null,
       agents: ids.map((id) => ({ id, name: labels.get(id)?.name ?? 'Agent' })).sort((a, b) => a.name.localeCompare(b.name)),
-      comparison,
-      kpis: periodKpis(deals, today, period),
-      pipeline: pipelineNow(deals, today),
-      totals: { ...t, volumeChange: percentChange(t.volume, t.prevVolume), closedChange: percentChange(t.closedDeals, t.prevClosedDeals) },
+      comparison: showMoney ? comparison : comparison.map((r) => ({ ...r, volume: 0, prevVolume: 0, volumeChange: null })),
+      kpis: showMoney ? kp : { current: { ...kp.current, volume: 0, avgPrice: null }, previous: { ...kp.previous, volume: 0, avgPrice: null } },
+      pipeline: showMoney ? pipelineNow(deals, today) : { ...pipelineNow(deals, today), openVolume: 0, closingNext30Volume: 0 },
+      totals: showMoney ? { ...t, volumeChange: percentChange(t.volume, t.prevVolume), closedChange: percentChange(t.closedDeals, t.prevClosedDeals) } : { ...t, volume: 0, prevVolume: 0, volumeChange: null, closedChange: percentChange(t.closedDeals, t.prevClosedDeals) },
     });
   } catch (error) {
     return oversightError(error, 'load trends');

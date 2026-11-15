@@ -74,6 +74,11 @@ export const AUTOMATIONS: AutomationDef[] = [
   },
 ];
 
+/** A TC team gets the rules that make sense for coordinators (status only: no document checks, no commissions, no agents joining). */
+export const TEAM_KINDS: AutomationKind[] = ['stalled', 'deadlines', 'digest', 'reporting'];
+export const kindsFor = (mode: 'brokerage' | 'team'): AutomationKind[] => (mode === 'team' ? TEAM_KINDS : [...AUTOMATION_KINDS]);
+export const triggersFor = (mode: 'brokerage' | 'team') => (mode === 'team' ? (WORKFLOW_TRIGGERS as readonly WorkflowTrigger[]).filter((t) => t !== 'missing_docs') : [...WORKFLOW_TRIGGERS]);
+
 export const defOf = (kind: AutomationKind) => AUTOMATIONS.find((a) => a.kind === kind) as AutomationDef;
 
 export const MESSAGE_MAX = 1000;
@@ -171,9 +176,10 @@ export function quietAgents(agentIds: string[], deals: DealLite[], today: string
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const lines = (flags: Pick<Flag, 'address' | 'reason'>[], name?: (i: number) => string) => flags.slice(0, 12).map((f, i) => `${f.address}${name ? ` (${name(i)})` : ''}: ${f.reason}`).join('\n') + (flags.length > 12 ? `\n…and ${flags.length - 12} more.` : '');
 
-export function agentNoticeText(kind: 'stalled' | 'closing' | 'documents', flags: Flag[]): { subject: string; paragraphs: string[] } {
+export function agentNoticeText(kind: 'stalled' | 'closing' | 'documents', flags: Flag[], org: 'brokerage' | 'team' = 'brokerage'): { subject: string; paragraphs: string[] } {
   const n = flags.length;
-  if (kind === 'stalled') return { subject: `${plural(n, 'deal')} ${n === 1 ? 'has' : 'have'} gone quiet`, paragraphs: ['Your brokerage noticed these deals have had no activity for a while. Update the file or the checklist if something is moving.', lines(flags)] };
+  const who = org === 'team' ? 'Your team owner' : 'Your brokerage';
+  if (kind === 'stalled') return { subject: `${plural(n, 'deal')} ${n === 1 ? 'has' : 'have'} gone quiet`, paragraphs: [`${who} noticed these deals have had no activity for a while. Update the file or the checklist if something is moving.`, lines(flags)] };
   if (kind === 'closing') return { subject: `${plural(n, 'closing')} coming up`, paragraphs: ['These deals close soon. Make sure every step and document is ready.', lines(flags)] };
   return { subject: `${plural(n, 'file')} missing required documents`, paragraphs: ['Your brokerage requires documents that are not on these files yet.', lines(flags)] };
 }
@@ -191,7 +197,7 @@ export interface DigestInput {
 }
 
 /** The daily digest, or null when there is nothing to say. */
-export function digestText(d: DigestInput): { subject: string; paragraphs: string[] } | null {
+export function digestText(d: DigestInput, org: 'brokerage' | 'team' = 'brokerage'): { subject: string; paragraphs: string[] } | null {
   const total = d.needsAttention.length + d.closing.length + d.lateAgents.length + d.quiet.length + d.newDeals.length;
   if (total === 0) return null;
   const out: string[] = [];
@@ -201,7 +207,8 @@ export function digestText(d: DigestInput): { subject: string; paragraphs: strin
   if (d.newDeals.length) out.push(`Opened yesterday (${d.newDeals.length}):\n${d.newDeals.slice(0, 10).map((x) => `${x.address} (${x.agentName})`).join('\n')}`);
   if (d.quiet.length) out.push(`No deals for a while: ${d.quiet.join(', ')}`);
   const attention = d.needsAttention.length + d.lateAgents.length;
-  return { subject: attention > 0 ? `Your brokerage today: ${plural(attention, 'thing')} need${attention === 1 ? 's' : ''} you` : 'Your brokerage today', paragraphs: out };
+  const lead = org === 'team' ? 'Your team today' : 'Your brokerage today';
+  return { subject: attention > 0 ? `${lead}: ${plural(attention, 'thing')} need${attention === 1 ? 's' : ''} you` : lead, paragraphs: out };
 }
 
 export function welcomeText(brokerage: string, message: string): { subject: string; paragraphs: string[] } {

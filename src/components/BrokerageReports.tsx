@@ -10,6 +10,7 @@ interface Point { month: string; closedDeals: number; volume: number }
 interface CompareRow { agentId: string; name: string; closedDeals: number; volume: number; prevClosedDeals: number; prevVolume: number; newDeals: number; prevNewDeals: number; volumeChange: number | null; closedChange: number | null }
 interface Kpis { closedDeals: number; volume: number; avgPrice: number | null; avgDaysToClose: number | null; newDeals: number }
 export interface Trends {
+  mode?: 'brokerage' | 'team'; showMoney?: boolean;
   months: number; period: number; series: Point[]; agentId: string | null; agents: { id: string; name: string }[];
   comparison: CompareRow[];
   kpis: { current: Kpis; previous: Kpis };
@@ -41,17 +42,19 @@ export function KpiTiles({ data, period }: { data: Trends; period: number }) {
   const { current: c, previous: p } = data.kpis;
   const pl = data.pipeline;
   const label = period === 1 ? 'last month' : `last ${period} months`;
-  const tiles: { label: string; value: string; sub: React.ReactNode; tone?: string }[] = [
+  const cash = data.showMoney !== false;
+  const all: { label: string; value: string; sub: React.ReactNode; tone?: string; money?: boolean }[] = [
     { label: `Closed, ${label}`, value: String(c.closedDeals), sub: <Change value={pct(c.closedDeals, p.closedDeals)} /> },
-    { label: 'Sales volume', value: money(c.volume), sub: <Change value={pct(c.volume, p.volume)} /> },
-    { label: 'Average sale price', value: c.avgPrice === null ? '—' : money(c.avgPrice), sub: <span className="text-slate-500">{p.avgPrice === null ? 'No sales before' : `was ${money(p.avgPrice)}`}</span> },
+    { label: 'Sales volume', value: money(c.volume), sub: <Change value={pct(c.volume, p.volume)} />, money: true },
+    { label: 'Average sale price', value: c.avgPrice === null ? '—' : money(c.avgPrice), sub: <span className="text-slate-500">{p.avgPrice === null ? 'No sales before' : `was ${money(p.avgPrice)}`}</span>, money: true },
     { label: 'Days to close', value: c.avgDaysToClose === null ? '—' : String(c.avgDaysToClose), sub: <span className="text-slate-500">{p.avgDaysToClose === null ? 'Acceptance to closing' : `was ${p.avgDaysToClose}`}</span> },
-    { label: 'Open now', value: String(pl.openDeals), sub: <span className="text-slate-500">{money(pl.openVolume)} in play</span> },
-    { label: 'Closing in 30 days', value: String(pl.closingNext30), sub: <span className="text-slate-500">{money(pl.closingNext30Volume)}</span> },
+    { label: 'Open now', value: String(pl.openDeals), sub: <span className="text-slate-500">{cash ? `${money(pl.openVolume)} in play` : 'files in progress'}</span> },
+    { label: 'Closing in 30 days', value: String(pl.closingNext30), sub: <span className="text-slate-500">{cash ? money(pl.closingNext30Volume) : 'files'}</span> },
     { label: 'With late steps', value: String(pl.withOverdueSteps), sub: <span className="text-slate-500">open deals</span>, tone: pl.withOverdueSteps > 0 ? 'text-amber-300' : '' },
   ];
+  const tiles = all.filter((t) => cash || !t.money);
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+    <div className={`grid grid-cols-2 sm:grid-cols-4 ${tiles.length >= 7 ? 'lg:grid-cols-7' : 'lg:grid-cols-5'} gap-3`}>
       {tiles.map((t) => (
         <div key={t.label} className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
           <p className="text-[11px] uppercase tracking-wider text-slate-500 leading-tight">{t.label}</p>
@@ -68,7 +71,7 @@ export function TrendsSection() {
   const [period, setPeriod] = useState(3);
   const [agent, setAgent] = useState('');
   const [data, setData] = useState<Trends | null>(null);
-  const [metric, setMetric] = useState<'volume' | 'closedDeals'>('volume');
+  const [metricPick, setMetric] = useState<'volume' | 'closedDeals'>('volume');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -84,6 +87,10 @@ export function TrendsSection() {
   }, [load]);
 
   if (!data) return <p className="text-sm text-slate-400">{error || 'Loading…'}</p>;
+  const team = data.mode === 'team';
+  const cash = data.showMoney !== false;
+  const who = team ? 'Coordinator' : 'Agent';
+  const metric = cash ? metricPick : 'closedDeals';
   const max = Math.max(1, ...data.series.map((p) => p[metric]));
   const w = 720, h = 180, gap = 6, bar = (w - gap * (data.series.length - 1)) / data.series.length;
 
@@ -92,20 +99,20 @@ export function TrendsSection() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="text-slate-100 font-semibold">Trends</h2>
-          <p className="text-sm text-slate-400">Closed deals and sales volume by month, and how each agent compares with the period before.</p>
+          <p className="text-sm text-slate-400">{cash ? 'Closed deals and sales volume by month, and how each agent compares with the period before.' : 'Closed deals by month, and how each coordinator compares with the period before. Prices stay private to each coordinator.'}</p>
         </div>
         <div className="flex flex-wrap gap-2 text-sm">
-          <select aria-label="Agent" value={agent} onChange={(e) => setAgent(e.target.value)} className={input}>
-            <option value="">All agents</option>
+          <select aria-label={who} value={agent} onChange={(e) => setAgent(e.target.value)} className={input}>
+            <option value="">{team ? 'Whole team' : 'All agents'}</option>
             {data.agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
           <select aria-label="Months shown" value={months} onChange={(e) => setMonths(Number(e.target.value))} className={input}>
             {[6, 12, 24].map((m) => <option key={m} value={m}>Last {m} months</option>)}
           </select>
-          <select aria-label="Metric" value={metric} onChange={(e) => setMetric(e.target.value as 'volume' | 'closedDeals')} className={input}>
+          {cash && <select aria-label="Metric" value={metric} onChange={(e) => setMetric(e.target.value as 'volume' | 'closedDeals')} className={input}>
             <option value="volume">Sales volume</option>
             <option value="closedDeals">Closed deals</option>
-          </select>
+          </select>}
         </div>
       </div>
 
@@ -118,7 +125,7 @@ export function TrendsSection() {
           return (
             <g key={p.month}>
               <rect x={x} y={h - bh} width={bar} height={Math.max(bh, p[metric] > 0 ? 2 : 0)} rx="3" className="fill-blue-500/70" />
-              <title>{`${monthLabel(p.month)}: ${p.closedDeals} closed, ${money(p.volume)}`}</title>
+              <title>{cash ? `${monthLabel(p.month)}: ${p.closedDeals} closed, ${money(p.volume)}` : `${monthLabel(p.month)}: ${p.closedDeals} closed`}</title>
               {(data.series.length <= 12 || i % 2 === 0) && <text x={x + bar / 2} y={h + 16} textAnchor="middle" className="fill-slate-500 text-[10px]">{monthLabel(p.month)}</text>}
               {p[metric] > 0 && data.series.length <= 12 && <text x={x + bar / 2} y={h - bh - 4} textAnchor="middle" className="fill-slate-300 text-[10px]">{metric === 'volume' ? money(p.volume) : p.closedDeals}</text>}
             </g>
@@ -127,7 +134,7 @@ export function TrendsSection() {
       </svg>
 
       <div className="flex flex-wrap items-center justify-between gap-3 mt-6 mb-2">
-        <h3 className="text-sm font-semibold text-slate-200">Agents, compared with the period before</h3>
+        <h3 className="text-sm font-semibold text-slate-200">{team ? 'Coordinators' : 'Agents'}, compared with the period before</h3>
         <select aria-label="Period" value={period} onChange={(e) => setPeriod(Number(e.target.value))} className={`${input} text-xs`}>
           {[1, 3, 6, 12].map((p) => <option key={p} value={p}>Last {p} {p === 1 ? 'month' : 'months'} vs the {p} before</option>)}
         </select>
@@ -136,19 +143,19 @@ export function TrendsSection() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
-              <th className="py-2 pr-4 font-medium">Agent</th><th className="py-2 pr-4 font-medium">Closed</th><th className="py-2 pr-4 font-medium">vs before</th>
-              <th className="py-2 pr-4 font-medium">Volume</th><th className="py-2 pr-4 font-medium">vs before</th><th className="py-2 font-medium">New deals</th>
+              <th className="py-2 pr-4 font-medium">{who}</th><th className="py-2 pr-4 font-medium">Closed</th><th className="py-2 pr-4 font-medium">vs before</th>
+              {cash && <><th className="py-2 pr-4 font-medium">Volume</th><th className="py-2 pr-4 font-medium">vs before</th></>}<th className="py-2 font-medium">New deals</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             <tr className="text-slate-100 font-semibold">
-              <td className="py-2 pr-4">Whole brokerage</td><td className="py-2 pr-4">{data.totals.closedDeals}</td><td className="py-2 pr-4"><Change value={data.totals.closedChange} /></td>
-              <td className="py-2 pr-4">{money(data.totals.volume)}</td><td className="py-2 pr-4"><Change value={data.totals.volumeChange} /></td><td className="py-2">{data.totals.newDeals} <span className="text-slate-500 font-normal">(was {data.totals.prevNewDeals})</span></td>
+              <td className="py-2 pr-4">{team ? 'Whole team' : 'Whole brokerage'}</td><td className="py-2 pr-4">{data.totals.closedDeals}</td><td className="py-2 pr-4"><Change value={data.totals.closedChange} /></td>
+              {cash && <><td className="py-2 pr-4">{money(data.totals.volume)}</td><td className="py-2 pr-4"><Change value={data.totals.volumeChange} /></td></>}<td className="py-2">{data.totals.newDeals} <span className="text-slate-500 font-normal">(was {data.totals.prevNewDeals})</span></td>
             </tr>
             {data.comparison.map((r) => (
               <tr key={r.agentId} className="text-slate-300">
                 <td className="py-2 pr-4">{r.name}</td><td className="py-2 pr-4">{r.closedDeals} <span className="text-slate-500">(was {r.prevClosedDeals})</span></td><td className="py-2 pr-4"><Change value={r.closedChange} /></td>
-                <td className="py-2 pr-4">{money(r.volume)} <span className="text-slate-500">(was {money(r.prevVolume)})</span></td><td className="py-2 pr-4"><Change value={r.volumeChange} /></td><td className="py-2">{r.newDeals} <span className="text-slate-500">(was {r.prevNewDeals})</span></td>
+                {cash && <><td className="py-2 pr-4">{money(r.volume)} <span className="text-slate-500">(was {money(r.prevVolume)})</span></td><td className="py-2 pr-4"><Change value={r.volumeChange} /></td></>}<td className="py-2">{r.newDeals} <span className="text-slate-500">(was {r.prevNewDeals})</span></td>
               </tr>
             ))}
           </tbody>

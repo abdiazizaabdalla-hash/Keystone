@@ -29,6 +29,7 @@ import { getUserPlan } from '@/lib/privileged';
 import { logAudit } from '@/lib/audit';
 import { hasAgentRole } from '@/lib/appMetadata';
 import { brokerageOn, listOwnerLinks, agentLabels } from '@/lib/oversight';
+import { ownerKind } from '@/lib/oversightRoster';
 import { resolveTeamAccess } from '@/lib/teamMessaging';
 
 interface UserInfo {
@@ -145,7 +146,10 @@ export async function GET(request: NextRequest) {
     // lookup of the owner's row.
     const seatInfo = getSeatInfo(getUserPlan(user));
 
+    // Which screens an owner gets: a brokerage (agents who joined) or a TC team (members, status only).
+    const kind = isOwner && isTeamPlan(getUserPlan(user)) ? await ownerKind(user.id).catch(() => 'team' as const) : null;
     return NextResponse.json({
+      ownerKind: kind,
       team: {
         id: membership.team.id,
         name: membership.team.name,

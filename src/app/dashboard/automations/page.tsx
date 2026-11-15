@@ -11,6 +11,7 @@ import type { Preset } from '@/lib/automation/presets';
 import WorkflowDialog from '@/components/WorkflowDialog';
 import BrokerageAutomations from '@/components/BrokerageAutomations';
 import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
+import { useTeamOwner } from '@/lib/useBrokerageOwner';
 
 interface Template {
   id: string;
@@ -272,8 +273,30 @@ function AgentAutomationsPage() {
 }
 
 // A brokerage owner gets the brokerage's own automations (watching the office); the agent library of deal-task automations is not shown to them.
+// A TC team owner gets both: their own deal automations, and rules that watch the team.
+function TeamOwnerAutomations() {
+  const [tab, setTab] = useState<'team' | 'mine'>('team');
+  const hasMine = isFeatureOnClient('automation');
+  return (
+    <div>
+      {hasMine && (
+        <div className="px-4 md:px-8 pt-4 md:pt-8">
+          <div className="flex gap-1 border-b border-slate-700 max-w-4xl" role="tablist">
+            {([['team', 'Team automations'], ['mine', 'My automations']] as const).map(([id, label]) => (
+              <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${tab === id ? 'border-blue-400 text-blue-300' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>{label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      {tab === 'team' || !hasMine ? <BrokerageAutomations /> : <AgentAutomationsPage />}
+    </div>
+  );
+}
+
 export default function AutomationsPage() {
   const owner = useBrokerageOperator();
-  if (owner === null) return <p className="p-8 text-sm text-slate-400">Loading…</p>;
+  const teamOwner = useTeamOwner();
+  if (owner === null || teamOwner === null) return <p className="p-8 text-sm text-slate-400">Loading…</p>;
+  if (teamOwner) return <TeamOwnerAutomations />;
   return owner ? <BrokerageAutomations /> : <AgentAutomationsPage />;
 }

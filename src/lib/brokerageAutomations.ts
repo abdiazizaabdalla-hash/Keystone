@@ -1,9 +1,10 @@
 import { supabaseServer } from './supabase';
+import { rosterFor } from './oversightRoster';
 import { CLOSED_STAGE, agentLabels, closedWithoutCommission, listOwnerLinks, loadOversightDeals, closedOnDate } from './oversight';
 import { sendBrokerageEmail } from './oversightServer';
 import { inReviewWindow, missingRequired, requiredForDeal, type DocumentList } from './fileReview';
 import {
-  agentNoticeText, closingFlags, cleanParams, digestText, documentFlags, lateStepFlags, monthlyText, ownerAlertText, paramNumber, quietAgents, stalledFlags, welcomeText,
+  agentNoticeText, closingFlags, kindsFor, cleanParams, digestText, documentFlags, lateStepFlags, monthlyText, ownerAlertText, paramNumber, quietAgents, stalledFlags, welcomeText,
   daysBetween, defOf, workflowAgentText, workflowFlags, type AutomationKind, type DealLite, type Flag, type OwnerMode, type WorkflowTrigger,
 } from './brokerageAutomationRules';
 
@@ -54,6 +55,7 @@ async function dueForEscalation(ownerId: string, kind: string, keys: Set<string>
 interface Ctx {
   ownerId: string;
   ownerName: string;
+  mode: 'brokerage' | 'team';
   today: string;
   agentIds: string[];
   names: Map<string, string>;
@@ -72,7 +74,7 @@ async function toAgent(c: Ctx, agentId: string, source: string, text: { subject:
   return sentOk(await sendBrokerageEmail({ outboxOwnerId: c.ownerId, fromLabel: c.ownerName, to: { userId: agentId }, source, subject: text.subject, paragraphs: text.paragraphs, path: '/dashboard/transactions', linkLabel: 'Open your deals' })) ? 1 : 0;
 }
 async function toOwner(c: Ctx, source: string, text: { subject: string; paragraphs: string[] }, path = '/dashboard/compliance'): Promise<number> {
-  return sentOk(await sendBrokerageEmail({ outboxOwnerId: c.ownerId, fromLabel: 'Relay TC', to: { userId: c.ownerId }, source, subject: text.subject, paragraphs: text.paragraphs, path, linkLabel: 'Open Relay' })) ? 1 : 0;
+  return sentOk(await sendBrokerageEmail({ outboxOwnerId: c.ownerId, fromLabel: 'Relay TC', to: { userId: c.ownerId }, source, subject: text.subject, paragraphs: text.paragraphs, path: c.mode === 'team' && path.startsWith('/dashboard/collaborate') ? '/dashboard/compliance' : path, linkLabel: 'Open Relay' })) ? 1 : 0;
 }
 
 /**
@@ -153,14 +155,14 @@ async function runOne(c: Ctx, cfg: AutomationConfig): Promise<Outcome> {
   const deals = c.deals.filter((d) => inScope(d.tc_user_id));
 
   if (kind === 'stalled') {
-    return notifyFlags(c, kind, stalledFlags(deals, c.today, paramNumber(kind, params, 'days')), { notifyAgent: cfg.notifyAgents, owner: 'escalate', escalateDays: paramNumber(kind, params, 'escalateDays'), agentText: (l) => agentNoticeText('stalled', l), ownerTitle: 'Stalled deals' });
+    return notifyFlags(c, kind, stalledFlags(deals, c.today, paramNumber(kind, params, 'days')), { notifyAgent: cfg.notifyAgents, owner: 'escalate', escalateDays: paramNumber(kind, params, 'escalateDays'), agentText: (l) => agentNoticeText('stalled', l, c.mode), ownerTitle: 'Stalled deals' });
   }
 
   if (kind === 'documents') {
     const scoped = c.allDeals.filter((d) => inScope(d.tc_user_id));
     const missing = await missingDocuments(c, scoped);
     if (missing === null) return { flagged: 0, emails: 0, summary: 'No required documents are set yet. Choose them under Compliance.' };
-    return notifyFlags(c, kind, documentFlags(scoped.filter((d) => missing.has(d.id)), missing), { notifyAgent: cfg.notifyAgents, owner: 'escalate', escalateDays: paramNumber(kind, params, 'escalateDays'), agentText: (l) => agentNoticeText('documents', l), ownerTitle: 'Files missing documents' });
+    return notifyFlags(c, kind, documentFlags(scoped.filter((d) => missing.has(d.id)), missing), { notifyAgent: cfg.notifyAgents, owner: 'escalate', escalateDays: paramNumber(kind, params, 'escalateDays'), agentText: (l) => agentNoticeText('documents', l, c.mode), ownerTitle: 'Files missing documents' });
   }
 
   if (kind === 'deadlines') {
@@ -168,7 +170,7 @@ async function runOne(c: Ctx, cfg: AutomationConfig): Promise<Outcome> {
     const fresh: Flag[] = [];
     for (const f of flags) if (await claim(c.ownerId, kind, f.key)) fresh.push(f);
     let emails = 0;
-    if (cfg.notifyAgents) for (const [agentId, list] of group(fresh)) emails += await toAgent(c, agentId, 'brokerage_deadlines', agentNoticeText('closing', list));
+    if (cfg.notifyAgents) for (const [agentId, list] of group(fresh)) emails += await toAgent(c, agentId, 'brokerage_deadlines', agentNoticeText('closing', list, c.mode));
     if (fresh.length) emails += await toOwner(c, 'brokerage_deadlines', ownerAlertText('Closings coming up', fresh.map((f) => ({ ...f, agentName: nameOf(c, f.agentId) }))), '/dashboard/transactions');
     const late = [];
     for (const l of lateStepFlags(deals, c.today, paramNumber(kind, params, 'lateSteps'))) if (await claim(c.ownerId, kind, l.key)) late.push(l);
@@ -192,7 +194,7 @@ async function runOne(c: Ctx, cfg: AutomationConfig): Promise<Outcome> {
       lateAgents: lateStepFlags(deals, c.today, 0).map((l) => ({ name: nameOf(c, l.agentId), late: l.late })).sort((a, b) => b.late - a.late).slice(0, 8),
       quiet: quietAgents(cfg.agentIds.length ? cfg.agentIds : c.agentIds, c.allDeals, c.today, paramNumber(kind, params, 'quietDays')).map((id) => nameOf(c, id)),
       newDeals: deals.filter((d) => (d.acceptance_date ?? '').slice(0, 10) === yesterday).map((d) => ({ address: d.property_address || 'A deal', agentName: nameOf(c, d.tc_user_id) })),
-    });
+    }, c.mode);
     if (!text) return { flagged: 0, emails: 0, summary: 'Nothing to report today, so no email was sent.' };
     return { flagged: 1, emails: await toOwner(c, 'brokerage_daily_digest', text, '/dashboard'), summary: 'Digest sent.' };
   }
@@ -220,6 +222,15 @@ async function runOne(c: Ctx, cfg: AutomationConfig): Promise<Outcome> {
   start.setUTCMonth(start.getUTCMonth() - 1);
   const prev = start.toISOString().slice(0, 7);
   const mine = c.allDeals.filter((d) => inScope(d.tc_user_id) && d.status === CLOSED_STAGE && closedOnDate(d, c.today).slice(0, 7) === prev);
+  if (c.mode === 'team') {
+    // A team owner sees status only: how many files each coordinator closed, never prices or commissions.
+    const label = new Date(`${prev}-01T00:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const per = new Map<string, number>();
+    for (const d of mine) per.set(d.tc_user_id, (per.get(d.tc_user_id) ?? 0) + 1);
+    const lines = [...per].sort((a, b) => b[1] - a[1]).map(([id, n]) => `${nameOf(c, id)}: ${plural(n, 'closing')}`);
+    const paragraphs = [`${plural(mine.length, 'file')} closed across your team in ${label}.`, ...(lines.length ? [lines.join('\n')] : [])];
+    return { flagged: mine.length, emails: await toOwner(c, 'brokerage_monthly_report', { subject: `Your team in ${label}: ${plural(mine.length, 'closing')}`, paragraphs }, '/dashboard/reports'), summary: `${label}: ${plural(mine.length, 'closing')}.` };
+  }
   const { data, error } = await supabaseServer.from('deal_commissions').select('transaction_id, status').eq('owner_user_id', c.ownerId).limit(5000);
   if (error && !missingTable(error)) throw error;
   const have = new Set((data ?? []).filter((r) => r.status !== 'void').map((r) => r.transaction_id as string));
@@ -232,11 +243,13 @@ async function runOne(c: Ctx, cfg: AutomationConfig): Promise<Outcome> {
 /** Runs the rules and workflows this owner has switched on (or only `only`: a rule's kind or `wf:<id>`, for "Run now"). Records each run. */
 export async function runForOwner(ownerId: string, today: string, only?: string): Promise<RunResult[]> {
   const onlyWorkflow = only?.startsWith('wf:') ? only.slice(3) : null;
-  const configs = onlyWorkflow ? [] : [...(await loadConfigs(ownerId)).values()].filter((c) => (only ? c.kind === only : c.enabled));
-  const workflows = (await loadWorkflows(ownerId)).filter((w) => (onlyWorkflow ? w.id === onlyWorkflow : !only && w.enabled));
+  const roster = await rosterFor(ownerId);
+  const mode = roster.mode;
+  const allowed = new Set<string>(kindsFor(mode));
+  const configs = onlyWorkflow ? [] : [...(await loadConfigs(ownerId)).values()].filter((c) => allowed.has(c.kind) && (only ? c.kind === only : c.enabled));
+  const workflows = (await loadWorkflows(ownerId)).filter((w) => (mode !== 'team' || w.trigger !== 'missing_docs') && (onlyWorkflow ? w.id === onlyWorkflow : !only && w.enabled));
   if (configs.length === 0 && workflows.length === 0) return [];
-  const links = (await listOwnerLinks(ownerId)).filter((l) => l.status === 'active' && l.agent_user_id);
-  const agentIds = links.map((l) => l.agent_user_id as string);
+  const agentIds = roster.userIds;
   const [labels, ownerLabel, rawDeals] = await Promise.all([agentLabels(agentIds), agentLabels([ownerId]), loadOversightDeals(agentIds, today)]);
   // Archived deals are out of everyday work, so they are never flagged.
   const archived = new Set<string>();
@@ -245,7 +258,7 @@ export async function runForOwner(ownerId: string, today: string, only?: string)
     for (const r of data ?? []) archived.add(r.id as string);
   }
   const allDeals = rawDeals.filter((d) => !archived.has(d.id)) as Ctx['allDeals'];
-  const ctx: Ctx = { ownerId, ownerName: ownerLabel.get(ownerId)?.name ?? 'Your brokerage', today, agentIds, names: new Map([...labels].map(([id, l]) => [id, l.name])), deals: allDeals, allDeals };
+  const ctx: Ctx = { ownerId, ownerName: ownerLabel.get(ownerId)?.name ?? (mode === 'team' ? 'Your team' : 'Your brokerage'), mode, today, agentIds, names: new Map([...labels].map(([id, l]) => [id, l.name])), deals: allDeals, allDeals };
 
   const jobs: { kind: string; label: string; workflowId: string | null; run: () => Promise<Outcome> }[] = [
     ...configs.map((cfg) => ({ kind: cfg.kind as string, label: defOf(cfg.kind).name, workflowId: null, run: () => runOne(ctx, cfg) })),

@@ -12,7 +12,7 @@ import BrokerageTrendsSummary from '@/components/BrokerageTrendsSummary';
 import BrokerageHome from '@/components/BrokerageHome';
 import AgentBrokerageStrip from '@/components/AgentBrokerageStrip';
 import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
-import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { useBrokerageOwner, useTeamOwner } from '@/lib/useBrokerageOwner';
 import TcInvitationBanner from '@/components/TcInvitationBanner';
 import ClosedDealAlerts from '@/components/ClosedDealAlerts';
 import AttentionPanel, { type AttentionSummary } from '@/components/AttentionPanel';
@@ -140,6 +140,7 @@ export default function Dashboard() {
   // The Team board card (Team/Brokerage plans, behind the brokerage flag). It tells us whether this person has a team, so the right column only exists then.
   const brokerageOwner = useBrokerageOperator();
   const trueOwner = useBrokerageOwner();
+  const teamOwner = useTeamOwner();
   useEffect(() => { setPersona(readPersona()); }, []);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -776,7 +777,7 @@ export default function Dashboard() {
       )}
       </div>
       </div>
-      {brokerageOwner && <BrokerageTrendsSummary />}
+      {(brokerageOwner || teamOwner === true) && <BrokerageTrendsSummary />}
     </div>
   );
 }

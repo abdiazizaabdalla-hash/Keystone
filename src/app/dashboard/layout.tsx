@@ -13,7 +13,7 @@ import PageHint from '@/components/PageHint';
 import { isTeamPlan } from '@/lib/plans';
 import { isFeatureOnClient } from '@/lib/features';
 import { savePersona } from '@/lib/persona';
-import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { useBrokerageOwner, useTeamOwner } from '@/lib/useBrokerageOwner';
 import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
 import { useBrokerageAdminAccess } from '@/lib/useBrokerageAdminAccess';
 
@@ -424,6 +424,7 @@ export default function DashboardLayout({
   const brokerOwner = useBrokerageOwner();
   const brokerageAdmin = useBrokerageAdminAccess();
   const brokerOperator = useBrokerageOperator();
+  const teamOwner = useTeamOwner();
   const showAgentsNav = !isAgentAccount && brokerOwner !== true && !(brokerOwner === null && isFeatureOnClient('brokerage') && isTeamPlan(plan));
   // Agents in a brokerage use the same Collaborate hub as their broker (no separate Brokerage page).
   const agentCollaborate = isFeatureOnClient('brokerage') && isAgentAccount && hasWorkspace;
@@ -435,18 +436,18 @@ export default function DashboardLayout({
 
   // Automations is last, and only where the feature is on and the account can use it (not a free or Basic agent login).
   // A broker (or an administrator they added) also gets Compliance and Reports, right after the everyday pages.
-  const brokerDesk = brokerOwner === true || brokerageAdmin?.delegated === true;
+  const brokerDesk = brokerOwner === true || brokerageAdmin?.delegated === true || teamOwner === true;
   const baseNav: { href: string; label: string; icon: string }[] = PRIMARY_NAV.filter((i) => {
     if (i.href === '/dashboard/invoices') return !(isAgentAccount && !hasWorkspace);
     // A broker's Automations are the brokerage's own rules, so they do not depend on the agent automation feature.
-    if (i.href === '/dashboard/automations' && brokerOperator === true) return true;
+    if (i.href === '/dashboard/automations' && (brokerOperator === true || teamOwner === true)) return true;
     if (i.href === '/dashboard/automations') return isFeatureOnClient('automation') && automationAllowed && !(isAgentAccount && !hasWorkspace);
     return true;
   });
   const primaryNav = brokerDesk
     ? [
         ...baseNav.filter((i) => i.href !== '/dashboard/automations'),
-        { href: '/dashboard/compliance', label: 'Compliance', icon: 'compliance' },
+        { href: '/dashboard/compliance', label: teamOwner === true ? 'Team desk' : 'Compliance', icon: 'compliance' },
         { href: '/dashboard/reports', label: 'Reports', icon: 'reports' },
         ...baseNav.filter((i) => i.href === '/dashboard/automations'),
       ]

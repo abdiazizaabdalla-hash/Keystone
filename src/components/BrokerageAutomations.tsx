@@ -1,8 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import { MESSAGE_MAX, TRIGGERS, WORKFLOW_PRESETS, describeWorkflow, triggerOf, type OwnerMode, type WorkflowTrigger } from '@/lib/brokerageAutomationRules';
+
+// A TC team owner uses the same screen with coordinator wording and only the rules that make sense for a team (no documents or onboarding).
+type Org = 'brokerage' | 'team';
+const OrgContext = createContext<Org>('brokerage');
+export function sayFor(org: Org) {
+  return (t: string) => (org === 'team' ? t.replace(/\bagents\b/g, 'coordinators').replace(/\bAgents\b/g, 'Coordinators').replace(/\bagent\b/g, 'coordinator').replace(/\bAgent\b/g, 'Coordinator').replace(/\bthe office\b/gi, (m) => (m[0] === 'T' ? 'The team' : 'the team')).replace(/\bEntire brokerage\b/, 'Whole team').replace(/\bbrokerage\b/g, 'team') : t);
+}
+const useSay = () => sayFor(useContext(OrgContext));
 
 // The broker's Automations: a short list of rules that watch the whole office and tell the right person, once. Each one is a fixed
 // trigger and action you can switch on and tune; there is no AI in them. Owner only.
@@ -15,7 +23,7 @@ interface Rule {
 interface RunItem { address: string; agent: string; reason: string; told: string }
 interface Run { id: string; kind: string; label?: string | null; ran_at: string; status: 'ok' | 'nothing' | 'failed'; flagged: number; emails: number; summary: string; detail?: { items?: RunItem[] } | null }
 interface Workflow { id: string; name: string; trigger: WorkflowTrigger; amount: number; notifyAgent: boolean; notifyOwner: OwnerMode; escalateDays: number; agentIds: string[]; dealTypes: string[]; enabled: boolean; description: string }
-interface Data { automations: Rule[]; workflows: Workflow[]; dealTypes: string[]; agents: { id: string; name: string }[]; runs: Run[] }
+interface Data { mode?: Org; triggers?: string[]; automations: Rule[]; workflows: Workflow[]; dealTypes: string[]; agents: { id: string; name: string }[]; runs: Run[] }
 type Draft = Omit<Workflow, 'id' | 'description'> & { id?: string }
 const blank: Draft = { name: '', trigger: 'quiet', amount: 5, notifyAgent: true, notifyOwner: 'escalate', escalateDays: 2, agentIds: [], dealTypes: [], enabled: true };
 
@@ -25,6 +33,7 @@ const when = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'sh
 const STATUS = { ok: ['Done', 'text-emerald-300'], nothing: ['Nothing to do', 'text-slate-400'], failed: ['Failed', 'text-red-300'] } as const;
 
 function RuleCard({ rule, agents, onSaved, onRan }: { rule: Rule; agents: Data['agents']; onSaved: () => Promise<void>; onRan: (note: string) => Promise<void> }) {
+  const say = useSay();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(rule);
   const [busy, setBusy] = useState<'save' | 'run' | ''>('');
@@ -66,10 +75,10 @@ function RuleCard({ rule, agents, onSaved, onRan }: { rule: Rule; agents: Data['
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-slate-100 font-semibold">{rule.name}</p>
-          <p className="text-sm text-slate-400 mt-0.5">{rule.blurb}</p>
-          <p className="text-xs text-slate-500 mt-2"><span className="text-slate-400">When:</span> {rule.trigger}</p>
-          <p className="text-xs text-slate-500"><span className="text-slate-400">Then:</span> {rule.action}</p>
-          <p className="text-xs text-slate-500 mt-1">{rule.enabled ? (rule.agentIds.length ? `Watching ${rule.agentIds.length} selected agent${rule.agentIds.length === 1 ? '' : 's'}` : 'Watching every agent') : 'Off'}</p>
+          <p className="text-sm text-slate-400 mt-0.5">{say(rule.blurb)}</p>
+          <p className="text-xs text-slate-500 mt-2"><span className="text-slate-400">When:</span> {say(rule.trigger)}</p>
+          <p className="text-xs text-slate-500"><span className="text-slate-400">Then:</span> {say(rule.action)}</p>
+          <p className="text-xs text-slate-500 mt-1">{rule.enabled ? say(rule.agentIds.length ? `Watching ${rule.agentIds.length} selected agent${rule.agentIds.length === 1 ? '' : 's'}` : 'Watching every agent') : 'Off'}</p>
         </div>
         <button type="button" role="switch" aria-checked={rule.enabled} aria-label={`${rule.name} ${rule.enabled ? 'on' : 'off'}`} disabled={busy === 'save'} onClick={toggle} className={`shrink-0 w-12 h-7 rounded-full transition relative ${rule.enabled ? 'bg-emerald-500' : 'bg-slate-600'}`}>
           <span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white transition-all ${rule.enabled ? 'left-[22px]' : 'left-0.5'}`} />
@@ -102,8 +111,8 @@ function RuleCard({ rule, agents, onSaved, onRan }: { rule: Rule; agents: Data['
             </label>
           )}
           <fieldset>
-            <legend className="text-xs uppercase tracking-wider text-slate-500 mb-1">Which agents</legend>
-            <label className="flex items-center gap-2 text-sm text-slate-300"><input type="radio" checked={!scoped} onChange={() => setDraft({ ...draft, agentIds: [] })} /> Every agent</label>
+            <legend className="text-xs uppercase tracking-wider text-slate-500 mb-1">{say('Which agents')}</legend>
+            <label className="flex items-center gap-2 text-sm text-slate-300"><input type="radio" checked={!scoped} onChange={() => setDraft({ ...draft, agentIds: [] })} /> {say('Every agent')}</label>
             <label className="flex items-center gap-2 text-sm text-slate-300"><input type="radio" checked={scoped} onChange={() => setDraft({ ...draft, agentIds: agents.slice(0, 1).map((a) => a.id) })} disabled={agents.length === 0} /> Only selected agents</label>
             {scoped && (
               <div className="mt-2 grid sm:grid-cols-2 gap-1 max-h-40 overflow-y-auto">
@@ -119,7 +128,7 @@ function RuleCard({ rule, agents, onSaved, onRan }: { rule: Rule; agents: Data['
           {rule.agentNotice && (
             <label className="flex items-start gap-2 text-sm text-slate-300">
               <input type="checkbox" className="mt-1" checked={draft.notifyAgents} onChange={(e) => setDraft({ ...draft, notifyAgents: e.target.checked })} />
-              <span>Tell the agent too. {rule.kind === 'onboarding' ? '' : 'Off means only you are told, straight away.'}</span>
+              <span>{say('Tell the agent too.')} {rule.kind === 'onboarding' ? '' : 'Off means only you are told, straight away.'}</span>
             </label>
           )}
           <button type="button" disabled={!changed || busy === 'save'} onClick={() => save(draft)} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition">{busy === 'save' ? 'Saving…' : 'Save settings'}</button>
@@ -130,7 +139,8 @@ function RuleCard({ rule, agents, onSaved, onRan }: { rule: Rule; agents: Data['
 }
 
 
-function WorkflowBuilder({ initial, agents, dealTypes, onClose, onSaved }: { initial: Draft; agents: Data['agents']; dealTypes: string[]; onClose: () => void; onSaved: (note: string) => Promise<void> }) {
+function WorkflowBuilder({ initial, agents, dealTypes, triggers, onClose, onSaved }: { initial: Draft; agents: Data['agents']; dealTypes: string[]; triggers?: string[]; onClose: () => void; onSaved: (note: string) => Promise<void> }) {
+  const say = useSay();
   const [d, setD] = useState<Draft>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -167,7 +177,7 @@ function WorkflowBuilder({ initial, agents, dealTypes, onClose, onSaved }: { ini
           <span className={label}>1. When</span>
           <div className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
             <select aria-label="Trigger" value={d.trigger} onChange={(e) => { const nt = triggerOf(e.target.value as WorkflowTrigger); set({ trigger: nt.id, amount: nt.default }); }} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100">
-              {TRIGGERS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+              {TRIGGERS.filter((x) => !triggers || triggers.includes(x.id)).map((x) => <option key={x.id} value={x.id}>{say(x.label)}</option>)}
             </select>
             {t.amountLabel && (
               <>
@@ -181,7 +191,7 @@ function WorkflowBuilder({ initial, agents, dealTypes, onClose, onSaved }: { ini
 
         <fieldset>
           <legend className={label}>2. Then tell</legend>
-          <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={d.notifyAgent} onChange={(e) => set({ notifyAgent: e.target.checked })} /> The agent</label>
+          <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={d.notifyAgent} onChange={(e) => set({ notifyAgent: e.target.checked })} /> {say('The agent')}</label>
           <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-slate-300">
             You:
             <select aria-label="When to tell you" value={d.notifyOwner} onChange={(e) => set({ notifyOwner: e.target.value as OwnerMode })} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100">
@@ -194,8 +204,8 @@ function WorkflowBuilder({ initial, agents, dealTypes, onClose, onSaved }: { ini
         </fieldset>
 
         <fieldset>
-          <legend className={label}>3. Which agents</legend>
-          <label className="flex items-center gap-2 text-sm text-slate-300"><input type="radio" checked={d.agentIds.length === 0} onChange={() => set({ agentIds: [] })} /> Entire brokerage</label>
+          <legend className={label}>3. {say('Which agents')}</legend>
+          <label className="flex items-center gap-2 text-sm text-slate-300"><input type="radio" checked={d.agentIds.length === 0} onChange={() => set({ agentIds: [] })} /> {say('Entire brokerage')}</label>
           <label className="flex items-center gap-2 text-sm text-slate-300"><input type="radio" disabled={agents.length === 0} checked={d.agentIds.length > 0} onChange={() => set({ agentIds: agents.slice(0, 1).map((a) => a.id) })} /> Selected agents</label>
           {d.agentIds.length > 0 && (
             <div className="mt-2 grid sm:grid-cols-2 gap-1 max-h-40 overflow-y-auto">
@@ -235,6 +245,7 @@ function WorkflowBuilder({ initial, agents, dealTypes, onClose, onSaved }: { ini
 }
 
 function WorkflowCard({ w, agents, onEdit, onChanged, onNote }: { w: Workflow; agents: Data['agents']; onEdit: () => void; onChanged: () => Promise<void>; onNote: (n: string) => void }) {
+  const say = useSay();
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const act = async (kind: 'toggle' | 'run' | 'delete') => {
@@ -256,7 +267,7 @@ function WorkflowCard({ w, agents, onEdit, onChanged, onNote }: { w: Workflow; a
       setBusy('');
     }
   };
-  const scope = `${w.agentIds.length ? `${w.agentIds.length} of ${agents.length} agents` : 'All agents'} · ${w.dealTypes.length ? w.dealTypes.join(', ') : 'all deal types'}`;
+  const scope = say(`${w.agentIds.length ? `${w.agentIds.length} of ${agents.length} agents` : 'All agents'} · ${w.dealTypes.length ? w.dealTypes.join(', ') : 'all deal types'}`);
   return (
     <li className={`${card} p-5`}>
       <div className="flex items-start justify-between gap-4">
@@ -280,6 +291,7 @@ function WorkflowCard({ w, agents, onEdit, onChanged, onNote }: { w: Workflow; a
 }
 
 export default function BrokerageAutomations() {
+  const [org, setOrg] = useState<Org>('brokerage');
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
@@ -293,6 +305,7 @@ export default function BrokerageAutomations() {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || 'Could not load your automations');
     setData(body);
+    setOrg(body.mode === 'team' ? 'team' : 'brokerage');
   }, []);
 
   useEffect(() => {
@@ -324,14 +337,17 @@ export default function BrokerageAutomations() {
       setLibBusy('');
     }
   };
+  const presets = WORKFLOW_PRESETS.map((p, i) => ({ p, i })).filter(({ p }) => !data.triggers || data.triggers.includes(p.trigger));
+  const say = sayFor(org);
   const builtIn = [...data.automations].sort((x, y) => Number(y.enabled) - Number(x.enabled));
 
   return (
+    <OrgContext.Provider value={org}>
     <div className="p-4 md:p-8 max-w-4xl">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
         <div>
-          <h1 className="font-display text-2xl md:text-3xl font-semibold text-slate-100">Brokerage Automations</h1>
-          <p className="text-sm text-slate-400 mt-1 max-w-2xl">Keep the office running without chasing anyone. Relay watches every file, flags problems, and tells the right person once. Fixed rules, not AI, checked every morning.</p>
+          <h1 className="font-display text-2xl md:text-3xl font-semibold text-slate-100">{org === 'team' ? 'Team Automations' : 'Brokerage Automations'}</h1>
+          <p className="text-sm text-slate-400 mt-1 max-w-2xl">{org === 'team' ? 'Keep your team on track without chasing anyone. Relay watches each coordinator’s files for status only (never prices or documents), flags problems, and tells the right person once. Fixed rules, not AI, checked every morning.' : 'Keep the office running without chasing anyone. Relay watches every file, flags problems, and tells the right person once. Fixed rules, not AI, checked every morning.'}</p>
         </div>
         <button type="button" onClick={() => setBuilding({ ...blank })} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition">+ Create workflow</button>
       </div>
@@ -348,7 +364,7 @@ export default function BrokerageAutomations() {
       {error && <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-3">{error}</p>}
       {note && <p className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 mb-3">{note}</p>}
 
-      {building && <WorkflowBuilder initial={building} agents={data.agents} dealTypes={data.dealTypes} onClose={() => setBuilding(null)} onSaved={async (n) => { setNote(n); await load(); }} />}
+      {building && <WorkflowBuilder initial={building} agents={data.agents} dealTypes={data.dealTypes} triggers={data.triggers} onClose={() => setBuilding(null)} onSaved={async (n) => { setNote(n); await load(); }} />}
 
       <h2 className="text-slate-100 font-semibold mb-2">Your workflows</h2>
       {data.workflows.length === 0 ? (
@@ -360,7 +376,7 @@ export default function BrokerageAutomations() {
       )}
 
       <h2 className="text-slate-100 font-semibold mb-1">Built-in rules</h2>
-      <p className="text-sm text-slate-400 mb-3">Ready to switch on. Each can be tuned and limited to chosen agents.</p>
+      <p className="text-sm text-slate-400 mb-3">{say('Ready to switch on. Each can be tuned and limited to chosen agents.')}</p>
       <ul className="space-y-3 mb-6">
         {builtIn.map((r) => <RuleCard key={r.kind} rule={r} agents={data.agents} onSaved={load} onRan={async (n) => { setNote(n); await load(); }} />)}
       </ul>
@@ -368,7 +384,7 @@ export default function BrokerageAutomations() {
       <h2 className="text-slate-100 font-semibold mb-1">Template library</h2>
       <p className="text-sm text-slate-400 mb-3">More workflows you can add in one click, then change.</p>
       <ul className="grid sm:grid-cols-2 gap-3 mb-6">
-        {WORKFLOW_PRESETS.map((p, i) => (
+        {presets.map(({ p, i }) => (
           <li key={p.name} className={`${card} p-4 flex flex-col justify-between gap-3`}>
             <div>
               <p className="text-sm font-semibold text-slate-100">{p.name}</p>
@@ -417,5 +433,6 @@ export default function BrokerageAutomations() {
         )}
       </section>
     </div>
+    </OrgContext.Provider>
   );
 }

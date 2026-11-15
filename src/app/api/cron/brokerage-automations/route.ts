@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { brokerageOn } from '@/lib/oversight';
 import { runAllBrokerageAutomations } from '@/lib/brokerageAutomations';
 
 // Every morning: checks each brokerage owner's switched-on automations and tells the right people once.
@@ -11,7 +10,6 @@ export async function GET(request: NextRequest) {
   if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if (!brokerageOn()) return NextResponse.json({ owners: 0, reason: 'brokerage feature is off' });
   try {
     return NextResponse.json(await runAllBrokerageAutomations(new Date().toISOString().slice(0, 10)));
   } catch (error) {

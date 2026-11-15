@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
+import { sayFor } from '@/components/BrokerageAutomations';
 import { MAX_REQUIRED_STEPS, STEP_NAME_MAX, type RequiredStep, type StepKind } from '@/lib/brokerageRequiredStepsRules';
 
 // The checklist the broker sets once for every agent: required steps for transactions and for listings. New files get the missing steps
@@ -14,7 +15,7 @@ const COPY: Record<StepKind, { title: string; blurb: string; due: string; exampl
   listing: { title: 'Required steps for listings', blurb: 'Added to every agent’s listings as they are created.', due: 'days after the planned list date', example: 'e.g. Listing agreement signed' },
 };
 
-function Editor({ kind, saved, onSaved, canEdit }: { kind: StepKind; saved: RequiredStep[]; onSaved: (note: string) => Promise<void>; canEdit: boolean }) {
+function Editor({ kind, saved, onSaved, canEdit, team }: { kind: StepKind; saved: RequiredStep[]; onSaved: (note: string) => Promise<void>; canEdit: boolean; team: boolean }) {
   const [rows, setRows] = useState<RequiredStep[]>(saved);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -42,7 +43,7 @@ function Editor({ kind, saved, onSaved, canEdit }: { kind: StepKind; saved: Requ
   return (
     <div className={card}>
       <p className="text-slate-100 font-semibold">{c.title}</p>
-      <p className="text-sm text-slate-400 mt-0.5 mb-3">{c.blurb} Default for all agents.</p>
+      <p className="text-sm text-slate-400 mt-0.5 mb-3">{team ? c.blurb.replace('every agent’s', 'every coordinator’s') : c.blurb} {team ? 'Default for your whole team.' : 'Default for all agents.'}</p>
       {rows.length === 0 && <p className="text-sm text-slate-500 mb-3">No required steps yet.</p>}
       <ul className="space-y-2">
         {rows.map((r, i) => (
@@ -71,7 +72,8 @@ function Editor({ kind, saved, onSaved, canEdit }: { kind: StepKind; saved: Requ
   );
 }
 
-export default function BrokerageRequiredSteps({ canEdit }: { canEdit: boolean }) {
+export default function BrokerageRequiredSteps({ canEdit, team = false }: { canEdit: boolean; team?: boolean }) {
+  const say = sayFor(team ? 'team' : 'brokerage');
   const [data, setData] = useState<Record<StepKind, RequiredStep[]> | null>(null);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
@@ -108,13 +110,13 @@ export default function BrokerageRequiredSteps({ canEdit }: { canEdit: boolean }
     <div className="space-y-5">
       <div>
         <h2 className="text-slate-100 font-semibold">Required steps</h2>
-        <p className="text-sm text-slate-400 max-w-2xl">Set the checklist every agent works from. Steps are added to new files automatically. Agents keep their own steps and can still add more.</p>
+        <p className="text-sm text-slate-400 max-w-2xl">{team ? 'Set the checklist everyone on your team works from, including you. Steps are added to new files automatically. Coordinators keep their own steps and can still add more.' : say('Set the checklist every agent works from. Steps are added to new files automatically. Agents keep their own steps and can still add more.')}</p>
       </div>
       {error && <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</p>}
       {note && <p className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">{note}</p>}
       <div className="grid lg:grid-cols-2 gap-5">
-        <Editor kind="transaction" saved={data.transaction} onSaved={async (n) => { setNote(n); await load(); }} canEdit={canEdit} />
-        <Editor kind="listing" saved={data.listing} onSaved={async (n) => { setNote(n); await load(); }} canEdit={canEdit} />
+        <Editor team={team} kind="transaction" saved={data.transaction} onSaved={async (n) => { setNote(n); await load(); }} canEdit={canEdit} />
+        <Editor team={team} kind="listing" saved={data.listing} onSaved={async (n) => { setNote(n); await load(); }} canEdit={canEdit} />
       </div>
       {canEdit && (
         <div className="flex flex-wrap items-center gap-3">

@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
-import { brokerageOn, listOwnerLinks } from '@/lib/oversight';
+import { rosterFor } from '@/lib/oversightRoster';
 import { oversightError } from '@/lib/oversightServer';
 import { assertBrokerageManageable } from '@/lib/brokerageAccount';
-import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
+import { resolveOversightActor } from '@/lib/brokerageAdminsServer';
 import { MAX_WORKFLOWS, cleanWorkflow } from '@/lib/brokerageAutomationRules';
 
 // Workflows a broker builds. The owner and a managing account create, change and delete them.
@@ -16,13 +16,13 @@ const isId = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f-]{3
 export async function POST(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
-    if (!brokerageOn()) throw new AuthError('Not found', 404);
-    const { owner: user } = await resolveBrokerageActor(caller, 'full');
+    const { owner: user } = await resolveOversightActor(caller, 'full');
     await assertBrokerageManageable(user.id);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    const links = await listOwnerLinks(user.id);
-    const checked = cleanWorkflow(body, new Set(links.filter((l) => l.agent_user_id).map((l) => l.agent_user_id as string)));
+    const roster = await rosterFor(user.id);
+    const checked = cleanWorkflow(body, new Set(roster.userIds));
     if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 });
+    if (roster.mode === 'team' && checked.value.trigger === 'missing_docs') return NextResponse.json({ error: 'Choose another trigger.' }, { status: 400 });
     const w = checked.value;
     const row = { owner_user_id: user.id, name: w.name, trigger: w.trigger, amount: w.amount, notify_agent: w.notifyAgent, notify_owner: w.notifyOwner, escalate_days: w.escalateDays, agent_ids: w.agentIds, deal_types: w.dealTypes, enabled: w.enabled, updated_at: new Date().toISOString() };
     let id: string;
@@ -51,8 +51,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
-    if (!brokerageOn()) throw new AuthError('Not found', 404);
-    const { owner: user } = await resolveBrokerageActor(caller, 'full');
+    const { owner: user } = await resolveOversightActor(caller, 'full');
     const id = request.nextUrl.searchParams.get('id');
     if (!isId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const { error } = await supabaseServer.from('brokerage_workflows').delete().eq('id', id).eq('owner_user_id', user.id);

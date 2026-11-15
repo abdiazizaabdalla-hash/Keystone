@@ -3,19 +3,20 @@ import { getUserFromRequest } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { assertBrokerageManageable } from '@/lib/brokerageAccount';
-import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
+import { resolveOversightActor } from '@/lib/brokerageAdminsServer';
+import { ownerKind } from '@/lib/oversightRoster';
 import { oversightError } from '@/lib/oversightServer';
 import { applyRequiredStepsToOpenFiles, cleanRequiredSteps, isStepKind, loadRequiredSteps } from '@/lib/brokerageRequiredSteps';
 
-// The brokerage's required steps for transactions and listings, added to every agent's files.
+// The required steps for transactions and listings, added to every agent's files (a brokerage) or every coordinator's files (a TC team).
 //   GET                          -> { transaction: [{name, dueDays}], listing: [...] }
 //   PUT  { kind, steps }         -> replace one list
 //   POST { apply: true }         -> add the steps to files that are already open (never twice)
 export async function GET(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
-    const { owner } = await resolveBrokerageActor(caller, 'view');
-    return NextResponse.json(await loadRequiredSteps(owner.id));
+    const { owner } = await resolveOversightActor(caller, 'view');
+    return NextResponse.json({ ...(await loadRequiredSteps(owner.id)), mode: await ownerKind(owner.id) });
   } catch (error) {
     return oversightError(error, 'load the required steps');
   }
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
-    const { owner } = await resolveBrokerageActor(caller, 'compliance');
+    const { owner } = await resolveOversightActor(caller, 'compliance');
     await assertBrokerageManageable(owner.id);
     const body = (await request.json().catch(() => ({}))) as { kind?: unknown; steps?: unknown };
     if (!isStepKind(body.kind)) return NextResponse.json({ error: 'Choose transactions or listings.' }, { status: 400 });
@@ -45,7 +46,7 @@ export async function PUT(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
-    const { owner } = await resolveBrokerageActor(caller, 'compliance');
+    const { owner } = await resolveOversightActor(caller, 'compliance');
     await assertBrokerageManageable(owner.id);
     const body = (await request.json().catch(() => ({}))) as { apply?: unknown };
     if (body.apply !== true) return NextResponse.json({ error: 'Nothing to do.' }, { status: 400 });

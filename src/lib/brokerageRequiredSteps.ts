@@ -1,5 +1,6 @@
 import { supabaseServer } from './supabase';
-import { CLOSED_STAGE, brokerageOwnersForAgent, listOwnerLinks, isOpenListing } from './oversight';
+import { CLOSED_STAGE, brokerageOwnersForAgent, isOpenListing } from './oversight';
+import { rosterFor, teamOwnerFor } from './oversightRoster';
 import { stepsToAdd, type RequiredStep, type StepKind } from './brokerageRequiredStepsRules';
 
 export * from './brokerageRequiredStepsRules';
@@ -56,10 +57,14 @@ async function addToFile(kind: StepKind, fileId: string, required: RequiredStep[
   return rows.length;
 }
 
-/** For a file just created by an agent in a brokerage: add the brokerage's required steps. Never throws. */
+/** For a file just created by an agent in a brokerage, or a coordinator on a TC team: add the brokerage's required steps. Never throws. */
 export async function applyRequiredStepsToNewFile(kind: StepKind, fileId: string, agentUserId: string, startDate: string | null): Promise<void> {
   try {
-    for (const ownerId of await brokerageOwnersForAgent(agentUserId)) {
+    const owners = new Set(await brokerageOwnersForAgent(agentUserId));
+    // A coordinator on a TC team (or its owner) gets the team's default checklist.
+    const teamOwner = await teamOwnerFor(agentUserId);
+    if (teamOwner) owners.add(teamOwner);
+    for (const ownerId of owners) {
       const required = (await loadRequiredSteps(ownerId, kind))[kind];
       await addToFile(kind, fileId, required, startDate);
     }
@@ -68,10 +73,10 @@ export async function applyRequiredStepsToNewFile(kind: StepKind, fileId: string
   }
 }
 
-/** "Add to files already open": every open deal and listing of the brokerage's active agents gets the steps it lacks. */
+/** "Add to files already open": every open deal and listing of the brokerage's agents (or the team's members and owner) gets the steps it lacks. */
 export async function applyRequiredStepsToOpenFiles(ownerId: string): Promise<{ deals: number; listings: number; steps: number }> {
   const steps = await loadRequiredSteps(ownerId);
-  const agentIds = (await listOwnerLinks(ownerId)).filter((l) => l.status === 'active' && l.agent_user_id).map((l) => l.agent_user_id as string);
+  const agentIds = (await rosterFor(ownerId)).checklistIds;
   const out = { deals: 0, listings: 0, steps: 0 };
   if (agentIds.length === 0) return out;
   if (steps.transaction.length) {

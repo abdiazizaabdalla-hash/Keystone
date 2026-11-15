@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { brokerageOn } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { assertBrokerageManageable } from '@/lib/brokerageAccount';
-import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
+import { resolveOversightActor } from '@/lib/brokerageAdminsServer';
 import { isAutomationKind } from '@/lib/brokerageAutomationRules';
 import { runForOwner } from '@/lib/brokerageAutomations';
 
@@ -11,8 +10,7 @@ import { runForOwner } from '@/lib/brokerageAutomations';
 export async function POST(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
-    if (!brokerageOn()) throw new AuthError('Not found', 404);
-    const { owner: user } = await resolveBrokerageActor(caller, 'full');
+    const { owner: user } = await resolveOversightActor(caller, 'full');
     await assertBrokerageManageable(user.id);
     const body = (await request.json().catch(() => ({}))) as { kind?: unknown; workflowId?: unknown };
     const workflowId = typeof body.workflowId === 'string' && /^[0-9a-f-]{36}$/i.test(body.workflowId) ? body.workflowId : null;
