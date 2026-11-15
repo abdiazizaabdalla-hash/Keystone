@@ -8,7 +8,6 @@ import { getUserPlan } from '@/lib/privileged';
 import { autoAddContact } from '@/lib/contactsAuto';
 import { cleanServices, type AgentService } from '@/lib/agentServices';
 import { logAudit } from '@/lib/audit';
-import { grantAgentPortalAccess, type GrantAccessResult } from '@/lib/agentInvite';
 
 export async function GET(request: NextRequest) {
   try {
@@ -147,7 +146,6 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    const { data: before } = await supabaseServer.from('agents').select('email').eq('id', id).maybeSingle();
 
     const { data: agent, error } = await supabaseServer
       .from('agents')
@@ -172,15 +170,8 @@ export async function PATCH(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // A new or changed email means this agent can now be given a login: put them on everything of theirs that is still open.
-    let portalAccess: GrantAccessResult | null = null;
-    const oldEmail = String(before?.email || '').trim().toLowerCase();
-    const newEmail = String(agent.email || '').trim().toLowerCase();
-    if (newEmail.includes('@') && newEmail !== oldEmail) {
-      portalAccess = await grantAgentPortalAccess({ agentId: agent.id as string, user, appUrl: request.nextUrl.origin });
-    }
-
-    return NextResponse.json({ ...agent, portalAccess });
+    // Adding or changing an email does not give anyone access: the coordinator ticks deals under Portal access on the Agents page.
+    return NextResponse.json({ ...agent, portalAccess: null });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

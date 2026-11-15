@@ -52,7 +52,7 @@ export default function NewTransactionPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   // Whether the agent is emailed a portal invite when the deal is created (turn off to invite them yourself later).
-  const [inviteAgent, setInviteAgent] = useState(true);
+  const [inviteAgent, setInviteAgent] = useState(false);
   // The team/brokerage's default checklist template (set from
   // /dashboard/collaborate's settings panel, Brokerage-only to change but
   // read here for any team member) -- pre-selected below once both this
@@ -666,12 +666,12 @@ export default function NewTransactionPage() {
                 <label data-tour="tx-invite" className="mt-3 flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
                   <input type="checkbox" checked={inviteAgent} onChange={(e) => setInviteAgent(e.target.checked)} className="mt-1 accent-blue-500" />
                   <span>
-                    Email {picked.name} ({picked.email}) a free portal invite for this deal. Uncheck to hold off and invite them yourself from the deal later.
+                    Give {picked.name} ({picked.email}) free portal access to this deal and email them. Leave unticked to decide later (Agents page → Portal access).
                   </span>
                 </label>
               ) : (
                 <p data-tour="tx-invite" className="mt-3 text-xs text-slate-500">
-                  {picked.name} has no email on file, so no portal invite goes out. Add one on the Agents page and they are added automatically.
+                  {picked.name} has no email on file, so no portal invite goes out. Add one on the Agents page, then choose their access there.
                 </p>
               );
             })()}

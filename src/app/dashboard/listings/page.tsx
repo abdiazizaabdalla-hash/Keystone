@@ -81,7 +81,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
   }, []);
   const soloAgentId = isAgentAcct && agents.length > 0 ? agents[0].id : null;
   // Whether the listing agent is emailed a portal invite on create (turn off to invite them yourself later).
-  const [inviteAgent, setInviteAgent] = useState(true);
+  const [inviteAgent, setInviteAgent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'open' | 'all'>('open');
@@ -461,11 +461,11 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
                 return picked.email ? (
                   <label data-tour="listing-invite" className="mt-2 flex items-start gap-2 text-xs text-slate-300 cursor-pointer">
                     <input type="checkbox" checked={inviteAgent} onChange={(e) => setInviteAgent(e.target.checked)} className="mt-0.5 accent-blue-500" />
-                    <span>Email {picked.name} ({picked.email}) a portal invite so this listing shows in their portal. Uncheck to invite them yourself later.</span>
+                    <span>Give {picked.name} ({picked.email}) portal access to this listing and email them. Leave unticked to decide later (Agents page → Portal access).</span>
                   </label>
                 ) : (
                   <p data-tour="listing-invite" className="mt-2 text-xs text-slate-500">
-                    {picked.name} has no email on file, so no portal invite goes out. Add one on the Agents page and they are added automatically.
+                    {picked.name} has no email on file, so no portal invite goes out. Add one on the Agents page, then choose their access there.
                   </p>
                 );
               })()}

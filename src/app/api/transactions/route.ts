@@ -400,7 +400,7 @@ export async function POST(request: NextRequest) {
     await logAudit(request, user, 'transaction.create', { entityType: 'transaction', entityId: transaction.id });
     queueBrokerageNewFile({ kind: 'deal', id: transaction.id, agentUserId: user.id, address: typeof propertyAddress === 'string' ? propertyAddress : null, actorUserId: user.id });
 
-    // The agent gets a portal invite right away when they have an email (turn off with inviteAgent: false). It never
+    // The agent gets a portal invite only when the coordinator ticks it (inviteAgent: true); access is otherwise chosen per agent on the Agents page. It never
     // blocks or undoes the deal; the outcome comes back so the screen can say what happened.
     // A deal converted from this agent's own listing says so in the email.
     let fromListing = false;
@@ -409,7 +409,7 @@ export async function POST(request: NextRequest) {
       const visibleForListing = await getVisibleTcUserIds(user.id);
       fromListing = Boolean(src && src.agent_id === transaction.agent_id && (isAdmin || visibleForListing.includes(src.tc_user_id as string)));
     }
-    const agentInvite = body.inviteAgent === false ? 'skipped' : await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, fromListing });
+    const agentInvite = body.inviteAgent !== true ? 'skipped' : await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, fromListing });
     return NextResponse.json({ ...transaction, agentInvite }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

@@ -303,7 +303,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
   const [reading, setReading] = useState('');
   const [readError, setReadError] = useState('');
   const [offerDocs, setOfferDocs] = useState<{ id: string; file_name: string; doc_kind: string }[]>([]);
-  const [inviteAgent, setInviteAgent] = useState(true);
+  const [inviteAgent, setInviteAgent] = useState(false);
   const [dealCreated, setDealCreated] = useState<{ txId: string; notes: string[] } | null>(null);
 
   const handleAuth = useCallback(
@@ -669,7 +669,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
                     ? { ok: false, text: `${portal.agentEmail} has a login, but this listing is not coming back for it. Check that the agent record's email matches the email they sign in with exactly, and that this listing's agent is that record.`, action: { label: 'Check the Agents page', run: () => router.push('/dashboard/agents') } }
                     : portal.login === 'unknown'
                       ? { ok: false, text: `The listing is set up for ${portal.agentEmail}, but I could not confirm that email has a login. Make sure the agent signs in with exactly that email.`, action: resendAction }
-                      : { ok: true, text: `${data.agent.name} can see this listing in their portal under Listings (signing in as ${portal.agentEmail}).`, action: resendAction };
+                      : { ok: true, text: `${data.agent.name} can see this listing in their portal under Listings (signing in as ${portal.agentEmail}).` };
   const priceChanges = data.priceChanges || [];
   const activity = data.activity || [];
   const hotCount = showings.filter((sh) => sh.interest === 'hot').length;
@@ -2259,7 +2259,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
                         ? `Invited ${new Date(portal.invitedAt).toLocaleDateString()} at ${portal.agentEmail}. They sign in with that email and see this listing under Listings.`
                         : `Not invited yet. They need a login with ${portal.agentEmail} before this listing shows in their portal.`}
                 </p>
-                {portal.agentEmail && portal.shared && (
+                {portal.agentEmail && portal.shared && !portalStatus.ok && (
                   <div className="mt-2 flex items-center gap-3">
                     <button type="button" onClick={invitePortal} disabled={invitingPortal} className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-100 text-xs font-semibold rounded-lg disabled:opacity-50">
                       {invitingPortal ? 'Sending…' : portal.invitedAt ? 'Resend invite' : 'Send portal invite'}

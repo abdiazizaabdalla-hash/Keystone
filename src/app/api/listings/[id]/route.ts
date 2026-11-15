@@ -10,7 +10,6 @@ import { offerDocPaths } from '@/lib/listingOfferFiles';
 import { queueListingCalendarSync, removeListingCalendarEvents } from '@/lib/calendarSync';
 import { isAgentUser } from '@/lib/agentPortal';
 import { removeInboundFiles } from '@/lib/listingInbound';
-import { sendListingPortalInvite } from '@/lib/agentInvite';
 import { REQUIRED_LISTING_DOCS } from '@/lib/listingReadiness';
 import {
   LISTING_STATUSES,
@@ -242,15 +241,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     queueListingCalendarSync(id);
 
-    // A newly assigned agent, or sharing switched on, gets their portal login without anyone having to remember.
-    // Only while the listing is still open, and never twice for the same agent.
+    // A newly assigned agent, or sharing switched on, no longer sends an invite by itself: portal access is a deliberate choice
+    // (Agents page -> Portal access, or the invite button on the listing).
     const agentChanged = 'agent_id' in updates && updates.agent_id && updates.agent_id !== listing.agent_id;
     const sharingTurnedOn = updates.share_with_agent === true && listing.share_with_agent !== true;
     // Announce it on the agent's dashboard once (add-listing-agent-notice.sql; ignored until it is run).
     if ((agentChanged || sharingTurnedOn) && data?.agent_id) await supabaseServer.from('listings').update({ agent_notice_seen: false }).eq('id', id);
-    if ((agentChanged || sharingTurnedOn) && data && ['preparing', 'active', 'under_offer'].includes(data.status as string)) {
-      await sendListingPortalInvite({ listing: data, user, appUrl: request.nextUrl.origin, onlyIfNew: true });
-    }
     return NextResponse.json(data);
   } catch (error) {
     return fail(error, 'update');
