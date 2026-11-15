@@ -51,7 +51,7 @@ export default function ForTcsPage() {
           <Link href="/auth?mode=signup&plan=starter" className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10">Start free</Link>
           <Link href="#plans" className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">See plans</Link>
         </div>
-        <p className="text-xs text-slate-500 mt-5">Free for 30 days. No credit card required.</p>
+        <p className="text-xs text-slate-500 mt-5">Free for 14 days. No credit card required.</p>
       </section>
 
       <section className="max-w-5xl mx-auto px-6 pb-16"><DealFlowIllustration /></section>

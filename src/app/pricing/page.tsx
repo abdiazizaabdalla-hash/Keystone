@@ -51,7 +51,7 @@ export default function PricingPage() {
 
       <section id="coordinators" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">TCs and teams</h2>
-        <p className="text-slate-400 mb-8">Free for 30 days, no card needed. Templates are on every plan. Automations are on Pro and Team.</p>
+        <p className="text-slate-400 mb-8">Free for 14 days, no card needed. Templates are on every plan. Automations are on Pro and Team.</p>
         <div className="grid md:grid-cols-3 gap-6">
           {PUBLIC_PLANS.map((plan) => (
             <div key={plan.id} className={`rounded-xl border p-8 flex flex-col ${plan.popular ? 'border-blue-500 bg-slate-700 ring-2 ring-blue-500/20' : 'border-slate-700 bg-slate-800/60'}`}>

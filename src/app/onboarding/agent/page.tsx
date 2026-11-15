@@ -258,7 +258,7 @@ export default function AgentOnboardingPage() {
         >
           {saving ? 'Setting up...' : 'Continue: upload your first contract'}
         </button>
-        <p className="text-xs text-slate-500 mt-3">{fromBrokerage ? 'Free while you are in your brokerage. No card needed.' : 'Your first 30 days are free. No card needed.'}</p>
+        <p className="text-xs text-slate-500 mt-3">{fromBrokerage ? 'Free while you are in your brokerage. No card needed.' : 'Your first 14 days are free. No card needed.'}</p>
       </main>
     </div>
   );

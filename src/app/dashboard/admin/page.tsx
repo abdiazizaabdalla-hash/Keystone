@@ -161,7 +161,7 @@ export default function AdminPage() {
   const handleWorkspaceToggle = async (agent: AgentAccount) => {
     const enable = !agent.workspace;
     const question = enable
-      ? `Give ${agent.email} their own agent workspace?\n\nThey will be able to create their own transactions, checklists, documents and client portals, and they start a 30-day trial. They keep working the deals coordinators added them to.`
+      ? `Give ${agent.email} their own agent workspace?\n\nThey will be able to create their own transactions, checklists, documents and client portals, and they start a 14-day trial. They keep working the deals coordinators added them to.`
       : `Remove the agent workspace from ${agent.email}?\n\nThey go back to a free portal login. They keep access to deals they were added to; their own transactions stay in their account but they can no longer open or change them.`;
     if (!window.confirm(question)) return;
     setActionError(null);

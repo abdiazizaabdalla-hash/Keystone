@@ -638,7 +638,7 @@ function OnboardingContent() {
             <div className="text-center mb-10">
               <h1 className="text-3xl sm:text-4xl font-display font-semibold text-slate-100 mb-3">Choose your plan</h1>
               <p className="text-lg text-slate-400">
-                Starter is free for 30 days. Upgrade to Pro or Team any time from your Account page.
+                Starter is free for 14 days. Upgrade to Pro or Team any time from your Account page.
               </p>
             </div>
 

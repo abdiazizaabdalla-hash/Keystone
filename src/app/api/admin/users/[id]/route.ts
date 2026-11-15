@@ -137,7 +137,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // checklists, documents and client portals, on top of working the deals coordinators
     // added them to. Admin-granted only for now; no billing is involved. Switching it off puts
     // them back to a free collaborator and keeps their access to the deals they were added to.
-    // Granting also starts a trial (default 30 days) unless a longer one is already running.
+    // Granting also starts a trial (default 14 days) unless a longer one is already running.
     if (body?.action === 'set_agent_workspace') {
       if (typeof body.enabled !== 'boolean') {
         return NextResponse.json({ error: 'enabled must be true or false' }, { status: 400 });
@@ -155,7 +155,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (body.enabled) {
         // The workspace shows agent wording (own deals, invoices) rather than coordinator wording.
         changes.account_type = 'agent';
-        const days = Number.isInteger(body.trialDays) && body.trialDays > 0 && body.trialDays <= 365 ? body.trialDays : 30;
+        const days = Number.isInteger(body.trialDays) && body.trialDays > 0 && body.trialDays <= 365 ? body.trialDays : 14;
         const proposed = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
         const existing = trialEndsAt ? new Date(trialEndsAt) : null;
         if (!existing || Number.isNaN(existing.getTime()) || existing < proposed) {

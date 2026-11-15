@@ -113,7 +113,7 @@ export default function Home() {
             </a>
           </div>
           <p className="text-xs text-slate-500 mt-4">
-            Free for 30 days. No credit card required.{' '}
+            Free for 14 days. No credit card required.{' '}
             <a href="#demo" className="text-blue-400 hover:text-blue-300">Watch the video</a>
           </p>
         </div>

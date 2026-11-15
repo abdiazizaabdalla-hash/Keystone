@@ -16,7 +16,11 @@ import { hasBrokerageAccess } from './brokerageAccessMeta';
 // free-forever behavior, permanently — see getTrialStatus below.
 export const TRIAL_ENFORCEMENT_START = new Date('2026-09-23T00:00:00Z');
 
-export const TRIAL_DAYS = 30;
+// New accounts get a 14-day trial. Accounts created before this date are mid-trial
+// on the earlier 30-day clock and keep it, so nobody's trial is cut short.
+export const SHORT_TRIAL_START = new Date('2026-11-14T00:00:00Z');
+export const TRIAL_DAYS = 14;
+export const LEGACY_TRIAL_DAYS = 30;
 
 // Parses a timestamp as UTC. Strings with no timezone designator (e.g.
 // TIMESTAMP WITHOUT TIME ZONE columns, serialized like
@@ -33,7 +37,7 @@ export interface TrialStatus {
   applies: boolean;
   trialEndsAt: Date | null;
   expired: boolean;
-  /** What ends the trial: the 30-day clock. Null when the trial doesn't apply. */
+  /** What ends the trial: the trial clock. Null when the trial doesn't apply. */
   endedBy: 'time' | null;
 }
 
@@ -43,7 +47,7 @@ export interface TrialStatus {
  * (see assertTrialActive below) since Pro/Team and an already-paying
  * Starter account never need this at all.
  *
- * The trial is a flat 30 days from account creation, regardless of any
+ * The trial is a flat 14 days from account creation (30 for accounts created before SHORT_TRIAL_START), regardless of any
  * transaction or invoice activity.
  */
 export async function getTrialStatus(
@@ -53,7 +57,7 @@ export async function getTrialStatus(
 ): Promise<TrialStatus> {
   // Admin override (set from the admin page): an explicit trial end date for
   // testing what happens when a trial ends (or to extend one). It wins over
-  // the 30-day clock and applies even to grandfathered accounts.
+  // the trial clock and applies even to grandfathered accounts.
   const override = appMetadata?.trial_ends_at;
   if (typeof override === 'string' && override) {
     const overrideEnd = new Date(override);
@@ -73,7 +77,8 @@ export async function getTrialStatus(
     return { applies: false, trialEndsAt: null, expired: false, endedBy: null };
   }
 
-  const timeLimit = new Date(createdAt.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  const days = createdAt < SHORT_TRIAL_START ? LEGACY_TRIAL_DAYS : TRIAL_DAYS;
+  const timeLimit = new Date(createdAt.getTime() + days * 24 * 60 * 60 * 1000);
 
   return {
     applies: true,

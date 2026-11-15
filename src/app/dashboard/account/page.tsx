@@ -230,7 +230,7 @@ function AccountContent() {
                   : `${summary.trial.daysLeft} day${summary.trial.daysLeft === 1 ? '' : 's'} left in your free trial`}
               </p>
               <p className="text-sm text-blue-200/80 mb-4">
-                Free for 30 days. Then it&apos;s $19/month.
+                Free for 14 days. Then it&apos;s $19/month.
               </p>
             </>
           )}
