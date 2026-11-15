@@ -224,7 +224,7 @@ export async function loadOversightDeals(agentIds: string[], today: string) {
   if (agentIds.length === 0) return [] as (OversightDeal & { health: DealHealth; nextStep: NextStep | null; tasksTotal: number; tasksDone: number })[];
   const { data, error } = await supabaseServer
     .from('transactions')
-    .select('id, tc_user_id, property_address, file_number, status, purchase_price, acceptance_date, closing_date, updated_at')
+    .select('id, tc_user_id, property_address, file_number, status, purchase_price, acceptance_date, closing_date, updated_at, checklist_template_name')
     .in('tc_user_id', agentIds)
     .order('updated_at', { ascending: false })
     .limit(2000);

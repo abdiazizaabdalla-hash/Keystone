@@ -43,3 +43,30 @@ describe('compareReviewRows', () => {
     expect([...rows].sort(compareReviewRows).map((r) => r.id)).toEqual(['gaps-new', 'gaps-old', 'flagged', 'clean', 'reviewed']);
   });
 });
+
+import { cleanDocumentLists, requiredForDeal, extraListLimit } from '@/lib/fileReview';
+
+describe('required-document lists by deal type', () => {
+  const lists = cleanDocumentLists([
+    { name: ' Cash ', templateNames: ['Cash', 'cash ', ''], documentTypes: ['Purchase Contract', 'Not a type'] },
+    { name: '', templateNames: ['x'], documentTypes: [] },
+  ], 5);
+  it('cleans names, templates and document types, and drops nameless lists', () => {
+    expect(lists).toHaveLength(1);
+    expect(lists[0].name).toBe('Cash');
+    expect(lists[0].templateNames).toEqual(['Cash', 'cash']);
+    expect(lists[0].documentTypes.every((t) => t !== 'Not a type')).toBe(true);
+  });
+  it('limits how many lists are kept', () => {
+    expect(cleanDocumentLists([{ name: 'A' }, { name: 'B' }, { name: 'C' }], 2)).toHaveLength(2);
+  });
+  it('picks the list naming the checklist template, else the default', () => {
+    expect(requiredForDeal('CASH', lists, ['Default doc']).listName).toBe('Cash');
+    expect(requiredForDeal('Condo', lists, ['Default doc'])).toEqual({ required: ['Default doc'], listName: null });
+    expect(requiredForDeal(null, lists, ['Default doc']).required).toEqual(['Default doc']);
+  });
+  it('allows the tier limit minus the default list', () => {
+    expect(extraListLimit(1)).toBe(0);
+    expect(extraListLimit(10)).toBe(9);
+  });
+});

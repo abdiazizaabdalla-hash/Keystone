@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { DOCUMENT_CATEGORIES } from '@/lib/documentTaxonomy';
+import BrokerageDocumentLists from '@/components/BrokerageDocumentLists';
 
 // File review for a brokerage owner (Collaborate → File review): choose which documents every file must contain, then go
 // through closed files (and files about to close), see what is missing, and mark each reviewed or flag it for the agent.
@@ -17,6 +18,7 @@ interface FileRow {
   closed: boolean;
   closingDate: string | null;
   missing: string[];
+  listName?: string | null;
   review: { status: 'reviewed' | 'flagged'; note: string | null; reviewedAt: string } | null;
 }
 interface Data { required: string[]; files: FileRow[]; totals: { listed: number; needsReview: number; flagged: number; reviewed: number } }
@@ -134,6 +136,8 @@ export default function BrokerageFileReview() {
         )}
       </div>
 
+      <BrokerageDocumentLists onSaved={() => { load().catch(() => undefined); }} />
+
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: 'Need review', value: data.totals.needsReview, tone: data.totals.needsReview > 0 ? 'text-amber-300' : '' },
@@ -166,9 +170,9 @@ export default function BrokerageFileReview() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <Link href={`/dashboard/collaborate/deals/${f.id}`} className="text-sm font-semibold text-slate-100 hover:text-blue-300">{f.address ?? 'Untitled deal'}</Link>
-                  <p className="text-xs text-slate-500">{f.agentName} · {f.closed ? 'Closed' : 'Closing'} {date(f.closingDate)}{f.fileNumber ? ` · File ${f.fileNumber}` : ''}</p>
+                  <p className="text-xs text-slate-500">{f.agentName} · {f.closed ? 'Closed' : 'Closing'} {date(f.closingDate)}{f.fileNumber ? ` · File ${f.fileNumber}` : ''}{f.listName ? ` · List: ${f.listName}` : ''}</p>
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {data.required.length > 0 && f.missing.length === 0 && <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">All required documents</span>}
+                    {(data.required.length > 0 || f.listName) && f.missing.length === 0 && <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">All required documents</span>}
                     {f.missing.map((m) => <span key={m} className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">Missing: {m}</span>)}
                     {f.review?.status === 'reviewed' && <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">Reviewed {date(f.review.reviewedAt)}</span>}
                     {f.review?.status === 'flagged' && <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-300 border border-red-500/30">Flagged {date(f.review.reviewedAt)}</span>}

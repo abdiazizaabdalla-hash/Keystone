@@ -204,6 +204,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/transactions': { kind: 'session', methods: ['DELETE', 'GET', 'POST'] },
   '/api/transactions/[id]': { kind: 'session', methods: ['PATCH'] },
   '/api/listings/[id]/archive': { kind: 'session', methods: ['DELETE', 'POST'], why: 'Archives or restores one listing; requireListingAccess limits it to the listing\'s owner or their team, and agents and invited coordinators are refused.' },
+  '/api/oversight/file-review/lists': { kind: 'session', methods: ['GET', 'PUT'], why: 'The brokerage owner\'s named required-document lists; assertBrokerageOwner limits it to the owner of a Team or Brokerage plan.' },
   '/api/transactions/[id]/archive': { kind: 'session', methods: ['DELETE', 'POST'], why: 'Archives or restores one deal; authorizeDeal limits it to the deal\'s owner, their team owner, or a full participant, and free agent logins are refused.' },
   '/api/transactions/[id]/calendar-invite': { kind: 'session', methods: ['POST'] },
   '/api/transactions/[id]/calendar-sync': { kind: 'session', methods: ['GET', 'POST'] },

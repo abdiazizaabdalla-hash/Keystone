@@ -22,6 +22,8 @@ export interface OversightDeal {
   acceptance_date: string | null;
   closing_date: string | null;
   updated_at: string | null;
+  /** The checklist template the deal uses (a deal type for required-document lists). */
+  checklist_template_name?: string | null;
 }
 export interface OversightTask {
   transaction_id: string;

@@ -63,3 +63,47 @@ export function compareReviewRows(a: Parameters<typeof reviewSortKey>[0], b: Par
   const [rb, db] = reviewSortKey(b);
   return ra - rb || db.localeCompare(da);
 }
+
+// ---- Several required-document lists (Brokerage Pro) ----
+
+export const DOCUMENT_LIST_NAME_MAX = 60;
+export const LIST_TEMPLATES_MAX = 30;
+
+/** A named list that applies to files whose checklist template is one of templateNames. The default list is separate. */
+export interface DocumentList {
+  name: string;
+  templateNames: string[];
+  documentTypes: string[];
+}
+
+/** Cleans the lists a person sent: valid document types only, trimmed names, no empty lists, at most `max` lists. */
+export function cleanDocumentLists(input: unknown, max: number): DocumentList[] {
+  if (!Array.isArray(input)) return [];
+  const out: DocumentList[] = [];
+  for (const raw of input) {
+    if (out.length >= max) break;
+    const r = (raw ?? {}) as Record<string, unknown>;
+    const name = typeof r.name === 'string' ? r.name.trim().slice(0, DOCUMENT_LIST_NAME_MAX) : '';
+    if (!name) continue;
+    const templates = Array.isArray(r.templateNames)
+      ? [...new Set(r.templateNames.filter((t): t is string => typeof t === 'string').map((t) => t.trim().slice(0, 80)).filter(Boolean))].slice(0, LIST_TEMPLATES_MAX)
+      : [];
+    out.push({ name, templateNames: templates, documentTypes: cleanRequiredTypes(r.documentTypes) });
+  }
+  return out;
+}
+
+/** The documents a file must contain: the first list naming its checklist template, else the default list. */
+export function requiredForDeal(templateName: string | null | undefined, lists: DocumentList[], fallback: string[]): { required: string[]; listName: string | null } {
+  const key = (templateName ?? '').trim().toLowerCase();
+  if (key) {
+    const hit = lists.find((l) => l.templateNames.some((t) => t.toLowerCase() === key));
+    if (hit) return { required: hit.documentTypes, listName: hit.name };
+  }
+  return { required: fallback, listName: null };
+}
+
+/** How many extra (named) lists a tier may have: its list limit minus the default list. */
+export function extraListLimit(totalLists: number): number {
+  return Math.max(0, totalLists - 1);
+}
