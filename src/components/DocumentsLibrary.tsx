@@ -146,7 +146,18 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
           setTrecError(((await trRes.json().catch(() => ({}))) as { error?: string }).error || 'Could not load the Texas forms');
         }
         if (pRes.ok) setPins((await pRes.json()) as Pin[]);
-        if (fRes.ok) setFolders((await fRes.json()) as CustomFolder[]);
+        if (fRes.ok) {
+          const list = (await fRes.json()) as CustomFolder[];
+          setFolders(list);
+          // One blank folder to start with, named so it is obvious it can be renamed (Rename is inside the folder). Once per browser, so deleting it sticks.
+          try {
+            if (list.length === 0 && !localStorage.getItem('relay-starter-folder')) {
+              localStorage.setItem('relay-starter-folder', '1');
+              const made = await authFetch('/api/templates/folders', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'My folder' }) });
+              if (made.ok && !cancelled) setFolders([(await made.json()) as CustomFolder]);
+            }
+          } catch { /* the folder is a convenience only */ }
+        }
         if (lRes.ok) setLinks((await lRes.json()) as StateLink[]);
         setError('');
       } catch (e) {
@@ -884,7 +895,6 @@ export default function DocumentsLibrary({ reloadKey, showArchived, onEdit, onUp
             {!hasDisclosure && (
               <button type="button" onClick={() => onUpload(null)} className="text-left rounded-2xl border border-dashed border-white/25 hover:border-blue-400 bg-white/[0.02] p-4 transition min-w-0">
                 <span className="block text-slate-100 font-semibold">+ Add a brokerage’s IABS</span>
-                <span className="block text-xs text-slate-400 mt-1">You work with agents from different brokerages. Upload each brokerage’s disclosure (like an Information About Brokerage Services form) once, named for it, e.g. “Acme Realty IABS”. Relay offers the matching one on that agent’s deals.</span>
               </button>
             )}
             {all.length === 0 && (

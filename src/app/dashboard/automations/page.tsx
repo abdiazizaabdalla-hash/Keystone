@@ -8,7 +8,6 @@ import AutomationBuilder, { blankAutomation, type BuilderValue } from '@/compone
 import { summarizeSteps } from '@/components/ApplyAutomations';
 import PresetLibrary from '@/components/PresetLibrary';
 import WorkflowDialog from '@/components/WorkflowDialog';
-import AiDraftDialog from '@/components/AiDraftDialog';
 
 interface Template {
   id: string;
@@ -47,8 +46,6 @@ export default function AutomationsPage() {
   const [tab, setTab] = useState<'mine' | 'library'>('mine');
   const [libError, setLibError] = useState<string | null>(null);
   const [openMine, setOpenMine] = useState<Template | null>(null);
-  const [aiStart, setAiStart] = useState(false);
-  const [drafted, setDrafted] = useState<{ value: BuilderValue; unsupported: string[] } | null>(null);
   const [mineError, setMineError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -179,7 +176,7 @@ export default function AutomationsPage() {
           <h1 className="text-2xl font-bold text-white">Automations</h1>
           <p className="text-sm text-slate-400">Build a workflow once, then apply it to any transaction or listing.</p>
         </div>
-        {!editing && <button type="button" onClick={() => setAiStart(true)} className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-400" data-testid="create-automation">New automation</button>}
+        {!editing && <button type="button" onClick={() => { setBuilderError(null); setEditing({ id: null, value: blankAutomation('transaction') }); }} className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-400" data-testid="create-automation">New automation</button>}
       </header>
       {error && <p role="alert" className="rounded-lg bg-red-500/10 p-3 text-sm text-red-200">{error}</p>}
       {notice && <p role="status" className="rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-200">{notice}</p>}
@@ -234,13 +231,6 @@ export default function AutomationsPage() {
             <PresetLibrary owned={new Set((templates ?? []).map((t) => t.name))} saving={saving} error={libError} onSave={addFromLibrary} onFullEditor={(v) => { setBuilderError(null); setEditing({ id: null, value: v }); window.scrollTo({ top: 0 }); }} />
           )}
         </>
-      )}
-      {aiStart && <AiDraftDialog onClose={() => setAiStart(false)} onManual={() => { setAiStart(false); setBuilderError(null); setEditing({ id: null, value: blankAutomation('transaction') }); }} onDraft={(v, unsupported) => { setAiStart(false); setLibError(null); setDrafted({ value: v, unsupported }); }} />}
-      {drafted && (
-        <WorkflowDialog key="drafted" preset={drafted.value} saving={saving} error={libError} saveLabel="Save automation"
-          banner={<p className="mt-3 rounded-lg bg-violet-500/10 p-3 text-xs text-violet-100">Drafted by AI from your description. Check every step, the timing and each email before you save.{drafted.unsupported.length > 0 && <span className="mt-1 block text-slate-300">Left out because it is not possible yet: {drafted.unsupported.join('; ')}.</span>}</p>}
-          onClose={() => setDrafted(null)} onSave={async (v) => { if (await addFromLibrary(v)) setDrafted(null); }}
-          onFullEditor={(v) => { setDrafted(null); setBuilderError(null); setEditing({ id: null, value: v }); window.scrollTo({ top: 0 }); }} />
       )}
       {openMine && (() => {
         const t = openMine;

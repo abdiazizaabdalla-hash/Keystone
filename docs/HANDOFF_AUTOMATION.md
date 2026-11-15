@@ -235,3 +235,5 @@ SQL (relay-test first, additive): `add-task-documents.sql` (tasks.received_at, r
 - Checklist shows "Document received · needs your review" with Mark reviewed; completing the step clears it.
 - Follow-ups: after the max chases a one-time "no answer" notice; a one-time notice when a waiting step is due within 3 days. Pause/resume = existing per-deal mode and per-copy pause. Interval = existing per-deal follow-up days.
 - NOT built: role-specific follow-up templates, inbound-reply detection (current infra only files replies on the deal), expected-document field per step (matching uses the document type + step name).
+
+> **Removed:** both AI writing features (the "Draft with AI" automation dialog and the email "Write/Rewrite with AI" box) are gone for every user. Automations are built by hand or from Ready-made ones; the two `/api/automation/ai/*` routes and `builder*.ts` no longer exist. The in-deal assistant (`ai.ts`, `aiCore.ts`) is separate and unchanged.

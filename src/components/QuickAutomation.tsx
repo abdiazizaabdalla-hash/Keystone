@@ -3,11 +3,9 @@
 import { useEffect, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import AutomationBuilder, { blankAutomation, type BuilderValue } from '@/components/AutomationBuilder';
-import AiDraftDialog from '@/components/AiDraftDialog';
 import type { Step } from '@/lib/automation/library';
 
-// Create a new automation, or change one, without leaving the deal or listing. A new one can be described in plain English or built
-// by hand, then it is applied right here. An edit changes this file's copy only: the library version and other files are untouched
+// Create a new automation, or change one, without leaving the deal or listing. An edit changes this file's copy only: the library version and other files are untouched
 // unless you tick the box. Steps that already ran are not run again.
 
 export interface EditTarget { id: string; templateId: string | null; name: string; category: 'transaction' | 'listing'; triggerType: string; steps: Step[] }
@@ -17,9 +15,8 @@ const errorOf = async (res: Response, fallback: string) => (await res.json().cat
 
 export default function QuickAutomation({ scope, edit, onClose, onDone }: { scope: Scope; edit?: EditTarget | null; onClose: () => void; onDone: (message: string) => void }) {
   const category = scope.transactionId ? 'transaction' : 'listing';
-  const [stage, setStage] = useState<'ai' | 'builder'>(edit ? 'builder' : 'ai');
+  const stage = 'builder' as const;
   const [initial, setInitial] = useState<BuilderValue>(() => (edit ? { name: edit.name, description: '', category: edit.category, triggerType: edit.triggerType, steps: edit.steps } : blankAutomation(category)));
-  const [unsupported, setUnsupported] = useState<string[]>([]);
   const [alsoLibrary, setAlsoLibrary] = useState(!edit); // new: saved to the library too; edit: this file only
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,10 +27,6 @@ export default function QuickAutomation({ scope, edit, onClose, onDone }: { scop
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [stage, onClose]);
-
-  if (stage === 'ai') {
-    return <AiDraftDialog fixedCategory={category} onClose={onClose} onManual={() => { setInitial(blankAutomation(category)); setStage('builder'); }} onDraft={(v, u) => { setInitial(v); setUnsupported(u); setStage('builder'); }} />;
-  }
 
   const save = async (v: BuilderValue) => {
     setSaving(true);
@@ -78,7 +71,6 @@ export default function QuickAutomation({ scope, edit, onClose, onDone }: { scop
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg px-2 py-1 text-slate-400 hover:bg-white/10 hover:text-white">✕</button>
         </div>
-        {unsupported.length > 0 && <p className="mb-3 rounded-lg bg-amber-500/10 p-2 text-xs text-amber-100">Not possible yet, so left out: {unsupported.join('; ')}.</p>}
         {(!edit || edit.templateId) && (
           <label className="mb-4 flex items-start gap-2 text-sm text-slate-200">
             <input type="checkbox" className="mt-1" checked={alsoLibrary} onChange={(e) => setAlsoLibrary(e.target.checked)} data-testid="quick-library" />

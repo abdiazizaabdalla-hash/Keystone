@@ -247,7 +247,6 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/automation/alerts': { kind: 'session', methods: ['GET', 'POST'], why: 'Banners for a deal or listing the caller owns (anyone else gets 404); acknowledging matches owner_user_id and an automation action.' },
   '/api/automation/progress': { kind: 'session', methods: ['GET'], why: 'Per-step progress of the automations on a deal or listing the caller owns (anyone else gets 404).' },
   '/api/automation/history': { kind: 'session', methods: ['GET'], why: "What the caller's saved automations did; only the caller's own runs." },
-  '/api/automation/ai/draft': { kind: 'session', methods: ['POST'], why: "Drafts an automation from plain English for the caller to review; saves and runs nothing; limited to the catalog and the caller's monthly AI allowance." },
   '/api/cron/automation-tick': { kind: 'cron', methods: ['GET'], why: "Scheduled job; requires CRON_SECRET. Called hourly by a Supabase schedule (Vercel Hobby cannot run hourly) and once a day by Vercel as a fallback." },
   '/api/template-runs': { kind: 'session', methods: ['GET'] },
   '/api/template-runs/outbox': { kind: 'session', methods: ['GET'] },
