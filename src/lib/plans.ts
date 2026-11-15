@@ -161,7 +161,10 @@ export const PLANS: Plan[] = [
       ...PRO_FEATURES,
       'Team board and direct messages',
       'Shared contacts for lenders, title companies and inspectors',
-      'Owner status report across the team (no client details)',
+      'Team desk: each coordinator’s open files, late steps and closings (status only)',
+      'A default checklist for every new transaction and listing on your team',
+      'Team automations: stalled files, closing deadlines, daily digest and monthly report',
+      'Team trends and scheduled team reports, with no client details or prices',
       '3 seats included, $30/month for each extra seat',
     ],
     limits: {

@@ -128,7 +128,7 @@ export default function ForTcsPage() {
       <section id="teams" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Teams</p>
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">TCs who work together, deals that stay private.</h2>
-        <p className="text-slate-400 max-w-3xl mb-8">Team is $89 a month and includes three coordinator seats. Each extra seat is $30 a month. Everyone gets everything in Pro, automations included.</p>
+        <p className="text-slate-400 max-w-3xl mb-8">Team is $89 a month and includes three coordinator seats. Each extra seat is $30 a month. Everyone gets everything in Pro, automations included, and you get a view of the whole team that shows status only.</p>
         <TeamIllustration />
         <ol className="grid md:grid-cols-4 gap-5 mt-8">
           {TEAM_STEPS.map((s, i) => (
@@ -139,7 +139,17 @@ export default function ForTcsPage() {
             </li>
           ))}
         </ol>
-        <p className="text-sm text-slate-500 mt-6 max-w-3xl">Each coordinator keeps their own deals, agents and notes private. Teammates see only what you choose to share, and agents you invite never use a seat.</p>
+        <h3 className="font-semibold text-slate-100 mt-10 mb-3">What the team owner gets</h3>
+        <ul className="grid md:grid-cols-2 gap-x-8 gap-y-3 text-sm text-slate-300 max-w-4xl">
+          {[
+            'A team desk: each coordinator’s open files, late steps and closings this week, and the files that need a word',
+            'A default checklist for listings and transactions, added to every new file for you and your team',
+            'Team automations: stalled files, closing deadlines, a daily digest and a monthly report, each sent once',
+            'Team trends and scheduled team reports: closings by month and coordinator, with no prices or client details',
+          ].map((l) => <li key={l} className="flex items-start gap-2.5"><svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>{l}</li>)}
+        </ul>
+        <p className="text-sm text-slate-500 mt-6 max-w-3xl">Running a brokerage of agents instead? <Link href="/for-brokerages" className="text-blue-400 hover:text-blue-300">See Relay for brokerages →</Link></p>
+        <p className="text-sm text-slate-500 mt-3 max-w-3xl">Each coordinator keeps their own deals, agents and notes private. Teammates see only what you choose to share, and agents you invite never use a seat.</p>
       </section>
 
       <section id="plans" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">

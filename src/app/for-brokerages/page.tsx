@@ -83,12 +83,30 @@ export default function ForBrokeragesPage() {
         <ul className="grid md:grid-cols-2 gap-x-8 gap-y-3 text-sm text-slate-300 mt-8">
           {[
             'Set the required-document list once for the brokerage',
+            'Set required steps once for listings and transactions. Every agent’s new files get them, and you can add them to files already open',
             'Missing documents flagged on each file',
             'Mark each file reviewed, or flag it back to the agent',
             'Your review is your own record: it never changes the agent’s deal',
           ].map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
         </ul>
         <p className="text-sm text-slate-500 mt-6 max-w-3xl">Relay does not decide what is compliant. It gives your authorized staff the facts and a place to record their decision.</p>
+      </section>
+
+      <section id="automations" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <p className={eyebrow}>Automations</p>
+        <h2 className={h2}>Stop chasing. Relay tells the right person once.</h2>
+        <p className="text-slate-400 max-w-3xl mb-8">Switch on the rules that watch every file each morning. The agent hears first, and you hear only if it is still unresolved. These are fixed rules, not AI, and nobody is told twice about the same file.</p>
+        <ul className="grid md:grid-cols-2 gap-x-8 gap-y-3 text-sm text-slate-300">
+          {[
+            'Stalled files, closing deadlines and files missing documents',
+            'A welcome message when an agent joins, and a daily digest of what needs you',
+            'A monthly report of closings, with any closed file that has no commission recorded',
+            'Choose which agents each rule covers, and see exactly who was told what',
+            'On Pro: build your own workflows from a trigger, pick who is told and when it escalates, or start from a template',
+            'On Pro: run history for every workflow, with the active-workflow count and what was flagged this week',
+          ].map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
+        </ul>
+        <p className="text-sm text-slate-500 mt-6 max-w-3xl">Add one more managing account that works like yours, apart from your plan and billing, so a second broker or an operations lead can run this with you.</p>
       </section>
 
       <section id="templates" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">

@@ -21,6 +21,9 @@ const COMPARISON_ROWS: { feature: string; starter: Cell; pro: Cell; team: Cell }
   { feature: 'Admin dashboard', starter: false, pro: true, team: true },
   { feature: 'Team board, direct messages and shared contacts', starter: false, pro: false, team: true },
   { feature: 'Owner status report across the team', starter: false, pro: false, team: true },
+  { feature: 'Team desk: workload, late steps and closings by coordinator', starter: false, pro: false, team: true },
+  { feature: 'Default checklist for every new file on the team', starter: false, pro: false, team: true },
+  { feature: 'Team automations (stalled files, deadlines, daily digest)', starter: false, pro: false, team: true },
   { feature: 'Seats', starter: '1', pro: '1', team: '3 included' },
 ];
 
