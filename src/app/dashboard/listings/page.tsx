@@ -1,5 +1,6 @@
 'use client';
 
+import { useAgentHasPortalAccess } from '@/lib/useAgentPortalAccess';
 import MoneyInput from '@/components/MoneyInput';
 import PhoneInput from '@/components/PhoneInput';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -82,6 +83,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
   const soloAgentId = isAgentAcct && agents.length > 0 ? agents[0].id : null;
   // Whether the listing agent is emailed a portal invite on create (turn off to invite them yourself later).
   const [inviteAgent, setInviteAgent] = useState(false);
+  const [skipPortal, setSkipPortal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'open' | 'all'>('open');
@@ -103,6 +105,8 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
     templateName: 'Standard',
   });
   const [templateNames, setTemplateNames] = useState<string[]>(['Standard']);
+  const agentHasPortal = useAgentHasPortalAccess(form.agentId || null);
+  const giveAccess = agentHasPortal ? !skipPortal : inviteAgent;
   // Starting from an uploaded listing agreement
   const [aiAvailable, setAiAvailable] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -260,7 +264,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
         body: JSON.stringify({
           ...form,
           allowDuplicate,
-          inviteAgent: soloAgentId ? false : inviteAgent,
+          inviteAgent: soloAgentId ? false : giveAccess,
           agentId: soloAgentId ?? (form.agentId || null),
           contacts: found.filter((p) => p.include).map((p) => ({ role: p.role, name: p.name, email: p.email, phone: p.phone })),
         }),
@@ -460,8 +464,17 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
                 if (!picked) return null;
                 return picked.email ? (
                   <label data-tour="listing-invite" className="mt-2 flex items-start gap-2 text-xs text-slate-300 cursor-pointer">
-                    <input type="checkbox" checked={inviteAgent} onChange={(e) => setInviteAgent(e.target.checked)} className="mt-0.5 accent-blue-500" />
-                    <span>Give {picked.name} ({picked.email}) portal access to this listing and email them. Leave unticked to decide later (Agents page → Portal access).</span>
+                    {agentHasPortal ? (
+                      <>
+                        <input type="checkbox" checked={skipPortal} onChange={(e) => setSkipPortal(e.target.checked)} className="mt-0.5 accent-blue-500" />
+                        <span>{picked.name} already has portal access, so this listing is added to it. Tick to keep this listing off their portal.</span>
+                      </>
+                    ) : (
+                      <>
+                        <input type="checkbox" checked={inviteAgent} onChange={(e) => setInviteAgent(e.target.checked)} className="mt-0.5 accent-blue-500" />
+                        <span>Give {picked.name} ({picked.email}) portal access to this listing and email them. Leave unticked to decide later (Agents page → Portal access).</span>
+                      </>
+                    )}
                   </label>
                 ) : (
                   <p data-tour="listing-invite" className="mt-2 text-xs text-slate-500">

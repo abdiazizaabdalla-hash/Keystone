@@ -1,5 +1,6 @@
 'use client';
 
+import { useAgentHasPortalAccess } from '@/lib/useAgentPortalAccess';
 import { useState, useEffect } from 'react';
 import { suggestFileNumber } from '@/lib/fileNumber';
 import { useRouter } from 'next/navigation';
@@ -53,6 +54,9 @@ export default function NewTransactionPage() {
   const [submitting, setSubmitting] = useState(false);
   // Whether the agent is emailed a portal invite when the deal is created (turn off to invite them yourself later).
   const [inviteAgent, setInviteAgent] = useState(false);
+  const [skipPortal, setSkipPortal] = useState(false);
+  const agentHasPortal = useAgentHasPortalAccess(formData.agentId || null);
+  const giveAccess = agentHasPortal ? !skipPortal : inviteAgent;
   // The team/brokerage's default checklist template (set from
   // /dashboard/collaborate's settings panel, Brokerage-only to change but
   // read here for any team member) -- pre-selected below once both this
@@ -337,7 +341,7 @@ export default function NewTransactionPage() {
           acceptanceDate: formData.acceptanceDate || null,
           closingDate: formData.closingDate || null,
           templateId: formData.templateId,
-          inviteAgent: soloAgentId ? false : inviteAgent,
+          inviteAgent: soloAgentId ? false : giveAccess,
           allowDuplicate,
         }),
       });
@@ -664,10 +668,19 @@ export default function NewTransactionPage() {
               if (!picked) return null;
               return picked.email ? (
                 <label data-tour="tx-invite" className="mt-3 flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
-                  <input type="checkbox" checked={inviteAgent} onChange={(e) => setInviteAgent(e.target.checked)} className="mt-1 accent-blue-500" />
-                  <span>
-                    Give {picked.name} ({picked.email}) free portal access to this deal and email them. Leave unticked to decide later (Agents page → Portal access).
-                  </span>
+                  {agentHasPortal ? (
+                    <>
+                      <input type="checkbox" checked={skipPortal} onChange={(e) => setSkipPortal(e.target.checked)} className="mt-1 accent-blue-500" />
+                      <span>{picked.name} already has portal access, so this deal is added to it. Tick to keep this deal off their portal.</span>
+                    </>
+                  ) : (
+                    <>
+                      <input type="checkbox" checked={inviteAgent} onChange={(e) => setInviteAgent(e.target.checked)} className="mt-1 accent-blue-500" />
+                      <span>
+                        Give {picked.name} ({picked.email}) free portal access to this deal and email them. Leave unticked to decide later (Agents page → Portal access).
+                      </span>
+                    </>
+                  )}
                 </label>
               ) : (
                 <p data-tour="tx-invite" className="mt-3 text-xs text-slate-500">

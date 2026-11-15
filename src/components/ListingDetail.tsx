@@ -1,5 +1,6 @@
 'use client';
 
+import { useAgentHasPortalAccess } from '@/lib/useAgentPortalAccess';
 import MoneyInput from '@/components/MoneyInput';
 import InvoiceConfirmModal from '@/components/InvoiceConfirmModal';
 import PhoneInput from '@/components/PhoneInput';
@@ -304,6 +305,9 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
   const [readError, setReadError] = useState('');
   const [offerDocs, setOfferDocs] = useState<{ id: string; file_name: string; doc_kind: string }[]>([]);
   const [inviteAgent, setInviteAgent] = useState(false);
+  const [skipPortal, setSkipPortal] = useState(false);
+  const agentHasPortal = useAgentHasPortalAccess(det.agentId || null);
+  const giveAccess = agentHasPortal ? !skipPortal : inviteAgent;
   const [dealCreated, setDealCreated] = useState<{ txId: string; notes: string[] } | null>(null);
 
   const handleAuth = useCallback(
@@ -857,7 +861,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
         closingDate: conv.closingDate || null,
         fromListingId: id,
         // The agent portal invite is sent with the deal (the server skips it when the agent has no email).
-        inviteAgent: !agentHidden && inviteAgent && Boolean(agents.find((a) => a.id === listing.agent_id)?.email),
+        inviteAgent: !agentHidden && giveAccess && Boolean(agents.find((a) => a.id === listing.agent_id)?.email),
       });
       txId = tx.id as string;
       const notes: string[] = [];
@@ -2674,13 +2678,13 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
                 <label className={`flex items-start gap-2 text-sm ${agentRow?.email ? 'text-slate-300 cursor-pointer' : 'text-slate-500'}`}>
                   <input
                     type="checkbox"
-                    checked={inviteAgent && Boolean(agentRow?.email)}
+                    checked={agentHasPortal ? skipPortal : inviteAgent && Boolean(agentRow?.email)}
                     disabled={!agentRow?.email}
-                    onChange={(e) => setInviteAgent(e.target.checked)}
+                    onChange={(e) => (agentHasPortal ? setSkipPortal(e.target.checked) : setInviteAgent(e.target.checked))}
                     className="mt-0.5 accent-blue-500"
                   />
                   <span>
-                    {agentRow?.email ? `Put this deal on ${agentRow.name}'s agent portal and email them (${agentRow.email})` : 'The agent has no email on file, so no agent portal invite can be sent. Add one on the Agents page.'}
+                    {agentRow?.email ? (agentHasPortal ? `${agentRow.name} already has portal access, so this deal is added to it. Tick to keep it off their portal.` : `Put this deal on ${agentRow.name}'s agent portal and email them (${agentRow.email})`) : 'The agent has no email on file, so no agent portal invite can be sent. Add one on the Agents page.'}
                   </span>
                 </label>
               );
