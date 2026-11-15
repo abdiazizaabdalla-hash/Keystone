@@ -2,11 +2,11 @@ import Link from 'next/link';
 import PublicMobileMenu from '@/components/PublicMobileMenu';
 
 export const PUBLIC_NAV = [
+  { href: '/for-tcs', label: 'For Coordinators' },
+  { href: '/for-agents', label: 'For Agents' },
+  { href: '/for-brokerages', label: 'For Brokerages' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/faq', label: 'FAQ' },
-  { href: '/for-agents', label: 'For Agents' },
-  { href: '/for-tcs', label: 'For TCs' },
-  { href: '/for-teams', label: 'For Teams' },
 ] as const;
 
 export default function PublicHeader({ active }: { active?: string }) {

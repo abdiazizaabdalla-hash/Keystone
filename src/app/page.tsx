@@ -57,8 +57,8 @@ export default function Home() {
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
-            <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
+            <Link href="/for-tcs" className="hover:text-slate-100 transition">For Coordinators</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-100 transition">For Brokerages</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
@@ -96,7 +96,7 @@ export default function Home() {
             <span className="italic text-blue-400">without the coordination headache.</span>
           </h1>
           <p className="text-lg text-slate-400 mb-8 max-w-lg">
-            Manage every transaction from contract to closing.
+            One place for every deal, for the coordinators who run them, the agents who close them and the brokerages that oversee them.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <Link
@@ -175,6 +175,23 @@ export default function Home() {
       </section>
 
       {/* Product video: click to play, nothing loads until then */}
+      <section className="max-w-6xl mx-auto px-6 pb-16">
+        <div className="grid md:grid-cols-3 gap-5">
+          {[
+            { href: '/for-tcs', who: 'Coordinators', line: 'Run every file from contract to closing. Teams welcome.', price: 'From $19 a month' },
+            { href: '/for-agents', who: 'Agents', line: 'Your own workspace for your deals, from your brokerage or on your own.', price: '$0 with your brokerage, or $19' },
+            { href: '/for-brokerages', who: 'Brokerages', line: 'See every agent and every file, with required documents checked.', price: 'From $99 a month' },
+          ].map((c) => (
+            <Link key={c.href} href={c.href} className="block bg-slate-800/60 border border-slate-700 hover:border-blue-400/60 rounded-xl p-6 transition">
+              <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-2">For</p>
+              <h2 className="font-display text-2xl font-semibold text-slate-100 mb-2">{c.who}</h2>
+              <p className="text-sm text-slate-400 mb-4">{c.line}</p>
+              <p className="text-sm font-semibold text-slate-200">{c.price} <span className="text-blue-400">→</span></p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       <section id="demo" className="max-w-4xl mx-auto px-6 pb-16 scroll-mt-4">
         <div className="text-center mb-8">
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">See it in a minute</p>
@@ -299,37 +316,6 @@ export default function Home() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <ShotRow
-          name="portal-illustration.jpg"
-          alt="Illustration of the agent portal for one deal, with documents by category and a message thread with the transaction coordinator"
-          caption="Illustration of the workflow."
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Agent portal</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Give your agents their own view of the deal.</h2>
-          <p className="text-slate-400 mb-5">Agents get a free portal where they can follow and check off steps on their deals and listings, upload documents, message you, and see their invoice. They can also share a live progress page with their own buyers and sellers, so clients stop feeling out of the loop. They only see what you&apos;ve shared with them.</p>
-          <ul className="space-y-2.5 text-sm text-slate-300">
-            {[
-              "See their deals and listings in one dashboard",
-              "Follow the checklist, check off their steps, and see key dates, offers and showings",
-              "Upload documents and add contacts",
-              "General messages with you, plus messages on each deal",
-              "New: share a live client progress page with the documents and steps they choose",
-              "A heads-up when a listing becomes an active deal, with no extra step",
-              "Dates on their own calendar, connected once with Google Calendar",
-              "Access arrives automatically when you add them to a deal or listing",
-              "View their invoices",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-          <p className="text-sm font-semibold text-slate-200 mt-5">Free for every agent on every deal their coordinator adds them to.</p>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
           name="invoice-illustration.jpg"
           alt="Illustration of the Relay Invoices page with total invoiced, outstanding and received amounts and a list of paid, unpaid and overdue invoices"
           caption="Illustration of the workflow."
@@ -444,11 +430,10 @@ export default function Home() {
             { title: "CSV deal import", body: 'Bring in your open deals from a spreadsheet, with a preview and no duplicates.' },
             { title: "Contacts", body: 'An address book that builds itself from your deals, with CSV import, export and a newsletter list.' },
             { title: "Document organization", body: 'Documents sorted into categories and linked to checklist steps.' },
-            { title: "Agent portal and messaging", body: 'Agents get a free login, set up automatically when you add them to a deal or listing, with general and per-deal messages.' },
-            { title: "Client portal (new)", body: 'Agents invite their buyers and sellers to a live progress page: the steps and documents they choose, a dates timeline, and a shared board plus private threads.' },
             { title: "Email-to-transaction", body: 'Forward or CC an email to the deal and it lands on the transaction, attachments included.' },
             { title: "Daily digest", body: 'A morning email with overdue and due-today steps.' },
-            { title: "Custom templates", body: 'Build checklists for different deal types, for deals and for listings. Pro and Team.' },
+            { title: "Templates", body: 'Ready-made document and email templates on every plan, and your own checklists for each deal type on Pro and Team.' },
+            { title: "Automations", body: 'Reminders and follow-ups that run for you, from a library of ready-made ones. Pro and Team.' },
             { title: "Compliance report", body: 'Export a timestamped PDF of a deal’s documents, messages and checklist.' },
             { title: "Team workspaces", body: 'Share a workspace and team messaging with other coordinators. Everyone’s deals, agents and contacts stay private to their own login.' },
             { title: "Payment tracking", body: 'See which invoices are paid and which are still outstanding.' },
@@ -470,7 +455,7 @@ export default function Home() {
         <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
           <div>
             <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple plans for coordinators and teams.</h2>
-            <p className="text-slate-400">Try Relay free and see how it fits into your workflow. Upgrade when you need more agents, custom templates, or team features.</p>
+            <p className="text-slate-400">Try Relay free and see how it fits into your workflow. Upgrade when you need more agents, automations or team features.</p>
           </div>
           <Link href="/pricing" className="text-blue-400 hover:text-blue-300 font-medium text-sm">
             Full pricing details →
@@ -489,7 +474,7 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-slate-500 mt-6">The agent portal is free for agents on every plan.</p>
+        <p className="text-xs text-slate-500 mt-6">Agent and brokerage plans are on the <Link href="/pricing" className="text-blue-400 hover:text-blue-300">pricing page</Link>.</p>
       </section>
 
       {/* CTA */}
@@ -524,8 +509,8 @@ export default function Home() {
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
-            <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
+            <Link href="/for-tcs" className="hover:text-slate-200 transition">For Coordinators</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-200 transition">For Brokerages</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>

@@ -99,6 +99,7 @@ const PRO_FEATURES = [
   'Calendar link for Google, Outlook and Apple, plus CSV deal import',
   'QuickBooks invoice import and export',
   'Custom checklist templates with required-step flags',
+  'Automations: reminders and follow-ups that run for you',
   'Admin dashboard access',
   'Priority support',
 ];
@@ -122,6 +123,7 @@ export const PLANS: Plan[] = [
       'AI contract intake -- upload the contract, Relay fills in the deal',
       'Listings, offers and showings, converted to a deal in one click',
       'Auto-built checklist with configurable per-step deadlines',
+      'Document and email templates, ready-made and your own',
       'Document uploads per checklist step',
       'Calendar link for Google, Outlook and Apple, plus CSV deal import',
       'Manual invoicing, with QuickBooks import and export',

@@ -1,0 +1,173 @@
+// Original line illustrations for the public site (inline SVG, no images to load). They use only the site's slate/blue palette.
+// Each one has a plain-language label for screen readers. Nothing here depicts a real person, brand or product screen.
+
+const frame = 'w-full h-auto rounded-2xl border border-slate-700 bg-slate-800/50';
+const box = 'fill-slate-800 stroke-slate-600';
+const hot = 'fill-blue-500/15 stroke-blue-400';
+const t1 = 'fill-slate-100 text-[13px] font-semibold';
+const t2 = 'fill-slate-400 text-[11px]';
+const line = 'stroke-slate-500';
+
+/** A deal moving left to right: contract in, checklist and dates, closing out. */
+export function DealFlowIllustration() {
+  const steps = [
+    { x: 24, title: 'Contract', sub: 'Upload it, Relay fills in the deal' },
+    { x: 218, title: 'Checklist', sub: 'Steps, due dates, templates' },
+    { x: 412, title: 'Key dates', sub: 'Reminders before each deadline' },
+    { x: 606, title: 'Closing', sub: 'Invoice, archive, done' },
+  ];
+  return (
+    <svg viewBox="0 0 800 170" className={frame} role="img" aria-label="A deal moves from contract to checklist to key dates to closing">
+      {steps.map((s, i) => (
+        <g key={s.title}>
+          <rect x={s.x} y="36" width="170" height="92" rx="14" className={i === 1 ? hot : box} strokeWidth="1.5" />
+          <circle cx={s.x + 24} cy="62" r="11" className="fill-blue-500" />
+          <text x={s.x + 24} y="66" textAnchor="middle" className="fill-white text-[12px] font-semibold">{i + 1}</text>
+          <text x={s.x + 44} y="67" className={t1}>{s.title}</text>
+          <text x={s.x + 16} y="98" className={t2}>{s.sub.length > 26 ? s.sub.slice(0, s.sub.lastIndexOf(' ', 26)) : s.sub}</text>
+          <text x={s.x + 16} y="113" className={t2}>{s.sub.length > 26 ? s.sub.slice(s.sub.lastIndexOf(' ', 26) + 1) : ''}</text>
+          {i < steps.length - 1 && <path d={`M${s.x + 174} 82 h16`} className={line} strokeWidth="2" markerEnd="url(#arrow)" />}
+        </g>
+      ))}
+      <defs>
+        <marker id="arrow" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" className="fill-slate-500" /></marker>
+      </defs>
+    </svg>
+  );
+}
+
+/** The coordinator in the middle: agents get a login for the deals they are given, clients get a progress page. */
+export function PortalIllustration() {
+  return (
+    <svg viewBox="0 0 800 330" className={frame} role="img" aria-label="A coordinator gives an agent a free login to chosen deals, and the agent shares a progress page with their client">
+      <rect x="290" y="120" width="220" height="92" rx="16" className={hot} strokeWidth="1.5" />
+      <text x="400" y="154" textAnchor="middle" className={t1}>Coordinator</text>
+      <text x="400" y="174" textAnchor="middle" className={t2}>Runs the deals in Relay</text>
+      <text x="400" y="192" textAnchor="middle" className={t2}>Chooses what each agent sees</text>
+
+      <rect x="30" y="40" width="210" height="110" rx="16" className={box} strokeWidth="1.5" />
+      <text x="135" y="72" textAnchor="middle" className={t1}>Agent</text>
+      <text x="135" y="94" textAnchor="middle" className={t2}>Free login. Only the deals and</text>
+      <text x="135" y="110" textAnchor="middle" className={t2}>listings the coordinator picks</text>
+      <rect x="62" y="122" width="146" height="18" rx="9" className="fill-emerald-500/15 stroke-emerald-400" />
+      <text x="135" y="135" textAnchor="middle" className="fill-emerald-300 text-[10px] font-semibold">FREE FOR THE AGENT</text>
+
+      <rect x="560" y="40" width="210" height="110" rx="16" className={box} strokeWidth="1.5" />
+      <text x="665" y="72" textAnchor="middle" className={t1}>Client</text>
+      <text x="665" y="94" textAnchor="middle" className={t2}>A live progress page the</text>
+      <text x="665" y="110" textAnchor="middle" className={t2}>agent chooses to share</text>
+
+      <path d="M262 150 C 280 170, 290 170, 300 168" className="stroke-blue-400" strokeWidth="2" fill="none" strokeDasharray="5 4" />
+      <path d="M538 168 C 550 170, 560 170, 580 150" className="stroke-blue-400" strokeWidth="2" fill="none" strokeDasharray="5 4" />
+      <text x="248" y="196" textAnchor="middle" className={t2}>Messages, documents, dates</text>
+      <text x="552" y="196" textAnchor="middle" className={t2}>Progress and shared files</text>
+
+      <rect x="60" y="238" width="680" height="64" rx="14" className="fill-slate-900/70 stroke-slate-700" />
+      <text x="400" y="264" textAnchor="middle" className={t1}>Access is a choice, deal by deal</text>
+      <text x="400" y="284" textAnchor="middle" className={t2}>Tick the deals and listings an agent can see. Untick to take one away. Nothing else is shared.</text>
+    </svg>
+  );
+}
+
+/** Three coordinators on a team: shared board and contacts on top, each person's own deals underneath and private. */
+export function TeamIllustration() {
+  const seats = [40, 290, 540];
+  return (
+    <svg viewBox="0 0 800 300" className={frame} role="img" aria-label="A team of three coordinators shares a message board and contacts, while each person keeps their own deals private">
+      <rect x="40" y="24" width="720" height="70" rx="14" className={hot} strokeWidth="1.5" />
+      <text x="400" y="54" textAnchor="middle" className={t1}>Shared by the team</text>
+      <text x="400" y="76" textAnchor="middle" className={t2}>Message board, direct messages, lenders, title companies and inspectors</text>
+      {seats.map((x, i) => (
+        <g key={x}>
+          <path d={`M${x + 110} 94 V130`} className={line} strokeWidth="1.5" strokeDasharray="4 4" />
+          <rect x={x} y="130" width="220" height="104" rx="14" className={box} strokeWidth="1.5" />
+          <circle cx={x + 26} cy="158" r="12" className="fill-blue-500" />
+          <text x={x + 26} y="162" textAnchor="middle" className="fill-white text-[11px] font-semibold">{['A', 'B', 'C'][i]}</text>
+          <text x={x + 48} y="162" className={t1}>Coordinator {['A', 'B', 'C'][i]}</text>
+          <text x={x + 18} y="192" className={t2}>Own deals, agents, notes</text>
+          <rect x={x + 18} y="204" width="76" height="18" rx="9" className="fill-slate-900 stroke-slate-600" />
+          <text x={x + 56} y="217" textAnchor="middle" className="fill-slate-300 text-[10px] font-semibold">PRIVATE</text>
+        </g>
+      ))}
+      <text x="400" y="272" textAnchor="middle" className={t2}>Owner status report: every open file, progress and overdue dates, with no client details</text>
+    </svg>
+  );
+}
+
+/** Two ways an agent gets their own workspace. */
+export function AgentPathsIllustration() {
+  return (
+    <svg viewBox="0 0 800 260" className={frame} role="img" aria-label="An agent gets their own Relay workspace either from their brokerage at no cost to them, or by subscribing to Agent Pro themselves">
+      <rect x="30" y="30" width="350" height="190" rx="16" className={box} strokeWidth="1.5" />
+      <text x="205" y="64" textAnchor="middle" className={t1}>Provided by your brokerage</text>
+      <text x="205" y="88" textAnchor="middle" className={t2}>Your brokerage invites you</text>
+      <text x="205" y="108" textAnchor="middle" className={t2}>Run your own deals and listings</text>
+      <text x="205" y="128" textAnchor="middle" className={t2}>Read a contract and fill in the deal</text>
+      <rect x="95" y="160" width="220" height="30" rx="15" className="fill-emerald-500/15 stroke-emerald-400" />
+      <text x="205" y="180" textAnchor="middle" className="fill-emerald-300 text-[12px] font-semibold">No cost to you</text>
+      <rect x="420" y="30" width="350" height="190" rx="16" className={hot} strokeWidth="1.5" />
+      <text x="595" y="64" textAnchor="middle" className={t1}>Agent Pro, on your own</text>
+      <text x="595" y="88" textAnchor="middle" className={t2}>Everything above, plus</text>
+      <text x="595" y="108" textAnchor="middle" className={t2}>your own templates and emails</text>
+      <text x="595" y="128" textAnchor="middle" className={t2}>and automations that run for you</text>
+      <rect x="485" y="160" width="220" height="30" rx="15" className="fill-blue-500/20 stroke-blue-400" />
+      <text x="595" y="180" textAnchor="middle" className="fill-blue-200 text-[12px] font-semibold">$19 a month</text>
+    </svg>
+  );
+}
+
+/** A brokerage owner's view across a roster of agents. */
+export function BrokerageDashboardIllustration() {
+  const rows = [
+    { n: 'Agent 1', open: 6, late: 0, w: 120 },
+    { n: 'Agent 2', open: 4, late: 1, w: 80 },
+    { n: 'Agent 3', open: 9, late: 2, w: 170 },
+    { n: 'Agent 4', open: 3, late: 0, w: 60 },
+  ];
+  return (
+    <svg viewBox="0 0 800 330" className={frame} role="img" aria-label="A brokerage dashboard showing each agent's open deals, late items and closings this week, with a missing-documents flag">
+      <rect x="30" y="24" width="740" height="282" rx="16" className="fill-slate-900/70 stroke-slate-700" />
+      <text x="54" y="56" className={t1}>Brokerage dashboard</text>
+      {[['Agents', '18'], ['Open deals', '46'], ['Closing this week', '5'], ['Missing documents', '7']].map(([k, v], i) => (
+        <g key={k}>
+          <rect x={54 + i * 178} y="70" width="164" height="58" rx="10" className={i === 3 ? 'fill-amber-500/10 stroke-amber-400' : box} strokeWidth="1.2" />
+          <text x={68 + i * 178} y="94" className={t2}>{k}</text>
+          <text x={68 + i * 178} y="118" className="fill-slate-100 text-[20px] font-semibold">{v}</text>
+        </g>
+      ))}
+      {rows.map((r, i) => (
+        <g key={r.n}>
+          <text x="58" y={166 + i * 34} className="fill-slate-300 text-[12px]">{r.n}</text>
+          <rect x="150" y={154 + i * 34} width="300" height="12" rx="6" className="fill-slate-800" />
+          <rect x="150" y={154 + i * 34} width={r.w} height="12" rx="6" className="fill-blue-500/70" />
+          <text x="470" y={165 + i * 34} className={t2}>{r.open} open</text>
+          <text x="560" y={165 + i * 34} className={r.late ? 'fill-amber-300 text-[11px]' : t2}>{r.late ? `${r.late} late` : 'on track'}</text>
+          {r.late > 0 && <rect x="650" y={152 + i * 34} width="92" height="18" rx="9" className="fill-amber-500/10 stroke-amber-400" />}
+          {r.late > 0 && <text x="696" y={165 + i * 34} textAnchor="middle" className="fill-amber-200 text-[10px] font-semibold">REVIEW</text>}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+/** Who pays for what, in one picture: three audiences, three plain labels. */
+export function WhoPaysIllustration() {
+  const cols = [
+    { x: 30, h: 'Coordinators', s: 'Choose a plan', p: 'From $19 a month', hot: false },
+    { x: 290, h: 'Agents', s: 'Your brokerage provides it,', s2: 'or choose Agent Pro', p: '$0 or $19 a month', hot: true },
+    { x: 550, h: 'Brokerages', s: 'One plan covers your agents', p: 'From $99 a month', hot: false },
+  ];
+  return (
+    <svg viewBox="0 0 800 190" className={frame} role="img" aria-label="Coordinators pay from 19 dollars a month, agents get Relay from their brokerage or pay 19 dollars for Agent Pro, brokerages pay from 99 dollars a month">
+      {cols.map((c) => (
+        <g key={c.h}>
+          <rect x={c.x} y="24" width="220" height="142" rx="16" className={c.hot ? hot : box} strokeWidth="1.5" />
+          <text x={c.x + 110} y="58" textAnchor="middle" className={t1}>{c.h}</text>
+          <text x={c.x + 110} y="84" textAnchor="middle" className={t2}>{c.s}</text>
+          <text x={c.x + 110} y="100" textAnchor="middle" className={t2}>{c.s2 ?? ''}</text>
+          <text x={c.x + 110} y="138" textAnchor="middle" className="fill-blue-300 text-[15px] font-semibold">{c.p}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
