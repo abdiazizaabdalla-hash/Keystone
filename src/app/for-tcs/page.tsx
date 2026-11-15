@@ -89,12 +89,10 @@ export default function ForTcsPage() {
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Agent portal</p>
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Give your agents a free login, deal by deal.</h2>
         <p className="text-slate-400 max-w-3xl mb-8">Agents you work with can follow their deals without calling you. It costs you and them nothing, and you decide exactly what each agent can see.</p>
-        <div className="grid lg:grid-cols-[3fr_2fr] gap-8 items-center">
-          <PortalIllustration />
-          <ul className="space-y-3 text-sm text-slate-300">
-            {PORTAL_POINTS.map((p) => <li key={p} className="flex items-start gap-2.5">{check}{p}</li>)}
-          </ul>
-        </div>
+        <PortalIllustration />
+        <ul className="grid md:grid-cols-2 gap-x-8 gap-y-3 text-sm text-slate-300 mt-8">
+          {PORTAL_POINTS.map((p) => <li key={p} className="flex items-start gap-2.5">{check}{p}</li>)}
+        </ul>
         <p className="text-sm text-slate-500 mt-6 max-w-3xl">
           This login is for agents who work with you. It lets them work on the deals you give them. An agent who wants a workspace of their own for their own deals can
           see <Link href="/for-agents" className="text-blue-400 hover:text-blue-300">Relay for agents</Link>.
