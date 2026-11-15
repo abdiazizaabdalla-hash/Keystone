@@ -164,3 +164,65 @@ export function WhoPaysIllustration() {
     </svg>
   );
 }
+
+/** File review: the documents every file must have, what is missing, and the owner's own review record. */
+export function FileReviewIllustration() {
+  const docs = [
+    { n: 'Executed contract', ok: true },
+    { n: 'Agency disclosure (IABS)', ok: true },
+    { n: 'Earnest money receipt', ok: true },
+    { n: 'Inspection report', ok: false },
+    { n: 'Final closing statement', ok: false },
+  ];
+  return (
+    <svg viewBox="0 0 800 330" className={frame} role="img" aria-label="A closed file checked against the brokerage's required documents, with two missing items flagged for the agent and a reviewed or flagged record kept by the broker">
+      <rect x="30" y="24" width="470" height="282" rx="16" className="fill-slate-900/70 stroke-slate-700" />
+      <text x="54" y="54" className={t1}>Closed file: required documents</text>
+      {docs.map((d, i) => (
+        <g key={d.n}>
+          <rect x="54" y={72 + i * 44} width="422" height="34" rx="10" className={d.ok ? box : 'fill-amber-500/10 stroke-amber-400'} strokeWidth="1.2" />
+          <circle cx="78" cy={89 + i * 44} r="9" className={d.ok ? 'fill-emerald-500/20 stroke-emerald-400' : 'fill-amber-500/20 stroke-amber-400'} />
+          <text x="78" y={93 + i * 44} textAnchor="middle" className={d.ok ? 'fill-emerald-300 text-[11px] font-semibold' : 'fill-amber-200 text-[11px] font-semibold'}>{d.ok ? '✓' : '!'}</text>
+          <text x="98" y={94 + i * 44} className="fill-slate-200 text-[12px]">{d.n}</text>
+          <text x="458" y={94 + i * 44} textAnchor="end" className={d.ok ? t2 : 'fill-amber-200 text-[11px] font-semibold'}>{d.ok ? 'on file' : 'MISSING'}</text>
+        </g>
+      ))}
+      <rect x="530" y="24" width="240" height="282" rx="16" className={hot} strokeWidth="1.5" />
+      <text x="650" y="54" textAnchor="middle" className={t1}>Your review</text>
+      <text x="650" y="78" textAnchor="middle" className={t2}>Your own record.</text>
+      <text x="650" y="94" textAnchor="middle" className={t2}>The agent’s deal never changes.</text>
+      <rect x="560" y="120" width="180" height="40" rx="12" className="fill-emerald-500/15 stroke-emerald-400" />
+      <text x="650" y="145" textAnchor="middle" className="fill-emerald-200 text-[12px] font-semibold">Mark reviewed</text>
+      <rect x="560" y="174" width="180" height="40" rx="12" className="fill-amber-500/15 stroke-amber-400" />
+      <text x="650" y="199" textAnchor="middle" className="fill-amber-200 text-[12px] font-semibold">Flag for the agent</text>
+      <text x="650" y="248" textAnchor="middle" className={t2}>Choose the documents</text>
+      <text x="650" y="264" textAnchor="middle" className={t2}>every file must contain.</text>
+    </svg>
+  );
+}
+
+/** The broker at the center: roster, shared templates, board, private messages, commissions. */
+export function BrokerageHubIllustration() {
+  const spokes = [
+    { x: 40, y: 30, h: 'Agent roster', s: 'Invite, see activity' },
+    { x: 560, y: 30, h: 'Shared templates', s: 'Your IABS, pinned for all' },
+    { x: 40, y: 200, h: 'Team board', s: 'Announcements, questions' },
+    { x: 560, y: 200, h: 'Commissions', s: 'Statements and a ledger' },
+  ];
+  return (
+    <svg viewBox="0 0 800 330" className={frame} role="img" aria-label="A broker at the center connected to the agent roster, shared templates, the team board and private messages, and commission statements">
+      {spokes.map((p) => (
+        <g key={p.h}>
+          <path d={`M${p.x < 400 ? p.x + 200 : p.x} ${p.y + 50} L${p.x < 400 ? 300 : 500} ${p.y < 100 ? 140 : 190}`} className={line} strokeWidth="1.5" strokeDasharray="5 4" />
+          <rect x={p.x} y={p.y} width="200" height="100" rx="14" className={box} strokeWidth="1.5" />
+          <text x={p.x + 100} y={p.y + 42} textAnchor="middle" className={t1}>{p.h}</text>
+          <text x={p.x + 100} y={p.y + 64} textAnchor="middle" className={t2}>{p.s}</text>
+        </g>
+      ))}
+      <rect x="300" y="115" width="200" height="100" rx="16" className={hot} strokeWidth="1.5" />
+      <text x="400" y="158" textAnchor="middle" className={t1}>You, the broker</text>
+      <text x="400" y="180" textAnchor="middle" className={t2}>One view of the brokerage</text>
+      <text x="400" y="198" textAnchor="middle" className={t2}>+ private messages</text>
+    </svg>
+  );
+}
