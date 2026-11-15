@@ -9,7 +9,7 @@ import { WhoPaysIllustration } from '@/components/marketing/Illustrations';
 type Cell = boolean | string;
 const COMPARISON_ROWS: { feature: string; starter: Cell; pro: Cell; team: Cell }[] = [
   { feature: 'Unlimited transactions', starter: true, pro: true, team: true },
-  { feature: 'AI contract intake (auto-fills the deal)', starter: true, pro: true, team: true },
+  { feature: 'AI contract intake (creates the transaction or listing for you)', starter: true, pro: true, team: true },
   { feature: 'Checklists with configurable due dates', starter: true, pro: true, team: true },
   { feature: 'Document and email templates', starter: true, pro: true, team: true },
   { feature: 'Listings, offers and showings', starter: true, pro: true, team: true },
@@ -50,7 +50,7 @@ export default function PricingPage() {
       <section className="max-w-5xl mx-auto px-6 pb-16"><WhoPaysIllustration /></section>
 
       <section id="coordinators" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Coordinators and teams</h2>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">TCs and teams</h2>
         <p className="text-slate-400 mb-8">Free for 30 days, no card needed. Templates are on every plan. Automations are on Pro and Team.</p>
         <div className="grid md:grid-cols-3 gap-6">
           {PUBLIC_PLANS.map((plan) => (

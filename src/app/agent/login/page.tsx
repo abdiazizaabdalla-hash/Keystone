@@ -113,7 +113,7 @@ function AgentLoginContent() {
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-100 transition">For Coordinators</Link>
+            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-brokerages" className="hover:text-slate-100 transition">For Brokerages</Link>
             <Link
               href="/auth"

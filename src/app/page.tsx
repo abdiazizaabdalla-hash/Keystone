@@ -57,7 +57,7 @@ export default function Home() {
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-100 transition">For Coordinators</Link>
+            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-brokerages" className="hover:text-slate-100 transition">For Brokerages</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
@@ -91,9 +91,9 @@ export default function Home() {
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
             Contract to closing
           </div>
-          <h1 className="font-display text-5xl sm:text-5xl font-semibold text-slate-100 leading-[1.08] mb-6">
+          <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight text-slate-100 leading-[1.1] mb-6">
             Transaction coordination,<br />
-            <span className="italic text-blue-400">without the coordination headache.</span>
+            <span className="text-blue-400">without the coordination headache.</span>
           </h1>
           <p className="text-lg text-slate-400 mb-8 max-w-lg">
             One place for every deal, for the coordinators who run them, the agents who close them and the brokerages that oversee them.
@@ -178,7 +178,7 @@ export default function Home() {
       <section className="max-w-6xl mx-auto px-6 pb-16">
         <div className="grid md:grid-cols-3 gap-5">
           {[
-            { href: '/for-tcs', who: 'Coordinators', line: 'Run every file from contract to closing. Teams welcome.', price: 'From $19 a month' },
+            { href: '/for-tcs', who: 'TCs', line: 'Run every file from contract to closing. Teams welcome.', price: 'From $19 a month' },
             { href: '/for-agents', who: 'Agents', line: 'Your own workspace for your deals, from your brokerage or on your own.', price: '$0 with your brokerage, or $19' },
             { href: '/for-brokerages', who: 'Brokerages', line: 'See every agent and every file, with required documents checked.', price: 'From $99 a month' },
           ].map((c) => (
@@ -208,7 +208,7 @@ export default function Home() {
         >
           <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">AI contract intake</p>
           <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Start with the contract, not a blank transaction.</h2>
-          <p className="text-slate-400 mb-5">Upload the signed purchase contract and Relay pulls the key details into the new transaction. Check the information, make any changes, and create the deal.</p>
+          <p className="text-slate-400 mb-5">Upload a purchase contract or a listing agreement and AI fills out and creates the transaction or listing for you. Check the information, make any changes, and save. Templates and automations then handle the routine emails and reminders.</p>
           <ul className="space-y-2.5 text-sm text-slate-300">
             {[
               "Property address and purchase price",
@@ -423,7 +423,7 @@ export default function Home() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { title: "Listings to deals", body: 'Track a listing, its offers and showings, then convert it to a transaction in one click.' },
-            { title: "AI contract intake", body: 'Upload the contract and Relay fills in the deal, including the key dates.' },
+            { title: "AI contract intake", body: 'Upload the contract and AI fills out and creates the transaction or listing for you, including the key dates.' },
             { title: "Critical dates", body: 'Dates are read from the contract, shown on your dashboard, and sent to agents as reminders.' },
             { title: "Built-in e-signatures", body: 'Send a document for signature from the transaction or listing. No separate DocuSign account.' },
             { title: "Calendar links", body: 'Connect Google Calendar and dates update within seconds. Outlook and Apple use your private Relay link.' },
@@ -454,7 +454,7 @@ export default function Home() {
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
         <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
           <div>
-            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple plans for coordinators and teams.</h2>
+            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple plans for TCs and teams.</h2>
             <p className="text-slate-400">Try Relay free and see how it fits into your workflow. Upgrade when you need more agents, automations or team features.</p>
           </div>
           <Link href="/pricing" className="text-blue-400 hover:text-blue-300 font-medium text-sm">
@@ -509,7 +509,7 @@ export default function Home() {
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-200 transition">For Coordinators</Link>
+            <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
             <Link href="/for-brokerages" className="hover:text-slate-200 transition">For Brokerages</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>

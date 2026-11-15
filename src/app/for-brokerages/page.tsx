@@ -5,25 +5,10 @@ import DemoRequestButton from '@/components/DemoRequestButton';
 import { BROKERAGE_TIERS, PILOT } from '@/lib/marketingPricing';
 import { BrokerageDashboardIllustration, FileReviewIllustration, BrokerageHubIllustration } from '@/components/marketing/Illustrations';
 
-const BEFORE = [
-  'Asking agents for a status by text and email, deal by deal',
-  'Finding the missing disclosure or receipt after the file has closed',
-  'Commission splits tracked in a spreadsheet and by memory',
-  'Every agent keeping their own checklist, or none at all',
-  'Announcements and forms lost in a group chat',
-];
-const AFTER = [
-  'One dashboard: open deals, late items and closings this week for every agent',
-  'Required documents checked on every file, with missing ones flagged',
-  'Commission statements agreed by both sides, with a ledger and an export',
-  'Every agent working from a checklist with due dates, on their own deals',
-  'A team board, private messages and your forms pinned for everyone',
-];
-
 const AGENT_GETS: { title: string; body: string }[] = [
-  { title: 'Contract in, deal out', body: 'Upload the contract and Relay fills in the address, price, parties and key dates.' },
-  { title: 'A checklist with due dates', body: 'Every step dated from the contract, with a ready-to-send email on each one.' },
-  { title: 'Listings, offers, showings', body: 'Track a listing and convert it to a deal in one click.' },
+  { title: 'Contract in, deal out', body: 'Upload the contract and AI fills out and creates the transaction or listing for you, with the address, price, parties and key dates.' },
+  { title: 'Checklists, templates and automations', body: 'Every step dated from the contract, with a ready-to-send template on each one and automations that send the reminders for you.' },
+  { title: 'Listings, apart from transactions', body: 'Listings have their own page, templates and automations. Convert one to a transaction in one click.' },
   { title: 'A page for the client', body: 'A live progress page for the buyer or seller, with only what the agent chooses to share.' },
   { title: 'Your brokerage’s templates', body: 'The forms you share show up pinned in their template list and in every deal.' },
   { title: 'Contacts and follow-ups', body: 'Each agent keeps their own contacts and follow-ups, kept apart from everyone else’s.' },
@@ -72,19 +57,6 @@ export default function ForBrokeragesPage() {
         <p className="text-xs text-slate-500 mt-5">{PILOT}</p>
       </section>
 
-      <section className="max-w-5xl mx-auto px-6 pb-16">
-        <div className="grid md:grid-cols-2 gap-5">
-          <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-7">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-4">How it usually goes</p>
-            <ul className="space-y-3 text-sm text-slate-400">{BEFORE.map((l) => <li key={l} className="flex items-start gap-2.5">{cross}{l}</li>)}</ul>
-          </div>
-          <div className="bg-slate-800/60 border border-blue-500/40 ring-2 ring-blue-500/10 rounded-2xl p-7">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-300 mb-4">With Relay</p>
-            <ul className="space-y-3 text-sm text-slate-200">{AFTER.map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}</ul>
-          </div>
-        </div>
-      </section>
-
       <section id="oversight" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <p className={eyebrow}>Oversight</p>
         <h2 className={h2}>Know where every file stands, without asking.</h2>
@@ -115,6 +87,24 @@ export default function ForBrokeragesPage() {
           ].map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
         </ul>
         <p className="text-sm text-slate-500 mt-6 max-w-3xl">Relay does not decide what is compliant. It gives your authorized staff the facts and a place to record their decision.</p>
+      </section>
+
+      <section id="commissions" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <p className={eyebrow}>Invoices and commissions</p>
+        <h2 className={h2}>Invoices, commission math and statements, in one place.</h2>
+        <p className="text-slate-400 max-w-3xl mb-8">Generate invoices, calculate each agent’s commission from the splits, caps and deductions you set, and hand out statements that carry your logo. Add your logo once in Settings and it appears on every invoice and statement PDF.</p>
+        <ul className="grid md:grid-cols-2 gap-x-8 gap-y-3 text-sm text-slate-300">
+          {[
+            'Generate invoices for each deal',
+            'Commission calculated from your splits, caps and deductions',
+            'Commission statements as PDFs, with your brokerage logo',
+            'A commission ledger you can export to CSV or QuickBooks bills',
+          ].map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
+        </ul>
+        <div className="mt-6 rounded-xl border border-slate-700 bg-slate-800/60 p-5 max-w-3xl">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Next to add</p>
+          <p className="flex items-start gap-2.5 text-sm text-slate-300">{soon}Pay commissions through Relay. Connect your Stripe account and pay agents from the statement, with nothing else needed.</p>
+        </div>
       </section>
 
       <section id="team" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">

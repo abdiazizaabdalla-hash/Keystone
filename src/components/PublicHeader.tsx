@@ -2,7 +2,7 @@ import Link from 'next/link';
 import PublicMobileMenu from '@/components/PublicMobileMenu';
 
 export const PUBLIC_NAV = [
-  { href: '/for-tcs', label: 'For Coordinators' },
+  { href: '/for-tcs', label: 'For TCs' },
   { href: '/for-agents', label: 'For Agents' },
   { href: '/for-brokerages', label: 'For Brokerages' },
   { href: '/pricing', label: 'Pricing' },

@@ -6,10 +6,11 @@ import { AGENT_PRO } from '@/lib/marketingPricing';
 import { AgentPathsIllustration } from '@/components/marketing/Illustrations';
 
 const WORKFLOW: { title: string; body: string }[] = [
-  { title: 'Upload the contract', body: 'Relay reads it and fills in the address, price, parties and key dates. You check and save.' },
-  { title: 'Follow every step', body: 'A checklist with due dates and a ready-to-send email on each step, so nothing waits on memory.' },
+  { title: 'Upload the contract', body: 'AI reads it and fills out and creates the transaction or listing for you, with the address, price, parties and key dates. You check and save.' },
+  { title: 'Follow every step', body: 'A checklist with due dates and a ready-to-send template on each step. Switch on automations and Relay sends the reminders and follow-ups for you.' },
   { title: 'Keep clients informed', body: 'Share a live progress page with your buyer or seller, with only the documents and steps you choose.' },
-  { title: 'Close and invoice', body: 'Track your listings, offers and showings, then see your invoices alongside the deal.' },
+  { title: 'Listings, separate from transactions', body: 'Listings have their own page for offers and showings, with their own templates and automations. Convert one to a transaction in one click.' },
+  { title: 'Close and invoice', body: 'See your invoices alongside the deal.' },
 ];
 
 const check = <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>;

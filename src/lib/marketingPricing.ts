@@ -7,7 +7,7 @@ export const AGENT_PRO = {
   period: '/month',
   includedByBrokerage: [
     'Run your own deals and listings in one place',
-    'Read a contract and fill in the deal for you',
+    'AI reads a contract and fills out and creates the transaction or listing for you',
     'Follow-ups, contacts and invoices',
     'Use your brokerage’s templates and Relay’s standard forms',
     'Your brokerage can see your deals, so nothing is chased by hand',
@@ -49,6 +49,7 @@ export const BROKERAGE_TIERS = {
       'Configurable, deal-level reports',
       'Trends and comparisons across agents and time',
       'Scoped roles for administrators (up to five extra)',
+      'Pay commissions through Relay with your connected Stripe account',
     ],
   },
   extraAgent: '$6',

@@ -6,7 +6,7 @@ export default function PublicFooter() {
       <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
         <p className="text-sm text-slate-500">© {new Date().getFullYear()} Relay TC</p>
         <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-slate-400">
-          <Link href="/for-tcs" className="hover:text-slate-200 transition">For Coordinators</Link>
+          <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
           <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
           <Link href="/for-brokerages" className="hover:text-slate-200 transition">For Brokerages</Link>
           <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>

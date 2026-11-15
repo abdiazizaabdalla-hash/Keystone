@@ -18,8 +18,8 @@ const FAQS: { category: string; q: string; a: string }[] = [
   },
   {
     category: 'Getting started',
-    q: 'Can Relay fill in a new transaction from the contract itself?',
-    a: 'Yes. Upload the signed purchase contract when creating a transaction and Relay reads it: property address, purchase price, acceptance and closing dates, buyers, sellers, the lender, and the title/escrow contact all come back pre-filled, and matching parties get added to the transaction as contacts automatically. Everything lands in an editable form first, so you review and adjust before it’s actually saved. Available on every plan, including Starter.',
+    q: 'Can Relay fill out a new transaction or listing from the contract itself?',
+    a: 'Yes. Upload the signed purchase contract when creating a transaction, or the listing agreement when creating a listing, and AI reads it and fills out and creates it for you: property address, purchase price, acceptance and closing dates, buyers, sellers, the lender, and the title/escrow contact all come back pre-filled, and matching parties get added to the transaction as contacts automatically. Everything lands in an editable form first, so you review and adjust before it’s actually saved. Available on every plan, including Starter.',
   },
   {
     category: 'Getting started',
@@ -102,53 +102,53 @@ const FAQS: { category: string; q: string; a: string }[] = [
   },
   // Agent portal
   {
-    category: 'Agent logins (for coordinators)',
+    category: 'Agent logins (for TCs)',
     q: 'Do the agents I work with need their own Relay account?',
     a: 'Not to be billed — you create an agent profile with their fee structure and contact details for invoicing, and that never requires a login. But you can separately invite an agent to a specific transaction for free, which gives them their own portal login scoped to just that deal. These are two different things that happen to share the word “agent”: an agent profile is a billing contact, while an invited agent is an actual login with access to one transaction.',
   },
   {
-    category: 'Agent logins (for coordinators)',
+    category: 'Agent logins (for TCs)',
     q: 'How do I give an agent access?',
     a: 'Just add the agent to a transaction or listing with their email. If they do not have a login yet, Relay sends them an email to set up their account, and if they already do, they get access straight away with no extra step. Each transaction and listing also shows whether the agent can see it in their portal, so you always know. New agents need no password the first time and choose one on their very first login. Their sign-in links work for 30 minutes and can be opened more than once, so a mail app that previews the link will not break it; you can always ask for a new one.',
   },
   {
-    category: 'Agent logins (for coordinators)',
+    category: 'Agent logins (for TCs)',
     q: 'Can one agent work with multiple TCs?',
     a: 'Yes. An agent’s portal login is their own — if several different TCs invite the same agent to their own deals, that agent sees every one of them grouped by TC in a single dashboard.',
   },
   {
-    category: 'Agent logins (for coordinators)',
+    category: 'Agent logins (for TCs)',
     q: 'What can agents see and change?',
     a: 'On a deal, an invited agent can see the checklist, dates, and status, check off steps, move a step’s due date and note who it is waiting on, upload documents and mark them signed or unsigned, add a new contact, and message you with file attachments. They can also share a live progress page with their own clients (see the Client portal questions below). On a listing you share with them, they can view the key dates, checklist, offers, showings, price history, documents and contacts, and add their own contacts. Your private notes are never shared. They cannot add, remove or rename checklist steps, delete a document, or send or void a signature request.',
   },
   {
-    category: 'Agent logins (for coordinators)',
+    category: 'Agent logins (for TCs)',
     q: 'Can agents access other clients’ transactions?',
     a: 'No. An agent only ever sees the specific transactions and listings you’ve shared with them — never your other clients, your invoices, or your billing.',
   },
   {
-    category: 'Agent logins (for coordinators)',
+    category: 'Agent logins (for TCs)',
     q: 'Can agents sign documents through Relay?',
     a: 'Agents can mark a document as signed or unsigned, the same toggle you have. Actually sending a document out for signature — or canceling a pending request — stays with the TC.',
   },
   // Client portal
   {
-    category: 'Client pages (for coordinators)',
+    category: 'Client pages (for TCs)',
     q: 'What is the client portal?',
     a: 'A live progress page for an agent’s buyer or seller. Clients often feel out of the loop between an accepted contract and closing day; the page shows where the deal stands, the checklist steps and documents the agent chooses to share, and the important dates ahead, so they stop texting for updates.',
   },
   {
-    category: 'Client pages (for coordinators)',
+    category: 'Client pages (for TCs)',
     q: 'Who invites clients, and what do they see?',
     a: 'The agent does, from their agent portal: add a client by name and email (or pick one of the deal’s contacts) and they get an email with their page. The agent ticks which checklist steps and documents that client can see, and can share new documents automatically. Nothing is shared until the agent chooses it. Your internal notes, invoices and other deals are never part of it.',
   },
   {
-    category: 'Client pages (for coordinators)',
+    category: 'Client pages (for TCs)',
     q: 'Can clients message us?',
     a: 'Yes. Each client has a shared board that the client, the agent and the TC can all read, plus a private thread with the agent and a private thread with the TC. The agent never sees the TC’s private thread and the TC never sees the agent’s, and your TC-to-agent messages are separate from all of it. Everyone is notified by email and in the in-app bell.',
   },
   {
-    category: 'Client pages (for coordinators)',
+    category: 'Client pages (for TCs)',
     q: 'Does the client portal cost extra?',
     a: 'No. It is included on every plan and with every free agent login. A TC can also see and turn off any client link on a deal from the External Access card.',
   },
@@ -271,7 +271,7 @@ export default function FAQPage() {
             <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
             <Link href="/faq" className="text-slate-100">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-100 transition">For Coordinators</Link>
+            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
             <Link href="/for-brokerages" className="hover:text-slate-100 transition">For Brokerages</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
@@ -363,7 +363,7 @@ export default function FAQPage() {
             <Link href="/" className="hover:text-slate-200 transition">Home</Link>
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-200 transition">For Coordinators</Link>
+            <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
             <Link href="/for-brokerages" className="hover:text-slate-200 transition">For Brokerages</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>

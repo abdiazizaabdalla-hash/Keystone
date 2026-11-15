@@ -93,7 +93,7 @@ export interface Plan {
 const PRO_FEATURES = [
   'Unlimited transactions',
   'Unlimited agent profiles',
-  'AI contract intake -- upload the contract, Relay fills in the deal',
+  'AI contract intake -- upload the contract and AI creates the transaction or listing for you',
   'Listings, offers and showings, converted to a deal in one click',
   'Document uploads per checklist step',
   'Calendar link for Google, Outlook and Apple, plus CSV deal import',
@@ -120,7 +120,7 @@ export const PLANS: Plan[] = [
       'Then $19/month',
       'Unlimited transactions',
       'Up to 3 agent profiles',
-      'AI contract intake -- upload the contract, Relay fills in the deal',
+      'AI contract intake -- upload the contract and AI creates the transaction or listing for you',
       'Listings, offers and showings, converted to a deal in one click',
       'Auto-built checklist with configurable per-step deadlines',
       'Document and email templates, ready-made and your own',
