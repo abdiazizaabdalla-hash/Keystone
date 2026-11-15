@@ -14,6 +14,7 @@ import { isTeamPlan } from '@/lib/plans';
 import { isFeatureOnClient } from '@/lib/features';
 import { savePersona } from '@/lib/persona';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
 import { useBrokerageAdminAccess } from '@/lib/useBrokerageAdminAccess';
 
 // Collapsed sidebar is icon-only -- narrow enough to stay useful on small
@@ -422,6 +423,7 @@ export default function DashboardLayout({
   // While we are still finding out who owns a team plan, hide it for team-plan users rather than flash it.
   const brokerOwner = useBrokerageOwner();
   const brokerageAdmin = useBrokerageAdminAccess();
+  const brokerOperator = useBrokerageOperator();
   const showAgentsNav = !isAgentAccount && brokerOwner !== true && !(brokerOwner === null && isFeatureOnClient('brokerage') && isTeamPlan(plan));
   // Agents in a brokerage use the same Collaborate hub as their broker (no separate Brokerage page).
   const agentCollaborate = isFeatureOnClient('brokerage') && isAgentAccount && hasWorkspace;
@@ -437,7 +439,7 @@ export default function DashboardLayout({
   const baseNav: { href: string; label: string; icon: string }[] = PRIMARY_NAV.filter((i) => {
     if (i.href === '/dashboard/invoices') return !(isAgentAccount && !hasWorkspace);
     // A broker's Automations are the brokerage's own rules, so they do not depend on the agent automation feature.
-    if (i.href === '/dashboard/automations' && brokerOwner === true) return true;
+    if (i.href === '/dashboard/automations' && brokerOperator === true) return true;
     if (i.href === '/dashboard/automations') return isFeatureOnClient('automation') && automationAllowed && !(isAgentAccount && !hasWorkspace);
     return true;
   });
@@ -734,7 +736,7 @@ export default function DashboardLayout({
         {children}
       <ToastHost />
       </div>
-      {isFeatureOnClient('automation') && automationAllowed && brokerOwner !== true && !(isAgentAccount && !hasWorkspace) && <ApprovalPopup />}
+      {isFeatureOnClient('automation') && automationAllowed && brokerOperator !== true && !(isAgentAccount && !hasWorkspace) && <ApprovalPopup />}
       {guideKind && <FirstRunGuide key={`${guideKind}-${guideRestartKey}`} kind={guideKind} restartKey={guideRestartKey} onFinished={handleGuideFinished} onHintSeen={markHintSeen} />}
       {hintsEligible && <PageHint seen={seenHints} suspended={guideKind !== null || tutorialMenuOpen} onSeen={markHintSeen} />}
       {tutorialMenuOpen && (

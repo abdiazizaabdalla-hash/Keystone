@@ -218,3 +218,86 @@ export function monthlyText(monthLabel: string, r: { closed: number; volume: num
   else out.push('Every recent closing has a commission recorded.');
   return { subject: `${monthLabel} closing report`, paragraphs: out };
 }
+
+// ---- Workflows a broker builds (or adds from the template library) ----
+
+export const WORKFLOW_TRIGGERS = ['quiet', 'closing', 'late_steps', 'missing_docs', 'new_deal', 'closed'] as const;
+export type WorkflowTrigger = (typeof WORKFLOW_TRIGGERS)[number];
+export const OWNER_MODES = ['escalate', 'now', 'never'] as const;
+export type OwnerMode = (typeof OWNER_MODES)[number];
+export const MAX_WORKFLOWS = 20;
+export const WORKFLOW_NAME_MAX = 80;
+
+export interface TriggerDef { id: WorkflowTrigger; label: string; /** Sentence the number completes, or null when the trigger has no number. */ amountLabel: string | null; unit?: string; min: number; max: number; default: number; agentWording: string }
+
+export const TRIGGERS: TriggerDef[] = [
+  { id: 'quiet', label: 'A deal has had no activity', amountLabel: 'for at least', unit: 'days', min: 2, max: 60, default: 5, agentWording: 'These deals have had no activity for a while.' },
+  { id: 'closing', label: 'A closing is coming up', amountLabel: 'within', unit: 'days', min: 1, max: 60, default: 7, agentWording: 'These deals close soon.' },
+  { id: 'late_steps', label: 'A deal has overdue steps', amountLabel: 'more than', unit: 'steps overdue', min: 0, max: 30, default: 2, agentWording: 'These deals have steps past their due date.' },
+  { id: 'missing_docs', label: 'A file is missing a required document', amountLabel: null, min: 0, max: 0, default: 0, agentWording: 'These files are missing documents your brokerage requires.' },
+  { id: 'new_deal', label: 'A new deal was opened', amountLabel: 'in the last', unit: 'days', min: 1, max: 14, default: 1, agentWording: 'These deals were just opened.' },
+  { id: 'closed', label: 'A deal closed', amountLabel: 'in the last', unit: 'days', min: 1, max: 30, default: 1, agentWording: 'These deals closed.' },
+];
+export const triggerOf = (id: WorkflowTrigger) => TRIGGERS.find((t) => t.id === id) as TriggerDef;
+
+export interface WorkflowInput { name: string; trigger: WorkflowTrigger; amount: number; notifyAgent: boolean; notifyOwner: OwnerMode; escalateDays: number; agentIds: string[]; dealTypes: string[]; enabled: boolean }
+
+/** A workflow from a request, cleaned: a name, a known trigger, numbers in range. Returns an error message when it can not be used. */
+export function cleanWorkflow(input: unknown, validAgents: Set<string>): { ok: true; value: WorkflowInput } | { ok: false; error: string } {
+  const b = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const name = typeof b.name === 'string' ? b.name.trim().slice(0, WORKFLOW_NAME_MAX) : '';
+  if (!name) return { ok: false, error: 'Give the workflow a name.' };
+  if (!(WORKFLOW_TRIGGERS as readonly string[]).includes(String(b.trigger))) return { ok: false, error: 'Choose what starts it.' };
+  const t = triggerOf(b.trigger as WorkflowTrigger);
+  const n = Number(b.amount);
+  const amount = t.amountLabel ? Math.min(t.max, Math.max(t.min, Number.isFinite(n) ? Math.round(n) : t.default)) : 0;
+  const notifyOwner: OwnerMode = (OWNER_MODES as readonly string[]).includes(String(b.notifyOwner)) ? (b.notifyOwner as OwnerMode) : 'escalate';
+  const notifyAgent = b.notifyAgent !== false;
+  if (!notifyAgent && notifyOwner === 'never') return { ok: false, error: 'Choose someone to tell: the agent, you, or both.' };
+  const e = Number(b.escalateDays);
+  const strings = (v: unknown, max: number) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 120))].slice(0, max) : []);
+  return {
+    ok: true,
+    value: {
+      name, trigger: t.id, amount, notifyAgent, notifyOwner,
+      escalateDays: Math.min(30, Math.max(1, Number.isFinite(e) ? Math.round(e) : 2)),
+      agentIds: strings(b.agentIds, 200).filter((id) => validAgents.has(id)),
+      dealTypes: strings(b.dealTypes, 30),
+      enabled: b.enabled !== false,
+    },
+  };
+}
+
+/** One sentence describing a workflow, for lists: "No activity for at least 5 days · tell the agent, then you after 2 days". */
+export function describeWorkflow(w: Pick<WorkflowInput, 'trigger' | 'amount' | 'notifyAgent' | 'notifyOwner' | 'escalateDays'>): string {
+  const t = triggerOf(w.trigger);
+  const when = `${t.label}${t.amountLabel ? ` ${t.amountLabel} ${w.amount} ${t.unit}` : ''}`;
+  const who = [w.notifyAgent ? 'the agent' : null, w.notifyOwner === 'now' ? 'you now' : w.notifyOwner === 'escalate' ? (w.notifyAgent ? `you after ${w.escalateDays} more day${w.escalateDays === 1 ? '' : 's'} if unresolved` : 'you') : null].filter(Boolean).join(', then ');
+  return `${when} → tell ${who}`;
+}
+
+/** The flags for a custom workflow's trigger, for the deals already limited to its agents and deal types. */
+export function workflowFlags(trigger: WorkflowTrigger, amount: number, deals: DealLite[], today: string, missingByDeal: Map<string, string[]>, closedDay: (d: DealLite) => string): Flag[] {
+  const place_ = (d: DealLite) => d.property_address || 'A deal';
+  if (trigger === 'quiet') return stalledFlags(deals, today, amount);
+  if (trigger === 'closing') return closingFlags(deals, today, amount);
+  if (trigger === 'missing_docs') return documentFlags(deals, missingByDeal);
+  if (trigger === 'late_steps') return deals.filter((d) => open(d) && d.health.overdueTasks > amount).map((d) => ({ key: `${d.id}:late:${d.health.overdueTasks}`, agentId: d.tc_user_id, dealId: d.id, address: place_(d), reason: `${d.health.overdueTasks} step${d.health.overdueTasks === 1 ? '' : 's'} overdue` }));
+  const since = addDays(today, -amount);
+  if (trigger === 'new_deal') return deals.filter((d) => d.acceptance_date && d.acceptance_date.slice(0, 10) >= since && d.acceptance_date.slice(0, 10) <= today).map((d) => ({ key: `${d.id}:new`, agentId: d.tc_user_id, dealId: d.id, address: place_(d), reason: 'Opened recently' }));
+  return deals.filter((d) => !open(d) && closedDay(d) >= since && closedDay(d) <= today).map((d) => ({ key: `${d.id}:closed`, agentId: d.tc_user_id, dealId: d.id, address: place_(d), reason: `Closed ${closedDay(d)}` }));
+}
+
+export function workflowAgentText(name: string, trigger: WorkflowTrigger, flags: Flag[]): { subject: string; paragraphs: string[] } {
+  return { subject: `${name}: ${plural(flags.length, 'file')}`, paragraphs: [triggerOf(trigger).agentWording, lines(flags)] };
+}
+
+/** Workflows a broker can add in one click from the library. */
+export const WORKFLOW_PRESETS: (Omit<WorkflowInput, 'agentIds' | 'dealTypes' | 'enabled'> & { blurb: string })[] = [
+  { name: 'Deal quiet for 10 days', blurb: 'A longer watch for deals that stop moving.', trigger: 'quiet', amount: 10, notifyAgent: true, notifyOwner: 'escalate', escalateDays: 3 },
+  { name: 'Final check 3 days before closing', blurb: 'A last nudge to the agent and you as closing nears.', trigger: 'closing', amount: 3, notifyAgent: true, notifyOwner: 'now', escalateDays: 1 },
+  { name: 'Deal falling behind', blurb: 'More than 2 overdue steps on one deal.', trigger: 'late_steps', amount: 2, notifyAgent: true, notifyOwner: 'escalate', escalateDays: 2 },
+  { name: 'Tell me about every new deal', blurb: 'You hear when an agent opens a deal.', trigger: 'new_deal', amount: 1, notifyAgent: false, notifyOwner: 'now', escalateDays: 1 },
+  { name: 'Tell me when a deal closes', blurb: 'A short note for each closing.', trigger: 'closed', amount: 1, notifyAgent: false, notifyOwner: 'now', escalateDays: 1 },
+  { name: 'Required documents still missing', blurb: 'Agent first, then you if it drags on.', trigger: 'missing_docs', amount: 0, notifyAgent: true, notifyOwner: 'escalate', escalateDays: 3 },
+];

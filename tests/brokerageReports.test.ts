@@ -47,8 +47,8 @@ describe('brokerage administrators', () => {
   it('gives Basic one full administrator and Pro five scoped ones', () => {
     expect(adminLimit('basic')).toBe(1);
     expect(adminLimit('pro')).toBe(5);
-    expect(allowedRoles('basic')).toEqual(['manager']);
-    expect(allowedRoles('pro')).toEqual(['viewer', 'reviewer', 'manager']);
+    expect(allowedRoles('basic')).toEqual(['manager', 'managing']);
+    expect(allowedRoles('pro')).toEqual(['viewer', 'reviewer', 'manager', 'managing']);
   });
   it('limits what each role can do', () => {
     expect(scopesFor('viewer')).toEqual(['view']);

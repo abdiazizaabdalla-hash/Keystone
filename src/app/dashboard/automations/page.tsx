@@ -10,7 +10,7 @@ import PresetLibrary from '@/components/PresetLibrary';
 import type { Preset } from '@/lib/automation/presets';
 import WorkflowDialog from '@/components/WorkflowDialog';
 import BrokerageAutomations from '@/components/BrokerageAutomations';
-import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
 
 interface Template {
   id: string;
@@ -273,7 +273,7 @@ function AgentAutomationsPage() {
 
 // A brokerage owner gets the brokerage's own automations (watching the office); the agent library of deal-task automations is not shown to them.
 export default function AutomationsPage() {
-  const owner = useBrokerageOwner();
+  const owner = useBrokerageOperator();
   if (owner === null) return <p className="p-8 text-sm text-slate-400">Loading…</p>;
   return owner ? <BrokerageAutomations /> : <AgentAutomationsPage />;
 }

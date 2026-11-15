@@ -59,3 +59,48 @@ describe('wording', () => {
     expect(monthlyText('October 2026', { closed: 2, volume: 900000, withoutCommission: [] }).paragraphs).toEqual(['October 2026: 2 deals closed, $900,000 in sales volume.', 'Every recent closing has a commission recorded.']);
   });
 });
+
+import { cleanWorkflow, describeWorkflow, workflowFlags, WORKFLOW_PRESETS } from '@/lib/brokerageAutomationRules';
+import { allowedRoles, roleAllows } from '@/lib/brokerageAdmins';
+
+describe('custom workflows', () => {
+  const agents = new Set(['a1', 'a2']);
+  it('needs a name and someone to tell', () => {
+    expect(cleanWorkflow({ trigger: 'quiet' }, agents)).toEqual({ ok: false, error: 'Give the workflow a name.' });
+    expect(cleanWorkflow({ name: 'x', trigger: 'nope' }, agents).ok).toBe(false);
+    expect(cleanWorkflow({ name: 'x', trigger: 'quiet', notifyAgent: false, notifyOwner: 'never' }, agents)).toEqual({ ok: false, error: 'Choose someone to tell: the agent, you, or both.' });
+  });
+  it('keeps numbers in range and only this brokerage’s agents', () => {
+    const r = cleanWorkflow({ name: ' Quiet ', trigger: 'quiet', amount: 999, escalateDays: 0, agentIds: ['a1', 'stranger'], dealTypes: ['Cash', 'Cash'] }, agents);
+    expect(r.ok && r.value).toMatchObject({ name: 'Quiet', amount: 60, escalateDays: 1, agentIds: ['a1'], dealTypes: ['Cash'], enabled: true, notifyOwner: 'escalate' });
+  });
+  it('ignores the number for a trigger that has none', () => {
+    const r = cleanWorkflow({ name: 'Docs', trigger: 'missing_docs', amount: 9 }, agents);
+    expect(r.ok && r.value.amount).toBe(0);
+  });
+  it('describes a workflow in one line', () => {
+    expect(describeWorkflow({ trigger: 'quiet', amount: 5, notifyAgent: true, notifyOwner: 'escalate', escalateDays: 2 })).toBe('A deal has had no activity for at least 5 days → tell the agent, then you after 2 more days if unresolved');
+  });
+  it('finds new and closed deals by recency, and deals with too many late steps', () => {
+    const deals = [deal({ acceptance_date: '2026-11-14' }), deal({ id: 'old', acceptance_date: '2026-10-01' }), deal({ id: 'c', status: 'Closed', closing_date: '2026-11-14' }), deal({ id: 'l', health: { overdueTasks: 3 } })];
+    const day = (d: DealLite) => String(d.closing_date).slice(0, 10);
+    expect(workflowFlags('new_deal', 1, deals, '2026-11-15', new Map(), day).map((f) => f.dealId)).toEqual(['d1']);
+    expect(workflowFlags('closed', 1, deals, '2026-11-15', new Map(), day).map((f) => f.dealId)).toEqual(['c']);
+    expect(workflowFlags('late_steps', 2, deals, '2026-11-15', new Map(), day).map((f) => f.dealId)).toEqual(['l']);
+  });
+  it('every library preset is a valid workflow', () => {
+    for (const p of WORKFLOW_PRESETS) expect(cleanWorkflow(p, agents).ok).toBe(true);
+  });
+});
+
+describe('managing accounts', () => {
+  it('may do everything the owner does except plan and billing, which no administrator role includes', () => {
+    expect(roleAllows('managing', 'full')).toBe(true);
+    expect(roleAllows('manager', 'full')).toBe(false);
+    expect(roleAllows('reviewer', 'full')).toBe(false);
+  });
+  it('is available on Basic as well as Pro', () => {
+    expect(allowedRoles('basic')).toEqual(['manager', 'managing']);
+    expect(allowedRoles('pro')).toContain('managing');
+  });
+});

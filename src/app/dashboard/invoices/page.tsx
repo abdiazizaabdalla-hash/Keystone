@@ -10,7 +10,7 @@ import { readPersona } from '@/lib/persona';
 import AgentInvoices from '@/components/AgentInvoices';
 import AgentBilledInvoices from '@/components/AgentBilledInvoices';
 import BrokerageInvoices from '@/components/BrokerageInvoices';
-import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
 import { isFeatureOnClient } from '@/lib/features';
 
 interface Agent {
@@ -528,7 +528,7 @@ export default function InvoicesPage() {
   const [dealId, setDealId] = useState<string | undefined>(undefined);
   const [startNew, setStartNew] = useState(false);
   const [commissionDeal, setCommissionDeal] = useState<string | undefined>(undefined);
-  const owner = useBrokerageOwner();
+  const owner = useBrokerageOperator();
   const [tab, setTab] = useState<'commissions' | 'fees' | 'custom'>('commissions');
   useEffect(() => {
     setMode(readPersona().workspace ? 'agent' : 'coordinator');

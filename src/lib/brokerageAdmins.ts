@@ -3,15 +3,18 @@ import { BROKERAGE_LIMITS, brokerageHas } from './tiers';
 
 // Administrators of a brokerage, and what each role may do. Pure (no database), shared by the server and the screens.
 // The owner always has every scope. An administrator never changes the owner's plan, billing or account, and cannot add other
-// administrators, and commissions and shared templates stay with the owner for now.
+// administrators. A managing account is the exception to the narrow roles: it runs the brokerage like the owner (agents, compliance,
+// reports, automations, commissions), still without the plan, billing or other administrators.
 
-export type AdminRole = 'viewer' | 'reviewer' | 'manager';
-export type AdminScope = 'view' | 'compliance' | 'roster';
+export type AdminRole = 'viewer' | 'reviewer' | 'manager' | 'managing';
+/** 'full' is everything an owner does except plan, billing and administrators. */
+export type AdminScope = 'view' | 'compliance' | 'roster' | 'full';
 
 export const ADMIN_ROLES: { id: AdminRole; label: string; blurb: string; scopes: AdminScope[] }[] = [
   { id: 'viewer', label: 'Viewer', blurb: 'Sees the dashboard, every agent’s deals and listings, file review and reports. Cannot change anything.', scopes: ['view'] },
   { id: 'reviewer', label: 'Compliance reviewer', blurb: 'Everything a Viewer sees, and can mark files reviewed or flagged and set the required documents.', scopes: ['view', 'compliance'] },
   { id: 'manager', label: 'Manager', blurb: 'All of the above, plus invite, resend and remove agents. Not commissions, billing or other administrators.', scopes: ['view', 'compliance', 'roster'] },
+  { id: 'managing', label: 'Managing account', blurb: 'Runs the brokerage like you do: agents, compliance, reports, automations and commissions. Cannot change your plan or billing, or add other managing accounts.', scopes: ['view', 'compliance', 'roster', 'full'] },
 ];
 
 export function isAdminRole(value: unknown): value is AdminRole {
@@ -33,9 +36,9 @@ export function adminLimit(tier: Tier): number {
   return brokerageHas(tier, 'multiple_administrators') ? BROKERAGE_LIMITS[tier].extraAdministrators : 0;
 }
 
-/** Roles a tier may hand out: Basic gets one full administrator; scoped roles are part of Pro. */
+/** Roles a tier may hand out: Basic gets a Manager or a managing account; scoped roles are part of Pro. */
 export function allowedRoles(tier: Tier): AdminRole[] {
-  return brokerageHas(tier, 'advanced_permissions') ? ADMIN_ROLES.map((r) => r.id) : ['manager'];
+  return brokerageHas(tier, 'advanced_permissions') ? ADMIN_ROLES.map((r) => r.id) : ['manager', 'managing'];
 }
 
 export const normaliseAdminEmail = (email: string) => email.trim().toLowerCase();

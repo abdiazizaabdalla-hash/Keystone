@@ -1,6 +1,7 @@
 import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { actingBrokerage } from '@/lib/brokerageAdminsServer';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import { brokerageOn, overseesAgent } from '@/lib/oversight';
@@ -19,7 +20,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user } = await getUserFromRequest(request);
+    const { user: caller } = await getUserFromRequest(request);
+    const user = await actingBrokerage(caller);
     if (!brokerageOn()) throw new AuthError('Not found', 404);
     const { id } = await params;
     const { row, side } = await loadCommissionFor(id, user.id);

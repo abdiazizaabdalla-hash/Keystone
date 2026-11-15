@@ -34,7 +34,7 @@ export const BROKERAGE_TIERS = {
       'Team board and private messages',
       'Commission statements: confirm, accept, mark paid',
       'Agent-by-month production export',
-      'One extra administrator',
+      'One extra managing account or administrator',
     ],
   },
   pro: {

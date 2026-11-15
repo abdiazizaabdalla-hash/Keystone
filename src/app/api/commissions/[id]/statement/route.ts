@@ -1,6 +1,7 @@
 import { loadLogo } from '@/lib/brandLogo';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { actingBrokerage } from '@/lib/brokerageAdminsServer';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { agentLabels, brokerageOn } from '@/lib/oversight';
 import { oversightError } from '@/lib/oversightServer';
@@ -11,7 +12,8 @@ import { generateCommissionStatementPdf } from '@/lib/commissionStatementPdf';
 // The commission statement as a PDF, for the owner or the agent on that commission and nobody else.
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user } = await getUserFromRequest(request);
+    const { user: caller } = await getUserFromRequest(request);
+    const user = await actingBrokerage(caller);
     if (!brokerageOn()) throw new AuthError('Not found', 404);
     const { id } = await params;
     const { row } = await loadCommissionFor(id, user.id);

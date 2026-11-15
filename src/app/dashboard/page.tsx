@@ -11,6 +11,7 @@ import ListingsOverviewCard from '@/components/ListingsOverviewCard';
 import BrokerageTrendsSummary from '@/components/BrokerageTrendsSummary';
 import BrokerageHome from '@/components/BrokerageHome';
 import AgentBrokerageStrip from '@/components/AgentBrokerageStrip';
+import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 import TcInvitationBanner from '@/components/TcInvitationBanner';
 import ClosedDealAlerts from '@/components/ClosedDealAlerts';
@@ -137,7 +138,8 @@ export default function Dashboard() {
   // Wording only: an agent running their own deals sees agent-focused copy. See lib/accountType.ts.
   const [persona, setPersona] = useState<Persona>({ accountType: 'tc', coordinationMode: null });
   // The Team board card (Team/Brokerage plans, behind the brokerage flag). It tells us whether this person has a team, so the right column only exists then.
-  const brokerageOwner = useBrokerageOwner();
+  const brokerageOwner = useBrokerageOperator();
+  const trueOwner = useBrokerageOwner();
   useEffect(() => { setPersona(readPersona()); }, []);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -418,7 +420,7 @@ export default function Dashboard() {
                 <p className="text-slate-400">Your agents, their pipeline and what needs you today.</p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <Link href="/dashboard/collaborate#agents" className="px-5 py-3 border border-white/10 hover:bg-white/5 text-slate-200 font-semibold rounded-xl transition text-center">Invite an agent</Link>
+                <Link href={trueOwner ? '/dashboard/collaborate#agents' : '/dashboard/brokerage-admin'} className="px-5 py-3 border border-white/10 hover:bg-white/5 text-slate-200 font-semibold rounded-xl transition text-center">Invite an agent</Link>
                 <Link href="/dashboard/transactions/new" className="px-5 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-500/20 text-center">+ New deal</Link>
               </div>
             </div>

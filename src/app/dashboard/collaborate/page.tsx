@@ -51,7 +51,7 @@ interface TeamResponse {
   brokerageAgents?: { linkId: string; userId: string | null; name: string; email: string; status: string }[];
 }
 
-type Tab = 'overview' | 'messages' | 'contacts' | 'people' | 'agents' | 'filereview' | 'reports' | 'commissions' | 'templates' | 'settings' | 'brokerage';
+type Tab = 'overview' | 'managers' | 'messages' | 'contacts' | 'people' | 'agents' | 'filereview' | 'reports' | 'commissions' | 'templates' | 'settings' | 'brokerage';
 
 // Role tags in the roster: a brokerage can have a broker, agents and coordinators.
 const KIND_LABEL = { broker: 'Broker', agent: 'Agent', tc: 'TC' } as const;
@@ -86,7 +86,7 @@ export default function CollaboratePage() {
       // Old links to what moved out of Collaborate go to its new home.
       const moved: Record<string, string> = { filereview: '/dashboard/compliance', reports: '/dashboard/reports', commissions: '/dashboard/invoices', messages: '', contacts: '', templates: '' };
       if (isFeatureOnClient('brokerage') && wanted in moved && moved[wanted]) { router.replace(moved[wanted]); return; }
-      if (['overview', 'messages', 'contacts', 'people', 'agents', 'filereview', 'reports', 'commissions', 'templates', 'settings', 'brokerage'].includes(wanted)) setTabState(wanted as Tab);
+      if (['overview', 'managers', 'messages', 'contacts', 'people', 'agents', 'filereview', 'reports', 'commissions', 'templates', 'settings', 'brokerage'].includes(wanted)) setTabState(wanted as Tab);
       try {
         const [sum, list] = await Promise.all([authFetch('/api/team/messages/summary'), authFetch('/api/contacts')]);
         if (sum.ok) setUnread((await sum.json()).total || 0);
@@ -291,6 +291,7 @@ export default function CollaboratePage() {
         // For the broker, Collaborate is only about the agents: who they are, their seats and the brokerage's settings.
         // Messages, Contacts, Templates, Compliance, Reports and Commissions have their own pages.
         { id: 'agents', label: 'Agents' },
+        { id: 'managers', label: 'Managing accounts' },
         { id: 'people', label: 'People' },
         { id: 'settings', label: 'Settings' },
       ]
@@ -579,6 +580,8 @@ export default function CollaboratePage() {
 
       {activeTab === 'agents' && isOwner && brokerageMode && <BrokerageRoster />}
 
+      {activeTab === 'managers' && isOwner && brokerageMode && <div className="max-w-4xl"><BrokerageAdmins /></div>}
+
       {activeTab === 'templates' && brokerageMode && <BrokerageTemplates isOwner={isOwner} />}
 
       {activeTab === 'settings' && isOwner && (
@@ -604,7 +607,6 @@ export default function CollaboratePage() {
             </form>
           </div>
 
-          {brokerageMode && <BrokerageAdmins />}
 
           <TeamReports />
         </div>

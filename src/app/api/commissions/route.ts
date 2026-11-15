@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { actingBrokerage } from '@/lib/brokerageAdminsServer';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import { assertBrokerageManageable } from '@/lib/brokerageAccount';
@@ -40,7 +41,8 @@ function fail(error: unknown, what: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
+    const { user: caller } = await getUserFromRequest(request);
+    const user = await actingBrokerage(caller);
     if (!brokerageOn()) throw new AuthError('Not found', 404);
     const params = request.nextUrl.searchParams;
     const transactionId = params.get('transaction');
@@ -174,7 +176,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
+    const { user: caller } = await getUserFromRequest(request);
+    const user = await actingBrokerage(caller);
     await assertBrokerageOwner(user);
     await assertBrokerageManageable(user.id);
     const input = (await request.json().catch(() => ({}))) as Record<string, unknown>;

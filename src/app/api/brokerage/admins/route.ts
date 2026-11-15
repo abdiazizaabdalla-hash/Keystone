@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     const tier = await tierFor(user.id);
     const role = isAdminRole(body.role) ? body.role : null;
     if (!role || !allowedRoles(tier).includes(role)) {
-      return NextResponse.json({ error: tier === 'basic' ? 'Scoped roles are part of Brokerage Pro. On Basic, an administrator is a Manager.' : 'Choose a role.' }, { status: 400 });
+      return NextResponse.json({ error: tier === 'basic' ? 'Scoped roles are part of Brokerage Pro. On Basic, an administrator is a Manager or a managing account.' : 'Choose a role.' }, { status: 400 });
     }
     const { count, error: countError } = await supabaseServer.from('brokerage_admins').select('id', { count: 'exact', head: true }).eq('owner_user_id', user.id).eq('status', 'active');
     if (countError) throw countError;

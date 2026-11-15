@@ -54,3 +54,17 @@ export async function resolveBrokerageActor(caller: CallerUser, scope: AdminScop
 export async function requireBrokerageOwnerOnly(caller: CallerUser): Promise<void> {
   await assertBrokerageOwner(caller);
 }
+
+/**
+ * Routes that are written for "the brokerage owner" (commissions) call this first. A managing account then works as the owner,
+ * so every query stays keyed on the owner's id; everyone else, including a narrower administrator, is returned unchanged.
+ */
+export async function actingBrokerage<T extends { id: string; email?: string | null }>(caller: T): Promise<T> {
+  if (!brokerageOn()) return caller;
+  const link = await findAdminLink(caller);
+  if (!link || !roleAllows(link.role, 'full')) return caller;
+  const { data } = await supabaseServer.auth.admin.getUserById(link.ownerId);
+  if (!data.user) throw new AuthError('This brokerage is no longer available.', 404);
+  await assertBrokerageOwner(data.user as unknown as CallerUser);
+  return data.user as unknown as T;
+}
