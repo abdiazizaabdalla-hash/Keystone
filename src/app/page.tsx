@@ -9,7 +9,7 @@ import DemoRequestButton from '@/components/DemoRequestButton';
 import ShotRow from '@/components/ShotRow';
 import HomeVideo from '@/components/HomeVideo';
 import PublicMobileMenu from '@/components/PublicMobileMenu';
-import { DealFlowIllustration, AutomationFlowIllustration, PayFlowIllustration } from '@/components/marketing/Illustrations';
+import { DealFlowIllustration, AutomationFlowIllustration, PayFlowIllustration, TemplateSharingIllustration, AutomationAudiencesIllustration } from '@/components/marketing/Illustrations';
 
 export default function Home() {
   const router = useRouter();
@@ -438,6 +438,16 @@ export default function Home() {
               <p className="text-sm text-slate-400">{f.body}</p>
             </div>
           ))}
+        </div>
+        <div className="grid lg:grid-cols-2 gap-5 mt-8">
+          <div>
+            <p className="text-sm text-slate-400 mb-3">Templates: for TCs, agents and brokerages. A brokerage shares one with every agent.</p>
+            <TemplateSharingIllustration />
+          </div>
+          <div>
+            <p className="text-sm text-slate-400 mb-3">Automations: for TCs and for agents.</p>
+            <AutomationAudiencesIllustration />
+          </div>
         </div>
         <div className="grid md:grid-cols-2 gap-5 mt-8">
           <div>

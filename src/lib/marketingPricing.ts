@@ -10,7 +10,7 @@ export const AGENT_PRO = {
     'AI reads a contract and fills out and creates the transaction or listing for you',
     'Follow-ups, contacts and invoices',
     'Use your brokerage’s templates and Relay’s standard forms',
-    'Your brokerage can see your deals, so nothing is chased by hand',
+    'Your brokerage can see where your deals stand',
   ],
   proAdds: [
     'Save your own templates, emails and checklists',

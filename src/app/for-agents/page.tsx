@@ -3,7 +3,7 @@ import PublicHeader from '@/components/PublicHeader';
 import PublicFooter from '@/components/PublicFooter';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import { AGENT_PRO } from '@/lib/marketingPricing';
-import { AgentPathsIllustration } from '@/components/marketing/Illustrations';
+import { AgentPathsIllustration, TemplateSharingIllustration, AutomationAudiencesIllustration } from '@/components/marketing/Illustrations';
 
 const WORKFLOW: { title: string; body: string }[] = [
   { title: 'Upload the contract', body: 'AI reads it and fills out and creates the transaction or listing for you, with the address, price, parties and key dates. You check and save.' },
@@ -26,7 +26,7 @@ export default function ForAgentsPage() {
           Your deals and listings, <span className="italic text-blue-400">in one workspace.</span>
         </h1>
         <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">
-          Run your own transactions without the spreadsheet and the email chase. Your brokerage can provide Relay for you, or you can start with Agent Pro on your own.
+          Run your own transactions and listings in one workspace. Your brokerage can provide Relay for you, or you can start with Agent Pro on your own.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
           <DemoRequestButton className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10" label="Join the Agent Pro pilot" />
@@ -35,6 +35,15 @@ export default function ForAgentsPage() {
       </section>
 
       <section className="max-w-5xl mx-auto px-6 pb-16"><AgentPathsIllustration /></section>
+
+      <section className="max-w-5xl mx-auto px-6 pb-16">
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Templates and automations</h2>
+        <p className="text-slate-400 max-w-3xl mb-8">Use your brokerage’s shared templates and Relay’s standard forms on any plan. Agent Pro adds your own templates and automations that send reminders and follow-ups for you.</p>
+        <div className="space-y-6">
+          <TemplateSharingIllustration />
+          <AutomationAudiencesIllustration />
+        </div>
+      </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Two ways to get Relay</h2>

@@ -135,7 +135,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Client pages (for TCs)',
     q: 'What is the client portal?',
-    a: 'A live progress page for an agent’s buyer or seller. Clients often feel out of the loop between an accepted contract and closing day; the page shows where the deal stands, the checklist steps and documents the agent chooses to share, and the important dates ahead, so they stop texting for updates.',
+    a: 'A live progress page for an agent’s buyer or seller. The page shows where the deal stands, the checklist steps and documents the agent chooses to share, and the important dates ahead without having to ask.',
   },
   {
     category: 'Client pages (for TCs)',

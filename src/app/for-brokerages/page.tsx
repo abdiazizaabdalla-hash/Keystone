@@ -3,7 +3,7 @@ import PublicHeader from '@/components/PublicHeader';
 import PublicFooter from '@/components/PublicFooter';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import { BROKERAGE_TIERS, PILOT } from '@/lib/marketingPricing';
-import { BrokerageDashboardIllustration, FileReviewIllustration, BrokerageHubIllustration } from '@/components/marketing/Illustrations';
+import { TemplateSharingIllustration, BrokerageDashboardIllustration, FileReviewIllustration, BrokerageHubIllustration } from '@/components/marketing/Illustrations';
 
 const AGENT_GETS: { title: string; body: string }[] = [
   { title: 'Contract in, deal out', body: 'Upload the contract and AI fills out and creates the transaction or listing for you, with the address, price, parties and key dates.' },
@@ -45,7 +45,7 @@ export default function ForBrokeragesPage() {
       <section className="max-w-4xl mx-auto px-6 pt-20 pb-12 text-center">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">For brokerages</p>
         <h1 className="font-display text-4xl sm:text-5xl font-semibold text-slate-100 mb-5">
-          Stop chasing agents for a status. <span className="italic text-blue-400">See every file.</span>
+          Every agent, every file, <span className="text-blue-400">in one view.</span>
         </h1>
         <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">
           Relay gives each agent a workspace for their deals and gives you one view of the whole brokerage: where every file stands, what is missing, who is late and what is owed.
@@ -81,12 +81,19 @@ export default function ForBrokeragesPage() {
         <ul className="grid md:grid-cols-2 gap-x-8 gap-y-3 text-sm text-slate-300 mt-8">
           {[
             'Set the required-document list once for the brokerage',
-            'Missing documents flagged on each file, not buried in a report',
+            'Missing documents flagged on each file',
             'Mark each file reviewed, or flag it back to the agent',
             'Your review is your own record: it never changes the agent’s deal',
           ].map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
         </ul>
         <p className="text-sm text-slate-500 mt-6 max-w-3xl">Relay does not decide what is compliant. It gives your authorized staff the facts and a place to record their decision.</p>
+      </section>
+
+      <section id="templates" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <p className={eyebrow}>Shared templates</p>
+        <h2 className={h2}>Share a template once. Every agent has it.</h2>
+        <p className="text-slate-400 max-w-3xl mb-8">Share your IABS, welcome letter or any form. It appears pinned in every agent’s template list and on their deals, next to the templates they keep for themselves. Agents on Agent Pro can also use automations to send reminders and follow-ups.</p>
+        <TemplateSharingIllustration />
       </section>
 
       <section id="commissions" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
