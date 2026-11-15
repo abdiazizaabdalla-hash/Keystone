@@ -1,6 +1,7 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
-import { agentLabels, assertBrokerageOwner, listOwnerLinks, loadOversightDeals } from '@/lib/oversight';
+import { agentLabels, listOwnerLinks, loadOversightDeals } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { compareAgents, lastMonths, monthlySeries, percentChange, totalsOf } from '@/lib/oversightTrends';
 
@@ -10,8 +11,8 @@ const pick = (value: string | null, allowed: number[], fallback: number) => (all
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     const q = request.nextUrl.searchParams;
     const months = pick(q.get('months'), [6, 12, 24], 12);
     const period = pick(q.get('period'), [1, 3, 6, 12], 3);

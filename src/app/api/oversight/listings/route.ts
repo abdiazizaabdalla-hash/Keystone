@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { getUserFromRequest } from '@/lib/auth';
-import { activeAgentIds, agentLabels, assertBrokerageOwner, isOpenListing, loadOversightListings } from '@/lib/oversight';
+import { activeAgentIds, agentLabels, isOpenListing, loadOversightListings } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 
 // Every listing of the agents who joined this brokerage, with what needs attention first.
 // Optional ?agent=<user id> and ?show=open|closed|all (default open). Seller details and offers are not part of this.
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     const ids = await activeAgentIds(user.id);
     const only = request.nextUrl.searchParams.get('agent');
     const show = request.nextUrl.searchParams.get('show') ?? 'open';

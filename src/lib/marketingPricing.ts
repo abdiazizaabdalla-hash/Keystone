@@ -43,12 +43,15 @@ export const BROKERAGE_TIERS = {
     period: '/month',
     agents: 25,
     blurb: 'More agents and finer control over documents, reports and who can do what.',
-    built: ['Everything in Basic', 'Up to 25 agents included'],
-    rollingOut: [
+    built: [
+      'Everything in Basic',
+      'Up to 25 agents included',
       'Several required-document lists, by deal type',
       'Configurable, deal-level reports',
       'Trends and comparisons across agents and time',
       'Scoped roles for administrators (up to five extra)',
+    ],
+    rollingOut: [
       'Pay commissions through Relay with your connected Stripe account',
     ],
   },

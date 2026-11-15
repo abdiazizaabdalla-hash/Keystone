@@ -1,7 +1,8 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
-import { agentLabels, assertBrokerageOwner, canOverseeListing, listingHealth } from '@/lib/oversight';
+import { agentLabels, canOverseeListing, listingHealth } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 
 // One listing of an agent in this brokerage, read-only: the listing, its checklist, the names of its documents and how many
@@ -9,8 +10,8 @@ import { oversightError, todayIso } from '@/lib/oversightServer';
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     if (!(await canOverseeListing(user.id, id))) throw new AuthError('Not found', 404);
 
     const { data: listing, error } = await supabaseServer

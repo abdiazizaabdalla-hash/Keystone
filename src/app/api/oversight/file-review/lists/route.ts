@@ -1,8 +1,9 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
-import { assertBrokerageOwner, listOwnerLinks } from '@/lib/oversight';
+import { listOwnerLinks } from '@/lib/oversight';
 import { assertBrokerageManageable, getAccount } from '@/lib/brokerageAccount';
 import { oversightError } from '@/lib/oversightServer';
 import { cleanDocumentLists, extraListLimit, type DocumentList } from '@/lib/fileReview';
@@ -20,8 +21,8 @@ async function limits(ownerId: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     const [{ tier, max }, listsRes, links] = await Promise.all([
       limits(user.id),
       supabaseServer.from('brokerage_document_lists').select('name, template_names, document_types').eq('owner_user_id', user.id).order('position', { ascending: true }),
@@ -45,8 +46,8 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'compliance');
     await assertBrokerageManageable(user.id);
     const { max } = await limits(user.id);
     const body = (await request.json().catch(() => ({}))) as { lists?: unknown };

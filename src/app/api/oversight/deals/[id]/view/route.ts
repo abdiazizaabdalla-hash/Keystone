@@ -1,7 +1,8 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
-import { agentLabels, assertBrokerageOwner, canOverseeDeal, ownerMayOpenDocuments } from '@/lib/oversight';
+import { agentLabels, canOverseeDeal, ownerMayOpenDocuments } from '@/lib/oversight';
 import { logAudit } from '@/lib/audit';
 import { oversightError } from '@/lib/oversightServer';
 
@@ -14,8 +15,8 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     if (!(await canOverseeDeal(user.id, id))) throw new AuthError('Not found', 404);
 
     const { data: deal, error } = await supabaseServer.from('transactions').select('*').eq('id', id).single();

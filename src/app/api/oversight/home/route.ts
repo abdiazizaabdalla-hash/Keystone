@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { getUserFromRequest } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
-import { CLOSED_STAGE, agentLabels, assertBrokerageOwner, closedWithoutCommission, closingSoon, isOpenListing, listOwnerLinks, loadOversightDeals, loadOversightListings, productionFor } from '@/lib/oversight';
+import { CLOSED_STAGE, agentLabels, closedWithoutCommission, closingSoon, isOpenListing, listOwnerLinks, loadOversightDeals, loadOversightListings, productionFor } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 
 // Everything the brokerage owner's dashboard shows, in one request: the agents, the pipeline, what needs attention,
 // closings coming up and where commissions stand. Counts and names only; nothing private to the agents.
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     const today = todayIso();
     const links = await listOwnerLinks(user.id);
     const activeLinks = links.filter((l) => l.status === 'active' && l.agent_user_id);

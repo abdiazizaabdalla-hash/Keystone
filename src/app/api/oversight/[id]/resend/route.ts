@@ -1,9 +1,9 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { assertBrokerageOwner } from '@/lib/oversight';
 import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { invitePathFor, oversightError, sendBrokerageInvite } from '@/lib/oversightServer';
 
@@ -12,8 +12,8 @@ import { invitePathFor, oversightError, sendBrokerageInvite } from '@/lib/oversi
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'roster');
     await assertBrokerageManageable(user.id);
     const { data: link, error } = await supabaseServer.from('brokerage_links').select('id, invited_email').eq('id', id).eq('owner_user_id', user.id).eq('status', 'pending').maybeSingle();
     if (error) throw error;

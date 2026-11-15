@@ -1,6 +1,7 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
-import { CLOSED_STAGE, activeAgentIds, agentLabels, assertBrokerageOwner, loadOversightDeals } from '@/lib/oversight';
+import { CLOSED_STAGE, activeAgentIds, agentLabels, loadOversightDeals } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { supabaseServer } from '@/lib/supabase';
 
@@ -8,8 +9,8 @@ import { supabaseServer } from '@/lib/supabase';
 // Optional ?agent=<user id> and ?show=open|closed|all (default open).
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     const ids = await activeAgentIds(user.id);
     const only = request.nextUrl.searchParams.get('agent');
     const show = request.nextUrl.searchParams.get('show') ?? 'open';

@@ -1,8 +1,9 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { AGENT_FOCUS, AGENT_VOLUME } from '@/lib/accountType';
-import { CLOSED_STAGE, assertBrokerageOwner, isOpenListing, loadOversightDeals, loadOversightListings, overseesAgent, productionFor } from '@/lib/oversight';
+import { CLOSED_STAGE, isOpenListing, loadOversightDeals, loadOversightListings, overseesAgent, productionFor } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { capInfoFor, termsFromLink, viewOf, type CommissionRow } from '@/lib/commissions';
 import type { SplitType } from '@/lib/commissionMath';
@@ -13,8 +14,8 @@ import { getAgentListingRows } from '@/lib/agentListings';
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     if (!(await overseesAgent(user.id, id))) throw new AuthError('Not found', 404);
     const today = todayIso();
 

@@ -69,6 +69,8 @@ export default function ForBrokeragesPage() {
             'A read-only look at every agent’s deals, key dates and listings',
             'Production by agent and month, exported when you need it',
             'What is late and what closes this week, up front, so the morning check takes minutes',
+            'On Pro: build your own deal reports, pick the columns and filters, and download a CSV',
+            'On Pro: compare agents and months, with the period before shown next to each number',
           ].map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
         </ul>
       </section>
@@ -76,7 +78,7 @@ export default function ForBrokeragesPage() {
       <section id="compliance" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <p className={eyebrow}>Compliance</p>
         <h2 className={h2}>Catch the missing document before the audit does.</h2>
-        <p className="text-slate-400 max-w-3xl mb-8">You choose the documents every file must contain. Relay checks closed files, and files about to close, against that list and shows exactly what is missing.</p>
+        <p className="text-slate-400 max-w-3xl mb-8">You choose the documents every file must contain. Relay checks closed files, and files about to close, against that list and shows exactly what is missing. On Pro, keep a different list for each kind of deal.</p>
         <FileReviewIllustration />
         <ul className="grid md:grid-cols-2 gap-x-8 gap-y-3 text-sm text-slate-300 mt-8">
           {[

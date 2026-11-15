@@ -1,3 +1,4 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
@@ -6,7 +7,6 @@ import {
   MAX_LINKS_PER_OWNER,
   OVERSIGHT_TERMS,
   agentLabels,
-  assertBrokerageOwner,
   cleanEmail,
   listOwnerLinks,
   loadOversightDeals,
@@ -20,8 +20,8 @@ import { isDuplicateLink, oversightError, prepareInvitee, sendBrokerageInvite, t
 // POST { email }: invite an agent. Accepting gives them a free Basic workspace (see agentAccess.ts); an agent with a workspace of their own keeps it.
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     if (request.nextUrl.searchParams.get('check') === '1') return NextResponse.json({ owner: true });
     const today = todayIso();
     const links = await listOwnerLinks(user.id);
@@ -69,8 +69,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'roster');
     const body = (await request.json().catch(() => ({}))) as { email?: unknown };
     const email = cleanEmail(body.email);
     if (email === (user.email ?? '').toLowerCase()) throw new AuthError('You cannot invite yourself.', 400);

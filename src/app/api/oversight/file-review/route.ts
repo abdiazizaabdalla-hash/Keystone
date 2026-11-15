@@ -1,7 +1,8 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
-import { CLOSED_STAGE, agentLabels, assertBrokerageOwner, listOwnerLinks, loadOversightDeals } from '@/lib/oversight';
+import { CLOSED_STAGE, agentLabels, listOwnerLinks, loadOversightDeals } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { compareReviewRows, inReviewWindow, missingRequired, requiredForDeal, type DocumentList, type ReviewStatus } from '@/lib/fileReview';
 
@@ -10,8 +11,8 @@ import { compareReviewRows, inReviewWindow, missingRequired, requiredForDeal, ty
 // Document names and types are not returned, only which required types are missing.
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     const today = todayIso();
     const links = await listOwnerLinks(user.id);
     const ids = links.filter((l) => l.status === 'active' && l.agent_user_id).map((l) => l.agent_user_id as string);

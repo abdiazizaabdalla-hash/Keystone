@@ -1,7 +1,8 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
-import { agentLabels, assertBrokerageOwner, listOwnerLinks, loadOversightDeals } from '@/lib/oversight';
+import { agentLabels, listOwnerLinks, loadOversightDeals } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { toCsv } from '@/lib/contactsCrm';
 import { buildReport, cleanColumns, cleanFilters, filterDeals, REPORT_COLUMNS, type ReportDeal } from '@/lib/dealReport';
@@ -13,8 +14,8 @@ const MAX_ROWS = 2000;
 
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     const q = request.nextUrl.searchParams;
     const columns = cleanColumns(q.get('columns'));
     const filters = cleanFilters({ agents: q.get('agents'), scope: q.get('scope'), stages: q.get('stages'), from: q.get('from'), to: q.get('to') });

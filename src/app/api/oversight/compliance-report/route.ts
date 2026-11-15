@@ -1,8 +1,9 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
-import { CLOSED_STAGE, agentLabels, assertBrokerageOwner, isOpenListing, listOwnerLinks, loadOversightDeals, loadOversightListings, productionFor } from '@/lib/oversight';
+import { CLOSED_STAGE, agentLabels, isOpenListing, listOwnerLinks, loadOversightDeals, loadOversightListings, productionFor } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { inReviewWindow, missingRequired, type ReviewStatus } from '@/lib/fileReview';
 import { generateComplianceReportPdf, reportCsv, type ReportAgent, type ReportMeta, type ReportRow } from '@/lib/complianceReport';
@@ -12,8 +13,8 @@ import { generateComplianceReportPdf, reportCsv, type ReportAgent, type ReportMe
 // window the file review uses. Read-only; it never includes client details, messages or document names.
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     const format = request.nextUrl.searchParams.get('format') === 'pdf' ? 'pdf' : 'csv';
     const today = todayIso();
     const links = (await listOwnerLinks(user.id)).filter((l) => l.status === 'active' && l.agent_user_id);

@@ -40,3 +40,27 @@ describe('deal report', () => {
     expect(rows[0]).toEqual(['1 Main St', 300000]);
   });
 });
+
+import { adminLimit, allowedRoles, roleAllows, scopesFor, isAdminRole, looksLikeEmail } from '@/lib/brokerageAdmins';
+
+describe('brokerage administrators', () => {
+  it('gives Basic one full administrator and Pro five scoped ones', () => {
+    expect(adminLimit('basic')).toBe(1);
+    expect(adminLimit('pro')).toBe(5);
+    expect(allowedRoles('basic')).toEqual(['manager']);
+    expect(allowedRoles('pro')).toEqual(['viewer', 'reviewer', 'manager']);
+  });
+  it('limits what each role can do', () => {
+    expect(scopesFor('viewer')).toEqual(['view']);
+    expect(roleAllows('viewer', 'compliance')).toBe(false);
+    expect(roleAllows('reviewer', 'compliance')).toBe(true);
+    expect(roleAllows('reviewer', 'roster')).toBe(false);
+    expect(roleAllows('manager', 'roster')).toBe(true);
+  });
+  it('validates roles and emails', () => {
+    expect(isAdminRole('manager')).toBe(true);
+    expect(isAdminRole('owner')).toBe(false);
+    expect(looksLikeEmail('a@b.co')).toBe(true);
+    expect(looksLikeEmail('nope')).toBe(false);
+  });
+});

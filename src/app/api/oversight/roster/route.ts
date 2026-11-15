@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { getUserFromRequest } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
-import { CLOSED_STAGE, OVERSIGHT_TERMS, agentLabels, assertBrokerageOwner, isOpenListing, listOwnerLinks, loadOversightDeals, loadOversightListings, productionFor, rosterStats } from '@/lib/oversight';
+import { CLOSED_STAGE, OVERSIGHT_TERMS, agentLabels, isOpenListing, listOwnerLinks, loadOversightDeals, loadOversightListings, productionFor, rosterStats } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { viewOf, termsFromLink, type CommissionRow } from '@/lib/commissions';
 
@@ -9,8 +10,8 @@ import { viewOf, termsFromLink, type CommissionRow } from '@/lib/commissions';
 // the current ones, their latest commission statements and base commission. Nothing private to the agent.
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     const today = todayIso();
     const links = await listOwnerLinks(user.id);
     const active = links.filter((l) => l.status === 'active' && l.agent_user_id);

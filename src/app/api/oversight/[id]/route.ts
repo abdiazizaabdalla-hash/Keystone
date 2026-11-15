@@ -1,8 +1,8 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
-import { assertBrokerageOwner } from '@/lib/oversight';
 import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { oversightError } from '@/lib/oversightServer';
 import { SplitError, cleanBaseFees, cleanRate, isSplitType, toCents } from '@/lib/commissionMath';
@@ -12,8 +12,8 @@ import { isCapReset } from '@/lib/commissionCap';
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'roster');
     const { data: link, error } = await supabaseServer.from('brokerage_links').select('id, status, agent_user_id').eq('id', id).eq('owner_user_id', user.id).in('status', ['pending', 'active']).maybeSingle();
     if (error) throw error;
     if (!link) throw new AuthError('Not found', 404);
@@ -35,8 +35,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'roster');
     await assertBrokerageManageable(user.id);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const { data: link, error } = await supabaseServer.from('brokerage_links').select('id').eq('id', id).eq('owner_user_id', user.id).eq('status', 'active').maybeSingle();

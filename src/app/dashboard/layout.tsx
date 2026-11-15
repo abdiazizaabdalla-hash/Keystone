@@ -14,6 +14,7 @@ import { isTeamPlan } from '@/lib/plans';
 import { isFeatureOnClient } from '@/lib/features';
 import { savePersona } from '@/lib/persona';
 import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { useBrokerageAdminAccess } from '@/lib/useBrokerageAdminAccess';
 
 // Collapsed sidebar is icon-only -- narrow enough to stay useful on small
 // screens without hiding navigation entirely. Expanded shows icon + label.
@@ -410,6 +411,7 @@ export default function DashboardLayout({
   // Brokers manage their agents from Collaborate, so the separate Agents page is for coordinators and independent agents' coordinators only.
   // While we are still finding out who owns a team plan, hide it for team-plan users rather than flash it.
   const brokerOwner = useBrokerageOwner();
+  const brokerageAdmin = useBrokerageAdminAccess();
   const showAgentsNav = !isAgentAccount && brokerOwner !== true && !(brokerOwner === null && isFeatureOnClient('brokerage') && isTeamPlan(plan));
   // Agents in a brokerage use the same Collaborate hub as their broker (no separate Brokerage page).
   const agentCollaborate = isFeatureOnClient('brokerage') && isAgentAccount && hasWorkspace;
@@ -432,6 +434,7 @@ export default function DashboardLayout({
     ...(isFeatureOnClient('templates') && !(isAgentAccount && !hasWorkspace) ? [{ href: '/dashboard/templates', label: 'Templates', icon: 'templates' }] : []),
     { href: '/dashboard/search', label: 'Search', icon: 'search' },
     ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: collaborateUnread }] : []),
+    ...(brokerageAdmin?.delegated ? [{ href: '/dashboard/brokerage-admin', label: 'Brokerage', icon: 'collaborate' }] : []),
     { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
     { href: '/dashboard/account', label: 'Account', icon: 'account' },
     ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin', icon: 'admin' }] : []),
@@ -493,6 +496,7 @@ export default function DashboardLayout({
               ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents' }] : []),
               { href: '/dashboard/search', label: 'Search' },
               ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: collaborateUnread > 0 ? `Collaborate (${collaborateUnread})` : 'Collaborate' }] : []),
+              ...(brokerageAdmin?.delegated ? [{ href: '/dashboard/brokerage-admin', label: 'Brokerage' }] : []),
               { href: '/dashboard/settings', label: 'Settings' },
               { href: '/dashboard/account', label: plan ? `Account · ${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan` : 'Account' },
               ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin' }] : []),

@@ -13,6 +13,7 @@ import TeamContacts from '@/components/TeamContacts';
 import BrokerageAccountBanner from '@/components/BrokerageAccountBanner';
 import BrokerageFileReview from '@/components/BrokerageFileReview';
 import BrokerageReports from '@/components/BrokerageReports';
+import BrokerageAdmins from '@/components/BrokerageAdmins';
 import BrokerageRoster from '@/components/BrokerageRoster';
 import BrokerageTemplates from '@/components/BrokerageTemplates';
 import TeamReports from '@/components/TeamReports';
@@ -607,6 +608,8 @@ export default function CollaboratePage() {
               {settingsMessage && <p className="text-sm text-slate-300">{settingsMessage}</p>}
             </form>
           </div>
+
+          {brokerageMode && <BrokerageAdmins />}
 
           <TeamReports />
         </div>

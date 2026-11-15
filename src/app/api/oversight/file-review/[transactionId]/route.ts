@@ -1,8 +1,9 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
-import { assertBrokerageOwner, canOverseeDeal } from '@/lib/oversight';
+import { canOverseeDeal } from '@/lib/oversight';
 import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { oversightError, sendBrokerageEmail } from '@/lib/oversightServer';
 import { REVIEW_NOTE_MAX } from '@/lib/fileReview';
@@ -12,8 +13,8 @@ import { REVIEW_NOTE_MAX } from '@/lib/fileReview';
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ transactionId: string }> }) {
   try {
     const { transactionId } = await params;
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'compliance');
     await assertBrokerageManageable(user.id);
     if (!(await canOverseeDeal(user.id, transactionId))) throw new AuthError('Not found', 404);
     const body = (await request.json().catch(() => ({}))) as { status?: unknown; note?: unknown };

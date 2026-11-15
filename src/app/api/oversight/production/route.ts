@@ -1,6 +1,7 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
-import { agentLabels, assertBrokerageOwner, listOwnerLinks, loadOversightDeals, productionByMonth } from '@/lib/oversight';
+import { agentLabels, listOwnerLinks, loadOversightDeals, productionByMonth } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { toCsv } from '@/lib/contactsCrm';
 
@@ -8,8 +9,8 @@ import { toCsv } from '@/lib/contactsCrm';
 // agents with an active link. ?year=2026 limits it to one calendar year. Nothing private to the agent (no clients, no fees).
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'view');
     const yearParam = request.nextUrl.searchParams.get('year') ?? '';
     const year = /^\d{4}$/.test(yearParam) ? yearParam : undefined;
     const links = await listOwnerLinks(user.id);

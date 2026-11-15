@@ -1,8 +1,8 @@
+import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
-import { assertBrokerageOwner } from '@/lib/oversight';
 import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { oversightError } from '@/lib/oversightServer';
 import { cleanRequiredTypes } from '@/lib/fileReview';
@@ -10,8 +10,8 @@ import { cleanRequiredTypes } from '@/lib/fileReview';
 // PUT { types: string[] }: the document types every file in this brokerage must contain. Replaces the whole list; unknown types are ignored.
 export async function PUT(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    await assertBrokerageOwner(user);
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner: user } = await resolveBrokerageActor(caller, 'compliance');
     await assertBrokerageManageable(user.id);
     const body = (await request.json().catch(() => ({}))) as { types?: unknown };
     const types = cleanRequiredTypes(body.types);
