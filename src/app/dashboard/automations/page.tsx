@@ -9,6 +9,8 @@ import { summarizeSteps } from '@/components/ApplyAutomations';
 import PresetLibrary from '@/components/PresetLibrary';
 import type { Preset } from '@/lib/automation/presets';
 import WorkflowDialog from '@/components/WorkflowDialog';
+import BrokerageAutomations from '@/components/BrokerageAutomations';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 
 interface Template {
   id: string;
@@ -34,7 +36,7 @@ async function errorOf(res: Response, fallback: string) {
   return (await res.json().catch(() => ({}))).error || fallback;
 }
 
-export default function AutomationsPage() {
+function AgentAutomationsPage() {
   const [templates, setTemplates] = useState<Template[] | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -267,4 +269,11 @@ export default function AutomationsPage() {
       })()}
     </div>
   );
+}
+
+// A brokerage owner gets the brokerage's own automations (watching the office); the agent library of deal-task automations is not shown to them.
+export default function AutomationsPage() {
+  const owner = useBrokerageOwner();
+  if (owner === null) return <p className="p-8 text-sm text-slate-400">Loading…</p>;
+  return owner ? <BrokerageAutomations /> : <AgentAutomationsPage />;
 }

@@ -436,6 +436,8 @@ export default function DashboardLayout({
   const brokerDesk = brokerOwner === true || brokerageAdmin?.delegated === true;
   const baseNav: { href: string; label: string; icon: string }[] = PRIMARY_NAV.filter((i) => {
     if (i.href === '/dashboard/invoices') return !(isAgentAccount && !hasWorkspace);
+    // A broker's Automations are the brokerage's own rules, so they do not depend on the agent automation feature.
+    if (i.href === '/dashboard/automations' && brokerOwner === true) return true;
     if (i.href === '/dashboard/automations') return isFeatureOnClient('automation') && automationAllowed && !(isAgentAccount && !hasWorkspace);
     return true;
   });
@@ -732,7 +734,7 @@ export default function DashboardLayout({
         {children}
       <ToastHost />
       </div>
-      {isFeatureOnClient('automation') && automationAllowed && !(isAgentAccount && !hasWorkspace) && <ApprovalPopup />}
+      {isFeatureOnClient('automation') && automationAllowed && brokerOwner !== true && !(isAgentAccount && !hasWorkspace) && <ApprovalPopup />}
       {guideKind && <FirstRunGuide key={`${guideKind}-${guideRestartKey}`} kind={guideKind} restartKey={guideRestartKey} onFinished={handleGuideFinished} onHintSeen={markHintSeen} />}
       {hintsEligible && <PageHint seen={seenHints} suspended={guideKind !== null || tutorialMenuOpen} onSeen={markHintSeen} />}
       {tutorialMenuOpen && (

@@ -16,6 +16,10 @@
       "schedule": "0 14 * * 1"
     },
     {
+      "path": "/api/cron/brokerage-automations",
+      "schedule": "0 12 * * *"
+    },
+    {
       "path": "/api/cron/brokerage-pilot",
       "schedule": "30 13 * * *"
     },

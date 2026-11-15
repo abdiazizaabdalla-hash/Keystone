@@ -1,6 +1,7 @@
 import { supabaseServer } from './supabase';
 import { agentLabels, loadOversightDeals, loadOversightListings, overseesAgent, rosterStats } from './oversight';
 import { sendBrokerageEmail } from './oversightServer';
+import { ownersWithDailyDigest } from './brokerageAutomations';
 import { digestParagraphs, digestSubject, type DigestAgent } from './brokerageDigestRules';
 
 export * from './brokerageDigestRules';
@@ -18,7 +19,10 @@ export async function runBrokerageDigest(today: string): Promise<{ sent: number;
     if (await overseesAgent(ownerId, agentId)) byOwner.set(ownerId, [...(byOwner.get(ownerId) ?? []), agentId]);
   }
   let sent = 0;
+  // Owners who switched on the daily digest automation already hear every morning, so they skip this weekly email.
+  const daily = await ownersWithDailyDigest();
   for (const [ownerId, agentIds] of byOwner) {
+    if (daily.has(ownerId)) continue;
     try {
       const [labels, deals, listings] = await Promise.all([agentLabels(agentIds), loadOversightDeals(agentIds, today), loadOversightListings(agentIds, today)]);
       const end = new Date(`${today}T00:00:00Z`);
