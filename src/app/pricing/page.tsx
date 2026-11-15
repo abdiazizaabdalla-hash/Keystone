@@ -116,7 +116,7 @@ export default function PricingPage() {
               <li className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />Everything in the brokerage-provided workspace</li>
               {AGENT_PRO.proAdds.map((l) => <li key={l} className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />{l}</li>)}
             </ul>
-            <DemoRequestButton className="mt-6 block w-full text-center py-3 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-semibold transition" label="Join the Agent Pro pilot" />
+            <Link href="/get-started" className="mt-6 block w-full text-center py-3 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-semibold transition">Start a free 14-day trial</Link>
           </div>
         </div>
       </section>

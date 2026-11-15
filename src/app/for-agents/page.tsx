@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import PublicHeader from '@/components/PublicHeader';
 import PublicFooter from '@/components/PublicFooter';
-import DemoRequestButton from '@/components/DemoRequestButton';
 import { AGENT_PRO } from '@/lib/marketingPricing';
 import { AgentPathsIllustration, TemplateSharingIllustration, AutomationAudiencesIllustration } from '@/components/marketing/Illustrations';
 
@@ -29,7 +28,7 @@ export default function ForAgentsPage() {
           Run your own transactions and listings in one workspace. Your brokerage can provide Relay for you, or you can start with Agent Pro on your own.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
-          <DemoRequestButton className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10" label="Join the Agent Pro pilot" />
+          <Link href="/get-started" className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10">Start a free 14-day trial</Link>
           <Link href="/for-brokerages" className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">Ask your brokerage</Link>
         </div>
       </section>
@@ -65,7 +64,7 @@ export default function ForAgentsPage() {
             </ul>
           </div>
         </div>
-        <p className="text-xs text-slate-500 mt-5">Agent Pro opens through a pilot first. Tell us you want in and we will set you up.</p>
+        <p className="text-xs text-slate-500 mt-5">Free for 14 days, no card needed. Then Agent Pro is $19 a month.</p>
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
@@ -85,7 +84,7 @@ export default function ForAgentsPage() {
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Not sure which one you are?</h2>
         <p className="text-slate-400 mb-6">If your broker has told you they use Relay, ask them to invite you. Otherwise start with Agent Pro.</p>
         <div className="flex flex-wrap items-center justify-center gap-4">
-          <DemoRequestButton className="px-7 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10" label="Join the Agent Pro pilot" />
+          <Link href="/get-started" className="px-7 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10">Start a free 14-day trial</Link>
           <Link href="/pricing#agents" className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">See agent pricing</Link>
         </div>
       </section>

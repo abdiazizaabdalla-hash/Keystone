@@ -2,6 +2,7 @@ import Link from 'next/link';
 import PublicHeader from '@/components/PublicHeader';
 import PublicFooter from '@/components/PublicFooter';
 import DemoRequestButton from '@/components/DemoRequestButton';
+import { AGENT_SELF_SERVE_PUBLIC } from '@/lib/agentSelfServe';
 
 const card = 'rounded-2xl border border-slate-700 bg-slate-800/60 p-7 flex flex-col';
 const primary = 'mt-auto block text-center px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition';
@@ -28,9 +29,13 @@ export default function GetStartedPage() {
 
           <div className={card}>
             <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Agent</p>
-            <h2 className="font-display text-2xl font-semibold text-slate-100 mb-2">Free trial for agents</h2>
-            <p className="text-sm text-slate-400 mb-6">Tell us a little about you and we will set up your own agent workspace. If your brokerage uses Relay, you may already be covered.</p>
-            <DemoRequestButton className={primary} label="Start the agent trial" />
+            <h2 className="font-display text-2xl font-semibold text-slate-100 mb-2">Free for 14 days</h2>
+            <p className="text-sm text-slate-400 mb-6">Your own workspace for your own transactions and listings. If your brokerage uses Relay, you may already be covered.</p>
+            {AGENT_SELF_SERVE_PUBLIC ? (
+              <Link href="/auth?mode=signup&plan=starter&as=agent" className={primary}>Start the agent trial</Link>
+            ) : (
+              <DemoRequestButton className={primary} label="Start the agent trial" />
+            )}
             <Link href="/for-agents" className="mt-3 text-center text-sm text-slate-400 hover:text-slate-200">What agents get</Link>
           </div>
 
