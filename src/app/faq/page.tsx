@@ -102,32 +102,32 @@ const FAQS: { category: string; q: string; a: string }[] = [
   },
   // Agent portal
   {
-    category: 'Agent logins (for TCs)',
+    category: 'Portal logins (for TCs)',
     q: 'Do the agents I work with need their own Relay account?',
     a: 'Not to be billed — you create an agent profile with their fee structure and contact details for invoicing, and that never requires a login. But you can separately invite an agent to a specific transaction for free, which gives them their own portal login scoped to just that deal. These are two different things that happen to share the word “agent”: an agent profile is a billing contact, while an invited agent is an actual login with access to one transaction.',
   },
   {
-    category: 'Agent logins (for TCs)',
+    category: 'Portal logins (for TCs)',
     q: 'How do I give an agent access?',
     a: 'Just add the agent to a transaction or listing with their email. If they do not have a login yet, Relay sends them an email to set up their account, and if they already do, they get access straight away with no extra step. Each transaction and listing also shows whether the agent can see it in their portal, so you always know. New agents need no password the first time and choose one on their very first login. Their sign-in links work for 30 minutes and can be opened more than once, so a mail app that previews the link will not break it; you can always ask for a new one.',
   },
   {
-    category: 'Agent logins (for TCs)',
+    category: 'Portal logins (for TCs)',
     q: 'Can one agent work with multiple TCs?',
     a: 'Yes. An agent’s portal login is their own — if several different TCs invite the same agent to their own deals, that agent sees every one of them grouped by TC in a single dashboard.',
   },
   {
-    category: 'Agent logins (for TCs)',
+    category: 'Portal logins (for TCs)',
     q: 'What can agents see and change?',
     a: 'On a deal, an invited agent can see the checklist, dates, and status, check off steps, move a step’s due date and note who it is waiting on, upload documents and mark them signed or unsigned, add a new contact, and message you with file attachments. They can also share a live progress page with their own clients (see the Client portal questions below). On a listing you share with them, they can view the key dates, checklist, offers, showings, price history, documents and contacts, and add their own contacts. Your private notes are never shared. They cannot add, remove or rename checklist steps, delete a document, or send or void a signature request.',
   },
   {
-    category: 'Agent logins (for TCs)',
+    category: 'Portal logins (for TCs)',
     q: 'Can agents access other clients’ transactions?',
     a: 'No. An agent only ever sees the specific transactions and listings you’ve shared with them — never your other clients, your invoices, or your billing.',
   },
   {
-    category: 'Agent logins (for TCs)',
+    category: 'Portal logins (for TCs)',
     q: 'Can agents sign documents through Relay?',
     a: 'Agents can mark a document as signed or unsigned, the same toggle you have. Actually sending a document out for signature — or canceling a pending request — stays with the TC.',
   },
@@ -282,7 +282,7 @@ export default function FAQPage() {
               <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>
-              Agent Login
+              Portal Login
             </Link>
             <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
             <Link

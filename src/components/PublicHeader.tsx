@@ -34,7 +34,7 @@ export default function PublicHeader({ active }: { active?: string }) {
             href="/agent/login"
             className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
           >
-            Agent Login
+            Portal Login
           </Link>
           <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
           <Link

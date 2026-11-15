@@ -122,7 +122,7 @@ function AgentLoginContent() {
               <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>
-              TC Login
+              Sign In
             </Link>
           </div>
         </div>
@@ -142,7 +142,7 @@ function AgentLoginContent() {
           {/* Card */}
           <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
             <h2 className="text-2xl font-display font-semibold text-slate-100 mb-1">
-              {invited && mode === 'link' ? 'Set up your agent account' : 'Agent Sign In'}
+              {invited && mode === 'link' ? 'Set up your portal login' : 'Portal Sign In'}
             </h2>
             <p className="text-slate-400 text-sm mb-6">
               {mode === 'password'
