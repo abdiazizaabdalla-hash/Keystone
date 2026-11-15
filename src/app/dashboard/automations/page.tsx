@@ -7,6 +7,7 @@ import { TRIGGERS, type Category, type Step } from '@/lib/automation/library';
 import AutomationBuilder, { blankAutomation, type BuilderValue } from '@/components/AutomationBuilder';
 import { summarizeSteps } from '@/components/ApplyAutomations';
 import PresetLibrary from '@/components/PresetLibrary';
+import type { Preset } from '@/lib/automation/presets';
 import WorkflowDialog from '@/components/WorkflowDialog';
 
 interface Template {
@@ -43,7 +44,7 @@ export default function AutomationsPage() {
   const [builderError, setBuilderError] = useState<string | null>(null);
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [showActivity, setShowActivity] = useState(false);
-  const [tab, setTab] = useState<'mine' | 'library'>('mine');
+  const [tab, setTab] = useState<'mine' | 'library'>('library');
   const [libError, setLibError] = useState<string | null>(null);
   const [openMine, setOpenMine] = useState<Template | null>(null);
   const [mineError, setMineError] = useState<string | null>(null);
@@ -97,14 +98,14 @@ export default function AutomationsPage() {
     }
   };
 
-  const addFromLibrary = async (v: BuilderValue): Promise<boolean> => {
+  const addFromLibrary = async (v: BuilderValue, stay = false): Promise<boolean> => {
     setSaving(true);
     setLibError(null);
     try {
       const res = await authFetch('/api/automation/templates', { method: 'POST', headers: json, body: JSON.stringify(v) });
       if (!res.ok) throw new Error(await errorOf(res, 'Could not add it'));
       setNotice(`Added "${v.name}". Apply it when you create a transaction or listing, or from a deal's Automation tab.`);
-      setTab('mine');
+      if (!stay) setTab('mine');
       await load();
       return true;
     } catch (e) {
@@ -113,6 +114,20 @@ export default function AutomationsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // The switch on a Library card: on adds the ready-made automation to Your automations, off removes that copy.
+  const togglePreset = async (p: Preset, on: boolean) => {
+    if (on) {
+      await addFromLibrary({ ...p, description: p.summary } as BuilderValue, true);
+      return;
+    }
+    const mine = (templates ?? []).find((t) => t.name === p.name && t.category === p.category);
+    if (!mine) return;
+    const unit = mine.category === 'transaction' ? 'transaction' : 'listing';
+    const used = mine.dealCount > 0 ? ` It will stop running on ${mine.dealCount} ${unit}${mine.dealCount === 1 ? '' : 's'} and cancel anything queued.` : '';
+    if (!window.confirm(`Remove "${mine.name}" from Your automations?${used}`)) return;
+    await act(() => authFetch(`/api/automation/templates/${mine.id}`, { method: 'DELETE' }), 'Could not remove it', () => `Removed "${mine.name}".`);
   };
 
   const saveMine = async (t: Template, v: BuilderValue) => {
@@ -189,7 +204,7 @@ export default function AutomationsPage() {
       ) : (
         <>
           <div className="flex gap-6 border-b border-white/10" role="tablist">
-            {([['mine', 'Your automations'], ['library', 'Ready-made']] as const).map(([id, label]) => (
+            {([['library', 'Library'], ['mine', 'Your automations']] as const).map(([id, label]) => (
               <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} data-testid={`tab-${id}`}
                 className={`-mb-px border-b-2 pb-2 text-sm font-medium ${tab === id ? 'border-blue-400 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>{label}</button>
             ))}
@@ -198,7 +213,7 @@ export default function AutomationsPage() {
           {tab === 'mine' ? (
           <section className="space-y-4" data-testid="your-automations">
             {templates === null ? <p className="text-sm text-slate-500">Loading…</p> : !hasAny ? (
-              <p className="rounded-2xl border border-dashed border-white/15 p-5 text-sm text-slate-400">Nothing here yet. Open Ready-made for a starting point, or create your own.</p>
+              <p className="rounded-2xl border border-dashed border-white/15 p-5 text-sm text-slate-400">Nothing here yet. Switch one on in the Library for a starting point, or create your own.</p>
             ) : (
               <>
                 {group('transaction', 'Transactions')}
@@ -228,7 +243,7 @@ export default function AutomationsPage() {
           </section>
 
           ) : (
-            <PresetLibrary owned={new Set((templates ?? []).map((t) => t.name))} saving={saving} error={libError} onSave={addFromLibrary} onFullEditor={(v) => { setBuilderError(null); setEditing({ id: null, value: v }); window.scrollTo({ top: 0 }); }} />
+            <PresetLibrary onToggle={togglePreset} owned={new Set((templates ?? []).map((t) => t.name))} saving={saving} error={libError} onSave={addFromLibrary} onFullEditor={(v) => { setBuilderError(null); setEditing({ id: null, value: v }); window.scrollTo({ top: 0 }); }} />
           )}
         </>
       )}
