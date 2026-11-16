@@ -36,28 +36,32 @@ export function DealFlowIllustration() {
   );
 }
 
-/** Coordinator, agent and client side by side: who sees what. */
+/** Coordinator shares with the agent; the agent shares with their buyer or seller underneath. */
 export function PortalIllustration() {
-  const boxes = [
-    { x: 30, hot: false, h: 'Agent', l: ['Free login', 'Only the deals and listings', 'the coordinator picks'], badge: true },
-    { x: 290, hot: true, h: 'Coordinator', l: ['Runs the deals in Relay', 'Chooses what each', 'agent can see'], badge: false },
-    { x: 550, hot: false, h: 'Client', l: ['A live progress page', 'the agent chooses', 'to share'], badge: false },
-  ];
   return (
-    <svg viewBox="0 0 800 290" className={frame} role="img" aria-label="A coordinator gives an agent a free login to chosen deals, and the agent shares a progress page with their client">
-      {boxes.map((b) => (
-        <g key={b.h}>
-          <rect x={b.x} y="30" width="220" height="140" rx="16" className={b.hot ? hot : box} strokeWidth="1.5" />
-          <text x={b.x + 110} y="62" textAnchor="middle" className={t1}>{b.h}</text>
-          {b.l.map((line, i) => <text key={line} x={b.x + 110} y={86 + i * 17} textAnchor="middle" className={t2}>{line}</text>)}
-          {b.badge && (<><rect x={b.x + 52} y="136" width="116" height="20" rx="10" className="fill-emerald-500/15 stroke-emerald-400" /><text x={b.x + 110} y="150" textAnchor="middle" className="fill-emerald-300 text-[10px] font-semibold">FREE FOR THE AGENT</text></>)}
-        </g>
-      ))}
-      <path d="M246 100 H274" className="stroke-blue-400" strokeWidth="3" strokeLinecap="round" />
-      <path d="M506 100 H534" className="stroke-blue-400" strokeWidth="3" strokeLinecap="round" />
-      <rect x="60" y="198" width="680" height="68" rx="14" className="fill-slate-900/70 stroke-slate-700" />
-      <text x="400" y="226" textAnchor="middle" className={t1}>Access is a choice, deal by deal</text>
-      <text x="400" y="248" textAnchor="middle" className={t2}>Tick the deals and listings an agent can see. Untick to take one away. Nothing else is shared.</text>
+    <svg viewBox="0 0 800 330" className={frame} role="img" aria-label="A coordinator gives an agent a free login to chosen deals, and the agent shares a live progress page with their buyer or seller">
+      <defs>
+        <marker id="arrow6" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" className="fill-blue-400" /></marker>
+      </defs>
+      <rect x="40" y="30" width="300" height="120" rx="16" className={hot} strokeWidth="1.5" />
+      <text x="190" y="62" textAnchor="middle" className={t1}>Coordinator</text>
+      <text x="190" y="88" textAnchor="middle" className={t2}>Runs the deals in Relay</text>
+      <text x="190" y="108" textAnchor="middle" className={t2}>Chooses what each agent can see</text>
+      <path d="M346 90 H452" className="stroke-blue-400" strokeWidth="3" strokeLinecap="round" markerEnd="url(#arrow6)" />
+      <rect x="460" y="30" width="300" height="120" rx="16" className={box} strokeWidth="1.5" />
+      <text x="610" y="62" textAnchor="middle" className={t1}>Agent</text>
+      <text x="610" y="88" textAnchor="middle" className={t2}>Free login to the deals chosen for them</text>
+      <rect x="552" y="108" width="116" height="20" rx="10" className="fill-emerald-500/15 stroke-emerald-400" />
+      <text x="610" y="122" textAnchor="middle" className="fill-emerald-300 text-[10px] font-semibold">FREE FOR THE AGENT</text>
+      <path d="M610 156 V196" className="stroke-blue-400" strokeWidth="3" strokeLinecap="round" markerEnd="url(#arrow6)" />
+      <rect x="460" y="204" width="300" height="100" rx="16" className={box} strokeWidth="1.5" />
+      <text x="610" y="234" textAnchor="middle" className={t1}>Their buyer or seller</text>
+      <text x="610" y="258" textAnchor="middle" className={t2}>A live progress page,</text>
+      <text x="610" y="278" textAnchor="middle" className={t2}>shared by the agent</text>
+      <text x="40" y="230" className={t1}>Access is a choice, deal by deal</text>
+      <text x="40" y="254" className={t2}>Tick the deals an agent can see.</text>
+      <text x="40" y="274" className={t2}>Untick to take one away.</text>
+      <text x="40" y="294" className={t2}>Nothing else is shared.</text>
     </svg>
   );
 }
