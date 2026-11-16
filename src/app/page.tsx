@@ -239,11 +239,11 @@ export default function Home() {
       {/* Snapshot: workflows that run themselves */}
       <section className="max-w-7xl mx-auto px-6 py-16 border-t border-slate-700">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Workflow</p>
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Reminders, templates and payments that run themselves.</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">Set it up once. Relay sends the reminders, shares the templates and keeps the money with the deal.</p>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Set a rule once. Relay does the follow-up.</h2>
+        <p className="text-slate-400 mb-8 max-w-2xl">Automations send the reminder emails you would otherwise write by hand. Shared templates keep everyone’s wording consistent. Invoices keep payment next to the deal.</p>
         <div className="grid gap-8">
           <div>
-            <p className="text-sm text-slate-400 mb-3">Automations: a reminder that sends itself.</p>
+            <p className="text-sm text-slate-400 mb-3">Automations: pick what triggers it and which template to use, and Relay sends the email.</p>
             <AutomationFlowIllustration />
           </div>
           <div>
@@ -255,7 +255,7 @@ export default function Home() {
             <TemplateSharingIllustration />
           </div>
           <div>
-            <p className="text-sm text-slate-400 mb-3">Automations: for TCs, teams, agents and brokerages.</p>
+            <p className="text-sm text-slate-400 mb-3">Who can use automations: coordinators, teams, agents and brokerages.</p>
             <AutomationAudiencesIllustration />
           </div>
         </div>
@@ -268,7 +268,7 @@ export default function Home() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {[
             { title: 'Calendar sync', body: 'Google Calendar updates within seconds. Outlook and Apple subscribe by a private link.' },
-            { title: 'Import your work', body: 'CSV deal import with a preview, and a contacts list that fills itself from your deals.' },
+            { title: 'Import your work', body: 'CSV deal import with a preview, and a contacts list built from the people on your deals.' },
             { title: 'QuickBooks files', body: 'Download invoices in QuickBooks’ import layout, or upload an export to match invoices.' },
             { title: 'Documents and e-signatures', body: 'Collect documents per deal and send them for signature.' },
             { title: 'Listings to transactions', body: 'Convert a listing to a transaction in one click.' },

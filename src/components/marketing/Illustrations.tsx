@@ -230,12 +230,12 @@ export function BrokerageHubIllustration() {
 /** A simple three-step flow: something happens, a template is chosen, the message goes out. */
 export function AutomationFlowIllustration() {
   const steps = [
-    { x: 40, title: 'Something happens', sub: 'New transaction, earnest money due' },
-    { x: 300, title: 'A template is used', sub: 'Your email, ready to go' },
-    { x: 560, title: 'It goes out', sub: 'The reminder sends itself' },
+    { x: 40, title: 'Something happens', sub: 'A new deal, or a date gets close' },
+    { x: 300, title: 'Your template is picked', sub: 'The email you wrote once' },
+    { x: 560, title: 'Relay sends it', sub: 'To the people on the deal' },
   ];
   return (
-    <svg viewBox="0 0 800 150" className={frame} role="img" aria-label="An automation: an event happens, a template is used, and the reminder is sent">
+    <svg viewBox="0 0 800 150" className={frame} role="img" aria-label="An automation: something happens on a deal, your template is picked, and Relay sends the email for you">
       <defs>
         <marker id="arrow2" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" className="fill-slate-500" /></marker>
       </defs>
@@ -309,7 +309,7 @@ export function TemplateSharingIllustration() {
 export function AutomationAudiencesIllustration() {
   const lanes = [
     { y: 20, who: 'TC', steps: ['A deal is created', 'Your template is chosen', 'The agent gets the reminder'] },
-    { y: 130, who: 'Agent', steps: ['A listing goes live', 'Your template is chosen', 'The follow-up sends itself'] },
+    { y: 130, who: 'Agent', steps: ['A listing goes live', 'Your template is chosen', 'Relay sends the follow-up'] },
   ];
   return (
     <svg viewBox="0 0 820 250" className={frame} role="img" aria-label="Automations for a TC and for an agent: an event happens, a template is chosen, and the message is sent">

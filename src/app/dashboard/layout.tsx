@@ -161,7 +161,7 @@ function NavLink({
       title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
       className={`relative flex items-center rounded-xl transition font-medium ${
-        collapsed ? 'justify-center px-0 py-2.5 short:py-2 tiny:py-1' : 'gap-3 px-4 py-2.5 short:py-2 tiny:py-1'
+        collapsed ? 'justify-center px-0 py-2 short:py-1.5 tiny:py-1' : 'gap-2.5 px-3 py-2 short:py-1.5 tiny:py-1'
       } ${colors}`}
     >
       {icon}
@@ -174,25 +174,6 @@ function NavLink({
             {badge > 99 ? '99+' : badge}
           </span>
         ))}
-    </Link>
-  );
-}
-
-function BannerLink({ href, label, icon, active, badge = 0 }: { href: string; label: string; icon: React.ReactNode; active: boolean; badge?: number }) {
-  return (
-    <Link
-      href={href}
-      data-tour={`nav-${label.toLowerCase()}`}
-      aria-current={active ? 'page' : undefined}
-      className={`relative flex items-center gap-2 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition ${
-        active ? 'text-white border-blue-400' : 'text-slate-300 border-transparent hover:text-white'
-      }`}
-    >
-      {icon}
-      <span>{label}</span>
-      {badge > 0 && (
-        <span className="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center">{badge > 99 ? '99+' : badge}</span>
-      )}
     </Link>
   );
 }
@@ -228,8 +209,6 @@ export default function DashboardLayout({
   } | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
   // Phones only: the sidebar is replaced by a top bar with a slide-down menu.
   const [mobileOpen, setMobileOpen] = useState(false);
   // Unread team messages (Team/Brokerage plans) -- shown on the Collaborate link, or on Messages for a broker and for brokerage agents.
@@ -496,14 +475,13 @@ export default function DashboardLayout({
   // A brokerage's own account (owner or managing account) is labelled Brokerage, never Team.
   const chipLabel = brokerOwner === true || brokerageAdmin?.delegated === true || plan === 'brokerage' ? 'Brokerage' : plan ?? '';
 
+  // Logged-in screens run a little more zoomed out than the public site, so there is room for the work.
   useEffect(() => {
-    if (!menuOpen) return;
-    const close = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
-  }, [menuOpen]);
+    const root = document.documentElement;
+    const before = root.style.fontSize;
+    root.style.fontSize = '80%';
+    return () => { root.style.fontSize = before; };
+  }, []);
 
   if (isLoading) {
     return (
@@ -600,22 +578,22 @@ export default function DashboardLayout({
       {/* Sidebar (tablet and desktop) */}
       <div
         className={`${
-          collapsed ? 'w-16' : 'w-52'
+          collapsed ? 'w-14' : 'w-44'
         } shrink-0 h-full bg-slate-950/50 backdrop-blur border-r border-white/10 hidden md:flex flex-col transition-all duration-200`}
       >
         {/* Logo */}
         <div
           className={`border-b border-white/10 flex items-center ${
-            collapsed ? 'justify-center px-3 py-3' : 'justify-between px-4 py-3.5 tiny:py-2.5'
+            collapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-3 py-3 tiny:py-2'
           }`}
         >
           <Link href="/dashboard" className="flex items-center gap-3 min-w-0" title={collapsed ? 'Relay TC' : undefined}>
-            <span className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm shrink-0">
+            <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm shrink-0">
               <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
             </span>
             {!collapsed && (
               <div className="min-w-0">
-                <h1 className="text-white font-display font-semibold text-lg truncate">Relay TC</h1>
+                <h1 className="text-white font-display font-semibold text-base truncate">Relay TC</h1>
                 {showPlanChip && (
                   <span className="inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40">
                     {chipLabel}
@@ -653,7 +631,7 @@ export default function DashboardLayout({
         )}
 
         {/* Navigation */}
-        <nav className={`flex-1 min-h-0 overflow-y-auto py-3 tiny:py-1.5 space-y-0.5 ${collapsed ? 'px-2' : 'px-3'}`}>
+        <nav className={`flex-1 min-h-0 overflow-y-auto py-2 tiny:py-1.5 space-y-0.5 ${collapsed ? 'px-1.5' : 'px-2'}`}>
           {sideItems.map((item) => (
             <NavLink
               key={item.href}
@@ -665,8 +643,25 @@ export default function DashboardLayout({
               icon={NAV_ICONS[item.icon]}
             />
           ))}
+          {bannerItems.length > 0 && (
+            <>
+              <div className="my-2 border-t border-white/10" />
+              {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] uppercase tracking-wider text-slate-500">Manage</p>}
+              {bannerItems.map((item) => (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  label={item.label}
+                  collapsed={collapsed}
+                  active={isActivePath(pathname, item.href)}
+                  badge={item.badge ?? 0}
+                  icon={NAV_ICONS[item.icon]}
+                />
+              ))}
+            </>
+          )}
           <div className="my-2 border-t border-white/10" />
-          {moreItems.filter((i) => i.href !== '/dashboard/search').map((item) => (
+          {moreItems.map((item) => (
             <NavLink
               key={item.href}
               href={item.href}
@@ -681,66 +676,35 @@ export default function DashboardLayout({
             type="button"
             onClick={() => setTutorialMenuOpen(true)}
             title={collapsed ? 'Tutorial' : 'Open a quick tutorial'}
-            className={`w-full flex items-center rounded-xl transition font-medium text-slate-300 hover:bg-white/5 hover:text-white ${collapsed ? 'justify-center px-0 py-2.5 short:py-2 tiny:py-1' : 'gap-3 px-4 py-2.5 short:py-2 tiny:py-1'}`}
+            className={`w-full flex items-center rounded-xl transition font-medium text-slate-300 hover:bg-white/5 hover:text-white ${collapsed ? 'justify-center px-0 py-2 short:py-1.5 tiny:py-1' : 'gap-2.5 px-3 py-2 short:py-1.5 tiny:py-1'}`}
           >
-            <svg className={ICON_CLS} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="M7.8 7.8a2.3 2.3 0 114 1.5c-.6.6-1.8 1-1.8 2.2M10 14.2v.1" /></svg>
+            <svg className={ICON_CLS} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 20 20"><path strokeLinecap="round" strokeLinejoin="round" d="M10 5.5C8.6 4.4 6.5 4 3.5 4v11c3 0 5.1.4 6.5 1.5 1.4-1.1 3.5-1.5 6.5-1.5V4c-3 0-5.1.4-6.5 1.5zM10 5.5v11" /></svg>
             {!collapsed && <span>Tutorial</span>}
           </button>
         </nav>
+
+        <div className={`border-t border-white/10 space-y-1 ${collapsed ? 'p-1.5' : 'p-2.5'}`}>
+          {userName && !collapsed && <p className="px-2 text-xs font-semibold text-slate-200 truncate tiny:hidden">{userName}</p>}
+          {plan && !fromBrokerage && !collapsed && (
+            <p className="px-2 text-[11px] text-slate-400">
+              {showPlanChip ? <span className="text-slate-200 font-semibold capitalize">{chipLabel}</span> : 'Free'} plan{' '}
+              <Link href="/dashboard/account" className="text-blue-400 hover:text-blue-300">{showPlanChip ? 'Manage' : 'Upgrade'}</Link>
+            </p>
+          )}
+          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={11} />
+          <button
+            onClick={handleLogout}
+            title={collapsed ? 'Logout' : undefined}
+            className={`w-full flex items-center justify-center text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition text-sm py-1.5 ${collapsed ? 'px-0' : 'px-4'}`}
+          >
+            {collapsed ? '⏻' : 'Logout'}
+          </button>
+        </div>
 
       </div>
 
       {/* Main Content */}
       <div className="flex-1 min-w-0 overflow-auto">
-        {/* Top banner (tablet and desktop): running the office, search, notifications and the account menu */}
-        <header className="hidden md:flex sticky top-0 z-30 items-center justify-between gap-3 px-3 bg-slate-950/80 backdrop-blur border-b border-white/10">
-          <nav aria-label="Manage" className="flex items-center min-w-0 overflow-x-auto">
-            {bannerItems.map((item, i) => (
-              <div key={item.href} className="flex items-center">
-                {i > 0 && <span aria-hidden className="text-slate-600 select-none">|</span>}
-                <BannerLink href={item.href} label={item.label} icon={NAV_ICONS[item.icon]} active={isActivePath(pathname, item.href)} badge={item.badge ?? 0} />
-              </div>
-            ))}
-          </nav>
-          <div className="flex items-center gap-1 shrink-0">
-            <Link href="/dashboard/search" data-tour="nav-search" aria-label="Search" title="Search" className="p-2 text-slate-300 hover:text-white rounded-lg transition">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" /></svg>
-            </Link>
-            <NotificationBell variant="banner" />
-            <div ref={menuRef} className="relative ml-1">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((o) => !o)}
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                className="flex items-center gap-2 pl-1.5 pr-2 py-1 text-sm text-slate-200 hover:text-white rounded-lg transition"
-              >
-                <span className="w-7 h-7 rounded-full bg-blue-500/25 border border-blue-400/40 text-blue-200 text-xs font-semibold flex items-center justify-center">{(userName || 'U').trim().charAt(0).toUpperCase()}</span>
-                <span className="max-w-[10rem] truncate hidden lg:inline">{userName || 'Account'}</span>
-                <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </button>
-              {menuOpen && (
-                <div role="menu" className="absolute right-0 top-full mt-1 w-64 bg-slate-900 border border-white/15 rounded-xl shadow-2xl py-1.5 z-50">
-                  {(userName || (plan && !fromBrokerage)) && (
-                    <div className="px-4 py-2 border-b border-white/10 mb-1">
-                      {userName && <p className="text-sm font-semibold text-slate-100 truncate">{userName}</p>}
-                      {plan && !fromBrokerage && (
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          {showPlanChip ? <><span className="text-slate-200 font-semibold capitalize">{chipLabel}</span> plan</> : 'Free plan'}
-                          {' · '}
-                          <Link href="/dashboard/account" onClick={() => setMenuOpen(false)} className="text-blue-400 hover:text-blue-300">{showPlanChip ? 'Manage' : 'Upgrade'}</Link>
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <button type="button" role="menuitem" onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:text-red-300 transition">
-                    <span className="w-5 h-5 shrink-0" />Logout
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
         {readOnly && (
           <div className="px-6 py-3 bg-amber-900/30 border-b border-amber-700/60" role="status">
             <p className="text-sm text-amber-100 font-semibold">Your workspace is read-only for now</p>

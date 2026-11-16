@@ -53,6 +53,13 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   const [mobileOpen, setMobileOpen] = useState(false);
   // An agent the admin gave a workspace to gets a way back to it from the shared-deals portal.
   const [hasWorkspace, setHasWorkspace] = useState(false);
+  // Logged-in screens run a little more zoomed out than the public site.
+  useEffect(() => {
+    const root = document.documentElement;
+    const before = root.style.fontSize;
+    root.style.fontSize = '80%';
+    return () => { root.style.fontSize = before; };
+  }, []);
   useEffect(() => {
     let cancelled = false;
     fetchHasWorkspace().then((has) => {
@@ -185,7 +192,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
       {/* Sidebar (tablet and desktop) */}
       <div
         className={`${
-          collapsed ? 'w-20' : 'w-56'
+          collapsed ? 'w-14' : 'w-44'
         } shrink-0 h-full bg-gradient-to-b from-slate-800 to-slate-900 border-r border-slate-700 hidden md:flex flex-col transition-all duration-200`}
       >
         <div
@@ -324,7 +331,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
         </nav>
 
         <div className={`border-t border-slate-700 ${collapsed ? 'p-2' : 'p-4'}`}>
-          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={14} />
+          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={11} />
           <button
             onClick={handleLogout}
             title={collapsed ? 'Logout' : undefined}

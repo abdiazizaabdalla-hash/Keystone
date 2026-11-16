@@ -185,7 +185,7 @@ export default function NotificationBell({
 
   const panelStyle =
     variant === 'sidebar'
-      ? { left: `${(collapsed ? 5 : sidebarRem) + 0.75}rem` }
+      ? { left: `${(collapsed ? 3.5 : sidebarRem) + 0.75}rem` }
       : undefined;
   const panelClass =
     variant === 'sidebar'

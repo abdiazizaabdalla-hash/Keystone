@@ -2,7 +2,18 @@ import Link from 'next/link';
 import PublicHeader from '@/components/PublicHeader';
 import PublicFooter from '@/components/PublicFooter';
 import AgentPlanCards from '@/components/marketing/AgentPlanCards';
-import { AgentPathsIllustration } from '@/components/marketing/Illustrations';
+import { DealFlowIllustration, AutomationFlowIllustration } from '@/components/marketing/Illustrations';
+
+const FEATURES: { title: string; body: string }[] = [
+  { title: 'Contracts, read for you', body: 'Upload the signed contract. AI fills in the address, price, parties and key dates, and you check and save.' },
+  { title: 'A checklist on every deal', body: 'Each deal starts with a closing checklist. Due dates follow the contract and move when the dates move.' },
+  { title: 'Dates on your calendar', body: 'Google Calendar updates within seconds. Outlook and Apple subscribe with a private link.' },
+  { title: 'Documents with the step', body: 'Upload documents against the checklist step they belong to, and share only the ones you choose.' },
+  { title: 'Listings, offers and showings', body: 'Each listing has its own page. Turn it into a transaction in one click when an offer is accepted.' },
+  { title: 'A live page for your client', body: 'Give your buyer or seller a progress page that shows only the steps and documents you pick.' },
+  { title: 'Ready-made emails and forms', body: 'Start from templates for common emails and documents, and edit them for your own wording.' },
+  { title: 'Invoices and import', body: 'Keep invoices next to the deal, move them to QuickBooks, and bring your open deals in from a spreadsheet.' },
+];
 
 const WORKFLOW: { title: string; body: string }[] = [
   { title: 'Upload the contract', body: 'AI reads it and fills out and creates the transaction or listing for you, with the address, price, parties and key dates. You check and save.' },
@@ -32,11 +43,31 @@ export default function ForAgentsPage() {
         </div>
       </section>
 
-      <section className="max-w-7xl mx-auto px-6 pb-16"><AgentPathsIllustration /></section>
-
       <section className="max-w-7xl mx-auto px-6 pb-16">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Templates and automations</h2>
-        <p className="text-slate-400 max-w-3xl mb-8">Use your brokerage’s shared templates and Relay’s standard forms on both plans. Pro adds custom checklist templates and automations that send reminders and follow-ups for you.</p>
+        <DealFlowIllustration />
+        <p className="text-xs text-slate-500 mt-3 text-center">One deal, from the contract to closing day.</p>
+      </section>
+
+      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
+        <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">What you get</p>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Everything about a deal, in one place.</h2>
+        <p className="text-slate-400 mb-8 max-w-2xl">No more digging through email, texts and folders to find a date, a document or what is still waiting on someone.</p>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {FEATURES.map((f) => (
+            <div key={f.title} className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl">
+              <h3 className="font-semibold text-slate-100 mb-2">{f.title}</h3>
+              <p className="text-sm text-slate-400">{f.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="max-w-7xl mx-auto px-6 py-16 border-t border-slate-700">
+        <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Automations, on Pro</p>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Write the reminder once. Relay sends it every time.</h2>
+        <p className="text-slate-400 mb-8 max-w-3xl">You choose what should trigger it, such as a new deal or a date getting close, and which email template to use. When that happens, Relay sends the email to the people on the deal for you. One switch in Settings pauses everything.</p>
+        <AutomationFlowIllustration />
+        <p className="text-sm text-slate-400 mt-6 max-w-3xl">Starter has ready-made email and document templates you can edit and use by hand, plus your brokerage’s shared templates if it uses Relay. Pro adds the automations and custom checklist templates.</p>
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
@@ -57,6 +88,23 @@ export default function ForAgentsPage() {
             </li>
           ))}
         </ol>
+      </section>
+
+      <section className="max-w-4xl mx-auto px-6 py-16 border-t border-slate-700">
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-8">Questions agents ask</h2>
+        <dl className="space-y-6">
+          {[
+            { q: 'Do I need a brokerage to use Relay?', a: 'No. Sign up on your own with Starter or Pro. If your brokerage already uses Relay, you can also be invited by them.' },
+            { q: 'What happens after the 14 days?', a: 'Starter continues at $19 a month. You add a payment method to keep creating and editing, and your deals stay put.' },
+            { q: 'Can I work with a coordinator?', a: 'Yes. If your coordinator has a Relay account, you can collaborate with them directly on the same deals.' },
+            { q: 'Who can see my deals?', a: 'You do. If your brokerage invited you, your broker can also see where your deals stand. Your clients see only what you share.' },
+          ].map((x) => (
+            <div key={x.q}>
+              <dt className="font-semibold text-slate-100 mb-1">{x.q}</dt>
+              <dd className="text-sm text-slate-400">{x.a}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       <section className="max-w-4xl mx-auto px-6 py-20 border-t border-slate-700 text-center">
