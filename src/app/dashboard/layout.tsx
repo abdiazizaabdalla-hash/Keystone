@@ -2,7 +2,7 @@
 
 import ApprovalPopup from '@/components/ApprovalPopup';
 import ListingAddedNotice from '@/components/ListingAddedNotice';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getValidToken, clearSession, authFetch } from '@/lib/authClient';
@@ -152,8 +152,8 @@ function TopNavLink({
 }) {
   const body = (
     <>
-      <span className={menu ? '' : '[&>svg]:w-4 [&>svg]:h-4'}>{icon}</span>
-      <span className={compact && !menu ? 'sr-only' : 'truncate'}>{label}</span>
+      <span className={menu ? '' : compact ? 'hidden' : '[&>svg]:w-4 [&>svg]:h-4'}>{icon}</span>
+      <span className="truncate">{label}</span>
       {badge > 0 && (
         <span className={`${menu ? 'ml-auto' : 'ml-0.5'} min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center`}>
           {badge > 99 ? '99+' : badge}
@@ -176,7 +176,7 @@ function TopNavLink({
       data-tour={`nav-${label.toLowerCase()}`}
       title={label}
       aria-current={active ? 'page' : undefined}
-      className={`relative flex items-center shrink-0 gap-1.5 ${compact ? 'px-3' : 'px-3'} h-full border-b-2 text-[13px] lg:text-sm font-medium whitespace-nowrap transition-colors ${active ? 'border-blue-400 text-white' : tone === 'admin' ? 'border-transparent text-amber-200 hover:text-amber-100' : 'border-transparent text-slate-400 hover:text-white'}`}
+      className={`relative flex items-center shrink-0 gap-1.5 ${compact ? 'px-2' : 'px-3'} h-full border-b-2 text-[13px] lg:text-sm font-medium whitespace-nowrap transition-colors ${active ? 'border-blue-400 text-white' : tone === 'admin' ? 'border-transparent text-amber-200 hover:text-amber-100' : 'border-transparent text-slate-400 hover:text-white'}`}
     >
       {body}
     </Link>
@@ -217,7 +217,7 @@ export default function DashboardLayout({
   const [userOpen, setUserOpen] = useState(false);
   const menusRef = useRef<HTMLDivElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
-  // The bar shows icon and name; when that does not fit the screen it falls back to icons alone (names stay as tooltips).
+  // The bar shows icon and name; when that does not fit the screen it drops the icons and keeps the names.
   const [compactBar, setCompactBar] = useState(false);
   // Phones only: the sidebar is replaced by a top bar with a slide-down menu.
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -462,7 +462,7 @@ export default function DashboardLayout({
     window.addEventListener('resize', again);
     return () => { clearTimeout(t); window.removeEventListener('resize', again); };
   }, [barKey]);
-  // If the names do not fit, fall back to icons alone.
+  // If icon and name do not fit, keep the names and drop the icons.
   useEffect(() => {
     if (compactBar) return;
     const el = navRef.current;
@@ -580,10 +580,11 @@ export default function DashboardLayout({
           </span>
         </Link>
 
-        <nav ref={navRef} className="flex items-stretch gap-1 min-w-0 flex-1 self-stretch overflow-hidden" aria-label="Main">
-          {barItems.map((item) => (
+        <nav ref={navRef} className="flex items-stretch min-w-0 flex-1 self-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Main">
+          {barItems.map((item, i) => (
+            <Fragment key={item.href}>
+              {i > 0 && <span aria-hidden="true" className="self-center h-5 w-px bg-white/20 shrink-0" />}
             <TopNavLink
-              key={item.href}
               href={item.href}
               label={item.label}
               compact={compactBar}
@@ -592,6 +593,7 @@ export default function DashboardLayout({
               badge={item.href === '/dashboard/messages' ? messagesUnread : item.href === '/dashboard/collaborate' ? collaborateUnread : 0}
               icon={NAV_ICONS[item.icon]}
             />
+            </Fragment>
           ))}
         </nav>
 
