@@ -1103,6 +1103,9 @@ create index if not exists idx_brokerage_required_steps_owner on public.brokerag
 alter table public.brokerage_required_steps enable row level security;
 revoke all on table public.brokerage_required_steps from anon, authenticated;
 grant select, insert, update, delete on table public.brokerage_required_steps to service_role;
+-- A listing step can fall before the planned list date, so the day count may be negative.
+alter table public.brokerage_required_steps drop constraint if exists brokerage_required_steps_due_days_check;
+alter table public.brokerage_required_steps add constraint brokerage_required_steps_due_days_check check (due_days is null or due_days between -365 and 365);
 notify pgrst, 'reload schema';
 
 commit;

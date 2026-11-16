@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanRequiredSteps, stepsToAdd } from '@/lib/brokerageRequiredStepsRules';
+import { DEFAULT_REQUIRED_STEPS, cleanRequiredSteps, stepsToAdd } from '@/lib/brokerageRequiredStepsRules';
 
 describe('brokerage required steps', () => {
   it('trims, drops blanks and repeats, and keeps days in range', () => {
@@ -14,5 +14,20 @@ describe('brokerage required steps', () => {
     const required = [{ name: 'Broker file review', dueDays: 3 }, { name: 'Wire check', dueDays: null }];
     expect(stepsToAdd(['broker FILE review', 'Inspection'], required)).toEqual([{ name: 'Wire check', dueDays: null }]);
     expect(stepsToAdd([], required)).toHaveLength(2);
+  });
+});
+
+describe('starting checklist', () => {
+  it('offers Relay’s baseline steps, with days only where they count from acceptance', () => {
+    const t = DEFAULT_REQUIRED_STEPS.transaction;
+    expect(t.map((s) => s.name)).toEqual(['Contract & File Setup', 'Earnest Money & Option', 'Inspection & Repairs', 'Title, Appraisal & Financing', 'Clear to Close', 'Closing & Post-Closing']);
+    expect(t.map((s) => s.dueDays)).toEqual([1, 3, 10, 21, null, null]);
+  });
+  it('keeps listing steps that fall before the list date, and survives cleaning', () => {
+    const l = DEFAULT_REQUIRED_STEPS.listing;
+    expect(l[0].dueDays).toBe(-21);
+    expect(cleanRequiredSteps(l, 'listing')).toEqual(l);
+    // A transaction step cannot be due before acceptance.
+    expect(cleanRequiredSteps([{ name: 'x', dueDays: -5 }], 'transaction')[0].dueDays).toBe(0);
   });
 });

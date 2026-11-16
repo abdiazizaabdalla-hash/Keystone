@@ -6,7 +6,7 @@ import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { resolveOversightActor } from '@/lib/brokerageAdminsServer';
 import { ownerKind } from '@/lib/oversightRoster';
 import { oversightError } from '@/lib/oversightServer';
-import { applyRequiredStepsToOpenFiles, cleanRequiredSteps, isStepKind, loadRequiredSteps } from '@/lib/brokerageRequiredSteps';
+import { DEFAULT_REQUIRED_STEPS, applyRequiredStepsToOpenFiles, cleanRequiredSteps, isStepKind, loadRequiredSteps } from '@/lib/brokerageRequiredSteps';
 
 // The required steps for transactions and listings, added to every agent's files (a brokerage) or every coordinator's files (a TC team).
 //   GET                          -> { transaction: [{name, dueDays}], listing: [...] }
@@ -16,7 +16,15 @@ export async function GET(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
     const { owner } = await resolveOversightActor(caller, 'view');
-    return NextResponse.json({ ...(await loadRequiredSteps(owner.id)), mode: await ownerKind(owner.id) });
+    // Until the owner saves a list, show Relay's starting checklist so they can edit it and make it the default for everyone.
+    const saved = await loadRequiredSteps(owner.id);
+    const isDefault = { transaction: saved.transaction.length === 0, listing: saved.listing.length === 0 };
+    return NextResponse.json({
+      transaction: isDefault.transaction ? DEFAULT_REQUIRED_STEPS.transaction : saved.transaction,
+      listing: isDefault.listing ? DEFAULT_REQUIRED_STEPS.listing : saved.listing,
+      isDefault,
+      mode: await ownerKind(owner.id),
+    });
   } catch (error) {
     return oversightError(error, 'load the required steps');
   }
@@ -29,7 +37,7 @@ export async function PUT(request: NextRequest) {
     await assertBrokerageManageable(owner.id);
     const body = (await request.json().catch(() => ({}))) as { kind?: unknown; steps?: unknown };
     if (!isStepKind(body.kind)) return NextResponse.json({ error: 'Choose transactions or listings.' }, { status: 400 });
-    const steps = cleanRequiredSteps(body.steps);
+    const steps = cleanRequiredSteps(body.steps, body.kind);
     const { error: delErr } = await supabaseServer.from('brokerage_required_steps').delete().eq('owner_user_id', owner.id).eq('kind', body.kind);
     if (delErr) throw delErr;
     if (steps.length) {
