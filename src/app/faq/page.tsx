@@ -82,12 +82,12 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Agents',
     q: 'What plans are there for agents?',
-    a: 'Two: Starter at $9 a month and Pro at $19 a month, both free for 14 days with no card needed. Your brokerage can also invite you if it uses Relay.',
+    a: 'Two: Starter at $19 a month and Pro at $39 a month, both with the same features as on the pricing page. Starter is free for 14 days with no card needed. Your brokerage can also invite you if it uses Relay.',
   },
   {
     category: 'Agents',
     q: 'What does Pro add for agents?',
-    a: 'On top of running your own deals and listings, Pro lets you save your own templates, emails and checklists and use automations. You keep it if you change brokerages.',
+    a: 'On top of running your own deals and listings, Pro adds custom checklist templates, automations that send reminders and follow-ups for you, and priority support.',
   },
   // Brokerages
   {

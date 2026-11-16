@@ -1,34 +1,6 @@
 // Prices and plain-language feature lists for the agent and brokerage sections of the public site. Copy only: nothing here bills anyone.
-// The coordinator plans (Starter, Pro, Team) come from plans.ts. Billing for Agent Pro and the brokerage tiers is not built yet, so the
+// The Starter, Pro and Team plans (which agents share with coordinators) come from plans.ts. Billing for the brokerage tiers is not built yet, so the
 // site offers a pilot for those (see docs/PRICING_ENTITLEMENT_DESIGN.md); the numbers below are the ones the pilot converts to.
-
-export const AGENT_PRO = {
-  starterPrice: '$9',
-  price: '$19',
-  period: '/month',
-  starter: [
-    'Run your own deals and listings in one place',
-    'AI reads a contract and fills out and creates the transaction or listing for you',
-    'Follow-ups, contacts and invoices',
-    'Use your brokerage’s templates and Relay’s standard forms',
-  ],
-  proAdds: [
-    'Save your own templates, emails and checklists',
-    'Automations that send reminders and follow-ups for you',
-    'Keep it if you ever change brokerages',
-  ],
-} as const;
-
-// What an agent gets on each of the two agent plans, Starter and Pro. Placeholder prices until approved.
-export const AGENT_COMPARE: { feature: string; starter: boolean; pro: boolean }[] = [
-  { feature: 'Your own deals and listings', starter: true, pro: true },
-  { feature: 'AI reads a contract and creates the deal', starter: true, pro: true },
-  { feature: 'Follow-ups, contacts and invoices', starter: true, pro: true },
-  { feature: 'Your brokerage’s shared templates and Relay’s standard forms', starter: true, pro: true },
-  { feature: 'Your own templates, emails and checklists', starter: false, pro: true },
-  { feature: 'Automations that send reminders and follow-ups', starter: false, pro: true },
-  { feature: 'Keep it if you change brokerages', starter: false, pro: true },
-];
 
 export const BROKERAGE_TIERS = {
   basic: {

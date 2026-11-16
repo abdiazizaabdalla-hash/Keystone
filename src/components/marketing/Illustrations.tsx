@@ -97,14 +97,14 @@ export function AgentPathsIllustration() {
       <text x="205" y="108" textAnchor="middle" className={t2}>Read a contract and fill in the deal</text>
       <text x="205" y="128" textAnchor="middle" className={t2}>Follow-ups, contacts and invoices</text>
       <rect x="95" y="160" width="220" height="30" rx="15" className="fill-slate-700/60 stroke-slate-500" />
-      <text x="205" y="180" textAnchor="middle" className="fill-slate-200 text-[12px] font-semibold">$9 a month</text>
+      <text x="205" y="180" textAnchor="middle" className="fill-slate-200 text-[12px] font-semibold">$19 a month</text>
       <rect x="420" y="30" width="350" height="190" rx="16" className={hot} strokeWidth="1.5" />
       <text x="595" y="64" textAnchor="middle" className={t1}>Pro</text>
       <text x="595" y="88" textAnchor="middle" className={t2}>Everything in Starter, plus</text>
-      <text x="595" y="108" textAnchor="middle" className={t2}>your own templates and emails</text>
+      <text x="595" y="108" textAnchor="middle" className={t2}>custom checklist templates</text>
       <text x="595" y="128" textAnchor="middle" className={t2}>and automations that run for you</text>
       <rect x="485" y="160" width="220" height="30" rx="15" className="fill-blue-500/20 stroke-blue-400" />
-      <text x="595" y="180" textAnchor="middle" className="fill-blue-200 text-[12px] font-semibold">$19 a month</text>
+      <text x="595" y="180" textAnchor="middle" className="fill-blue-200 text-[12px] font-semibold">$39 a month</text>
     </svg>
   );
 }
@@ -147,11 +147,11 @@ export function BrokerageDashboardIllustration() {
 export function WhoPaysIllustration() {
   const cols = [
     { x: 30, h: 'Coordinators', s: 'Choose a plan', p: 'From $19 a month', hot: false },
-    { x: 290, h: 'Agents', s: 'Starter or Pro', s2: '', p: '$9 or $19 a month', hot: true },
+    { x: 290, h: 'Agents', s: 'Starter or Pro', s2: '', p: '$19 or $39 a month', hot: true },
     { x: 550, h: 'Brokerages', s: 'One plan covers your agents', p: 'From $99 a month', hot: false },
   ];
   return (
-    <svg viewBox="0 0 800 190" className={frame} role="img" aria-label="Coordinators pay from 19 dollars a month, agents choose Starter at 9 dollars or Pro at 19 dollars a month, brokerages pay from 99 dollars a month">
+    <svg viewBox="0 0 800 190" className={frame} role="img" aria-label="Coordinators pay from 19 dollars a month, agents choose Starter at 19 dollars or Pro at 39 dollars a month, brokerages pay from 99 dollars a month">
       {cols.map((c) => (
         <g key={c.h}>
           <rect x={c.x} y="24" width="220" height="142" rx="16" className={c.hot ? hot : box} strokeWidth="1.5" />

@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import PublicHeader from '@/components/PublicHeader';
 import PublicFooter from '@/components/PublicFooter';
-import { AGENT_PRO } from '@/lib/marketingPricing';
-import { AgentPathsIllustration, TemplateSharingIllustration, AutomationAudiencesIllustration } from '@/components/marketing/Illustrations';
+import AgentPlanCards from '@/components/marketing/AgentPlanCards';
+import { AgentPathsIllustration } from '@/components/marketing/Illustrations';
 
 const WORKFLOW: { title: string; body: string }[] = [
   { title: 'Upload the contract', body: 'AI reads it and fills out and creates the transaction or listing for you, with the address, price, parties and key dates. You check and save.' },
@@ -12,7 +12,6 @@ const WORKFLOW: { title: string; body: string }[] = [
   { title: 'Close and invoice', body: 'See your invoices alongside the deal.' },
 ];
 
-const check = <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>;
 
 export default function ForAgentsPage() {
   return (
@@ -25,7 +24,7 @@ export default function ForAgentsPage() {
           Your deals and listings, <span className="text-blue-400">in one workspace.</span>
         </h1>
         <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">
-          Run your own transactions and listings in one workspace. Start on Starter, or move up to Pro for your own templates and automations.
+          Run your own transactions and listings in one workspace. Start on Starter, or move up to Pro for automations and more. If your coordinator has a Relay account, you can collaborate with them directly.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
           <Link href="/get-started" className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10">Start a free 14-day trial</Link>
@@ -37,31 +36,13 @@ export default function ForAgentsPage() {
 
       <section className="max-w-7xl mx-auto px-6 pb-16">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Templates and automations</h2>
-        <p className="text-slate-400 max-w-3xl mb-8">Use your brokerage’s shared templates and Relay’s standard forms on both plans. Pro adds your own templates and automations that send reminders and follow-ups for you.</p>
-        <div className="space-y-6">
-          <TemplateSharingIllustration />
-          <AutomationAudiencesIllustration />
-        </div>
+        <p className="text-slate-400 max-w-3xl mb-8">Use your brokerage’s shared templates and Relay’s standard forms on both plans. Pro adds custom checklist templates and automations that send reminders and follow-ups for you.</p>
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Two plans for agents</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">Both start free for 14 days, no card needed. Pro adds your own templates and automations.</p>
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-7">
-            <h3 className="font-display text-xl font-semibold text-slate-100 mb-1">Starter</h3>
-            <p className="text-3xl font-display font-semibold text-slate-100 mb-4">{AGENT_PRO.starterPrice} <span className="text-base font-sans font-normal text-slate-400">{AGENT_PRO.period}</span></p>
-            <ul className="space-y-2.5 text-sm text-slate-300">{AGENT_PRO.starter.map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}</ul>
-          </div>
-          <div className="bg-slate-800/60 border border-blue-500/40 ring-2 ring-blue-500/10 rounded-2xl p-7">
-            <h3 className="font-display text-xl font-semibold text-slate-100 mb-1">Pro</h3>
-            <p className="text-3xl font-display font-semibold text-slate-100 mb-4">{AGENT_PRO.price} <span className="text-base font-sans font-normal text-slate-400">{AGENT_PRO.period}</span></p>
-            <ul className="space-y-2.5 text-sm text-slate-300">
-              <li className="flex items-start gap-2.5">{check}Everything in Starter</li>
-              {AGENT_PRO.proAdds.map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
-            </ul>
-          </div>
-        </div>
+        <p className="text-slate-400 mb-8 max-w-2xl">Both start free for 14 days, no card needed. Pro adds automations, custom checklist templates and more.</p>
+        <AgentPlanCards />
         <p className="text-xs text-slate-500 mt-5">Brokerages can also invite their agents. <Link href="/for-brokerages" className="text-blue-400 hover:text-blue-300">See brokerage plans</Link> for the 10 and 25 agent options.</p>
       </section>
 

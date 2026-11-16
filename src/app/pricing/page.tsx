@@ -3,7 +3,8 @@ import PublicHeader from '@/components/PublicHeader';
 import PublicFooter from '@/components/PublicFooter';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import { PUBLIC_PLANS } from '@/lib/plans';
-import { AGENT_PRO, AGENT_COMPARE, BROKERAGE_TIERS, PILOT } from '@/lib/marketingPricing';
+import AgentPlanCards from '@/components/marketing/AgentPlanCards';
+import { BROKERAGE_TIERS, PILOT } from '@/lib/marketingPricing';
 import { WhoPaysIllustration } from '@/components/marketing/Illustrations';
 
 type Cell = boolean | string;
@@ -105,44 +106,8 @@ export default function PricingPage() {
 
       <section id="agents" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Agents</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">Free for 14 days, no card needed. Templates are on both plans. Automations are on Pro. If your brokerage uses Relay, ask them to invite you.</p>
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-8 flex flex-col">
-            <h3 className="font-display text-2xl font-semibold text-slate-100 mb-2">Starter</h3>
-            <p className="mb-6"><span className="text-4xl font-display font-semibold text-slate-100">{AGENT_PRO.starterPrice}</span><span className="text-slate-400 ml-1">{AGENT_PRO.period}</span></p>
-            <ul className="space-y-2.5 text-sm text-slate-300">{AGENT_PRO.starter.map((l) => <li key={l} className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />{l}</li>)}</ul>
-            <Link href="/get-started" className="mt-6 block w-full text-center py-3 rounded-lg border border-slate-600 text-slate-200 hover:border-slate-500 font-semibold transition">Start free</Link>
-          </div>
-          <div className="rounded-xl border border-blue-500 bg-slate-700 ring-2 ring-blue-500/20 p-8 flex flex-col">
-            <h3 className="font-display text-2xl font-semibold text-slate-100 mb-2">Pro</h3>
-            <p className="mb-6"><span className="text-4xl font-display font-semibold text-slate-100">{AGENT_PRO.price}</span><span className="text-slate-400 ml-1">{AGENT_PRO.period}</span></p>
-            <ul className="space-y-2.5 text-sm text-slate-300">
-              <li className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />Everything in Starter</li>
-              {AGENT_PRO.proAdds.map((l) => <li key={l} className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />{l}</li>)}
-            </ul>
-            <Link href="/get-started" className="mt-6 block w-full text-center py-3 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-semibold transition">Start Pro free for 14 days</Link>
-          </div>
-        </div>
-        <div className="overflow-x-auto rounded-xl border border-slate-700 mt-8">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-800/80 border-b border-slate-700">
-                <th className="text-left font-medium text-slate-300 px-5 py-4">Feature</th>
-                <th className="font-medium text-slate-300 px-5 py-4">Starter</th>
-                <th className="font-medium text-slate-300 px-5 py-4">Pro</th>
-              </tr>
-            </thead>
-            <tbody>
-              {AGENT_COMPARE.map((row, i) => (
-                <tr key={row.feature} className={i % 2 === 0 ? 'bg-slate-800/30' : ''}>
-                  <td className="text-left text-slate-300 px-5 py-3.5 border-t border-slate-700/60">{row.feature}</td>
-                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><Mark value={row.starter} /></td>
-                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><Mark value={row.pro} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <p className="text-slate-400 mb-8 max-w-2xl">Free for 14 days, no card needed. Automations are on Pro. If your brokerage uses Relay, ask them to invite you.</p>
+        <AgentPlanCards />
       </section>
 
       <section id="brokerages" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">

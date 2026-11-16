@@ -127,7 +127,7 @@ export default function Home() {
       <section className="max-w-6xl mx-auto px-6 pb-16">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
-            { href: '/for-agents', who: 'Agents', line: 'Your own workspace for your deals and listings.', price: 'Starter $9, Pro $19 a month' },
+            { href: '/for-agents', who: 'Agents', line: 'Your own workspace for your deals and listings.', price: 'Starter $19, Pro $39 a month' },
             { href: '/for-tcs', who: 'Coordinators', line: 'Run every file from contract to closing, with agents following along.', price: 'From $19 a month' },
             { href: '/for-tcs#teams', who: 'TC teams', line: 'A shared desk and checklist for the team, with each file kept private.', price: '$89 a month for three seats' },
             { href: '/for-brokerages', who: 'Brokerages', line: 'See every agent and every file, with required documents checked.', price: 'From $99 a month' },
@@ -177,7 +177,7 @@ export default function Home() {
               label: 'Agents',
               title: 'Your own deals, your own workspace.',
               body: 'Two plans, Starter and Pro, or get invited by your brokerage.',
-              bullets: ['Run your own deals and listings', 'Read a contract and fill in the deal', 'Your TC’s updates and documents in one place', 'Templates and automations on Pro'],
+              bullets: ['Run your own deals and listings', 'Read a contract and fill in the deal', 'Collaborate directly with a coordinator who uses Relay', 'Templates and automations on Pro'],
               href: '/for-agents',
               cta: 'See Relay for agents',
               art: <AgentPathsIllustration />,
@@ -296,7 +296,7 @@ export default function Home() {
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
-            { who: 'Agents', price: '$9', note: 'a month, to start', extra: 'Pro is $19 a month, with automations', href: '/pricing#agents' },
+            { who: 'Agents', price: '$19', note: 'a month, to start', extra: 'Pro is $39 a month, with automations', href: '/pricing#agents' },
             { who: 'Coordinators', price: '$19', note: 'a month, to start', extra: 'Pro adds automations and templates', href: '/pricing#coordinators' },
             { who: 'TC teams', price: '$89', note: 'a month, three seats', extra: '$30 a month for each extra seat', href: '/pricing#coordinators' },
             { who: 'Brokerages', price: '$99', note: 'a month, 10 agents', extra: 'Pro is $199 a month for 25 agents', href: '/pricing#brokerages' },
