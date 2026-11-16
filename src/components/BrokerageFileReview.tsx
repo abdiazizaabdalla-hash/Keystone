@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 import { DOCUMENT_CATEGORIES } from '@/lib/documentTaxonomy';
+import SelectAllToggle from '@/components/SelectAllToggle';
 import BrokerageDocumentLists from '@/components/BrokerageDocumentLists';
 
 // File review for a brokerage owner (Collaborate → File review): choose which documents every file must contain, then go
@@ -122,7 +123,7 @@ export default function BrokerageFileReview({ part }: { part?: 'files' | 'requir
             <div className="grid md:grid-cols-2 gap-4">
               {DOCUMENT_CATEGORIES.filter((c) => c.key !== 'other').map((c) => (
                 <fieldset key={c.key}>
-                  <legend className="text-xs uppercase tracking-wider text-slate-500 mb-1">{c.label}</legend>
+                  <legend className="text-xs uppercase tracking-wider text-slate-500 mb-1">{c.label}<SelectAllToggle items={c.types} selected={draft} onChange={setDraft} label={c.label} /></legend>
                   {c.types.map((t) => (
                     <label key={t} className="flex items-center gap-2 text-sm text-slate-300 py-0.5">
                       <input type="checkbox" checked={draft.includes(t)} onChange={(e) => setDraft((d) => (e.target.checked ? [...d, t] : d.filter((x) => x !== t)))} />

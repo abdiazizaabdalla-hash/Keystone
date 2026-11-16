@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 import { DOCUMENT_CATEGORIES } from '@/lib/documentTaxonomy';
+import SelectAllToggle from '@/components/SelectAllToggle';
 
 // Brokerage Pro: required-document lists by deal type. The default list (above, in File review) covers every file; each list here
 // applies to files whose checklist template it names, for example "Cash" or "Condo".
@@ -71,7 +72,7 @@ export default function BrokerageDocumentLists({ onSaved }: { onSaved: () => voi
                   <button type="button" onClick={() => { setDraft((d) => d.filter((_, j) => j !== i)); setDirty(true); setOpen(null); }} className="px-3 py-1.5 text-xs text-red-300 hover:text-red-200">Remove</button>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 mb-1">Applies to files using these checklist templates</p>
+                  <p className="text-xs text-slate-500 mb-1">Applies to files using these checklist templates<SelectAllToggle items={[...new Set([...data.templates, ...l.templateNames])]} selected={l.templateNames} onChange={(next) => change(i, { templateNames: next })} label="checklist templates" /></p>
                   {data.templates.length === 0 && l.templateNames.length === 0 ? (
                     <p className="text-xs text-slate-500">Your agents have no checklist templates on their deals yet.</p>
                   ) : (
@@ -89,7 +90,7 @@ export default function BrokerageDocumentLists({ onSaved }: { onSaved: () => voi
                   <div className="grid md:grid-cols-2 gap-4">
                     {DOCUMENT_CATEGORIES.filter((c) => c.key !== 'other').map((c) => (
                       <fieldset key={c.key}>
-                        <legend className="text-xs uppercase tracking-wider text-slate-500 mb-1">{c.label}</legend>
+                        <legend className="text-xs uppercase tracking-wider text-slate-500 mb-1">{c.label}<SelectAllToggle items={c.types} selected={l.documentTypes} onChange={(next) => change(i, { documentTypes: next })} label={c.label} /></legend>
                         {c.types.map((t) => (
                           <label key={t} className="flex items-center gap-2 text-sm text-slate-300 py-0.5">
                             <input type="checkbox" checked={l.documentTypes.includes(t)} onChange={(e) => change(i, { documentTypes: e.target.checked ? [...l.documentTypes, t] : l.documentTypes.filter((x) => x !== t) })} />
