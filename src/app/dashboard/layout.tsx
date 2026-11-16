@@ -137,7 +137,7 @@ function TopNavLink({
   tone = 'default',
   badge = 0,
   menu = false,
-  labelsAt = 'xl',
+  lgOnly = false,
 }: {
   href: string;
   label: string;
@@ -147,8 +147,8 @@ function TopNavLink({
   badge?: number;
   /** Inside a dropdown: a full-width row instead of a pill. */
   menu?: boolean;
-  /** Screen width from which the name shows next to the icon (a crowded bar waits for a wider screen). */
-  labelsAt?: 'xl' | '2xl';
+  /** In the bar, only from large screens up (on a medium screen it moves into More). */
+  lgOnly?: boolean;
 }) {
   const colors = active
     ? 'bg-blue-500/20 text-white ring-1 ring-blue-400/30'
@@ -161,12 +161,12 @@ function TopNavLink({
       data-tour={`nav-${label.toLowerCase()}`}
       title={label}
       aria-current={active ? 'page' : undefined}
-      className={`relative flex items-center shrink-0 rounded-lg transition font-medium text-sm ${menu ? 'gap-3 px-3 py-2 w-full' : 'gap-1.5 px-2 py-2'} ${colors}`}
+      className={`relative items-center shrink-0 rounded-lg transition font-medium whitespace-nowrap ${menu ? 'flex gap-3 px-3 py-2 w-full text-sm' : `${lgOnly ? 'hidden lg:flex' : 'flex'} gap-1 px-2 py-2 text-[13px] lg:text-sm`} ${colors}`}
     >
-      {icon}
-      <span className={menu ? 'truncate' : labelsAt === '2xl' ? 'hidden 2xl:inline truncate' : 'hidden xl:inline truncate'}>{label}</span>
+      {menu && icon}
+      <span className="truncate">{label}</span>
       {badge > 0 && (
-        <span className={`${menu ? 'ml-auto' : 'xl:ml-1 absolute xl:static -top-0.5 -right-0.5'} min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center`}>
+        <span className={`${menu ? 'ml-auto' : 'ml-1'} min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center`}>
           {badge > 99 ? '99+' : badge}
         </span>
       )}
@@ -545,14 +545,13 @@ export default function DashboardLayout({
           <span className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm shrink-0">
             <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
           </span>
-          <span className="hidden 2xl:inline text-white font-display font-semibold text-lg whitespace-nowrap">Relay TC</span>
         </Link>
 
         <nav className="flex items-center gap-0 min-w-0 flex-1" aria-label="Main">
-          {[...primaryNav, contactsItem].map((item, _i, all) => (
+          {[...primaryNav, contactsItem].map((item, i) => (
             <TopNavLink
               key={item.href}
-              labelsAt={all.length > 7 ? '2xl' : 'xl'}
+              lgOnly={i >= 6}
               href={item.href}
               label={item.label}
               active={isActivePath(pathname, item.href)}
@@ -576,6 +575,11 @@ export default function DashboardLayout({
             </button>
             {moreOpen && (
               <div role="menu" className="absolute left-0 top-full mt-1 w-56 bg-slate-900 border border-white/15 rounded-xl shadow-2xl p-1.5 space-y-0.5">
+                {[...primaryNav, contactsItem].slice(6).map((item) => (
+                  <div key={item.href} className="lg:hidden">
+                    <TopNavLink href={item.href} label={item.label} menu active={isActivePath(pathname, item.href)} badge={item.href === '/dashboard/messages' ? messagesUnread : 0} icon={NAV_ICONS[item.icon]} />
+                  </div>
+                ))}
                 {moreItems.map((item) => (
                   <TopNavLink
                     key={item.href}
