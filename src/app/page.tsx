@@ -6,10 +6,9 @@ import Link from 'next/link';
 import { PUBLIC_PLANS } from '@/lib/plans';
 import { decodeStoredRole } from '@/lib/authClient';
 import DemoRequestButton from '@/components/DemoRequestButton';
-import ShotRow from '@/components/ShotRow';
 import HomeVideo from '@/components/HomeVideo';
 import PublicMobileMenu from '@/components/PublicMobileMenu';
-import { DealFlowIllustration, AutomationFlowIllustration, PayFlowIllustration, TemplateSharingIllustration, AutomationAudiencesIllustration } from '@/components/marketing/Illustrations';
+import { DealFlowIllustration, PortalIllustration, TeamIllustration, AgentPathsIllustration, BrokerageDashboardIllustration, AutomationFlowIllustration, PayFlowIllustration, TemplateSharingIllustration, AutomationAudiencesIllustration } from '@/components/marketing/Illustrations';
 
 export default function Home() {
   const router = useRouter();
@@ -202,254 +201,106 @@ export default function Home() {
         <HomeVideo />
       </section>
 
+      {/* Snapshot: one deal, start to finish */}
       <section id="how-it-works" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="intake-illustration.jpg"
-          alt="Illustration of uploading a purchase contract in Relay and reviewing the address, price, key dates and people read from it before creating the transaction"
-          caption="Illustration of the workflow."
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">AI contract intake</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Start with the contract, not a blank transaction.</h2>
-          <p className="text-slate-400 mb-5">Upload a purchase contract or a listing agreement and AI fills out and creates the transaction or listing for you. Check the information, make any changes, and save. Templates and automations then handle the routine emails and reminders.</p>
-          <ul className="space-y-2.5 text-sm text-slate-300">
-            {[
-              "Property address and purchase price",
-              "Key dates",
-              "Buyer, seller, lender, and title contacts",
-              "Agent",
-              "Review before creating the transaction",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-slate-500 mt-4">Included on every plan.</p>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="listings-illustration.jpg"
-          alt="Illustration of a Relay listing with a pre-listing checklist, a side-by-side offer comparison, showings, documents, and a one-click convert to deal"
-          caption="Illustration of the workflow."
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Listings</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Start before the contract.</h2>
-          <p className="text-slate-400 mb-5">Track a listing from the first call to going live, through offers, to a signed contract. When it goes under contract, convert it to a transaction in one click and nothing gets retyped.</p>
-          <ul className="space-y-2.5 text-sm text-slate-300">
-            {[
-              "A pre-listing checklist you can rename, reorder and mark done in one click",
-              "Offers and counteroffers in one place, with terms read from the offer PDF and a side-by-side comparison",
-              "Showings, open houses and buyer feedback, ready for your seller updates",
-              "Listing agreement, disclosures and photos in a Documents card, copied onto the deal when you convert",
-              "Price history, a ready-to-list check, and offer emails forwarded to the listing’s own address",
-              "Convert to a deal: the checklist, documents and contacts carry over and your agent is told it is now active",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-slate-500 mt-4">Included on every plan. Duplicate-address warnings keep the same property from being added twice.</p>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="transaction-illustration.jpg"
-          alt="Illustration of a Relay transaction page with tabs for the checklist, documents, messages and contacts, plus key dates and the invoice"
-          caption="Illustration of the workflow."
-          reverse
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">The transaction workspace</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Every deal gets its own page.</h2>
-          <p className="text-slate-400 mb-5">
-            Open a transaction and everything for that deal is right there, from the checklist
-            and documents to the messages, contacts, and invoice.
-          </p>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {[
-              'Checklist',
-              'Critical dates',
-              'Documents',
-              'Signatures',
-              'Messages',
-              'Contacts',
-              'Invoice',
-              'Payment status',
-            ].map((line) => (
-              <div key={line} className="flex items-center gap-3 p-3 bg-slate-800/60 border border-slate-700 rounded-xl">
-                <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                <span className="text-sm text-slate-300">{line}</span>
-              </div>
-            ))}
-          </div>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="checklist-illustration.jpg"
-          alt="Illustration of a Relay transaction checklist with grouped steps, due dates, a progress bar, and a step waiting on title"
-          caption="Illustration of the workflow."
-          reverse
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Workflow</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Know what needs to happen next.</h2>
-          <p className="text-slate-400 mb-5">Each transaction starts with a closing checklist. Set deadlines for each step and keep track of what is done, what is coming up, and what needs attention.</p>
-          <ul className="space-y-2.5 text-sm text-slate-300">
-            {[
-              "A default closing checklist on every deal",
-              "Due dates based on acceptance, closing, or a fixed date, updated when the dates change",
-              "Your own templates for different deal types (Pro and Team)",
-              "Overdue, due-today, waiting, and upcoming items show on your dashboard and in a daily email digest",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="invoice-illustration.jpg"
-          alt="Illustration of the Relay Invoices page with total invoiced, outstanding and received amounts and a list of paid, unpaid and overdue invoices"
-          caption="Illustration of the workflow."
-          reverse
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Invoicing</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Keep invoicing with the deal.</h2>
-          <p className="text-slate-400 mb-5">Generate an invoice from the transaction, send it to the agent, and keep the payment status with the rest of the deal.</p>
-          <ul className="space-y-2.5 text-sm text-slate-300">
-            {[
-              "Generate and send invoices",
-              "Accept online payment through your Stripe account",
-              "Track paid and unpaid status",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="calendar-illustration.jpg"
-          alt="Illustration of Relay dates on a calendar with Add to Google Calendar, Outlook and Apple Calendar buttons and a private calendar link" reverse
-          caption="Illustration of the workflow."
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Calendar</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Your deadlines, on the calendar you already use.</h2>
-          <p className="text-slate-400 mb-5">Connect Google Calendar once and every date you add or move in Relay updates there within seconds. Use Outlook or Apple Calendar? Subscribe to your private Relay link instead. Agents can connect their own calendar too, so every deal they are on shows up automatically.</p>
-          <ul className="space-y-2.5 text-sm text-slate-300">
-            {[
-              "Connect Google Calendar in about 30 seconds and changes appear within seconds",
-              "Outlook or Apple Calendar: add your private Relay link, no sign-in needed",
-              "Critical dates, checklist due dates and listing dates, kept up to date as they change",
-              "Choose what goes on your calendar: critical dates, closing day, checklist due dates, listing dates",
-              "A private link only you have, which you can replace any time",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-slate-500 mt-4">Subscribed links (Outlook, Apple, or Google by link) refresh on the calendar app's own schedule, so a change can take a few hours to show. Connecting Google Calendar directly avoids that wait.</p>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="import-illustration.jpg"
-          alt="Illustration of importing deals from a CSV with column matching and a preview, next to a contacts list that fills itself"
-          caption="Illustration of the workflow."
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Bring your work with you</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Move over in an afternoon.</h2>
-          <p className="text-slate-400 mb-5">Import your open deals from a spreadsheet, and let Relay build your address book as you work.</p>
-          <ul className="space-y-2.5 text-sm text-slate-300">
-            {[
-              "CSV deal import with automatic column matching and a preview before anything is created",
-              "Re-importing the same file updates existing deals instead of duplicating them",
-              "A contacts list that fills itself from your deals, with CSV import, export and a newsletter list",
-              "Contacts and agents with phone numbers formatted automatically",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <ShotRow
-          name="invoicing-illustration.jpg"
-          alt="Illustration of downloading Relay invoices as QuickBooks import files and uploading a QuickBooks export with every match shown before saving"
-          caption="Illustration of the workflow."
-          reverse
-        >
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Invoicing</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Your invoices, in QuickBooks in minutes.</h2>
-          <p className="text-slate-400 mb-5">Download your Relay invoices as a file QuickBooks Online imports, or upload an export from QuickBooks to bring invoices into Relay. Nothing to connect and no permissions to grant, so you stay in control.</p>
-          <ul className="space-y-2.5 text-sm text-slate-300">
-            {[
-              "Invoices in QuickBooks’ own column layout, split into files of 100 to match its import limit",
-              "A payments report and your agents as a customer list, so the invoices land on the right customers",
-              "Upload an Excel or CSV export from QuickBooks and see every match to an agent and deal before anything is saved",
-              "Duplicates are skipped and existing invoices are never changed",
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5">
-                <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                {line}
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-slate-500 mt-4">Included on every plan. This works by file: it does not connect to your QuickBooks account or sync on its own, and QuickBooks cannot import payment status from a file.</p>
-        </ShotRow>
-      </section>
-
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Everything you need to run the deal</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">Six things, done well. The rest is inside the app.</p>
+        <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">How it works</p>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">One deal, from contract to closing.</h2>
+        <p className="text-slate-400 mb-8 max-w-2xl">Upload the contract and Relay builds the deal. From there the dates, checklist, documents, messages and invoice all live on one page.</p>
         <DealFlowIllustration />
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-8">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
           {[
-            { title: "Contracts, read for you", body: 'Upload a contract and AI fills out and creates the transaction or listing for you.' },
-            { title: "Dates and checklists", body: 'Critical dates, a dated checklist and reminders on every deal. Sync to your calendar.' },
-            { title: "Templates and automations", body: 'Ready-made emails and forms on every plan. Automations send the reminders for you on Pro and Team.' },
-            { title: "Listings and transactions", body: 'Each has its own page. Convert a listing to a transaction in one click.' },
-            { title: "Invoices and e-signatures", body: 'Invoice agents, get paid, export to QuickBooks, and send documents for signature.' },
-            { title: "Teams and agent logins", body: 'Share a workspace with other TCs, and give agents a login for the deals you choose.' },
-          ].map((f) => (
-            <div key={f.title} className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl">
-              <h3 className="font-semibold text-slate-100 mb-2">{f.title}</h3>
-              <p className="text-sm text-slate-400">{f.body}</p>
+            { step: '1', title: 'Read the contract', body: 'AI fills in the transaction or listing from the PDF.' },
+            { step: '2', title: 'Dates and checklist', body: 'Critical dates and a dated closing checklist, kept current as dates move.' },
+            { step: '3', title: 'Documents and signatures', body: 'Collect documents, send for e-signature, message the parties.' },
+            { step: '4', title: 'Invoice and get paid', body: 'Invoice the agent, accept online payment, export to QuickBooks.' },
+          ].map((s) => (
+            <div key={s.step} className="p-5 bg-slate-800/60 border border-slate-700 rounded-xl">
+              <span className="w-7 h-7 rounded-full bg-blue-500/15 border border-blue-400/60 text-blue-300 text-sm font-semibold flex items-center justify-center mb-3">{s.step}</span>
+              <h3 className="font-semibold text-slate-100 mb-1">{s.title}</h3>
+              <p className="text-sm text-slate-400">{s.body}</p>
             </div>
           ))}
         </div>
-        <div className="grid lg:grid-cols-2 gap-5 mt-8">
-          <div>
-            <p className="text-sm text-slate-400 mb-3">Templates: for TCs, agents and brokerages. A brokerage shares one with every agent.</p>
-            <TemplateSharingIllustration />
-          </div>
-          <div>
-            <p className="text-sm text-slate-400 mb-3">Automations: for TCs and for agents.</p>
-            <AutomationAudiencesIllustration />
-          </div>
+      </section>
+
+      {/* Snapshot: who it is for */}
+      <section id="who" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Who it is for</p>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">The same deal, seen from each seat.</h2>
+        <p className="text-slate-400 mb-10 max-w-2xl">Relay works the same way for everyone on the file. What changes is what you see and what you can do.</p>
+
+        <div className="space-y-14">
+          {[
+            {
+              id: 'tcs',
+              label: 'Transaction coordinators',
+              title: 'Run every file from one workspace.',
+              body: 'Contracts, dates, checklists, documents, invoices and your agents’ logins, without the spreadsheet.',
+              bullets: ['AI contract intake, listings and transactions', 'Your own checklist templates and automated reminders', 'Invoices with online payment and QuickBooks files', 'Agent portal with the deals you choose to share'],
+              href: '/for-tcs',
+              cta: 'See Relay for TCs',
+              art: <PortalIllustration />,
+            },
+            {
+              id: 'teams',
+              label: 'TC teams',
+              title: 'Lead a team without reading their files.',
+              body: 'Team owners get a status-only desk across the team. Each member’s deals, prices, documents and clients stay private to them.',
+              bullets: ['Team desk with stalled and overdue status', 'A default checklist the whole team starts from', 'Team automations, digests and trends', 'Get paid through Relay with Stripe'],
+              href: '/for-tcs#teams',
+              cta: 'See team features',
+              art: <TeamIllustration />,
+              reverse: true,
+            },
+            {
+              id: 'agents',
+              label: 'Agents',
+              title: 'Your own deals, your own workspace.',
+              body: 'Get a workspace from your brokerage at no cost to you, or subscribe to Agent Pro on your own.',
+              bullets: ['Run your own deals and listings', 'Read a contract and fill in the deal', 'Your TC’s updates and documents in one place', 'Templates and automations on Agent Pro'],
+              href: '/for-agents',
+              cta: 'See Relay for agents',
+              art: <AgentPathsIllustration />,
+            },
+            {
+              id: 'brokerages',
+              label: 'Brokerages',
+              title: 'See every file. Set the standard once.',
+              body: 'A compliance desk and file review across your roster, with the required steps and document lists every agent works from.',
+              bullets: ['Compliance desk and file review', 'Required steps and document lists, pushed to every agent', 'Automations, reports and trends', 'Managing accounts with scoped roles, and commissions paid through Relay'],
+              href: '/for-brokerages',
+              cta: 'See Relay for brokerages',
+              art: <BrokerageDashboardIllustration />,
+              reverse: true,
+            },
+          ].map((a) => (
+            <div key={a.id} id={a.id} className="grid lg:grid-cols-2 gap-8 items-center scroll-mt-4">
+              <div className={a.reverse ? 'lg:order-2' : ''}>
+                <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">{a.label}</p>
+                <h3 className="font-display text-2xl font-semibold text-slate-100 mb-3">{a.title}</h3>
+                <p className="text-slate-400 mb-4">{a.body}</p>
+                <ul className="space-y-2 text-sm text-slate-300 mb-5">
+                  {a.bullets.map((b) => (
+                    <li key={b} className="flex items-start gap-2.5">
+                      <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+                <Link href={a.href} className="text-blue-400 hover:text-blue-300 font-medium text-sm">{a.cta} →</Link>
+              </div>
+              <div className={a.reverse ? 'lg:order-1' : ''}>{a.art}</div>
+            </div>
+          ))}
         </div>
-        <div className="grid md:grid-cols-2 gap-5 mt-8">
+      </section>
+
+      {/* Snapshot: workflows that run themselves */}
+      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
+        <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Workflow</p>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Reminders, templates and payments that run themselves.</h2>
+        <p className="text-slate-400 mb-8 max-w-2xl">Set it up once. Relay sends the reminders, shares the templates and keeps the money with the deal.</p>
+        <div className="grid md:grid-cols-2 gap-5">
           <div>
             <p className="text-sm text-slate-400 mb-3">Automations: a reminder that sends itself.</p>
             <AutomationFlowIllustration />
@@ -458,14 +309,44 @@ export default function Home() {
             <p className="text-sm text-slate-400 mb-3">Invoices: from the deal to paid to your books.</p>
             <PayFlowIllustration />
           </div>
+          <div>
+            <p className="text-sm text-slate-400 mb-3">Templates: a brokerage shares one with every agent.</p>
+            <TemplateSharingIllustration />
+          </div>
+          <div>
+            <p className="text-sm text-slate-400 mb-3">Automations: for TCs, teams, agents and brokerages.</p>
+            <AutomationAudiencesIllustration />
+          </div>
         </div>
       </section>
+
+      {/* Snapshot: everything else */}
+      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">And the rest of the file.</h2>
+        <p className="text-slate-400 mb-8 max-w-2xl">Everything else a closing needs, already in the app.</p>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[
+            { title: 'Calendar sync', body: 'Google Calendar updates within seconds. Outlook and Apple subscribe by a private link.' },
+            { title: 'Import your work', body: 'CSV deal import with a preview, and a contacts list that fills itself from your deals.' },
+            { title: 'QuickBooks files', body: 'Download invoices in QuickBooks’ import layout, or upload an export to match invoices.' },
+            { title: 'Documents and e-signatures', body: 'Collect documents per deal and send them for signature.' },
+            { title: 'Listings to transactions', body: 'Convert a listing to a transaction in one click.' },
+            { title: 'Daily digest', body: 'Overdue, due-today and waiting items on your dashboard and in your inbox.' },
+          ].map((f) => (
+            <div key={f.title} className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl">
+              <h3 className="font-semibold text-slate-100 mb-2">{f.title}</h3>
+              <p className="text-sm text-slate-400">{f.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
 
       {/* Pricing teaser */}
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
         <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
           <div>
-            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple plans for TCs and teams.</h2>
+            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple plans for every seat.</h2>
             <p className="text-slate-400">Try Relay free and see how it fits into your workflow. Upgrade when you need more agents, automations or team features.</p>
           </div>
           <Link href="/pricing" className="text-blue-400 hover:text-blue-300 font-medium text-sm">
