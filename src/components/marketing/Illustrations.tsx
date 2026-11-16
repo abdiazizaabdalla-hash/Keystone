@@ -275,61 +275,24 @@ export function PayFlowIllustration() {
   );
 }
 
-/** Templates for each audience, and how a brokerage shares one with every agent. */
+/** A brokerage shares a template once; every agent sees it pinned. */
 export function TemplateSharingIllustration() {
-  const cols = [
-    { x: 20, title: 'Brokerage', chips: ['IABS', 'Welcome letter', 'Your own forms'], note: 'Share once with every agent' },
-    { x: 290, title: 'Agent', chips: ['IABS (pinned)', 'Welcome letter (pinned)', 'Your own templates'], note: 'Shared ones appear pinned' },
-    { x: 560, title: 'TC', chips: ['Emails and letters', 'Forms', 'Folders you organize'], note: 'Edit, then use on any deal' },
-  ];
   return (
-    <svg viewBox="0 0 820 250" className={frame} role="img" aria-label="Templates for brokerages, agents and TCs. A brokerage shares a template once and it appears pinned in every agent's template list">
+    <svg viewBox="0 0 700 190" className={frame} role="img" aria-label="A brokerage shares a template once and it appears pinned for every agent">
       <defs>
         <marker id="arrow4" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" className="fill-blue-400" /></marker>
       </defs>
-      {cols.map((c, i) => (
-        <g key={c.title}>
-          <rect x={c.x} y="20" width="240" height="210" rx="14" className={i === 1 ? hot : box} strokeWidth="1.5" />
-          <text x={c.x + 20} y="50" className={t1}>{c.title}</text>
-          {c.chips.map((chip, j) => (
-            <g key={chip}>
-              <rect x={c.x + 20} y={66 + j * 38} width="200" height="28" rx="8" className="fill-slate-700 stroke-slate-600" strokeWidth="1" />
-              <text x={c.x + 32} y={85 + j * 38} className="fill-slate-200 text-[12px]">{chip}</text>
-            </g>
-          ))}
-          <text x={c.x + 20} y="212" className={t2}>{c.note}</text>
-        </g>
-      ))}
-      <path d="M262 100 h24" className="stroke-blue-400" strokeWidth="2" markerEnd="url(#arrow4)" />
-    </svg>
-  );
-}
-
-/** Automations: an event, a template, a message, for a TC and for an agent. */
-export function AutomationAudiencesIllustration() {
-  const lanes = [
-    { y: 20, who: 'TC', steps: ['A deal is created', 'Your template is chosen', 'The agent gets the reminder'] },
-    { y: 130, who: 'Agent', steps: ['A listing goes live', 'Your template is chosen', 'Relay sends the follow-up'] },
-  ];
-  return (
-    <svg viewBox="0 0 820 250" className={frame} role="img" aria-label="Automations for a TC and for an agent: an event happens, a template is chosen, and the message is sent">
-      <defs>
-        <marker id="arrow5" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" className="fill-slate-500" /></marker>
-      </defs>
-      {lanes.map((l) => (
-        <g key={l.who}>
-          <rect x="20" y={l.y} width="780" height="96" rx="14" className={box} strokeWidth="1.5" />
-          <text x="40" y={l.y + 54} className={t1}>{l.who}</text>
-          {l.steps.map((s, i) => (
-            <g key={s}>
-              <rect x={120 + i * 226} y={l.y + 24} width="196" height="48" rx="10" className={i === 1 ? hot : 'fill-slate-700 stroke-slate-600'} strokeWidth="1.2" />
-              <text x={120 + i * 226 + 98} y={l.y + 53} textAnchor="middle" className="fill-slate-100 text-[12px]">{s}</text>
-              {i < 2 && <path d={`M${120 + i * 226 + 200} ${l.y + 48} h22`} className={line} strokeWidth="2" markerEnd="url(#arrow5)" />}
-            </g>
-          ))}
-        </g>
-      ))}
-      <text x="410" y="244" textAnchor="middle" className={t2}>One switch in Settings pauses every automation.</text>
+      <rect x="30" y="30" width="270" height="130" rx="14" className={box} strokeWidth="1.5" />
+      <text x="50" y="62" className={t1}>Brokerage</text>
+      <rect x="50" y="78" width="230" height="30" rx="8" className="fill-slate-700 stroke-slate-600" />
+      <text x="64" y="98" className="fill-slate-200 text-[13px]">Welcome letter</text>
+      <text x="50" y="140" className={t2}>Share it once</text>
+      <path d="M312 95 h76" className="stroke-blue-400" strokeWidth="2" markerEnd="url(#arrow4)" />
+      <rect x="400" y="30" width="270" height="130" rx="14" className={hot} strokeWidth="1.5" />
+      <text x="420" y="62" className={t1}>Every agent</text>
+      <rect x="420" y="78" width="230" height="30" rx="8" className="fill-slate-700 stroke-slate-600" />
+      <text x="434" y="98" className="fill-slate-200 text-[13px]">Welcome letter (pinned)</text>
+      <text x="420" y="140" className={t2}>It is already in their list</text>
     </svg>
   );
 }

@@ -5,7 +5,7 @@ import DemoRequestButton from '@/components/DemoRequestButton';
 import { PUBLIC_PLANS } from '@/lib/plans';
 import { PRESETS } from '@/lib/automation/presets';
 import { CoordinatorWorkspaceMockup, MockupCaption } from '@/components/marketing/ProductMockups';
-import { DealFlowIllustration, PortalIllustration, TeamIllustration, TemplateSharingIllustration, AutomationAudiencesIllustration } from '@/components/marketing/Illustrations';
+import { DealFlowIllustration, PortalIllustration, TeamIllustration } from '@/components/marketing/Illustrations';
 
 const FEATURES: { title: string; body: string }[] = [
   { title: 'Upload it, AI does the setup', body: 'Upload a purchase contract or a listing agreement. AI fills out and creates the transaction or listing for you, with the address, price, parties and key dates. You review, then save.' },
@@ -86,14 +86,6 @@ export default function ForTcsPage() {
             <p className="text-sm text-slate-400">{PRESETS.filter((p) => p.category === 'transaction').length} ready-made automations for the moments that matter: new transaction, earnest money, inspection and option period, financing, appraisal, title, closing and post-closing. Switch on the ones you want in the Library, then apply them to a transaction.</p>
           </div>
         </div>
-      </section>
-
-      <section className="max-w-7xl mx-auto px-6 pb-16 -mt-4">
-        <div className="space-y-6">
-          <TemplateSharingIllustration />
-          <AutomationAudiencesIllustration />
-        </div>
-        <p className="text-xs text-slate-500 mt-3 text-center">Templates are on every plan. Automations run on Pro and Team.</p>
       </section>
 
       <section id="listings" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
