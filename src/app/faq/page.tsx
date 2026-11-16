@@ -34,8 +34,8 @@ const FAQS: { category: string; q: string; a: string }[] = [
   // Pricing & billing
   {
     category: 'Pricing & billing',
-    q: 'What’s included on the free Starter plan?',
-    a: 'Starter includes unlimited transactions and listings, up to 3 agent profiles, the baseline checklist, document and email templates, document storage, e-signature requests, invoicing, calendar links and CSV deal import — enough to run your whole pipeline through Relay with no credit card required to start.',
+    q: 'What’s included in Starter for coordinators?',
+    a: 'Starter includes unlimited transactions and listings, up to 3 agent profiles, the baseline checklist, document and email templates, document storage, e-signature requests, invoicing, calendar links and CSV deal import — enough to run your whole pipeline through Relay. You can start the 14-day trial without a card.',
   },
   {
     category: 'Pricing & billing',
@@ -45,12 +45,12 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Pricing & billing',
     q: 'Does Starter have a transaction limit?',
-    a: 'No. Every plan, including Starter, supports unlimited transactions. The caps on Starter are 3 agent profiles, no custom checklist templates and no automations.',
+    a: 'No. Every plan, including Starter, supports unlimited transactions. For coordinators, the caps on Starter are 3 agent profiles, no custom checklist templates and no automations.',
   },
   {
     category: 'Pricing & billing',
-    q: 'What’s the difference between Starter and Pro?',
-    a: 'Pro removes the agent-profile limit, unlocks custom checklist templates and automations, and adds the admin usage dashboard. Everything else, including templates, works the same on both.',
+    q: 'What’s the difference between Starter and Pro for coordinators?',
+    a: 'For coordinators, Pro removes the agent-profile limit, unlocks custom checklist templates and automations, and adds the admin usage dashboard. Everything else, including templates, works the same on both.',
   },
   {
     category: 'Pricing & billing',
@@ -71,7 +71,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Templates and automations',
     q: 'Are templates on every plan?',
-    a: 'Yes. Ready-made document and email templates are on every coordinator plan, Starter included. You can organize them in folders and edit them.',
+    a: 'Yes. Ready-made document and email templates are on every plan for agents and coordinators, Starter included. You can organize them in folders and edit them.',
   },
   {
     category: 'Templates and automations',
@@ -82,7 +82,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Agents',
     q: 'What plans are there for agents?',
-    a: 'Two: Starter at $19 a month and Pro at $39 a month, both with the same features as on the pricing page. Starter is free for 14 days with no card needed. Your brokerage can also invite you if it uses Relay.',
+    a: 'Two: Starter at $19 a month and Pro at $39 a month, both with the same features as on the pricing page. Both start with a 14-day trial, no card needed. Your brokerage can also invite you if it uses Relay.',
   },
   {
     category: 'Agents',
@@ -289,7 +289,7 @@ export default function FAQPage() {
               href="/get-started"
               className="px-3 sm:px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
             >
-              Start free
+              Start a 14-day trial
             </Link>
           </div>
         </div>
@@ -344,7 +344,7 @@ export default function FAQPage() {
             href="/get-started"
             className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
           >
-            Start free
+            Start a 14-day trial
           </Link>
           <Link href="/pricing" className="px-6 py-3 border border-slate-600 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">
             See pricing
