@@ -2,6 +2,7 @@ import Link from 'next/link';
 import PublicHeader from '@/components/PublicHeader';
 import PublicFooter from '@/components/PublicFooter';
 import AgentPlanCards from '@/components/marketing/AgentPlanCards';
+import { AgentDashboardMockup, MockupCaption } from '@/components/marketing/ProductMockups';
 import { DealFlowIllustration, AutomationFlowIllustration } from '@/components/marketing/Illustrations';
 
 const FEATURES: { title: string; body: string }[] = [
@@ -41,6 +42,11 @@ export default function ForAgentsPage() {
           <Link href="/get-started" className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10">Start a free 14-day trial</Link>
           <Link href="/for-brokerages" className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">Ask your brokerage</Link>
         </div>
+      </section>
+
+      <section className="max-w-5xl mx-auto px-6 pb-16">
+        <AgentDashboardMockup />
+        <MockupCaption />
       </section>
 
       <section className="max-w-7xl mx-auto px-6 pb-16">

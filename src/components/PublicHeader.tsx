@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import PublicMobileMenu from '@/components/PublicMobileMenu';
+import DemoRequestButton from '@/components/DemoRequestButton';
 
 export const PUBLIC_NAV = [
-  { href: '/for-tcs', label: 'For TCs' },
   { href: '/for-agents', label: 'For Agents' },
+  { href: '/for-tcs', label: 'For TCs' },
   { href: '/for-brokerages', label: 'For Brokerages' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/faq', label: 'FAQ' },
@@ -17,7 +18,7 @@ export default function PublicHeader({ active }: { active?: string }) {
           <PublicMobileMenu />
           <Link href="/" className="flex items-center gap-2">
             <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-              <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
+              <img src="/relay-icon.png" alt="Relay" className="w-full h-full object-contain" />
             </span>
           </Link>
         </div>
@@ -36,6 +37,7 @@ export default function PublicHeader({ active }: { active?: string }) {
           >
             Portal Login
           </Link>
+          <DemoRequestButton className="hidden xl:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap" label="Book a demo" />
           <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
           <Link
             href="/get-started"

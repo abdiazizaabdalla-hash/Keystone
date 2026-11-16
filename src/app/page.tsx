@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { decodeStoredRole } from '@/lib/authClient';
 import DemoRequestButton from '@/components/DemoRequestButton';
-import PublicMobileMenu from '@/components/PublicMobileMenu';
-import { HeroIllustration, DealFlowIllustration, PortalIllustration, TeamIllustration, AgentPathsIllustration, BrokerageDashboardIllustration, AutomationFlowIllustration, PayFlowIllustration, TemplateSharingIllustration, AutomationAudiencesIllustration } from '@/components/marketing/Illustrations';
+import PublicHeader from '@/components/PublicHeader';
+import { HeroWorkspaceMockup, ProblemContrastMockup, TransactionWorkspaceMockup, ListingDashboardMockup, WorkflowBuilderMockup, BrokerageDashboardMockup, ConnectedMockup, AgentMini, CoordinatorMini, BrokerageMini, MockupCaption } from '@/components/marketing/ProductMockups';
 
 export default function Home() {
   const router = useRouter();
@@ -40,248 +40,178 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-900">
-      {/* Nav */}
-      <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-900/90 backdrop-blur">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <PublicMobileMenu />
-            <Link href="/" className="flex items-center gap-2">
-              <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-                <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
-              </span>
-            </Link>
-          </div>
-          <nav className="hidden sm:flex items-center gap-8 text-sm text-slate-300">
-            <Link href="/" className="hover:text-slate-100 transition">Home</Link>
-            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
-            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
-            <Link href="/for-brokerages" className="hover:text-slate-100 transition">For Brokerages</Link>
-            <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
-            <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
-          </nav>
-          <div className="flex items-center gap-2 sm:gap-4">
-            <Link
-              href="/agent/login"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
-            >
-              <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-              Portal Login
-            </Link>
-            <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
-            <Link
-              href="/get-started"
-              className="px-3 sm:px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
-            >
-              Start free
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PublicHeader />
 
-      {/* Hero */}
-      <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 grid lg:grid-cols-[5fr_6fr] gap-12 items-center">
+      {/* 1. Hero */}
+      <section className="max-w-7xl mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-[4fr_6fr] gap-12 items-center">
         <div>
-          <span className="inline-block bg-white rounded-xl p-4 mb-3 shadow-md -ml-4">
-            <img src="/relay-logo.png" alt="Relay TC" className="h-14 w-auto object-contain" />
-          </span>
-          <div className="flex items-center gap-2 text-xs font-semibold tracking-wider text-blue-400 uppercase mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-            Contract to closing
-          </div>
-          <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight text-slate-100 leading-[1.1] mb-6">
-            One deal. Everyone on it.<br />
-            <span className="text-blue-400">One workspace.</span>
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-5">Transactions, listings and brokerage oversight</p>
+          <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight text-slate-100 leading-[1.08] mb-6">
+            Every transaction. Every listing. <span className="text-blue-400">One platform.</span>
           </h1>
           <p className="text-lg text-slate-400 mb-8 max-w-lg">
-            Relay puts agents, coordinators, coordinator teams and brokerages on the same file, from contract to closing, each with the view and tools they need.
+            Manage transactions, listings, clients, documents and workflows in one place. Whether you are an agent, a transaction coordinator or a brokerage, Relay brings your operation together.
           </p>
           <div className="flex flex-wrap items-center gap-4">
-            <Link
-              href="/get-started"
-              className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10"
-            >
-              Get started
-            </Link>
-            <a
-              href="#how-it-works"
-              className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition"
-            >
-              Explore Relay
-            </a>
+            <Link href="/get-started" className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10">Get started</Link>
+            <a href="#platform" className="px-6 py-3 border border-slate-700 hover:border-slate-500 text-slate-200 font-semibold rounded-lg transition">Explore the platform</a>
           </div>
-          <p className="text-xs text-slate-500 mt-4">
-            Free for 14 days. No credit card required.{' '}
-            <a href="#who" className="text-blue-400 hover:text-blue-300">See who it is for</a>
-          </p>
+          <p className="text-xs text-slate-500 mt-4">Free for 14 days. No credit card required.</p>
+          <nav aria-label="Choose your role" className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+            <a href="#agents" className="text-slate-300 hover:text-white transition">For agents</a>
+            <span className="text-slate-700">|</span>
+            <a href="#coordinators" className="text-slate-300 hover:text-white transition">For transaction coordinators</a>
+            <span className="text-slate-700">|</span>
+            <a href="#brokerages" className="text-slate-300 hover:text-white transition">For brokerages</a>
+          </nav>
         </div>
-
-        <div className="relative">
-          <HeroIllustration />
-          <div className="absolute -z-10 -top-8 -right-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl" />
-        </div>
+        <div><HeroWorkspaceMockup /></div>
       </section>
 
-      {/* Four audiences, equal weight */}
-      <section className="max-w-6xl mx-auto px-6 pb-16">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* 2. The problem */}
+      <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
+        <div className="max-w-3xl mb-10">
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">The problem</p>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">Your real estate operation shouldn’t live across five different tools.</h2>
+          <p className="text-slate-400">Disconnected systems create extra administrative work, missed details and inconsistent processes. Deals sit in spreadsheets, deadlines in calendars, contacts in lists and documents in folders, while brokerage leaders lack a view of what agents are doing. Relay puts it in one organized workspace.</p>
+        </div>
+        <ProblemContrastMockup />
+      </section>
+
+      {/* 3. One platform, three ways to work */}
+      <section id="platform" className="max-w-7xl mx-auto px-6 py-20 border-t border-slate-700 scroll-mt-20">
+        <div className="max-w-3xl mb-10">
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">One platform, three ways to work</p>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">Built for everyone involved in the transaction.</h2>
+          <p className="text-slate-400">The same Relay workspace underneath. What changes is who is using it and what they can see.</p>
+        </div>
+        <div className="grid lg:grid-cols-3 gap-6">
           {[
-            { href: '/for-agents', who: 'Agents', line: 'Your own workspace for your deals and listings.', price: 'Starter $19, Pro $39 a month' },
-            { href: '/for-tcs', who: 'Coordinators', line: 'Run every file from contract to closing, with agents following along.', price: 'From $19 a month' },
-            { href: '/for-tcs#teams', who: 'TC teams', line: 'A shared desk and checklist for the team, with each file kept private.', price: '$89 a month for three seats' },
-            { href: '/for-brokerages', who: 'Brokerages', line: 'See every agent and every file, with required documents checked.', price: 'From $99 a month' },
+            { id: 'agents', who: 'Agents', head: 'Run your business from one place.', body: 'Manage transactions, listings, contacts, documents and client communication without juggling disconnected systems.', cta: 'Explore Relay for agents', href: '/for-agents', art: <AgentMini />, price: 'Starter $19 · Pro $39 a month' },
+            { id: 'coordinators', who: 'Transaction coordinators and teams', head: 'Manage every detail. Keep every deal moving.', body: 'Coordinate transactions, organize listings, automate repetitive tasks and run your coordination business, alone or as a team, from one workspace.', cta: 'Explore Relay for TCs', href: '/for-tcs', art: <CoordinatorMini />, price: 'Starter $19 · Pro $39 · Team $89 a month' },
+            { id: 'brokerages', who: 'Brokerages', head: 'Equip your agents. Oversee your entire operation.', body: 'Give agents full Relay accounts, with brokerage-wide visibility, listing oversight, shared templates and standardized workflows for leadership.', cta: 'Explore Relay for brokerages', href: '/for-brokerages', art: <BrokerageMini />, price: 'From $99 a month, agents included' },
           ].map((c) => (
-            <Link key={c.who} href={c.href} className="block bg-slate-800/60 border border-slate-700 hover:border-blue-400/60 rounded-xl p-6 transition">
-              <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-2">For</p>
-              <h2 className="font-display text-2xl font-semibold text-slate-100 mb-2">{c.who}</h2>
-              <p className="text-sm text-slate-400 mb-4">{c.line}</p>
-              <p className="text-sm font-semibold text-slate-200">{c.price} <span className="text-blue-400">→</span></p>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* Snapshot: one deal, start to finish */}
-      <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">How it works</p>
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">One deal, from contract to closing.</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">Upload the contract and Relay builds the deal. From there the dates, checklist, documents, messages and invoice all live on one page.</p>
-        <DealFlowIllustration />
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-          {[
-            { step: '1', title: 'Read the contract', body: 'AI fills in the transaction or listing from the PDF.' },
-            { step: '2', title: 'Dates and checklist', body: 'Critical dates and a dated closing checklist, kept current as dates move.' },
-            { step: '3', title: 'Documents and signatures', body: 'Collect documents, send for e-signature, message the parties.' },
-            { step: '4', title: 'Invoice and get paid', body: 'Invoice the agent, accept online payment, export to QuickBooks.' },
-          ].map((s) => (
-            <div key={s.step} className="p-5 bg-slate-800/60 border border-slate-700 rounded-xl">
-              <span className="w-7 h-7 rounded-full bg-blue-500/15 border border-blue-400/60 text-blue-300 text-sm font-semibold flex items-center justify-center mb-3">{s.step}</span>
-              <h3 className="font-semibold text-slate-100 mb-1">{s.title}</h3>
-              <p className="text-sm text-slate-400">{s.body}</p>
+            <div key={c.id} id={c.id} className="scroll-mt-24 flex flex-col rounded-2xl border border-slate-700 bg-slate-800/50 p-6">
+              <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">{c.who}</p>
+              <h3 className="font-display text-xl font-semibold text-slate-100 mb-2">{c.head}</h3>
+              <p className="text-sm text-slate-400 mb-5">{c.body}</p>
+              <div className="mb-5 mt-auto">{c.art}</div>
+              <p className="text-xs text-slate-500 mb-3">{c.price}</p>
+              <Link href={c.href} className="text-sm font-semibold text-blue-400 hover:text-blue-300">{c.cta} →</Link>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Snapshot: who it is for */}
-      <section id="who" className="max-w-7xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
-        <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Who it is for</p>
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">The same deal, seen from each seat.</h2>
-        <p className="text-slate-400 mb-10 max-w-2xl">Relay works the same way for everyone on the file. What changes is what you see and what you can do.</p>
-
-        <div className="space-y-14">
+      {/* 4. Transactions */}
+      <section className="max-w-7xl mx-auto px-6 py-20 border-t border-slate-700">
+        <div className="max-w-3xl mb-12">
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Transaction management</p>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">From contract to closing, everything stays connected.</h2>
+          <p className="text-slate-400">Relay manages the work of a transaction, not just a list of them.</p>
+        </div>
+        <TransactionWorkspaceMockup />
+        <MockupCaption />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-12">
           {[
-            {
-              id: 'agents',
-              label: 'Agents',
-              title: 'Your own deals, your own workspace.',
-              body: 'Two plans, Starter and Pro, or get invited by your brokerage.',
-              bullets: ['Run your own deals and listings', 'Read a contract and fill in the deal', 'Collaborate directly with a coordinator who uses Relay', 'Templates and automations on Pro'],
-              href: '/for-agents',
-              cta: 'See Relay for agents',
-              art: <AgentPathsIllustration />,
-            },
-            {
-              id: 'tcs',
-              label: 'Coordinators',
-              title: 'Run every file from one workspace.',
-              body: 'Contracts, dates, checklists, documents, invoices and your agents’ logins, without the spreadsheet.',
-              bullets: ['AI contract intake, listings and transactions', 'Your own checklist templates and automated reminders', 'Invoices with online payment and QuickBooks files', 'Agent portal with the deals you choose to share'],
-              href: '/for-tcs',
-              cta: 'See Relay for TCs',
-              art: <PortalIllustration />,
-              reverse: true,
-            },
-            {
-              id: 'teams',
-              label: 'TC teams',
-              title: 'Lead a team without reading their files.',
-              body: 'Team owners get a status-only desk across the team. Each member’s deals, prices, documents and clients stay private to them.',
-              bullets: ['Team desk with stalled and overdue status', 'A default checklist the whole team starts from', 'Team automations, digests and trends', 'Get paid through Relay with Stripe'],
-              href: '/for-tcs#teams',
-              cta: 'See team features',
-              art: <TeamIllustration />,
-            },
-            {
-              id: 'brokerages',
-              label: 'Brokerages',
-              title: 'See every file. Set the standard once.',
-              body: 'A compliance desk and file review across your roster, with the required steps and document lists every agent works from.',
-              bullets: ['Compliance desk and file review', 'Required steps and document lists, pushed to every agent', 'Automations, reports and trends', 'Managing accounts with scoped roles, and commissions paid through Relay'],
-              href: '/for-brokerages',
-              cta: 'See Relay for brokerages',
-              art: <BrokerageDashboardIllustration />,
-              reverse: true,
-            },
-          ].map((a) => (
-            <div key={a.id} id={a.id} className={`grid ${a.reverse ? 'lg:grid-cols-[3fr_2fr]' : 'lg:grid-cols-[2fr_3fr]'} gap-10 items-center scroll-mt-4`}>
-              <div className={a.reverse ? 'lg:order-2' : ''}>
-                <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">{a.label}</p>
-                <h3 className="font-display text-2xl font-semibold text-slate-100 mb-3">{a.title}</h3>
-                <p className="text-slate-400 mb-4">{a.body}</p>
-                <ul className="space-y-2 text-sm text-slate-300 mb-5">
-                  {a.bullets.map((b) => (
-                    <li key={b} className="flex items-start gap-2.5">
-                      <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-                <Link href={a.href} className="text-blue-400 hover:text-blue-300 font-medium text-sm">{a.cta} →</Link>
-              </div>
-              <div className={a.reverse ? 'lg:order-1' : ''}>{a.art}</div>
+            ['Contract intake', 'Upload a supported electronic contract and Relay reads the property, parties, price and key dates. You check and save.'],
+            ['Tracking and milestones', 'Active transactions, progress and closing deadlines, with what needs attention at the top.'],
+            ['Tasks and checklists', 'A closing checklist on every deal, with due dates that follow the contract and move when it does.'],
+            ['Documents and e-signatures', 'Documents kept with the step they belong to, and signature requests with a record of who signed.'],
+            ['Contacts', 'Agents, clients, lenders, title companies and inspectors, kept with the deals they work on.'],
+            ['Client communication', 'Deal emails and a live progress page for your buyer or seller, showing only what you choose.'],
+            ['Calendar sync', 'Critical dates on Google Calendar within seconds, or on Outlook and Apple by a private link.'],
+            ['Invoicing and payments', 'Invoices alongside the deal, Stripe payments, and QuickBooks files.'],
+          ].map(([t, b]) => (
+            <div key={t} className="rounded-xl border border-slate-700 bg-slate-800/50 p-5">
+              <h3 className="font-semibold text-slate-100 mb-1.5">{t}</h3><p className="text-sm text-slate-400">{b}</p>
             </div>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500 mt-4">Contract intake works from electronic contracts. Scanned images of paper contracts are not read.</p>
+      </section>
+
+      {/* 5. Listings */}
+      <section className="max-w-7xl mx-auto px-6 py-20 border-t border-slate-700">
+        <div className="max-w-3xl mb-12">
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Listing management</p>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">Your listings deserve the same level of organization.</h2>
+          <p className="text-slate-400">Listings are a first-class part of Relay, with their own page, tools and templates. When an offer is accepted, one click turns the listing into a transaction.</p>
+        </div>
+        <ListingDashboardMockup />
+        <MockupCaption />
+        <ul className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-3 text-sm text-slate-300 mt-10">
+          {['Property details and pricing', 'Listing and expiration dates', 'Offers and showings', 'Listing contacts and documents'].map((x) => (
+            <li key={x} className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />{x}</li>
+          ))}
+        </ul>
+      </section>
+
+      {/* 6. Automation */}
+      <section className="max-w-7xl mx-auto px-6 py-20 border-t border-slate-700">
+        <div className="max-w-3xl mb-12">
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Workflow automation</p>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">Stop repeating the work. Build workflows that move things forward.</h2>
+          <p className="text-slate-400">Choose what triggers a workflow, such as a new transaction or an approaching closing date, then the steps that follow. Start from ready-made workflows or build your own, and choose whether Relay asks you before it sends anything.</p>
+        </div>
+        <WorkflowBuilderMockup />
+        <MockupCaption>Illustration of the workflow builder. Names and steps are examples.</MockupCaption>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-10">
+          {['Create tasks when a transaction starts', 'Send reminders as a deadline approaches', 'Start closing preparation', 'Create listing tasks when a listing is added', 'Send follow-ups after key events', 'Pause everything with one switch'].map((x) => (
+            <div key={x} className="rounded-xl border border-slate-700 bg-slate-800/50 px-5 py-4 text-sm text-slate-300">{x}</div>
           ))}
         </div>
       </section>
 
-      {/* Snapshot: workflows that run themselves */}
-      <section className="max-w-7xl mx-auto px-6 py-16 border-t border-slate-700">
-        <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Workflow</p>
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Set a rule once. Relay does the follow-up.</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">Automations send the reminder emails you would otherwise write by hand. Shared templates keep everyone’s wording consistent. Invoices keep payment next to the deal.</p>
-        <div className="grid gap-8">
-          <div>
-            <p className="text-sm text-slate-400 mb-3">Automations: pick what triggers it and which template to use, and Relay sends the email.</p>
-            <AutomationFlowIllustration />
-          </div>
-          <div>
-            <p className="text-sm text-slate-400 mb-3">Invoices: from the deal to paid to your books.</p>
-            <PayFlowIllustration />
-          </div>
-          <div>
-            <p className="text-sm text-slate-400 mb-3">Templates: a brokerage shares one with every agent.</p>
-            <TemplateSharingIllustration />
-          </div>
-          <div>
-            <p className="text-sm text-slate-400 mb-3">Who can use automations: coordinators, teams, agents and brokerages.</p>
-            <AutomationAudiencesIllustration />
-          </div>
+      {/* 7. Brokerage advantage */}
+      <section className="max-w-7xl mx-auto px-6 py-20 border-t border-slate-700">
+        <div className="max-w-3xl mb-12">
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">The brokerage advantage</p>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">One platform for your agents. Complete visibility for your brokerage.</h2>
+          <p className="text-slate-400">Every agent gets the tools to manage their own transactions and listings. Leadership gets a view across the organization, without opening every agent’s workspace.</p>
+        </div>
+        <BrokerageDashboardMockup />
+        <MockupCaption>Illustration of the brokerage dashboard. Names and numbers are made up.</MockupCaption>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-12">
+          {[
+            ['Brokerage-wide oversight', 'Active deals, upcoming closings, late steps, listings and each agent’s progress in one place.'],
+            ['Standardized workflows', 'Build a workflow once and publish it so agents run the same process.'],
+            ['Shared templates', 'Share forms and email templates once. They appear in every agent’s template list.'],
+            ['Agent management', 'Invite agents, manage seats and add managing accounts with scoped roles.'],
+          ].map(([t, b]) => (
+            <div key={t} className="rounded-xl border border-slate-700 bg-slate-800/50 p-5"><h3 className="font-semibold text-slate-100 mb-1.5">{t}</h3><p className="text-sm text-slate-400">{b}</p></div>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500 mt-4">Brokerage leaders see where files stand and what is missing. Private messages and agents’ own contacts stay private.</p>
+        <div className="flex flex-wrap items-center gap-4 mt-8">
+          <DemoRequestButton className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition" label="Book a brokerage demo" />
+          <Link href="/for-brokerages" className="px-6 py-3 border border-slate-700 hover:border-slate-500 text-slate-200 font-semibold rounded-lg transition">Explore brokerage features</Link>
         </div>
       </section>
 
-      {/* Snapshot: everything else */}
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">And the rest of the file.</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">Everything else a closing needs, already in the app.</p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      {/* 8. Connected */}
+      <section className="max-w-7xl mx-auto px-6 py-20 border-t border-slate-700">
+        <div className="max-w-3xl mb-12">
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Everything connected</p>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">Your tools, information and workflows work together.</h2>
+          <p className="text-slate-400">Information entered once shows up wherever it is needed.</p>
+        </div>
+        <ConnectedMockup />
+      </section>
+
+      {/* 9. Benefits */}
+      <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
+        <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-10 max-w-3xl">Less administrative work. More visibility. Better-organized transactions.</h2>
+        <div className="grid md:grid-cols-3 gap-6">
           {[
-            { title: 'Calendar sync', body: 'Google Calendar updates within seconds. Outlook and Apple subscribe by a private link.' },
-            { title: 'Import your work', body: 'CSV deal import with a preview, and a contacts list built from the people on your deals.' },
-            { title: 'QuickBooks files', body: 'Download invoices in QuickBooks’ import layout, or upload an export to match invoices.' },
-            { title: 'Documents and e-signatures', body: 'Collect documents per deal and send them for signature.' },
-            { title: 'Listings to transactions', body: 'Convert a listing to a transaction in one click.' },
-            { title: 'Daily digest', body: 'Overdue, due-today and waiting items on your dashboard and in your inbox.' },
-          ].map((f) => (
-            <div key={f.title} className="p-6 bg-slate-800/60 border border-slate-700 rounded-xl">
-              <h3 className="font-semibold text-slate-100 mb-2">{f.title}</h3>
-              <p className="text-sm text-slate-400">{f.body}</p>
-            </div>
+            ['Stay organized', 'Keep transactions, listings, documents, contacts and deadlines together.'],
+            ['Work more efficiently', 'Automate repetitive tasks and standardize how your team works.'],
+            ['Stay informed', 'See what needs attention and where every transaction stands.'],
+          ].map(([t, b]) => (
+            <div key={t} className="rounded-2xl border border-slate-700 bg-slate-800/50 p-7"><h3 className="font-display text-xl font-semibold text-slate-100 mb-2">{t}</h3><p className="text-slate-400">{b}</p></div>
           ))}
         </div>
       </section>
-
 
       {/* Trust strip */}
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
@@ -305,7 +235,7 @@ export default function Home() {
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
         <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
           <div>
-            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple pricing for every seat.</h2>
+            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple pricing for every role.</h2>
             <p className="text-slate-400">Try Relay free and see how it fits. Pick the row that describes you.</p>
           </div>
           <Link href="/pricing" className="text-blue-400 hover:text-blue-300 font-medium text-sm">
@@ -329,23 +259,15 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
-        <div className="flex flex-wrap items-center justify-between gap-6">
-          <h2 className="font-display text-3xl font-semibold text-slate-100">Run your next closing in Relay.</h2>
-          <div className="flex flex-wrap items-center gap-4">
-            <Link
-              href="/get-started"
-              className="inline-block px-8 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
-            >
-              Start free
-            </Link>
-            <DemoRequestButton
-              className="px-6 py-3 text-slate-300 hover:text-slate-100 font-semibold transition"
-              label="Request a demo"
-            />
-          </div>
+      {/* 10. Final conversion */}
+      <section className="max-w-4xl mx-auto px-6 py-24 border-t border-slate-700 text-center">
+        <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">Bring your entire real estate operation into Relay.</h2>
+        <p className="text-slate-400 mb-8 max-w-2xl mx-auto">Whether you are managing your own transactions, coordinating deals for clients or overseeing a brokerage, Relay gives you the tools to keep everything moving.</p>
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <Link href="/get-started" className="px-8 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10">Get started</Link>
+          <DemoRequestButton className="px-7 py-3 border border-slate-700 hover:border-slate-500 text-slate-200 font-semibold rounded-lg transition" label="Book a demo" />
         </div>
+        <p className="text-xs text-slate-500 mt-5">Agents and coordinators: start free for 14 days. Brokerages: book a demo or start a 30-day pilot.</p>
       </section>
 
       {/* Footer */}
@@ -353,9 +275,9 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <span className="w-7 h-7 bg-white rounded-md flex items-center justify-center p-1 shadow-sm">
-              <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
+              <img src="/relay-icon.png" alt="Relay" className="w-full h-full object-contain" />
             </span>
-            <span className="font-brand font-extrabold text-sm text-slate-300">Relay TC</span>
+            <span className="font-brand font-extrabold text-sm text-slate-300">Relay</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>

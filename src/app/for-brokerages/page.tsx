@@ -3,6 +3,7 @@ import PublicHeader from '@/components/PublicHeader';
 import PublicFooter from '@/components/PublicFooter';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import { BROKERAGE_TIERS, PILOT } from '@/lib/marketingPricing';
+import { BrokerageDashboardMockup, MockupCaption } from '@/components/marketing/ProductMockups';
 import { TemplateSharingIllustration, BrokerageDashboardIllustration, FileReviewIllustration, BrokerageHubIllustration } from '@/components/marketing/Illustrations';
 
 const AGENT_GETS: { title: string; body: string }[] = [
@@ -44,17 +45,19 @@ export default function ForBrokeragesPage() {
       <section className="max-w-4xl mx-auto px-6 pt-20 pb-12 text-center">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">For brokerages</p>
         <h1 className="font-display text-4xl sm:text-5xl font-semibold text-slate-100 mb-5">
-          Every agent, every file, <span className="text-blue-400">in one view.</span>
+          Your brokerage, <span className="text-blue-400">operating as one.</span>
         </h1>
         <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">
           Relay gives each agent a workspace for their deals and gives you one view of the whole brokerage: where every file stands, what is missing, who is late and what is owed.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
-          <DemoRequestButton className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10" label="Start a free 30-day pilot" />
-          <Link href="#plans" className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">See plans</Link>
+          <DemoRequestButton className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10" label="Book a brokerage demo" />
+          <Link href="#oversight" className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">Explore brokerage features</Link>
         </div>
         <p className="text-xs text-slate-500 mt-5">{PILOT}</p>
       </section>
+
+      <section className="max-w-6xl mx-auto px-6 pb-16"><BrokerageDashboardMockup /><MockupCaption>Illustration of the brokerage dashboard. Names and numbers are made up.</MockupCaption></section>
 
       <section id="oversight" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <p className={eyebrow}>Oversight</p>
@@ -211,7 +214,7 @@ export default function ForBrokeragesPage() {
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">See it with your own roster.</h2>
         <p className="text-slate-400 mb-6">Start the pilot, invite a few agents, and judge it on real files. No card, and nothing renews.</p>
         <div className="flex flex-wrap items-center justify-center gap-4">
-          <DemoRequestButton className="px-7 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10" label="Start a free 30-day pilot" />
+          <DemoRequestButton className="px-7 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10" label="Book a brokerage demo" />
           <Link href="/pricing#brokerages" className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">See all pricing</Link>
         </div>
       </section>

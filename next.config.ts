@@ -36,6 +36,13 @@ const cspHeaderName =
 const nextConfig: NextConfig = {
   // The read-only live-data server (scripts/dev-prod-readonly.mjs) builds into its own folder so it can run next to dev:local.
   ...(process.env.NEXT_DIST_DIR ? { distDir: process.env.NEXT_DIST_DIR } : {}),
+  async redirects() {
+    return [
+      { source: '/agents', destination: '/for-agents', permanent: false },
+      { source: '/transaction-coordinators', destination: '/for-tcs', permanent: false },
+      { source: '/brokerages', destination: '/for-brokerages', permanent: false },
+    ];
+  },
   async headers() {
     return [{ source: '/:path*', headers: [...securityHeaders, { key: cspHeaderName, value: csp }] }];
   },
