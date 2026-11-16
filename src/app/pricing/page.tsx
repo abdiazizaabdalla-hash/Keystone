@@ -144,7 +144,7 @@ export default function PricingPage() {
             <div key={t.name} className={`rounded-xl border p-8 ${i === 1 ? 'border-blue-500 bg-slate-700 ring-2 ring-blue-500/20' : 'border-slate-700 bg-slate-800/60'}`}>
               <h3 className="font-display text-2xl font-semibold text-slate-100 mb-1">{t.name}</h3>
               <p className="mb-1"><span className="text-4xl font-display font-semibold text-slate-100">{t.price}</span><span className="text-slate-400 ml-1">{t.period}</span></p>
-              <p className="text-sm text-slate-300 mb-4">Includes {t.agents} agents. Extra agents {extraAgent} a month.</p>
+              <p className="text-sm text-slate-300 mb-4">Includes {t.agents} agents. Extra agents {i === 0 ? extraAgent.basic : extraAgent.pro} a month.</p>
               <p className="text-sm text-slate-400">{t.blurb}</p>
             </div>
           ))}

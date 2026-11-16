@@ -8,7 +8,7 @@ export const BROKERAGE_TIERS = {
     price: '$99',
     period: '/month',
     agents: 10,
-    blurb: 'See your whole roster and every file, with required documents checked.',
+    blurb: 'Know what is happening across your brokerage. See every agent’s transaction and listing activity, monitor compliance and review required documents.',
     built: [
       'Invite and manage your agents',
       'Dashboard: open deals, late items, closings this week, last activity',
@@ -30,7 +30,7 @@ export const BROKERAGE_TIERS = {
     price: '$199',
     period: '/month',
     agents: 25,
-    blurb: 'More agents and finer control over documents, reports and who can do what.',
+    blurb: 'Standardize how your brokerage operates. Required documents by deal type, deeper reports and scoped roles for your administrators.',
     built: [
       'Everything in Basic',
       'Up to 25 agents included',
@@ -38,7 +38,7 @@ export const BROKERAGE_TIERS = {
       'Scoped roles for administrators (up to five extra)',
     ],
   },
-  extraAgent: '$6',
+  extraAgent: { basic: '$8', pro: '$6' },
 } as const;
 
 export const PILOT = '30 days of Brokerage Pro, free, with no card needed. If it is not for you, nothing renews and your agents keep read access to what they already have.';
