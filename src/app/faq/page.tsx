@@ -8,8 +8,8 @@ const FAQS: { category: string; q: string; a: string }[] = [
   // Getting started
   {
     category: 'Getting started',
-    q: 'Who is Relay TC for?',
-    a: 'Relay is built first for transaction coordinators who manage the paperwork and checklist between an accepted contract and closing day, solo or in a team. Agents can have a workspace of their own, and brokerages can see every agent’s files in one place.',
+    q: 'Who is Relay for?',
+    a: 'Relay is built for the whole transaction: agents who manage their own deals and listings, transaction coordinators and coordinator teams, and brokerages that want every agent’s files in one place. Each has its own plans and pricing, and they can collaborate directly when both have an account.',
   },
   {
     category: 'Getting started',
@@ -18,8 +18,8 @@ const FAQS: { category: string; q: string; a: string }[] = [
   },
   {
     category: 'Getting started',
-    q: 'Can Relay fill out a new transaction or listing from the contract itself?',
-    a: 'Yes. Upload the signed purchase contract when creating a transaction, or the listing agreement when creating a listing, and AI reads it and fills out and creates it for you: property address, purchase price, acceptance and closing dates, buyers, sellers, the lender, and the title/escrow contact all come back pre-filled, and matching parties get added to the transaction as contacts automatically. Everything lands in an editable form first, so you review and adjust before it’s actually saved. Available on every plan, including Starter.',
+    q: 'Can Relay create a transaction or listing from the contract, with no retyping?',
+    a: 'Yes. Upload the purchase contract when creating a transaction, or the listing agreement when creating a listing, as a PDF. AI reads it and pre-fills the property address, price, key dates, buyers, sellers, lender and title or escrow contact. For a transaction, the people it finds are added as contacts (with email and phone when the contract lists them) and the reviewed dates become critical dates. Listings pull in the price, MLS details, sellers and agents with their roles. Everything appears in an editable form first, so you review and correct it before saving, and anything unclear is flagged. AI can misread a contract, so always check the details. Available on every plan, including Starter.',
   },
   {
     category: 'Getting started',

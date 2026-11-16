@@ -89,7 +89,7 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-slate-500 mt-4">Works with supported electronic contracts. Relay flags anything unclear for you to check, and nothing is saved until you review it.</p>
+        <p className="text-xs text-slate-500 mt-4">Upload the contract as a PDF. Relay flags anything unclear for you to check, and nothing is saved until you review it.</p>
       </section>
 
       {/* 2. The problem */}
@@ -152,7 +152,7 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-slate-500 mt-4">Contract intake works from electronic contracts. Scanned images of paper contracts are not read.</p>
+        <p className="text-xs text-slate-500 mt-4">Contract intake reads PDF contracts. Results are always shown for your review before anything is saved.</p>
       </section>
 
       {/* 5. Listings */}
