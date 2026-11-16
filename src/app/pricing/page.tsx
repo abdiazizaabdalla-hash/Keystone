@@ -155,12 +155,12 @@ export default function PricingPage() {
 
       <section className="max-w-4xl mx-auto px-6 py-16 border-t border-slate-700">
         <h2 className="font-display text-2xl font-semibold text-slate-100 mb-4">How getting paid works</h2>
-        <p className="text-slate-400 mb-3">There are two separate money flows in Relay:</p>
+        <p className="text-slate-400 mb-3">There are two separate money flows in Relay, and they work the same way for agents, coordinators and brokerages:</p>
         <ul className="space-y-3 text-sm text-slate-300 mb-4">
-          <li className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />You pay Relay for your plan, the one you picked above.</li>
-          <li className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />Agents pay coordinators for invoices. Relay never touches that money.</li>
+          <li className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />You pay Relay for your plan, the one you picked above. That is the only thing Relay charges you for.</li>
+          <li className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />Money between the people on a deal is theirs. Coordinators invoice agents, agents can invoice for other work, and brokerages issue commission statements to their agents.</li>
         </ul>
-        <p className="text-slate-400">Take invoice payments through your connected Stripe account, or record payments received another way. Relay charges no platform fee on invoice payments.</p>
+        <p className="text-slate-400">Take payments through your own connected Stripe account, or record payments received another way, such as Zelle or a check. Relay charges no platform fee on invoice payments.</p>
       </section>
 
       <section className="max-w-4xl mx-auto px-6 py-20 border-t border-slate-700 text-center">
