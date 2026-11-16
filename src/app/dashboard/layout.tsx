@@ -178,6 +178,25 @@ function NavLink({
   );
 }
 
+function BannerLink({ href, label, icon, active, badge = 0 }: { href: string; label: string; icon: React.ReactNode; active: boolean; badge?: number }) {
+  return (
+    <Link
+      href={href}
+      data-tour={`nav-${label.toLowerCase()}`}
+      aria-current={active ? 'page' : undefined}
+      className={`relative flex items-center gap-2 px-3.5 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
+        active ? 'text-white border-blue-400' : 'text-slate-300 border-transparent hover:text-white'
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+      {badge > 0 && (
+        <span className="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center">{badge > 99 ? '99+' : badge}</span>
+      )}
+    </Link>
+  );
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -209,6 +228,8 @@ export default function DashboardLayout({
   } | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   // Phones only: the sidebar is replaced by a top bar with a slide-down menu.
   const [mobileOpen, setMobileOpen] = useState(false);
   // Unread team messages (Team/Brokerage plans) -- shown on the Collaborate link, or on Messages for a broker and for brokerage agents.
@@ -444,22 +465,27 @@ export default function DashboardLayout({
     if (i.href === '/dashboard/automations') return isFeatureOnClient('automation') && automationAllowed && !(isAgentAccount && !hasWorkspace);
     return true;
   });
-  const primaryNav = brokerDesk
-    ? [
-        ...baseNav.filter((i) => i.href !== '/dashboard/automations'),
-        { href: '/dashboard/compliance', label: teamOwner === true ? 'Team desk' : 'Compliance', icon: 'compliance' },
-        { href: '/dashboard/reports', label: 'Reports', icon: 'reports' },
-        ...baseNav.filter((i) => i.href === '/dashboard/automations'),
-      ]
-    : baseNav;
-
-  const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
+  // Layout: the sidebar holds the day-to-day work on a deal (Home to Invoices, plus Contacts). The top banner holds how the
+  // office is run (desk, reports, automations, templates, people) with search, notifications and the account menu at its right.
+  const sideItems: { href: string; label: string; icon: string }[] = [
+    ...baseNav.filter((i) => i.href !== '/dashboard/automations'),
     { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
-    ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }] : []),
+  ];
+  const bannerItems: { href: string; label: string; icon: string; badge?: number }[] = [
+    ...(brokerDesk
+      ? [
+          { href: '/dashboard/compliance', label: teamOwner === true ? 'Team desk' : 'Compliance', icon: 'compliance' },
+          { href: '/dashboard/reports', label: 'Reports', icon: 'reports' },
+        ]
+      : []),
+    ...baseNav.filter((i) => i.href === '/dashboard/automations'),
     ...(isFeatureOnClient('templates') && !(isAgentAccount && !hasWorkspace) ? [{ href: '/dashboard/templates', label: 'Templates', icon: 'templates' }] : []),
-    { href: '/dashboard/search', label: 'Search', icon: 'search' },
     ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: collaborateUnread }] : []),
+    ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }] : []),
     ...(brokerageAdmin?.delegated ? [{ href: '/dashboard/brokerage-admin', label: 'Brokerage agents', icon: 'collaborate' }] : []),
+  ];
+  const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
+    { href: '/dashboard/search', label: 'Search', icon: 'search' },
     { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
     { href: '/dashboard/account', label: 'Account', icon: 'account' },
     ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin', icon: 'admin' }] : []),
@@ -469,6 +495,15 @@ export default function DashboardLayout({
   const showPlanChip = Boolean(plan) && plan !== 'starter' && !fromBrokerage;
   // A brokerage's own account (owner or managing account) is labelled Brokerage, never Team.
   const chipLabel = brokerOwner === true || brokerageAdmin?.delegated === true || plan === 'brokerage' ? 'Brokerage' : plan ?? '';
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
+  }, [menuOpen]);
 
   if (isLoading) {
     return (
@@ -518,12 +553,9 @@ export default function DashboardLayout({
         {mobileOpen && (
           <div className="absolute left-0 right-0 top-full max-h-[calc(100vh-56px)] overflow-y-auto bg-slate-900 border-b border-white/10 shadow-xl px-3 pb-3 space-y-1">
             {[
-              ...primaryNav.map((i) => ({ href: i.href, label: i.href === '/dashboard/messages' && messagesUnread > 0 ? `Messages (${messagesUnread})` : i.label })),
-              { href: '/dashboard/contacts', label: 'Contacts' },
-              ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents' }] : []),
+              ...sideItems.map((i) => ({ href: i.href, label: i.href === '/dashboard/messages' && messagesUnread > 0 ? `Messages (${messagesUnread})` : i.label })),
+              ...bannerItems.map((i) => ({ href: i.href, label: i.badge && i.badge > 0 ? `${i.label} (${i.badge})` : i.label })),
               { href: '/dashboard/search', label: 'Search' },
-              ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: collaborateUnread > 0 ? `Collaborate (${collaborateUnread})` : 'Collaborate' }] : []),
-              ...(brokerageAdmin?.delegated ? [{ href: '/dashboard/brokerage-admin', label: 'Brokerage agents' }] : []),
               { href: '/dashboard/settings', label: 'Settings' },
               { href: '/dashboard/account', label: plan ? `Account · ${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan` : 'Account' },
               ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin' }] : []),
@@ -622,7 +654,7 @@ export default function DashboardLayout({
 
         {/* Navigation */}
         <nav className={`flex-1 min-h-0 overflow-y-auto py-3 tiny:py-1.5 space-y-0.5 ${collapsed ? 'px-2' : 'px-3'}`}>
-          {primaryNav.map((item) => (
+          {sideItems.map((item) => (
             <NavLink
               key={item.href}
               href={item.href}
@@ -633,75 +665,77 @@ export default function DashboardLayout({
               icon={NAV_ICONS[item.icon]}
             />
           ))}
-
-          {moreItems.map((item) => (
-              <NavLink
-                key={item.href}
-                href={item.href}
-                label={item.label}
-                collapsed={collapsed}
-                active={isActivePath(pathname, item.href)}
-                tone={item.href === '/dashboard/admin' ? 'admin' : 'default'}
-                badge={'badge' in item ? item.badge : 0}
-                icon={NAV_ICONS[item.icon]}
-              />
-            ))}
         </nav>
 
-        {/* User Section */}
-        <div className={`border-t border-white/10 space-y-1.5 ${collapsed ? 'p-2' : 'p-3'}`}>
-          {userName && !collapsed && (
-            <div className="px-2 tiny:hidden">
-              <p className="text-sm font-semibold text-slate-100 truncate">{userName}</p>
-            </div>
-          )}
-          {plan && !fromBrokerage && !collapsed && (
-            <div className="flex items-center justify-between px-3 py-1.5 bg-slate-700/60 border border-slate-600 rounded-lg">
-              {showPlanChip ? (
-                <span className="text-xs text-slate-400">
-                  <span className="text-slate-200 font-semibold capitalize">{chipLabel}</span> plan
-                </span>
-              ) : (
-                <span className="text-xs text-slate-400">Get more with Pro</span>
-              )}
-              <Link href="/dashboard/account" className="text-xs text-blue-400 hover:text-blue-300 font-medium">
-                {showPlanChip ? 'Manage' : 'Upgrade'}
-              </Link>
-            </div>
-          )}
-          {plan && !fromBrokerage && collapsed && (
-            <Link
-              href="/dashboard/account"
-              title={showPlanChip ? `${chipLabel} plan -- Manage` : 'Upgrade'}
-              className="flex items-center justify-center py-2 bg-slate-700/60 border border-slate-600 rounded-lg text-xs text-slate-200 font-semibold uppercase"
-            >
-              {showPlanChip ? chipLabel.charAt(0) : '↑'}
-            </Link>
-          )}
-          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={16} />
-          <button
-            onClick={() => setTutorialMenuOpen(true)}
-            title="Open a quick tutorial"
-            className={`w-full flex items-center justify-center text-slate-400 hover:bg-white/5 hover:text-slate-200 rounded-lg transition text-sm py-1.5 ${
-              collapsed ? 'px-0' : 'px-4'
-            }`}
-          >
-            {collapsed ? '?' : 'Tutorial'}
-          </button>
-          <button
-            onClick={handleLogout}
-            title={collapsed ? 'Logout' : undefined}
-            className={`w-full flex items-center justify-center text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition text-sm py-1.5 ${
-              collapsed ? 'px-0' : 'px-4'
-            }`}
-          >
-            Logout
-          </button>
-        </div>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 min-w-0 overflow-auto">
+        {/* Top banner (tablet and desktop): running the office, search, notifications and the account menu */}
+        <header className="hidden md:flex sticky top-0 z-30 items-center justify-between gap-3 px-4 bg-slate-950/80 backdrop-blur border-b border-white/10">
+          <nav aria-label="Manage" className="flex items-center min-w-0 overflow-x-auto">
+            {bannerItems.map((item, i) => (
+              <div key={item.href} className="flex items-center">
+                {i > 0 && <span aria-hidden className="text-slate-600 select-none">|</span>}
+                <BannerLink href={item.href} label={item.label} icon={NAV_ICONS[item.icon]} active={isActivePath(pathname, item.href)} badge={item.badge ?? 0} />
+              </div>
+            ))}
+          </nav>
+          <div className="flex items-center gap-1 shrink-0">
+            <Link href="/dashboard/search" data-tour="nav-search" aria-label="Search" title="Search" className="p-2 text-slate-300 hover:text-white rounded-lg transition">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" /></svg>
+            </Link>
+            <NotificationBell variant="banner" />
+            <div ref={menuRef} className="relative ml-1">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((o) => !o)}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                className="flex items-center gap-2 pl-1.5 pr-2 py-1.5 text-sm text-slate-200 hover:text-white rounded-lg transition"
+              >
+                <span className="w-7 h-7 rounded-full bg-blue-500/25 border border-blue-400/40 text-blue-200 text-xs font-semibold flex items-center justify-center">{(userName || 'U').trim().charAt(0).toUpperCase()}</span>
+                <span className="max-w-[10rem] truncate hidden lg:inline">{userName || 'Account'}</span>
+                <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {menuOpen && (
+                <div role="menu" className="absolute right-0 top-full mt-1 w-64 bg-slate-900 border border-white/15 rounded-xl shadow-2xl py-1.5 z-50">
+                  {(userName || (plan && !fromBrokerage)) && (
+                    <div className="px-4 py-2 border-b border-white/10 mb-1">
+                      {userName && <p className="text-sm font-semibold text-slate-100 truncate">{userName}</p>}
+                      {plan && !fromBrokerage && (
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {showPlanChip ? <><span className="text-slate-200 font-semibold capitalize">{chipLabel}</span> plan</> : 'Free plan'}
+                          {' · '}
+                          <Link href="/dashboard/account" onClick={() => setMenuOpen(false)} className="text-blue-400 hover:text-blue-300">{showPlanChip ? 'Manage' : 'Upgrade'}</Link>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {moreItems.filter((i) => i.href !== '/dashboard/search').map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      role="menuitem"
+                      onClick={() => setMenuOpen(false)}
+                      data-tour={`nav-${item.label.toLowerCase()}`}
+                      className={`flex items-center gap-3 px-4 py-2 text-sm transition ${item.href === '/dashboard/admin' ? 'text-amber-200' : 'text-slate-200'} hover:text-white`}
+                    >
+                      {NAV_ICONS[item.icon]}
+                      {item.label}
+                    </Link>
+                  ))}
+                  <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setTutorialMenuOpen(true); }} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-200 hover:text-white transition border-t border-white/10 mt-1 pt-2.5">
+                    <span className="w-5 h-5 shrink-0 text-center text-slate-400">?</span>Tutorial
+                  </button>
+                  <button type="button" role="menuitem" onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:text-red-300 transition">
+                    <span className="w-5 h-5 shrink-0" />Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
         {readOnly && (
           <div className="px-6 py-3 bg-amber-900/30 border-b border-amber-700/60" role="status">
             <p className="text-sm text-amber-100 font-semibold">Your workspace is read-only for now</p>

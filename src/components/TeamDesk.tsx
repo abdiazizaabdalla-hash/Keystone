@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { authFetch } from '@/lib/authClient';
 
 // A TC team owner's workload view: who is carrying what, and which files need a word. Status only: a coordinator's files are private
@@ -17,7 +18,7 @@ const ago = (iso: string | null) => {
   return days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : `${days} days ago`;
 };
 
-export default function TeamDesk({ goTo }: { goTo?: (tab: 'requirements') => void }) {
+export default function TeamDesk({ goTo, compact = false }: { goTo?: (tab: 'requirements') => void; compact?: boolean }) {
   const [data, setData] = useState<Desk | null>(null);
   const [error, setError] = useState('');
 
@@ -29,7 +30,7 @@ export default function TeamDesk({ goTo }: { goTo?: (tab: 'requirements') => voi
     return () => { live = false; };
   }, []);
 
-  if (!data) return <p className="text-sm text-slate-400">{error || 'Loading…'}</p>;
+  if (!data) return <p className="text-sm text-slate-400 mb-6">{error || 'Loading…'}</p>;
   const t = data.totals;
   const tiles = [
     { label: 'Open files', value: t.openDeals, tone: '' },
@@ -37,6 +38,35 @@ export default function TeamDesk({ goTo }: { goTo?: (tab: 'requirements') => voi
     { label: 'Closing this week', value: t.closingThisWeek, tone: '' },
     { label: 'Gone quiet', value: t.quiet, tone: t.quiet > 0 ? 'text-amber-300' : '' },
   ];
+
+  // The summary on the owner's Home: the four numbers and what needs a word, with the full desk one click away.
+  if (compact) {
+    return (
+      <section aria-label="Your team" className="mb-8">
+        <div className="flex items-baseline justify-between gap-3 mb-3">
+          <h2 className="text-lg font-semibold text-slate-100">Your team</h2>
+          <Link href="/dashboard/compliance" className="text-sm text-blue-400 hover:text-blue-300">Open team desk</Link>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {tiles.map((x) => (
+            <div key={x.label} className="bg-white/5 border border-white/10 rounded-2xl px-4 py-4">
+              <p className="text-xs text-slate-400">{x.label}</p>
+              <p className={`text-3xl font-bold mt-1 ${x.tone || 'text-blue-400'}`}>{x.value}</p>
+            </div>
+          ))}
+        </div>
+        {data.members.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-300">No teammates yet. <Link href="/dashboard/collaborate" className="text-blue-400 hover:text-blue-300">Invite a coordinator</Link></p>
+        ) : data.attention.length > 0 && (
+          <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            {data.attention.slice(0, 3).map((a, i) => (
+              <li key={`${a.dealId}-${i}`} className={TONE[a.tone]}>{a.member}: {a.address} · {WHY[a.tone].toLowerCase()}, {a.reason}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+    );
+  }
 
   return (
     <div className="space-y-5">

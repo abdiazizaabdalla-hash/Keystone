@@ -67,7 +67,7 @@ export default function NotificationBell({
   collapsed = false,
   sidebarRem = 16,
 }: {
-  variant: 'sidebar' | 'topbar';
+  variant: 'sidebar' | 'topbar' | 'banner';
   collapsed?: boolean;
   /** Width of the sidebar in rem, so the panel opens just to its right. */
   sidebarRem?: number;
@@ -190,7 +190,9 @@ export default function NotificationBell({
   const panelClass =
     variant === 'sidebar'
       ? 'fixed bottom-4 z-[60] w-[22rem] max-w-[calc(100vw-2rem)]'
-      : 'fixed left-2 right-2 top-14 z-[60]';
+      : variant === 'banner'
+        ? 'fixed right-4 top-14 z-[60] w-[22rem] max-w-[calc(100vw-2rem)]'
+        : 'fixed left-2 right-2 top-14 z-[60]';
 
   return (
     <div ref={rootRef} className={variant === 'sidebar' ? 'w-full' : 'relative'}>
@@ -223,9 +225,9 @@ export default function NotificationBell({
           onClick={toggleOpen}
           aria-label={badge ? `Notifications, ${unread} unread` : 'Notifications'}
           aria-expanded={open}
-          className="relative p-2.5 text-slate-300 hover:text-slate-100 hover:bg-slate-700 rounded-lg transition"
+          className={`relative text-slate-300 hover:text-slate-100 rounded-lg transition ${variant === 'banner' ? 'p-2' : 'p-2.5 hover:bg-slate-700'}`}
         >
-          <BellIcon className="w-6 h-6" />
+          <BellIcon className={variant === 'banner' ? 'w-5 h-5' : 'w-6 h-6'} />
           {badge && (
             <span className="absolute top-1 right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-blue-500 text-white text-[10px] font-semibold flex items-center justify-center">
               {badge}

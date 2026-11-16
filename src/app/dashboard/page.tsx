@@ -12,6 +12,7 @@ import BrokerageTrendsSummary from '@/components/BrokerageTrendsSummary';
 import BrokerageHome from '@/components/BrokerageHome';
 import AgentBrokerageStrip from '@/components/AgentBrokerageStrip';
 import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
+import TeamDesk from '@/components/TeamDesk';
 import { useBrokerageOwner, useOrgName, useTeamOwner } from '@/lib/useBrokerageOwner';
 import TcInvitationBanner from '@/components/TcInvitationBanner';
 import ClosedDealAlerts from '@/components/ClosedDealAlerts';
@@ -434,6 +435,25 @@ export default function Dashboard() {
     );
   }
 
+  if (transactions.length === 0 && teamOwner === true) {
+    return (
+      <div className="p-4 md:p-10 mx-auto max-w-6xl">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">{org.name ?? 'Your team'}</h1>
+            <p className="text-slate-400">{org.ready && !org.name && trueOwner ? <>Your coordinators, their workload and what needs a word today. <Link href="/dashboard/collaborate#settings" className="text-blue-400 hover:text-blue-300">Add your team’s name</Link></> : 'Your coordinators, their workload and what needs a word today.'}</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/dashboard/collaborate" className="px-5 py-3 border border-white/10 hover:bg-white/5 text-slate-200 font-semibold rounded-xl transition text-center">Invite a coordinator</Link>
+            <Link href="/dashboard/transactions/new" className="px-5 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-500/20 text-center">+ New deal</Link>
+          </div>
+        </div>
+        <TeamDesk />
+        <div className="mt-6"><BrokerageTrendsSummary /></div>
+      </div>
+    );
+  }
+
   if (transactions.length === 0) {
     const isAgent = persona.accountType === 'agent';
     const agentLine =
@@ -482,7 +502,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Welcome back</h1>
+          <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">{teamOwner === true && org.name ? org.name : 'Welcome back'}</h1>
           <p className="text-slate-400">Here is what needs you today.</p>
         </div>
         <Link
@@ -494,6 +514,7 @@ export default function Dashboard() {
       </div>
 
       {brokerageOwner && <BrokerageHome compact />}
+      {teamOwner === true && !brokerageOwner && <TeamDesk compact />}
       {persona.workspace === true && <AgentBrokerageStrip deals={transactions.map((t) => ({ id: t.id, address: t.property_address, status: t.status, closingDate: t.closing_date }))} />}
 
       {/* KPI row */}
