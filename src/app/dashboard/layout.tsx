@@ -137,6 +137,7 @@ function TopNavLink({
   tone = 'default',
   badge = 0,
   menu = false,
+  labelsAt = 'xl',
 }: {
   href: string;
   label: string;
@@ -146,6 +147,8 @@ function TopNavLink({
   badge?: number;
   /** Inside a dropdown: a full-width row instead of a pill. */
   menu?: boolean;
+  /** Screen width from which the name shows next to the icon (a crowded bar waits for a wider screen). */
+  labelsAt?: 'xl' | '2xl';
 }) {
   const colors = active
     ? 'bg-blue-500/20 text-white ring-1 ring-blue-400/30'
@@ -158,10 +161,10 @@ function TopNavLink({
       data-tour={`nav-${label.toLowerCase()}`}
       title={label}
       aria-current={active ? 'page' : undefined}
-      className={`relative flex items-center shrink-0 rounded-lg transition font-medium text-sm ${menu ? 'gap-3 px-3 py-2 w-full' : 'gap-2 px-2.5 py-2'} ${colors}`}
+      className={`relative flex items-center shrink-0 rounded-lg transition font-medium text-sm ${menu ? 'gap-3 px-3 py-2 w-full' : 'gap-1.5 px-2 py-2'} ${colors}`}
     >
       {icon}
-      <span className={menu ? 'truncate' : 'hidden xl:inline truncate'}>{label}</span>
+      <span className={menu ? 'truncate' : labelsAt === '2xl' ? 'hidden 2xl:inline truncate' : 'hidden xl:inline truncate'}>{label}</span>
       {badge > 0 && (
         <span className={`${menu ? 'ml-auto' : 'xl:ml-1 absolute xl:static -top-0.5 -right-0.5'} min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center`}>
           {badge > 99 ? '99+' : badge}
@@ -427,14 +430,16 @@ export default function DashboardLayout({
 
   // Contacts sits in the top bar itself (the tours point at it); the rest of the secondary pages live under More.
   const contactsItem = { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' };
+  const userItems = [
+    { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
+    { href: '/dashboard/account', label: 'Account', icon: 'account' },
+  ];
   const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
     ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }] : []),
     ...(isFeatureOnClient('templates') && !(isAgentAccount && !hasWorkspace) ? [{ href: '/dashboard/templates', label: 'Templates', icon: 'templates' }] : []),
     { href: '/dashboard/search', label: 'Search', icon: 'search' },
     ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: collaborateUnread }] : []),
     ...(brokerageAdmin?.delegated ? [{ href: '/dashboard/brokerage-admin', label: 'Brokerage agents', icon: 'collaborate' }] : []),
-    { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
-    { href: '/dashboard/account', label: 'Account', icon: 'account' },
     ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin', icon: 'admin' }] : []),
   ];
 
@@ -463,11 +468,7 @@ export default function DashboardLayout({
             <span className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1">
               <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
             </span>
-            <span className="text-white font-display font-semibold">Relay TC{showPlanChip && (
-              <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40">
-                {chipLabel}
-              </span>
-            )}</span>
+            <span className="text-white font-display font-semibold">Relay TC</span>
           </Link>
           <div className="flex items-center">
           <NotificationBell variant="topbar" />
@@ -544,18 +545,14 @@ export default function DashboardLayout({
           <span className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm shrink-0">
             <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
           </span>
-          <span className="text-white font-display font-semibold text-lg whitespace-nowrap">Relay TC</span>
-          {showPlanChip && (
-            <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40">
-              {chipLabel}
-            </span>
-          )}
+          <span className="hidden 2xl:inline text-white font-display font-semibold text-lg whitespace-nowrap">Relay TC</span>
         </Link>
 
-        <nav className="flex items-center gap-0.5 min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Main">
-          {[...primaryNav, contactsItem].map((item) => (
+        <nav className="flex items-center gap-0 min-w-0 flex-1" aria-label="Main">
+          {[...primaryNav, contactsItem].map((item, _i, all) => (
             <TopNavLink
               key={item.href}
+              labelsAt={all.length > 7 ? '2xl' : 'xl'}
               href={item.href}
               label={item.label}
               active={isActivePath(pathname, item.href)}
@@ -571,7 +568,7 @@ export default function DashboardLayout({
               onClick={() => { setMoreOpen((o) => !o); setUserOpen(false); }}
               aria-expanded={moreOpen}
               aria-haspopup="menu"
-              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-sm font-medium transition ${moreOpen || moreItems.some((i) => isActivePath(pathname, i.href)) ? 'bg-white/5 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
+              className={`flex items-center gap-1 px-2 py-2 rounded-lg text-sm font-medium transition ${moreOpen || moreItems.some((i) => isActivePath(pathname, i.href)) ? 'bg-white/5 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
             >
               More
               {collaborateUnread > 0 && <span className="w-2 h-2 rounded-full bg-red-500" aria-hidden="true" />}
@@ -622,6 +619,9 @@ export default function DashboardLayout({
                   <Link href="/dashboard/account" className="text-xs text-blue-400 hover:text-blue-300 font-medium">{showPlanChip ? 'Manage' : 'Upgrade'}</Link>
                 </div>
               )}
+              {userItems.map((item) => (
+                <TopNavLink key={item.href} href={item.href} label={item.label} menu active={isActivePath(pathname, item.href)} icon={NAV_ICONS[item.icon]} />
+              ))}
               <button onClick={() => { setUserOpen(false); setTutorialMenuOpen(true); }} title="Open a quick tutorial" className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-slate-100 rounded-lg transition">Tutorial</button>
               <button onClick={handleLogout} className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition">Logout</button>
             </div>
