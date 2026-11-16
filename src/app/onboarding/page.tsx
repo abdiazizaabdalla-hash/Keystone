@@ -892,7 +892,7 @@ function OnboardingContent() {
         {currentStep === 5 && (
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-display font-semibold text-slate-100 mb-2">How do agents pay you?</h1>
+              <h1 className="text-3xl font-display font-semibold text-slate-100 mb-2">{needsOrgName ? 'Get paid through Relay' : 'How do agents pay you?'}</h1>
               <p className="text-slate-400">You can change this any time in Settings.</p>
             </div>
 
@@ -902,7 +902,7 @@ function OnboardingContent() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className={`grid grid-cols-1 gap-6 mb-6 ${needsOrgName ? 'max-w-xl mx-auto' : 'md:grid-cols-2'}`}>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 flex flex-col">
                 <h2 className="text-xl font-display font-semibold text-slate-100 mb-2">Get paid through Relay</h2>
                 <p className="text-slate-400 text-sm mb-6 flex-1">
@@ -950,7 +950,7 @@ function OnboardingContent() {
                 )}
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 flex flex-col">
+              {!needsOrgName && <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 flex flex-col">
                 <h2 className="text-xl font-display font-semibold text-slate-100 mb-2">I&apos;ll collect payment myself</h2>
                 <p className="text-slate-400 text-sm mb-6 flex-1">
                   Agents pay you by Zelle, Venmo, PayPal, check, or however you already work. Relay still builds the
@@ -965,7 +965,7 @@ function OnboardingContent() {
                 >
                   {isSavingPaymentPreference ? 'Saving…' : 'Collect it myself'}
                 </button>
-              </div>
+              </div>}
             </div>
 
             <div className="flex items-center justify-center gap-6">

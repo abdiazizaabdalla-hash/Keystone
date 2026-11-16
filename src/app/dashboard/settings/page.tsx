@@ -3,7 +3,7 @@
 import LogoSettingsCard from '@/components/LogoSettingsCard';
 import MoneyInput from '@/components/MoneyInput';
 import { readPersona } from '@/lib/persona';
-import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { useBrokerageOwner, useTeamOwner } from '@/lib/useBrokerageOwner';
 import { isFeatureOnClient } from '@/lib/features';
 import { useAgentAccess } from '@/lib/useAgentAccess';
 import { Suspense, useEffect, useState } from 'react';
@@ -46,6 +46,9 @@ function SettingsContent() {
   }, []);
   // These blocks are for coordinators who bill agents. A broker, or an agent working under a brokerage, has no use for them.
   const brokerOwner = useBrokerageOwner();
+  const teamOwner = useTeamOwner();
+  // A brokerage or team owner is paid through Relay (Stripe) only, with no do-it-yourself option.
+  const payThroughRelay = brokerOwner === true || teamOwner === true;
   const [inBrokerage, setInBrokerage] = useState(false);
   useEffect(() => {
     if (!isAgentAcct || !isFeatureOnClient('brokerage')) return;
@@ -788,9 +791,16 @@ function SettingsContent() {
         </div>
 
         <div id="getting-paid" className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 scroll-mt-6">
-          <h2 className="text-lg font-bold text-slate-100 mb-1">{isAgentAcct ? 'Getting paid' : 'Getting Paid by Agents'}</h2>
+          <h2 className="text-lg font-bold text-slate-100 mb-1">{isAgentAcct || payThroughRelay ? 'Get paid through Relay' : 'Getting Paid by Agents'}</h2>
           <p className="text-sm text-slate-400 mb-6">
-            {isAgentAcct ? (
+            {payThroughRelay ? (
+              <>
+                Connect Stripe and Relay handles your payments. Every invoice gets a &quot;Pay Online&quot; link, agents pay by card or bank
+                transfer without creating an account, and the money lands directly in your own Stripe account (Relay never touches the funds).
+                {brokerOwner === true && ' Paying commissions to your agents through Relay is coming next.'}
+                {paymentPreference === 'manual' && ' You are currently collecting payment yourself; connect Stripe to switch.'}
+              </>
+            ) : isAgentAcct ? (
               <>
                 Connect Stripe so the money you are owed, such as your commission from your brokerage and invoices you send, can be paid to you
                 online. It lands directly in your own Stripe account (Relay never touches the funds). Until payments through Relay are switched
@@ -811,7 +821,7 @@ function SettingsContent() {
             <div className="mb-4 text-sm text-slate-300">{paymentMessage}</div>
           )}
 
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className={`grid gap-4 ${payThroughRelay ? 'max-w-xl' : 'md:grid-cols-2'}`}>
             <div
               className={`rounded-lg border p-5 ${
                 paymentPreference === 'stripe' ? 'border-blue-500 bg-slate-800/50' : 'border-slate-600'
@@ -861,7 +871,7 @@ function SettingsContent() {
               )}
             </div>
 
-            <div
+            {!payThroughRelay && <div
               className={`rounded-lg border p-5 ${
                 paymentPreference === 'manual' ? 'border-blue-500 bg-slate-800/50' : 'border-slate-600'
               }`}
@@ -883,7 +893,7 @@ function SettingsContent() {
                   Use manual payments
                 </button>
               )}
-            </div>
+            </div>}
           </div>
         </div>
 
