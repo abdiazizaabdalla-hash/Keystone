@@ -10,6 +10,8 @@ export default function PublicFooter() {
           <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
           <Link href="/for-brokerages" className="hover:text-slate-200 transition">For Brokerages</Link>
           <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
+          <Link href="/compare" className="hover:text-slate-200 transition">Compare</Link>
+          <Link href="/security" className="hover:text-slate-200 transition">Security</Link>
           <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
           <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
           <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>

@@ -283,6 +283,24 @@ export default function Home() {
       </section>
 
 
+      {/* Trust strip */}
+      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
+        <div className="grid md:grid-cols-2 gap-5">
+          <Link href="/compare" className="block p-7 bg-slate-800/60 border border-slate-700 hover:border-blue-400/60 rounded-xl transition">
+            <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-2">How we compare</p>
+            <h3 className="font-display text-xl font-semibold text-slate-100 mb-2">Next to Dotloop, SkySlope and the rest.</h3>
+            <p className="text-sm text-slate-400 mb-3">What each is built for, what it costs, and where each one is ahead today.</p>
+            <span className="text-sm text-blue-400">Read the comparison →</span>
+          </Link>
+          <Link href="/security" className="block p-7 bg-slate-800/60 border border-slate-700 hover:border-blue-400/60 rounded-xl transition">
+            <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-2">Security and trust</p>
+            <h3 className="font-display text-xl font-semibold text-slate-100 mb-2">Private files, two-step sign-in, an audit log.</h3>
+            <p className="text-sm text-slate-400 mb-3">What protects your transactions today, and what we are working on next.</p>
+            <span className="text-sm text-blue-400">See how we protect your files →</span>
+          </Link>
+        </div>
+      </section>
+
       {/* Pricing teaser */}
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
         <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
@@ -344,6 +362,8 @@ export default function Home() {
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
             <Link href="/for-brokerages" className="hover:text-slate-200 transition">For Brokerages</Link>
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
+            <Link href="/compare" className="hover:text-slate-200 transition">Compare</Link>
+            <Link href="/security" className="hover:text-slate-200 transition">Security</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
