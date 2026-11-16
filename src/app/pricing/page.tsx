@@ -8,30 +8,76 @@ import { BROKERAGE_TIERS, PILOT } from '@/lib/marketingPricing';
 import { WhoPaysIllustration } from '@/components/marketing/Illustrations';
 
 type Cell = boolean | string;
-const COMPARISON_ROWS: { feature: string; starter: Cell; pro: Cell; team: Cell }[] = [
-  { feature: 'Unlimited transactions', starter: true, pro: true, team: true },
-  { feature: 'AI contract intake (creates the transaction or listing for you)', starter: true, pro: true, team: true },
-  { feature: 'Checklists with configurable due dates', starter: true, pro: true, team: true },
-  { feature: 'Document and email templates', starter: true, pro: true, team: true },
-  { feature: 'Listings, offers and showings', starter: true, pro: true, team: true },
-  { feature: 'Documents, e-signature and deal email', starter: true, pro: true, team: true },
-  { feature: 'Invoicing, other invoices and archive', starter: true, pro: true, team: true },
-  { feature: 'Agent profiles', starter: 'Up to 3', pro: 'Unlimited', team: 'Unlimited' },
-  { feature: 'Custom checklist templates', starter: false, pro: true, team: true },
-  { feature: 'Automations (reminders and follow-ups that run for you)', starter: false, pro: true, team: true },
-  { feature: 'Admin dashboard', starter: false, pro: true, team: true },
-  { feature: 'Team board, direct messages and shared contacts', starter: false, pro: false, team: true },
-  { feature: 'Owner status report across the team', starter: false, pro: false, team: true },
-  { feature: 'Team desk: workload, late steps and closings by coordinator', starter: false, pro: false, team: true },
-  { feature: 'Default checklist for every new file on the team', starter: false, pro: false, team: true },
-  { feature: 'Team automations (stalled files, deadlines, daily digest)', starter: false, pro: false, team: true },
-  { feature: 'Seats', starter: '1', pro: '1', team: '3 included' },
+type Row = { feature: string; cells: Cell[] };
+
+const SHARED_ROWS: Row[] = [
+  { feature: 'Unlimited transactions', cells: [true, true] },
+  { feature: 'AI contract intake (creates the transaction or listing for you)', cells: [true, true] },
+  { feature: 'Checklists with configurable due dates', cells: [true, true] },
+  { feature: 'Document and email templates', cells: [true, true] },
+  { feature: 'Listings, offers and showings', cells: [true, true] },
+  { feature: 'Documents, e-signature and deal email', cells: [true, true] },
+  { feature: 'Invoicing, other invoices and archive', cells: [true, true] },
+  { feature: 'Custom checklist templates', cells: [false, true] },
+  { feature: 'Automations (reminders and follow-ups that run for you)', cells: [false, true] },
+  { feature: 'Admin dashboard', cells: [false, true] },
+];
+const AGENT_ROWS: Row[] = SHARED_ROWS;
+const COORDINATOR_ROWS: Row[] = [
+  ...SHARED_ROWS.slice(0, 7),
+  { feature: 'Agent profiles', cells: ['Up to 3', 'Unlimited'] },
+  ...SHARED_ROWS.slice(7),
+].map((r) => ({ ...r, cells: [...r.cells, r.feature === 'Agent profiles' ? 'Unlimited' : r.cells[1]] }));
+const COORDINATOR_TEAM_ONLY: Row[] = [
+  { feature: 'Team board, direct messages and shared contacts', cells: [false, false, true] },
+  { feature: 'Owner status report across the team', cells: [false, false, true] },
+  { feature: 'Team desk: workload, late steps and closings by coordinator', cells: [false, false, true] },
+  { feature: 'Default checklist for every new file on the team', cells: [false, false, true] },
+  { feature: 'Team automations (stalled files, deadlines, daily digest)', cells: [false, false, true] },
+  { feature: 'Seats', cells: ['1', '1', '3 included'] },
+];
+const BROKERAGE_ROWS: Row[] = [
+  { feature: 'Agents included', cells: ['10', '25'] },
+  { feature: 'Dashboard: open deals, late items, closings this week, last activity', cells: [true, true] },
+  { feature: 'Read-only view of every agent’s deals, deadlines and listings', cells: [true, true] },
+  { feature: 'Compliance desk with missing-document flags and a review record', cells: [true, true] },
+  { feature: 'Default required steps added to new files automatically', cells: [true, true] },
+  { feature: 'Office-wide automations: stalled files, deadlines, daily digest', cells: [true, true] },
+  { feature: 'Team board and private messages', cells: [true, true] },
+  { feature: 'Commission statements, and paying agents through Stripe', cells: [true, true] },
+  { feature: 'Agent-by-month production export and Reports tab', cells: [true, true] },
+  { feature: 'Custom workflow builder with a template library', cells: [true, true] },
+  { feature: 'Several required-document lists, by deal type', cells: [false, true] },
+  { feature: 'Extra administrators', cells: ['One', 'Up to five, with scoped roles'] },
 ];
 
 function Mark({ value }: { value: Cell }) {
   if (typeof value === 'string') return <span className="text-slate-200">{value}</span>;
   if (value) return <svg className="w-5 h-5 text-blue-400 mx-auto" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>;
   return <span className="text-slate-600">—</span>;
+}
+
+function ComparisonTable({ columns, rows }: { columns: string[]; rows: Row[] }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-700 mt-12">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-slate-800/80 border-b border-slate-700">
+            <th className="text-left font-medium text-slate-300 px-5 py-4">Feature</th>
+            {columns.map((c) => <th key={c} className="font-medium text-slate-300 px-5 py-4">{c}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={row.feature} className={i % 2 === 0 ? 'bg-slate-800/30' : ''}>
+              <td className="text-left text-slate-300 px-5 py-3.5 border-t border-slate-700/60">{row.feature}</td>
+              {row.cells.map((c, j) => <td key={j} className="text-center px-5 py-3.5 border-t border-slate-700/60"><Mark value={c} /></td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export default function PricingPage() {
@@ -80,34 +126,14 @@ export default function PricingPage() {
           Team is $89 a month with three seats, then $30 a month for each extra seat. <Link href="/for-tcs#teams" className="text-blue-400 hover:text-blue-300">How teams work →</Link>
         </p>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-700 mt-12">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-800/80 border-b border-slate-700">
-                <th className="text-left font-medium text-slate-300 px-5 py-4">Feature</th>
-                <th className="font-medium text-slate-300 px-5 py-4">Starter</th>
-                <th className="font-medium text-slate-300 px-5 py-4">Pro</th>
-                <th className="font-medium text-slate-300 px-5 py-4">Team</th>
-              </tr>
-            </thead>
-            <tbody>
-              {COMPARISON_ROWS.map((row, i) => (
-                <tr key={row.feature} className={i % 2 === 0 ? 'bg-slate-800/30' : ''}>
-                  <td className="text-left text-slate-300 px-5 py-3.5 border-t border-slate-700/60">{row.feature}</td>
-                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><Mark value={row.starter} /></td>
-                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><Mark value={row.pro} /></td>
-                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><Mark value={row.team} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ComparisonTable columns={['Starter', 'Pro', 'Team']} rows={[...COORDINATOR_ROWS, ...COORDINATOR_TEAM_ONLY]} />
       </section>
 
       <section id="agents" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Agents</h2>
         <p className="text-slate-400 mb-8 max-w-2xl">Free for 14 days, no card needed. Automations are on Pro. If your brokerage uses Relay, ask them to invite you.</p>
         <AgentPlanCards />
+        <ComparisonTable columns={['Starter', 'Pro']} rows={AGENT_ROWS} />
       </section>
 
       <section id="brokerages" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
@@ -123,6 +149,7 @@ export default function PricingPage() {
             </div>
           ))}
         </div>
+        <ComparisonTable columns={['Brokerage Basic', 'Brokerage Pro']} rows={BROKERAGE_ROWS} />
         <p className="mt-6 text-sm text-slate-500"><Link href="/for-brokerages#plans" className="text-blue-400 hover:text-blue-300">See what each brokerage plan includes →</Link></p>
       </section>
 
