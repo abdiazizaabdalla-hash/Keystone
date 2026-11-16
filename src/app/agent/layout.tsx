@@ -14,33 +14,26 @@ import ToastHost from '@/components/ToastHost';
 // centered full-screen steps, not part of the logged-in portal shell.
 const BARE_PREFIXES = ['/agent/login', '/agent/accept', '/agent/welcome'];
 
-// Same collapse behavior as the TC sidebar: icon-only when collapsed,
-// remembered per device, and collapsed by default on phones.
-const SIDEBAR_COLLAPSED_KEY = 'agent_sidebar_collapsed';
-
 function SideLink({
   href,
   label,
   active,
   icon,
-  collapsed,
 }: {
   href: string;
   label: string;
   active: boolean;
   icon: React.ReactNode;
-  collapsed: boolean;
 }) {
   return (
     <Link
       href={href}
-      title={collapsed ? label : undefined}
-      className={`flex items-center rounded-lg transition font-medium ${
-        collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-4 py-3'
-      } ${active ? 'bg-slate-700 text-slate-100' : 'text-slate-300 hover:bg-slate-700/60 hover:text-slate-100'}`}
+      title={label}
+      aria-current={active ? 'page' : undefined}
+      className={`flex items-center shrink-0 gap-2 rounded-lg transition font-medium text-sm px-2.5 py-2 ${active ? 'bg-slate-700 text-slate-100' : 'text-slate-300 hover:bg-slate-700/60 hover:text-slate-100'}`}
     >
       {icon}
-      {!collapsed && <span className="truncate">{label}</span>}
+      <span className="hidden lg:inline truncate">{label}</span>
     </Link>
   );
 }
@@ -48,7 +41,6 @@ function SideLink({
 export default function AgentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [collapsed, setCollapsed] = useState(false);
   // Phones only: the sidebar becomes a slide-down menu behind a top bar.
   const [mobileOpen, setMobileOpen] = useState(false);
   // An agent the admin gave a workspace to gets a way back to it from the shared-deals portal.
@@ -72,36 +64,6 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
     };
   }, [router]);
 
-  useEffect(() => {
-    const initCollapsed = async () => {
-      // Deferred a tick so the first client render matches the server markup.
-      await Promise.resolve();
-      try {
-        const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-        if (stored === 'true' || stored === 'false') {
-          setCollapsed(stored === 'true');
-        } else if (window.innerWidth < 768) {
-          setCollapsed(true);
-        }
-      } catch {
-        // localStorage can throw in private-browsing modes; default to expanded.
-      }
-    };
-    initCollapsed();
-  }, []);
-
-  const toggleCollapsed = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
-      } catch {
-        // Non-critical -- the preference just won't persist.
-      }
-      return next;
-    });
-  };
-
   if (BARE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return <>{children}</>;
   }
@@ -122,7 +84,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   };
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col md:flex-row overflow-hidden">
+    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
       {/* Phones: compact top bar + menu (the desktop sidebar below is hidden under md) */}
       <div className="md:hidden shrink-0 relative z-40 bg-slate-800 border-b border-slate-700">
         <div className="flex items-center justify-between px-4 py-2.5">
@@ -182,56 +144,18 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
         )}
       </div>
 
-      {/* Sidebar (tablet and desktop) */}
-      <div
-        className={`${
-          collapsed ? 'w-20' : 'w-56'
-        } shrink-0 h-full bg-gradient-to-b from-slate-800 to-slate-900 border-r border-slate-700 hidden md:flex flex-col transition-all duration-200`}
-      >
-        <div
-          className={`border-b border-slate-700 flex items-center ${
-            collapsed ? 'justify-center px-3 py-4' : 'justify-between p-5'
-          }`}
-        >
-          <Link href="/agent" className="flex items-center gap-3 min-w-0" title={collapsed ? 'Relay TC' : undefined}>
-            <img src="/relay-icon.png" alt="Relay TC" className="w-9 h-9 object-contain bg-white rounded-lg p-1 shrink-0" />
-            {!collapsed && <h1 className="text-white font-display font-semibold truncate">Relay TC</h1>}
-          </Link>
-          {!collapsed && (
-            <button
-              onClick={toggleCollapsed}
-              aria-label="Collapse sidebar"
-              title="Collapse sidebar"
-              className="shrink-0 p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-md transition"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-        </div>
-        {collapsed && (
-          <div className="flex justify-center py-2 border-b border-slate-700">
-            <button
-              onClick={toggleCollapsed}
-              aria-label="Expand sidebar"
-              title="Expand sidebar"
-              className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-md transition"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        <nav className={`flex-1 min-h-0 overflow-y-auto py-6 space-y-2 ${collapsed ? 'px-2' : 'px-3'}`}>
+      {/* Top navigation (tablet and desktop) */}
+      <header className="hidden md:flex shrink-0 items-center gap-1 h-14 px-4 bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700">
+        <Link href="/agent" className="flex items-center gap-2.5 min-w-0 mr-3" title="Relay TC">
+          <img src="/relay-icon.png" alt="Relay TC" className="w-8 h-8 object-contain bg-white rounded-lg p-1 shrink-0" />
+          <span className="text-white font-display font-semibold whitespace-nowrap">Relay TC</span>
+        </Link>
+        <nav className="flex items-center gap-0.5 min-w-0 flex-1" aria-label="Main">
           {hasWorkspace && (
             <SideLink
               href="/dashboard"
               label="My workspace"
-              collapsed={collapsed}
-              active={false}
+                active={false}
               icon={
                 <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 10l9-7 9 7v10a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1V10z" />
@@ -242,7 +166,6 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
           <SideLink
             href="/agent"
             label="Dashboard"
-            collapsed={collapsed}
             active={isDeals}
             icon={
               <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -256,7 +179,6 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
           <SideLink
             href="/agent/transactions"
             label="Transactions"
-            collapsed={collapsed}
             active={isTransactions}
             icon={
               <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -268,7 +190,6 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
           <SideLink
             href="/agent/listings"
             label="Listings"
-            collapsed={collapsed}
             active={isListings}
             icon={
               <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -279,7 +200,6 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
           <SideLink
             href="/agent/messages"
             label="Messages"
-            collapsed={collapsed}
             active={isMessages}
             icon={
               <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -294,7 +214,6 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
           <SideLink
             href="/agent/invoices"
             label="Invoices"
-            collapsed={collapsed}
             active={isInvoices}
             icon={
               <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -309,7 +228,6 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
           <SideLink
             href="/agent/settings"
             label="Settings"
-            collapsed={collapsed}
             active={isSettings}
             icon={
               <svg className="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -322,20 +240,14 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
             }
           />
         </nav>
-
-        <div className={`border-t border-slate-700 ${collapsed ? 'p-2' : 'p-4'}`}>
-          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={14} />
-          <button
-            onClick={handleLogout}
-            title={collapsed ? 'Logout' : undefined}
-            className={`w-full flex items-center justify-center text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition text-sm py-2 ${
-              collapsed ? 'px-0' : 'px-4'
-            }`}
-          >
-            Logout
-          </button>
-        </div>
-      </div>
+        <NotificationBell variant="topbar" />
+        <button
+          onClick={handleLogout}
+          className="px-3 py-2 text-sm text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition"
+        >
+          Logout
+        </button>
+      </header>
 
       {/* Main Content */}
       <div className="flex-1 min-w-0 overflow-auto">{children}</div>
