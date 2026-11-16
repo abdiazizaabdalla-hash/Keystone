@@ -129,6 +129,10 @@ function isActivePath(pathname: string | null, href: string) {
   return pathname === href || pathname.startsWith(href + '/');
 }
 
+// Which screen width a top-bar tab appears from. The first four always fit; later ones wait for more room and sit under More until then.
+const tabShow = (i: number) => (i < 4 ? 'flex' : i < 6 ? 'hidden lg:flex' : i < 7 ? 'hidden xl:flex' : 'hidden 2xl:flex');
+const tabHideInMore = (i: number) => (i < 4 ? 'hidden' : i < 6 ? 'lg:hidden' : i < 7 ? 'xl:hidden' : '2xl:hidden');
+
 function TopNavLink({
   href,
   label,
@@ -137,7 +141,7 @@ function TopNavLink({
   tone = 'default',
   badge = 0,
   menu = false,
-  lgOnly = false,
+  index = 0,
 }: {
   href: string;
   label: string;
@@ -145,31 +149,40 @@ function TopNavLink({
   active?: boolean;
   tone?: 'default' | 'admin';
   badge?: number;
-  /** Inside a dropdown: a full-width row instead of a pill. */
+  /** Inside a dropdown: a full-width row. */
   menu?: boolean;
-  /** In the bar, only from large screens up (on a medium screen it moves into More). */
-  lgOnly?: boolean;
+  /** Position in the bar, which decides how wide the screen must be for it to show there. */
+  index?: number;
 }) {
-  const colors = active
-    ? 'bg-blue-500/20 text-white ring-1 ring-blue-400/30'
-    : tone === 'admin'
-      ? 'text-amber-200 hover:bg-amber-500/10'
-      : 'text-slate-300 hover:bg-white/5 hover:text-white';
-  return (
-    <Link
-      href={href}
-      data-tour={`nav-${label.toLowerCase()}`}
-      title={label}
-      aria-current={active ? 'page' : undefined}
-      className={`relative items-center shrink-0 rounded-lg transition font-medium whitespace-nowrap ${menu ? 'flex gap-3 px-3 py-2 w-full text-sm' : `${lgOnly ? 'hidden lg:flex' : 'flex'} gap-1 px-2 py-2 text-[13px] lg:text-sm`} ${colors}`}
-    >
-      {menu && icon}
+  const body = (
+    <>
+      <span className={menu ? '' : '[&>svg]:w-4 [&>svg]:h-4'}>{icon}</span>
       <span className="truncate">{label}</span>
       {badge > 0 && (
         <span className={`${menu ? 'ml-auto' : 'ml-1'} min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center`}>
           {badge > 99 ? '99+' : badge}
         </span>
       )}
+    </>
+  );
+  if (menu) {
+    const colors = active ? 'bg-white/10 text-white' : tone === 'admin' ? 'text-amber-200 hover:bg-amber-500/10' : 'text-slate-300 hover:bg-white/5 hover:text-white';
+    return (
+      <Link href={href} data-tour={`nav-${label.toLowerCase()}`} title={label} aria-current={active ? 'page' : undefined} className={`relative flex items-center shrink-0 gap-3 px-3 py-2 w-full rounded-lg transition font-medium text-sm whitespace-nowrap ${colors}`}>
+        {body}
+      </Link>
+    );
+  }
+  // In the bar: no hover pill. The page you are on gets a line under it; the others just brighten.
+  return (
+    <Link
+      href={href}
+      data-tour={`nav-${label.toLowerCase()}`}
+      title={label}
+      aria-current={active ? 'page' : undefined}
+      className={`${tabShow(index)} items-center shrink-0 gap-1.5 px-3 h-full border-b-2 text-[13px] lg:text-sm font-medium whitespace-nowrap transition-colors ${active ? 'border-blue-400 text-white' : 'border-transparent text-slate-400 hover:text-white'}`}
+    >
+      {body}
     </Link>
   );
 }
@@ -540,18 +553,18 @@ export default function DashboardLayout({
       </div>
 
       {/* Top navigation (tablet and desktop) */}
-      <header ref={menusRef} className="hidden md:flex shrink-0 relative z-40 items-center gap-1 h-14 px-4 bg-slate-950/70 backdrop-blur border-b border-white/10">
+      <header ref={menusRef} className="hidden md:flex shrink-0 relative z-40 items-center gap-2 h-14 px-4 bg-slate-950/70 backdrop-blur border-b border-white/10">
         <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0 mr-3" title="Relay TC">
           <span className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm shrink-0">
             <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
           </span>
         </Link>
 
-        <nav className="flex items-center gap-0 min-w-0 flex-1" aria-label="Main">
+        <nav className="flex items-stretch gap-1 min-w-0 flex-1 self-stretch" aria-label="Main">
           {[...primaryNav, contactsItem].map((item, i) => (
             <TopNavLink
               key={item.href}
-              lgOnly={i >= 6}
+              index={i}
               href={item.href}
               label={item.label}
               active={isActivePath(pathname, item.href)}
@@ -561,13 +574,13 @@ export default function DashboardLayout({
           ))}
         </nav>
 
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 self-stretch">
             <button
               type="button"
               onClick={() => { setMoreOpen((o) => !o); setUserOpen(false); }}
               aria-expanded={moreOpen}
               aria-haspopup="menu"
-              className={`flex items-center gap-1 px-2 py-2 rounded-lg text-sm font-medium transition ${moreOpen || moreItems.some((i) => isActivePath(pathname, i.href)) ? 'bg-white/5 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
+              className={`flex items-center gap-1 px-3 h-14 border-b-2 text-[13px] lg:text-sm font-medium transition-colors ${moreItems.some((i) => isActivePath(pathname, i.href)) ? 'border-blue-400 text-white' : moreOpen ? 'border-transparent text-white' : 'border-transparent text-slate-400 hover:text-white'}`}
             >
               More
               {collaborateUnread > 0 && <span className="w-2 h-2 rounded-full bg-red-500" aria-hidden="true" />}
@@ -575,8 +588,8 @@ export default function DashboardLayout({
             </button>
             {moreOpen && (
               <div role="menu" className="absolute left-0 top-full mt-1 w-56 bg-slate-900 border border-white/15 rounded-xl shadow-2xl p-1.5 space-y-0.5">
-                {[...primaryNav, contactsItem].slice(6).map((item) => (
-                  <div key={item.href} className="lg:hidden">
+                {[...primaryNav, contactsItem].map((item, i) => i < 4 ? null : (
+                  <div key={item.href} className={tabHideInMore(i)}>
                     <TopNavLink href={item.href} label={item.label} menu active={isActivePath(pathname, item.href)} badge={item.href === '/dashboard/messages' ? messagesUnread : 0} icon={NAV_ICONS[item.icon]} />
                   </div>
                 ))}
@@ -605,7 +618,7 @@ export default function DashboardLayout({
             aria-expanded={userOpen}
             aria-haspopup="menu"
             aria-label="Your account menu"
-            className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-white/5 transition"
+            className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg text-slate-400 hover:text-white transition-colors"
           >
             <span className="w-8 h-8 rounded-full bg-blue-500/30 text-blue-100 text-sm font-semibold flex items-center justify-center uppercase">{(userName || 'U').charAt(0)}</span>
             <svg className={`w-3.5 h-3.5 text-slate-400 transition ${userOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
