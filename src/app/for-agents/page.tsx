@@ -25,7 +25,7 @@ export default function ForAgentsPage() {
           Your deals and listings, <span className="text-blue-400">in one workspace.</span>
         </h1>
         <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">
-          Run your own transactions and listings in one workspace. Your brokerage can provide Relay for you, or you can start with Agent Pro on your own.
+          Run your own transactions and listings in one workspace. Start on Starter, or move up to Pro for your own templates and automations.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
           <Link href="/get-started" className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10">Start a free 14-day trial</Link>
@@ -37,7 +37,7 @@ export default function ForAgentsPage() {
 
       <section className="max-w-7xl mx-auto px-6 pb-16">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Templates and automations</h2>
-        <p className="text-slate-400 max-w-3xl mb-8">Use your brokerage’s shared templates and Relay’s standard forms on any plan. Agent Pro adds your own templates and automations that send reminders and follow-ups for you.</p>
+        <p className="text-slate-400 max-w-3xl mb-8">Use your brokerage’s shared templates and Relay’s standard forms on both plans. Pro adds your own templates and automations that send reminders and follow-ups for you.</p>
         <div className="space-y-6">
           <TemplateSharingIllustration />
           <AutomationAudiencesIllustration />
@@ -46,25 +46,23 @@ export default function ForAgentsPage() {
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Two plans for agents</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">The regular workspace is $0 to you when your brokerage provides Relay. Agent Pro is {AGENT_PRO.price} a month on your own. You are never billed for both.</p>
+        <p className="text-slate-400 mb-8 max-w-2xl">Both start free for 14 days, no card needed. Pro adds your own templates and automations.</p>
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-7">
-            
-            <p className="text-3xl font-display font-semibold text-slate-100 mb-1">$0 <span className="text-base font-sans font-normal text-slate-400">to you</span></p>
-            <p className="text-sm text-slate-400 mb-5">When your brokerage provides Relay. They invite you and cover it. </p>
-            <ul className="space-y-2.5 text-sm text-slate-300">{AGENT_PRO.includedByBrokerage.map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}</ul>
+            <h3 className="font-display text-xl font-semibold text-slate-100 mb-1">Starter</h3>
+            <p className="text-3xl font-display font-semibold text-slate-100 mb-4">{AGENT_PRO.starterPrice} <span className="text-base font-sans font-normal text-slate-400">{AGENT_PRO.period}</span></p>
+            <ul className="space-y-2.5 text-sm text-slate-300">{AGENT_PRO.starter.map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}</ul>
           </div>
           <div className="bg-slate-800/60 border border-blue-500/40 ring-2 ring-blue-500/10 rounded-2xl p-7">
-            <p className="text-3xl font-display font-semibold text-slate-100 mb-1">{AGENT_PRO.price} <span className="text-base font-sans font-normal text-slate-400">{AGENT_PRO.period}</span></p>
-            <h3 className="font-display text-xl font-semibold text-slate-100 mb-1">Agent Pro</h3>
-            <p className="text-sm text-slate-400 mb-5">Everything in the regular workspace, on your own subscription, plus the tools that save you the most time.</p>
+            <h3 className="font-display text-xl font-semibold text-slate-100 mb-1">Pro</h3>
+            <p className="text-3xl font-display font-semibold text-slate-100 mb-4">{AGENT_PRO.price} <span className="text-base font-sans font-normal text-slate-400">{AGENT_PRO.period}</span></p>
             <ul className="space-y-2.5 text-sm text-slate-300">
-              <li className="flex items-start gap-2.5">{check}Everything in the brokerage-provided workspace</li>
+              <li className="flex items-start gap-2.5">{check}Everything in Starter</li>
               {AGENT_PRO.proAdds.map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
             </ul>
           </div>
         </div>
-        <p className="text-xs text-slate-500 mt-5">Free for 14 days, no card needed. Then Agent Pro is $19 a month.</p>
+        <p className="text-xs text-slate-500 mt-5">Brokerages can also invite their agents. <Link href="/for-brokerages" className="text-blue-400 hover:text-blue-300">See brokerage plans</Link> for the 10 and 25 agent options.</p>
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
@@ -82,7 +80,7 @@ export default function ForAgentsPage() {
 
       <section className="max-w-4xl mx-auto px-6 py-20 border-t border-slate-700 text-center">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Not sure which one you are?</h2>
-        <p className="text-slate-400 mb-6">If your broker has told you they use Relay, ask them to invite you. Otherwise start with Agent Pro.</p>
+        <p className="text-slate-400 mb-6">If your broker has told you they use Relay, ask them to invite you. Otherwise start with Starter or Pro.</p>
         <div className="flex flex-wrap items-center justify-center gap-4">
           <Link href="/get-started" className="px-7 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10">Start a free 14-day trial</Link>
           <Link href="/pricing#agents" className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">See agent pricing</Link>

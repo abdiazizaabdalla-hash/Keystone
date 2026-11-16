@@ -81,19 +81,19 @@ const FAQS: { category: string; q: string; a: string }[] = [
   // Agents
   {
     category: 'Agents',
-    q: 'How does an agent get their own Relay workspace?',
-    a: 'Two ways. Your brokerage can provide it, which costs you nothing, or you can subscribe to Agent Pro for $19 a month. They are never both billed to you.',
+    q: 'What plans are there for agents?',
+    a: 'Two: Starter at $9 a month and Pro at $19 a month, both free for 14 days with no card needed. Your brokerage can also invite you if it uses Relay.',
   },
   {
     category: 'Agents',
-    q: 'What does Agent Pro add?',
-    a: 'On top of running your own deals and listings, Agent Pro lets you save your own templates, emails and checklists and use automations. You keep it if you change brokerages.',
+    q: 'What does Pro add for agents?',
+    a: 'On top of running your own deals and listings, Pro lets you save your own templates, emails and checklists and use automations. You keep it if you change brokerages.',
   },
   // Brokerages
   {
     category: 'Brokerages',
     q: 'What does a brokerage pay?',
-    a: 'Brokerage Basic is $99 a month for up to 10 agents and Brokerage Pro is $199 a month for up to 25. Extra agents are $6 a month each. Agents you include pay nothing.',
+    a: 'Brokerage Basic is $99 a month for up to 10 agents and Brokerage Pro is $199 a month for up to 25. Extra agents are $6 a month each. Agents you include are covered by the brokerage plan.',
   },
   {
     category: 'Brokerages',

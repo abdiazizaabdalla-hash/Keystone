@@ -184,7 +184,7 @@ function BannerLink({ href, label, icon, active, badge = 0 }: { href: string; la
       href={href}
       data-tour={`nav-${label.toLowerCase()}`}
       aria-current={active ? 'page' : undefined}
-      className={`relative flex items-center gap-2 px-3.5 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
+      className={`relative flex items-center gap-2 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition ${
         active ? 'text-white border-blue-400' : 'text-slate-300 border-transparent hover:text-white'
       }`}
     >
@@ -600,7 +600,7 @@ export default function DashboardLayout({
       {/* Sidebar (tablet and desktop) */}
       <div
         className={`${
-          collapsed ? 'w-20' : 'w-64'
+          collapsed ? 'w-16' : 'w-52'
         } shrink-0 h-full bg-slate-950/50 backdrop-blur border-r border-white/10 hidden md:flex flex-col transition-all duration-200`}
       >
         {/* Logo */}
@@ -665,6 +665,27 @@ export default function DashboardLayout({
               icon={NAV_ICONS[item.icon]}
             />
           ))}
+          <div className="my-2 border-t border-white/10" />
+          {moreItems.filter((i) => i.href !== '/dashboard/search').map((item) => (
+            <NavLink
+              key={item.href}
+              href={item.href}
+              label={item.label}
+              collapsed={collapsed}
+              active={isActivePath(pathname, item.href)}
+              tone={item.href === '/dashboard/admin' ? 'admin' : 'default'}
+              icon={NAV_ICONS[item.icon]}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => setTutorialMenuOpen(true)}
+            title={collapsed ? 'Tutorial' : 'Open a quick tutorial'}
+            className={`w-full flex items-center rounded-xl transition font-medium text-slate-300 hover:bg-white/5 hover:text-white ${collapsed ? 'justify-center px-0 py-2.5 short:py-2 tiny:py-1' : 'gap-3 px-4 py-2.5 short:py-2 tiny:py-1'}`}
+          >
+            <svg className={ICON_CLS} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" /><path strokeLinecap="round" strokeLinejoin="round" d="M7.8 7.8a2.3 2.3 0 114 1.5c-.6.6-1.8 1-1.8 2.2M10 14.2v.1" /></svg>
+            {!collapsed && <span>Tutorial</span>}
+          </button>
         </nav>
 
       </div>
@@ -672,7 +693,7 @@ export default function DashboardLayout({
       {/* Main Content */}
       <div className="flex-1 min-w-0 overflow-auto">
         {/* Top banner (tablet and desktop): running the office, search, notifications and the account menu */}
-        <header className="hidden md:flex sticky top-0 z-30 items-center justify-between gap-3 px-4 bg-slate-950/80 backdrop-blur border-b border-white/10">
+        <header className="hidden md:flex sticky top-0 z-30 items-center justify-between gap-3 px-3 bg-slate-950/80 backdrop-blur border-b border-white/10">
           <nav aria-label="Manage" className="flex items-center min-w-0 overflow-x-auto">
             {bannerItems.map((item, i) => (
               <div key={item.href} className="flex items-center">
@@ -692,7 +713,7 @@ export default function DashboardLayout({
                 onClick={() => setMenuOpen((o) => !o)}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
-                className="flex items-center gap-2 pl-1.5 pr-2 py-1.5 text-sm text-slate-200 hover:text-white rounded-lg transition"
+                className="flex items-center gap-2 pl-1.5 pr-2 py-1 text-sm text-slate-200 hover:text-white rounded-lg transition"
               >
                 <span className="w-7 h-7 rounded-full bg-blue-500/25 border border-blue-400/40 text-blue-200 text-xs font-semibold flex items-center justify-center">{(userName || 'U').trim().charAt(0).toUpperCase()}</span>
                 <span className="max-w-[10rem] truncate hidden lg:inline">{userName || 'Account'}</span>
@@ -712,22 +733,6 @@ export default function DashboardLayout({
                       )}
                     </div>
                   )}
-                  {moreItems.filter((i) => i.href !== '/dashboard/search').map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      role="menuitem"
-                      onClick={() => setMenuOpen(false)}
-                      data-tour={`nav-${item.label.toLowerCase()}`}
-                      className={`flex items-center gap-3 px-4 py-2 text-sm transition ${item.href === '/dashboard/admin' ? 'text-amber-200' : 'text-slate-200'} hover:text-white`}
-                    >
-                      {NAV_ICONS[item.icon]}
-                      {item.label}
-                    </Link>
-                  ))}
-                  <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setTutorialMenuOpen(true); }} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-200 hover:text-white transition border-t border-white/10 mt-1 pt-2.5">
-                    <span className="w-5 h-5 shrink-0 text-center text-slate-400">?</span>Tutorial
-                  </button>
                   <button type="button" role="menuitem" onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:text-red-300 transition">
                     <span className="w-5 h-5 shrink-0" />Logout
                   </button>
