@@ -467,6 +467,8 @@ export default function DashboardLayout({
 
   // Only a paid tier (Pro / Team) is ever named on screen, and never on an agent inside a brokerage.
   const showPlanChip = Boolean(plan) && plan !== 'starter' && !fromBrokerage;
+  // A brokerage's own account (owner or managing account) is labelled Brokerage, never Team.
+  const chipLabel = brokerOwner === true || brokerageAdmin?.delegated === true || plan === 'brokerage' ? 'Brokerage' : plan ?? '';
 
   if (isLoading) {
     return (
@@ -490,7 +492,7 @@ export default function DashboardLayout({
             </span>
             <span className="text-white font-display font-semibold">Relay TC{showPlanChip && (
               <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40">
-                {plan}
+                {chipLabel}
               </span>
             )}</span>
           </Link>
@@ -584,7 +586,7 @@ export default function DashboardLayout({
                 <h1 className="text-white font-display font-semibold text-lg truncate">Relay TC</h1>
                 {showPlanChip && (
                   <span className="inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40">
-                    {plan}
+                    {chipLabel}
                   </span>
                 )}
               </div>
@@ -657,7 +659,7 @@ export default function DashboardLayout({
             <div className="flex items-center justify-between px-3 py-1.5 bg-slate-700/60 border border-slate-600 rounded-lg">
               {showPlanChip ? (
                 <span className="text-xs text-slate-400">
-                  <span className="text-slate-200 font-semibold capitalize">{plan}</span> plan
+                  <span className="text-slate-200 font-semibold capitalize">{chipLabel}</span> plan
                 </span>
               ) : (
                 <span className="text-xs text-slate-400">Get more with Pro</span>
@@ -670,10 +672,10 @@ export default function DashboardLayout({
           {plan && !fromBrokerage && collapsed && (
             <Link
               href="/dashboard/account"
-              title={showPlanChip ? `${plan} plan -- Manage` : 'Upgrade'}
+              title={showPlanChip ? `${chipLabel} plan -- Manage` : 'Upgrade'}
               className="flex items-center justify-center py-2 bg-slate-700/60 border border-slate-600 rounded-lg text-xs text-slate-200 font-semibold uppercase"
             >
-              {showPlanChip ? plan.charAt(0) : '↑'}
+              {showPlanChip ? chipLabel.charAt(0) : '↑'}
             </Link>
           )}
           <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={16} />

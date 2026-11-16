@@ -12,7 +12,7 @@ import BrokerageTrendsSummary from '@/components/BrokerageTrendsSummary';
 import BrokerageHome from '@/components/BrokerageHome';
 import AgentBrokerageStrip from '@/components/AgentBrokerageStrip';
 import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
-import { useBrokerageOwner, useTeamOwner } from '@/lib/useBrokerageOwner';
+import { useBrokerageOwner, useOrgName, useTeamOwner } from '@/lib/useBrokerageOwner';
 import TcInvitationBanner from '@/components/TcInvitationBanner';
 import ClosedDealAlerts from '@/components/ClosedDealAlerts';
 import AttentionPanel, { type AttentionSummary } from '@/components/AttentionPanel';
@@ -141,6 +141,7 @@ export default function Dashboard() {
   const brokerageOwner = useBrokerageOperator();
   const trueOwner = useBrokerageOwner();
   const teamOwner = useTeamOwner();
+  const org = useOrgName();
   useEffect(() => { setPersona(readPersona()); }, []);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -417,8 +418,8 @@ export default function Dashboard() {
           <div className="min-w-0">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
               <div>
-                <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Your brokerage</h1>
-                <p className="text-slate-400">Your agents, their pipeline and what needs you today.</p>
+                <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">{org.name ?? 'Your brokerage'}</h1>
+                <p className="text-slate-400">{org.ready && !org.name && trueOwner ? <>Your agents, their pipeline and what needs you today. <Link href="/dashboard/collaborate#settings" className="text-blue-400 hover:text-blue-300">Add your brokerage’s name</Link></> : 'Your agents, their pipeline and what needs you today.'}</p>
               </div>
               <div className="flex flex-wrap gap-3">
                 <Link href={trueOwner ? '/dashboard/collaborate#agents' : '/dashboard/brokerage-admin'} className="px-5 py-3 border border-white/10 hover:bg-white/5 text-slate-200 font-semibold rounded-xl transition text-center">Invite an agent</Link>

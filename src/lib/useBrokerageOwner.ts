@@ -11,11 +11,12 @@ import { isTeamPlan } from './plans';
 // null while we are still finding out (pages show their normal view meanwhile); the server decides what they may do.
 // The answer belongs to whoever is signed in: signing out and in as someone else must never reuse it.
 export type OwnerKind = 'brokerage' | 'team' | null;
+interface OwnerInfo { kind: OwnerKind; name: string | null }
 
-let cached: Promise<OwnerKind> | null = null;
+let cached: Promise<OwnerInfo> | null = null;
 let cachedFor: string | null = null;
 
-function lookup(): Promise<OwnerKind> {
+function lookup(): Promise<OwnerInfo> {
   const me = storedUserId();
   if (cachedFor !== me) {
     cached = null;
@@ -24,26 +25,26 @@ function lookup(): Promise<OwnerKind> {
   if (!cached) {
     cached = authFetch('/api/team')
       .then(async (res) => {
-        if (!res.ok) return null;
-        const data = (await res.json()) as { role?: string | null; planId?: string | null; ownerKind?: 'brokerage' | 'team' | null };
-        if (data.role !== 'owner' || !isTeamPlan(data.planId)) return null;
-        return data.ownerKind === 'brokerage' ? 'brokerage' : 'team';
+        if (!res.ok) return { kind: null, name: null };
+        const data = (await res.json()) as { role?: string | null; planId?: string | null; ownerKind?: 'brokerage' | 'team' | null; team?: { name?: string | null } };
+        if (data.role !== 'owner' || !isTeamPlan(data.planId)) return { kind: null, name: null };
+        return { kind: (data.ownerKind === 'brokerage' ? 'brokerage' : 'team') as OwnerKind, name: data.team?.name?.trim() || null };
       })
       .catch(() => {
         cached = null; // try again next time
-        return null;
+        return { kind: null, name: null };
       });
   }
-  return cached;
+  return cached as Promise<OwnerInfo>;
 }
 
-function useOwnerKind(enabled: boolean): { kind: OwnerKind; ready: boolean } {
-  const [state, setState] = useState<{ kind: OwnerKind; ready: boolean }>({ kind: null, ready: false });
+function useOwnerKind(enabled: boolean): { kind: OwnerKind; name: string | null; ready: boolean } {
+  const [state, setState] = useState<{ kind: OwnerKind; name: string | null; ready: boolean }>({ kind: null, name: null, ready: false });
   useEffect(() => {
     if (!enabled) return;
     let live = true;
     lookup().then((v) => {
-      if (live) setState({ kind: v, ready: true });
+      if (live) setState({ kind: v.kind, name: v.name, ready: true });
     });
     return () => {
       live = false;
@@ -67,4 +68,10 @@ export function useTeamOwner(): boolean | null {
   if (!ready) return null;
   // With the brokerage feature on, an owner with a brokerage account or agents is a brokerage; with it off, every Team-plan owner is a team.
   return on ? kind === 'team' : kind !== null;
+}
+
+/** The name the owner gave their brokerage or team (null until they set one, or while finding out). */
+export function useOrgName(): { name: string | null; kind: OwnerKind; ready: boolean } {
+  const { kind, name, ready } = useOwnerKind(true);
+  return { name, kind, ready };
 }

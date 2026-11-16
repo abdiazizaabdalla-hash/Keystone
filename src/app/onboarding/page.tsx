@@ -7,7 +7,7 @@ import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
 import { DueDateSpec, normalizeDueDateSpec } from '@/lib/dueDates';
 import DueDateControl from '@/components/DueDateControl';
 
-import { PLANS, PUBLIC_PLANS, type PlanId } from '@/lib/plans';
+import { PLANS, PUBLIC_PLANS, isTeamPlan, type PlanId } from '@/lib/plans';
 
 // Onboarding walks a new account through the settings that matter before
 // dropping them at the dashboard:
@@ -157,6 +157,10 @@ function OnboardingContent() {
   // Steps 2, 3, 4: account settings — same fields/defaults as the
   // Settings page (src/app/dashboard/settings/page.tsx).
   const [fullName, setFullName] = useState('');
+  // A Team or Brokerage owner also names their team or brokerage, which is what their dashboard is headed with.
+  const [orgPlan, setOrgPlan] = useState<PlanId | null>(null);
+  const [orgName, setOrgName] = useState('');
+  const [orgIsBrokerage, setOrgIsBrokerage] = useState(false);
   const [defaultFlatFee, setDefaultFlatFee] = useState('400');
   const [defaultPercentFee, setDefaultPercentFee] = useState('0');
   const [invoiceDueDays, setInvoiceDueDays] = useState('30');
@@ -244,7 +248,21 @@ function OnboardingContent() {
           }))
         );
       }
-      return PLANS.some((p) => p.id === data.plan) ? (data.plan as PlanId) : null;
+      const known = PLANS.some((p) => p.id === data.plan) ? (data.plan as PlanId) : null;
+      setOrgPlan(known);
+      if (known && isTeamPlan(known)) {
+        try {
+          const t = await authFetch('/api/team');
+          if (t.ok) {
+            const team = await t.json();
+            setOrgName(team.team?.name ?? '');
+            setOrgIsBrokerage(known === 'brokerage' || team.ownerKind === 'brokerage');
+          }
+        } catch {
+          // Non-fatal: the name field just starts empty.
+        }
+      }
+      return known;
     } catch {
       // Non-fatal — steps just start from their defaults.
       return null;
@@ -417,7 +435,25 @@ function OnboardingContent() {
     }
   };
 
-  const handleSaveProfile = () => savePatch({ fullName }, 3);
+  const orgLabel = orgIsBrokerage || orgPlan === 'brokerage' ? 'Brokerage name' : 'Team name';
+  const needsOrgName = orgPlan !== null && isTeamPlan(orgPlan);
+  const handleSaveProfile = async () => {
+    if (needsOrgName) {
+      if (!orgName.trim()) {
+        setStepError(`Enter your ${orgLabel.toLowerCase()}.`);
+        return;
+      }
+      try {
+        await authFetch('/api/team'); // creates the team the first time, so there is something to name
+        const res = await authFetch('/api/team', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: orgName }) });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Could not save your ${orgLabel.toLowerCase()}`);
+      } catch (error) {
+        setStepError(error instanceof Error ? error.message : 'Failed to save');
+        return;
+      }
+    }
+    await savePatch({ fullName }, 3);
+  };
 
   const handleSaveFeesAndInvoicing = () => {
     const flat = parseFloat(defaultFlatFee);
@@ -715,6 +751,20 @@ function OnboardingContent() {
               placeholder="Jane Smith"
               className={inputClass}
             />
+            {needsOrgName && (
+              <div className="mt-5">
+                <label htmlFor="ob-org" className="text-sm text-slate-400 block mb-2">{orgLabel}</label>
+                <input
+                  id="ob-org"
+                  type="text"
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                  placeholder={orgLabel === 'Brokerage name' ? 'Smith & Co. Realty' : 'Smith Closing Team'}
+                  className={inputClass}
+                />
+                <p className="text-xs text-slate-500 mt-2">{orgLabel === 'Brokerage name' ? 'Your agents see this, and it heads your dashboard.' : 'Your teammates see this, and it heads your dashboard.'}</p>
+              </div>
+            )}
           </StepShell>
         )}
 
