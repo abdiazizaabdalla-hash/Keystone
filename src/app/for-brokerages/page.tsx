@@ -69,8 +69,8 @@ export default function ForBrokeragesPage() {
             'A read-only look at every agent’s deals, key dates and listings',
             'Production by agent and month, exported when you need it',
             'What is late and what closes this week, up front, so the morning check takes minutes',
-            'On Pro: build your own deal reports, pick the columns and filters, and download a CSV',
-            'On Pro: compare agents and months, with the period before shown next to each number',
+            'Build your own deal reports, pick the columns and filters, and download a CSV',
+            'Compare agents and months, with the period before shown next to each number',
           ].map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
         </ul>
       </section>
@@ -102,8 +102,8 @@ export default function ForBrokeragesPage() {
             'A welcome message when an agent joins, and a daily digest of what needs you',
             'A monthly report of closings, with any closed file that has no commission recorded',
             'Choose which agents each rule covers, and see exactly who was told what',
-            'On Pro: build your own workflows from a trigger, pick who is told and when it escalates, or start from a template',
-            'On Pro: run history for every workflow, with the active-workflow count and what was flagged this week',
+            'Build your own workflows from a trigger, pick who is told and when it escalates, or start from a template',
+            'Run history for every workflow, with the active-workflow count and what was flagged this week',
           ].map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
         </ul>
         <p className="text-sm text-slate-500 mt-6 max-w-3xl">Add one more managing account that works like yours, apart from your plan and billing, so a second broker or an operations lead can run this with you.</p>

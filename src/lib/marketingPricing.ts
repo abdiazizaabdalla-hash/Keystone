@@ -36,6 +36,8 @@ export const BROKERAGE_TIERS = {
       'Team board and private messages',
       'Commission statements: confirm, accept, mark paid',
       'Agent-by-month production export',
+      'Reports tab: trends and comparisons across agents and time, configurable deal-level reports, and scheduled team activity workbooks',
+      'Custom workflow builder with a template library, run history and active-workflow stats',
       'One extra managing account or administrator',
     ],
   },
@@ -49,9 +51,6 @@ export const BROKERAGE_TIERS = {
       'Everything in Basic',
       'Up to 25 agents included',
       'Several required-document lists, by deal type',
-      'Configurable, deal-level reports',
-      'Reports tab: trends and comparisons across agents and time, and scheduled team activity workbooks',
-      'Custom workflow builder with a template library, run history and active-workflow stats',
       'Scoped roles for administrators (up to five extra)',
     ],
     rollingOut: [
