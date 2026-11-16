@@ -32,15 +32,17 @@ export async function applyBrokerageAccess<T extends WithAppMetadata & { id: str
     if (!owner.user) return user;
     // The agent keeps their workspace for as long as they are on the roster. It becomes read-only when the brokerage has lapsed: the
     // owner is off a team plan, or the pilot has ended or the account was paused (brokeragePilot.ts). Nothing is deleted.
+    let tier: 'basic' | 'pro' = 'basic';
     let lapsed = !isTeamPlan(getUserPlan(owner.user as WithAppMetadata));
     if (!lapsed) {
-      const { data: account } = await supabaseServer.from('brokerage_accounts').select('status, pilot_ends_on').eq('owner_user_id', ownerId).maybeSingle();
+      const { data: account } = await supabaseServer.from('brokerage_accounts').select('status, pilot_ends_on, tier').eq('owner_user_id', ownerId).maybeSingle();
       if (account) {
+        tier = account.tier === 'pro' ? 'pro' : 'basic';
         const status = effectiveStatus({ status: account.status as 'pilot', pilot_ends_on: (account.pilot_ends_on as string | null) ?? null }, new Date().toISOString().slice(0, 10));
         lapsed = status === 'pilot_expired' || status === 'terminated';
       }
     }
-    return withBrokerageAccess(user, { readOnly: lapsed });
+    return withBrokerageAccess(user, { readOnly: lapsed, tier });
   } catch (error) {
     console.error('Brokerage access lookup failed:', error);
     return user;

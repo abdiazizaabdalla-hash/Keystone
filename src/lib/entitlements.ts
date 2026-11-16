@@ -1,7 +1,7 @@
 import { hasAgentRole, isPlatformAdmin, type WithAppMetadata } from './appMetadata';
 import { isFeatureOn } from './features';
 import type { AgentLevel } from './tiers';
-import { hasBrokerageAccess } from './brokerageAccessMeta';
+import { brokerageAgentLevel, hasBrokerageAccess } from './brokerageAccessMeta';
 
 // One place that answers "what kind of account is this, and what may it own?"
 //
@@ -55,7 +55,7 @@ export function getEntitlements(user: WithAppMetadata | null | undefined): Entit
 
   const kind: AccountKind = isAdmin ? 'admin' : workspace ? 'agent_workspace' : isCollaborator ? 'collaborator' : 'coordinator';
 
-  const agentLevel: Entitlements['agentLevel'] = kind === 'agent_workspace' ? (hasBrokerageAccess(user) ? 'basic' : 'pro') : kind === 'collaborator' ? 'guest' : null;
+  const agentLevel: Entitlements['agentLevel'] = kind === 'agent_workspace' ? (hasBrokerageAccess(user) ? brokerageAgentLevel(user) : 'pro') : kind === 'collaborator' ? 'guest' : null;
 
   return {
     kind,

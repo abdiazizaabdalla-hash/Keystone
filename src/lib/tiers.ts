@@ -113,7 +113,7 @@ export interface AgentTierInput {
   /** An admin granted this agent a Pro workspace (today's agent_workspace grant). */
   adminGrant: boolean;
   /** The active brokerage link, if any, and whether that brokerage is in good standing (plan active or pilot). */
-  brokerage: { inGoodStanding: boolean } | null;
+  brokerage: { inGoodStanding: boolean; tier?: Tier } | null;
   /** A coordinator added the agent to a deal (the free portal login). */
   invitedByCoordinator: boolean;
 }
@@ -133,7 +133,7 @@ export interface AgentAccess {
 export function resolveAgentAccess(input: AgentTierInput): AgentAccess {
   if (input.ownSubscription) return { level: 'pro', source: 'own_subscription' };
   if (input.adminGrant) return { level: 'pro', source: 'admin_grant' };
-  if (input.brokerage?.inGoodStanding) return { level: 'basic', source: 'brokerage' };
+  if (input.brokerage?.inGoodStanding) return { level: input.brokerage.tier === 'pro' ? 'pro' : 'basic', source: 'brokerage' };
   if (input.invitedByCoordinator) return { level: 'guest', source: 'coordinator_invite' };
   return { level: 'none', source: null };
 }

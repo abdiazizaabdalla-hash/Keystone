@@ -19,6 +19,13 @@ const ACCOUNTS = [
   { label: 'Free invited agent', email: 'agent-free@local.relay', app: { role: 'agent', account_type: 'agent' } },
   { label: 'Agent with a workspace (a member of the brokerage below)', email: 'agent-workspace@local.relay', app: { role: 'agent', account_type: 'agent', agent_workspace: true, trial_ends_at: new Date(Date.now() + 30 * 86400000).toISOString() } },
   { label: 'Brokerage owner / broker (Team plan)', email: 'broker@local.relay', app: { plan: 'team' } },
+  { label: 'Coordinator (Starter plan)', email: 'tc-starter@local.relay', app: { plan: 'starter' } },
+  { label: 'Agent, Starter (own workspace)', email: 'agent-starter@local.relay', app: { role: 'agent', account_type: 'agent', agent_workspace: true, plan: 'starter', trial_ends_at: new Date(Date.now() + 14 * 86400000).toISOString() } },
+  { label: 'Agent, Pro (own workspace)', email: 'agent-pro@local.relay', app: { role: 'agent', account_type: 'agent', agent_workspace: true, plan: 'pro' } },
+  { label: 'Brokerage Basic owner (Team plan)', email: 'broker-basic@local.relay', app: { plan: 'team' } },
+  { label: 'Brokerage Pro owner (Team plan)', email: 'broker-pro@local.relay', app: { plan: 'team' } },
+  { label: 'Agent on a Brokerage Basic roster', email: 'agent-in-basic@local.relay', app: { role: 'agent', account_type: 'agent' } },
+  { label: 'Agent on a Brokerage Pro roster', email: 'agent-in-pro@local.relay', app: { role: 'agent', account_type: 'agent' } },
   { label: 'Platform admin', email: 'admin@local.relay', app: { is_admin: true, plan: 'team' } },
 ];
 
@@ -121,6 +128,31 @@ if (broker && member) {
     if (error) console.warn('Could not add the demo IABS (is add-brokerage-oversight.sql run?):', error.message);
   }
   console.log('Brokerage demo ready: broker@local.relay oversees agent-workspace@local.relay.');
+}
+// Two separate brokerages for testing the tiers: one on Brokerage Basic, one on Brokerage Pro. Each has one agent on its roster.
+// Brokerage Pro agents work on Agent Pro; Brokerage Basic agents work on Agent Basic.
+{
+  const { data: all } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  const find = (e) => all.users.find((u) => u.email === e);
+  const today = new Date().toISOString().slice(0, 10);
+  for (const [ownerEmail, agentEmail, tier] of [['broker-basic@local.relay', 'agent-in-basic@local.relay', 'basic'], ['broker-pro@local.relay', 'agent-in-pro@local.relay', 'pro']]) {
+    const owner = find(ownerEmail);
+    const agent = find(agentEmail);
+    if (!owner || !agent) continue;
+    const { error: accErr } = await admin.from('brokerage_accounts').upsert({ owner_user_id: owner.id, tier, status: 'converted', extra_seats: 0, converted_on: today }, { onConflict: 'owner_user_id' });
+    if (accErr) console.warn(`Could not create the ${tier} brokerage account (is add-brokerage-accounts.sql run?):`, accErr.message);
+    const { data: open } = await admin.from('brokerage_links').select('id').eq('agent_user_id', agent.id).eq('status', 'active').maybeSingle();
+    if (!open) {
+      const { error } = await admin.from('brokerage_links').insert({ owner_user_id: owner.id, agent_user_id: agent.id, invited_email: agent.email, status: 'active', responded_at: new Date().toISOString() });
+      if (error) console.warn(`Could not link the ${tier} brokerage agent:`, error.message);
+    }
+    const { data: team } = await admin.from('teams').select('id').eq('owner_id', owner.id).maybeSingle();
+    if (!team) {
+      const created = await admin.from('teams').insert({ owner_id: owner.id }).select('id').single();
+      if (created.data) await admin.from('team_members').insert({ team_id: created.data.id, user_id: owner.id, role: 'owner' });
+    }
+  }
+  console.log('Brokerage tiers ready: broker-basic@local.relay (Basic) and broker-pro@local.relay (Pro).');
 }
 // A listing fee a coordinator has invoiced, so the free invited agent has one on their Invoices page and on the listing.
 {

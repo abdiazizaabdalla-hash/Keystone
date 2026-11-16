@@ -85,4 +85,12 @@ describe('a lapsed brokerage makes its agents read-only', () => {
       expect(readOnlyAllows(method, path)).toBe(false);
     }
   });
+
+  it('puts a Brokerage Pro agent on Agent Pro and a Brokerage Basic agent on Agent Basic', () => {
+    const pro = getEntitlements(withBrokerageAccess(u({ role: 'agent' }), { tier: 'pro' }));
+    const basic = getEntitlements(withBrokerageAccess(u({ role: 'agent' }), { tier: 'basic' }));
+    expect(pro.agentLevel).toBe('pro');
+    expect(basic.agentLevel).toBe('basic');
+    expect(getEntitlements(withBrokerageAccess(u({ role: 'agent' }))).agentLevel).toBe('basic');
+  });
 });

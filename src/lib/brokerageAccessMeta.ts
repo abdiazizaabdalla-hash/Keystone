@@ -17,6 +17,13 @@ export function mayGetBrokerageAccess(user: WithAppMetadata | null | undefined, 
   return user?.app_metadata?.agent_workspace !== true;
 }
 
+export const TIER_KEY = 'agent_access_tier';
+
+/** The agent level a brokerage-provided workspace gets: Brokerage Pro agents work on Agent Pro, Brokerage Basic agents on Agent Basic. */
+export function brokerageAgentLevel(user: WithAppMetadata | null | undefined): 'basic' | 'pro' {
+  return user?.app_metadata?.[TIER_KEY] === 'pro' ? 'pro' : 'basic';
+}
+
 export const READ_ONLY_KEY = 'agent_read_only';
 
 /** True when this agent's brokerage has lapsed: they keep everything and can read it, but cannot create or change anything. */
@@ -40,7 +47,7 @@ export function readOnlyAllows(method: string, pathname: string): boolean {
  * Pure part: the user as this request should see them once the brokerage link and owner plan are known.
  * `readOnly` marks a lapsed brokerage (pilot ended or terminated, or the owner is off a team plan).
  */
-export function withBrokerageAccess<T extends WithAppMetadata>(user: T, opts: { readOnly?: boolean } = {}): T {
-  user.app_metadata = { ...(user.app_metadata ?? {}), agent_workspace: true, [ACCESS_SOURCE_KEY]: BROKERAGE_ACCESS_SOURCE, ...(opts.readOnly ? { [READ_ONLY_KEY]: true } : {}) };
+export function withBrokerageAccess<T extends WithAppMetadata>(user: T, opts: { readOnly?: boolean; tier?: 'basic' | 'pro' } = {}): T {
+  user.app_metadata = { ...(user.app_metadata ?? {}), agent_workspace: true, [ACCESS_SOURCE_KEY]: BROKERAGE_ACCESS_SOURCE, [TIER_KEY]: opts.tier === 'pro' ? 'pro' : 'basic', ...(opts.readOnly ? { [READ_ONLY_KEY]: true } : {}) };
   return user;
 }
