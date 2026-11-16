@@ -432,3 +432,60 @@ export function BrokerageMini() {
     </div>
   );
 }
+
+function IntakeField({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1 border-b border-white/5 last:border-0 text-[11px]"><span className="text-slate-500">{k}</span><span className="text-slate-100 text-right">{v}</span></div>
+  );
+}
+
+/** AI contract intake: a purchase contract or listing agreement goes in, a filled-in workspace comes out. */
+export function ContractIntakeMockup() {
+  return (
+    <div className="grid lg:grid-cols-[2fr_auto_5fr] gap-5 items-center">
+      <div className="space-y-3">
+        {[['Purchase contract', 'Executed purchase agreement', 'PDF'], ['Listing agreement', 'Exclusive right to sell', 'PDF']].map(([t, s, f], i) => (
+          <div key={t} className={`rounded-xl border ${i === 0 ? 'border-blue-400/50 bg-blue-500/10' : 'border-white/10 bg-white/[0.04]'} p-4`}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-12 rounded-md bg-white/90 flex flex-col gap-1 p-1.5 shrink-0" aria-hidden>
+                <span className="h-1 rounded bg-slate-400" /><span className="h-1 rounded bg-slate-300" /><span className="h-1 w-2/3 rounded bg-slate-300" /><span className="h-1 rounded bg-blue-400/70" /><span className="h-1 w-1/2 rounded bg-slate-300" />
+              </div>
+              <div className="min-w-0"><p className="text-xs font-semibold text-slate-100">{t}</p><p className="text-[10px] text-slate-400">{s}</p></div>
+              <Chip tone="slate">{f}</Chip>
+            </div>
+          </div>
+        ))}
+        <p className="text-[11px] text-slate-400 text-center">Upload either one. No retyping.</p>
+      </div>
+      <div className="flex lg:flex-col items-center justify-center gap-2 text-blue-300">
+        <span className="text-[10px] uppercase tracking-wider">Relay reads it</span>
+        <svg className="w-8 h-8 rotate-90 lg:rotate-0" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-5-5l5 5-5 5" /></svg>
+      </div>
+      <Chrome label="412 Larkspur Lane · New transaction">
+        <div className="p-3 space-y-3">
+          <div className="flex items-center justify-between"><p className="text-xs font-semibold text-slate-100">Filled in from the contract</p><Chip tone="amber">You review, then save</Chip></div>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className={PANEL}>
+              <Title>Property and price</Title>
+              <IntakeField k="Address" v="412 Larkspur Lane" /><IntakeField k="Purchase price" v="$415,000" /><IntakeField k="Earnest money" v="$5,000" /><IntakeField k="Financing" v="Conventional" />
+            </div>
+            <div className={PANEL}>
+              <Title>Key dates</Title>
+              <IntakeField k="Accepted" v="Nov 14" /><IntakeField k="Earnest money due" v="Nov 17" /><IntakeField k="Inspection deadline" v="Nov 24" /><IntakeField k="Appraisal" v="Dec 2" /><IntakeField k="Closing" v="Dec 12" />
+            </div>
+          </div>
+          <div className={PANEL}>
+            <Title right={<Chip tone="emerald">Added to the deal</Chip>}>Contacts pulled from the contract</Title>
+            <div className="grid sm:grid-cols-2 gap-x-6">
+              <IntakeField k="Buyer" v="Dana and Chris Whitfield" /><IntakeField k="Seller" v="Priya Raman" /><IntakeField k="Lender" v="Harbor Federal" /><IntakeField k="Title and escrow" v="Cedar Title · escrow officer, email, phone" />
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className={PANEL}><Title>Created for you</Title><p className="text-[11px] text-slate-300">Closing checklist with dated steps</p><p className="text-[11px] text-slate-300">Critical dates on your calendar</p><p className="text-[11px] text-slate-300">The contract, filed on the deal</p></div>
+            <div className={PANEL}><Title>For a listing</Title><p className="text-[11px] text-slate-300">List price, MLS number, listing period</p><p className="text-[11px] text-slate-300">Sellers and agents with roles and contact details</p><p className="text-[11px] text-slate-300">Fee terms, and anything to double-check</p></div>
+          </div>
+        </div>
+      </Chrome>
+    </div>
+  );
+}

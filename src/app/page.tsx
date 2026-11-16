@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { decodeStoredRole } from '@/lib/authClient';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import PublicHeader from '@/components/PublicHeader';
-import { HeroWorkspaceMockup, ProblemContrastMockup, TransactionWorkspaceMockup, ListingDashboardMockup, WorkflowBuilderMockup, BrokerageDashboardMockup, ConnectedMockup, AgentMini, CoordinatorMini, BrokerageMini, MockupCaption } from '@/components/marketing/ProductMockups';
+import { HeroWorkspaceMockup, ProblemContrastMockup, ContractIntakeMockup, TransactionWorkspaceMockup, ListingDashboardMockup, WorkflowBuilderMockup, BrokerageDashboardMockup, ConnectedMockup, AgentMini, CoordinatorMini, BrokerageMini, MockupCaption } from '@/components/marketing/ProductMockups';
 
 export default function Home() {
   const router = useRouter();
@@ -50,7 +50,7 @@ export default function Home() {
             Every transaction. Every listing. <span className="text-blue-400">One platform.</span>
           </h1>
           <p className="text-lg text-slate-400 mb-8 max-w-lg">
-            Manage transactions, listings, clients, documents and workflows in one place. Whether you are an agent, a transaction coordinator or a brokerage, Relay brings your operation together.
+            Manage transactions, listings, clients, documents and workflows in one place. Upload a purchase or listing contract and Relay builds the file for you, with no retyping. For agents, transaction coordinators and brokerages.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <Link href="/get-started" className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/10">Get started</Link>
@@ -66,6 +66,30 @@ export default function Home() {
           </nav>
         </div>
         <div><HeroWorkspaceMockup /></div>
+      </section>
+
+      {/* AI contract intake */}
+      <section id="contract-intake" className="max-w-7xl mx-auto px-6 py-20 border-t border-slate-700 scroll-mt-20">
+        <div className="max-w-3xl mb-12">
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">AI contract intake</p>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">Upload the contract. Your workspace builds itself.</h2>
+          <p className="text-slate-400">Skip the retyping. Upload a purchase contract or a listing agreement and Relay creates the transaction or listing for you: the property, the price, every key date, and the people on the deal, already added as contacts.</p>
+        </div>
+        <ContractIntakeMockup />
+        <MockupCaption>Illustration of contract intake. Names, addresses and numbers are made up.</MockupCaption>
+        <div className="grid md:grid-cols-3 gap-5 mt-12">
+          {[
+            ['1', 'Upload', 'Add the executed purchase contract, or the signed listing agreement, from your computer.'],
+            ['2', 'Relay fills it in', 'Property, price, parties, earnest money, inspection, appraisal, financing and closing dates, plus lender and title contacts when the contract names them.'],
+            ['3', 'You review and save', 'Check what was read, fix anything, and save. Your checklist, dates and documents are ready on the deal.'],
+          ].map(([n, t, b]) => (
+            <div key={n} className="rounded-xl border border-slate-700 bg-slate-800/50 p-6">
+              <span className="w-8 h-8 rounded-full bg-blue-500 text-white text-sm font-semibold flex items-center justify-center mb-4">{n}</span>
+              <h3 className="font-semibold text-slate-100 mb-1.5">{t}</h3><p className="text-sm text-slate-400">{b}</p>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500 mt-4">Works with supported electronic contracts. Relay flags anything unclear for you to check, and nothing is saved until you review it.</p>
       </section>
 
       {/* 2. The problem */}
