@@ -2,7 +2,7 @@
 
 import ApprovalPopup from '@/components/ApprovalPopup';
 import ListingAddedNotice from '@/components/ListingAddedNotice';
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getValidToken, clearSession, authFetch } from '@/lib/authClient';
@@ -17,6 +17,9 @@ import { useBrokerageOwner, useTeamOwner } from '@/lib/useBrokerageOwner';
 import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
 import { useBrokerageAdminAccess } from '@/lib/useBrokerageAdminAccess';
 
+// Collapsed sidebar is icon-only -- narrow enough to stay useful on small
+// screens without hiding navigation entirely. Expanded shows icon + label.
+const SIDEBAR_COLLAPSED_KEY = 'sidebar_collapsed';
 
 const ICON_CLS = 'w-5 h-5 shrink-0';
 const NAV_ICONS: Record<string, React.ReactNode> = {
@@ -129,53 +132,48 @@ function isActivePath(pathname: string | null, href: string) {
   return pathname === href || pathname.startsWith(href + '/');
 }
 
-function TopNavLink({
+function NavLink({
   href,
   label,
   icon,
+  collapsed,
   active = false,
   tone = 'default',
   badge = 0,
-  menu = false,
 }: {
   href: string;
   label: string;
   icon: React.ReactNode;
+  collapsed: boolean;
   active?: boolean;
   tone?: 'default' | 'admin';
   badge?: number;
-  /** Inside a dropdown: a full-width row. */
-  menu?: boolean;
 }) {
-  const body = (
-    <>
-      <span className={menu ? '' : '[&>svg]:w-4 [&>svg]:h-4 shrink-0'}>{icon}</span>
-      <span className="truncate">{label}</span>
-      {badge > 0 && (
-        <span className={`${menu ? 'ml-auto' : 'ml-0.5'} min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center`}>
-          {badge > 99 ? '99+' : badge}
-        </span>
-      )}
-    </>
-  );
-  if (menu) {
-    const colors = active ? 'bg-white/10 text-white' : tone === 'admin' ? 'text-amber-200 hover:bg-amber-500/10' : 'text-slate-300 hover:bg-white/5 hover:text-white';
-    return (
-      <Link href={href} data-tour={`nav-${label.toLowerCase()}`} title={label} aria-current={active ? 'page' : undefined} className={`relative flex items-center shrink-0 gap-3 px-3 py-2 w-full rounded-lg transition font-medium text-sm whitespace-nowrap ${colors}`}>
-        {body}
-      </Link>
-    );
-  }
-  // In the bar: no hover pill. The page you are on gets a line under it; the others just brighten.
+  const colors = active
+    ? 'bg-blue-500/20 text-white ring-1 ring-blue-400/30'
+    : tone === 'admin'
+      ? 'text-amber-200 hover:bg-amber-500/10'
+      : 'text-slate-300 hover:bg-white/5 hover:text-white';
   return (
     <Link
       href={href}
       data-tour={`nav-${label.toLowerCase()}`}
-      title={label}
+      title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
-      className={`relative flex items-center shrink-0 gap-1.5 px-2.5 h-full border-b-2 text-[13px] font-medium whitespace-nowrap transition-colors ${active ? 'border-blue-400 text-white' : tone === 'admin' ? 'border-transparent text-amber-200 hover:text-amber-100' : 'border-transparent text-slate-400 hover:text-white'}`}
+      className={`relative flex items-center rounded-xl transition font-medium ${
+        collapsed ? 'justify-center px-0 py-2.5 short:py-2 tiny:py-1' : 'gap-3 px-4 py-2.5 short:py-2 tiny:py-1'
+      } ${colors}`}
     >
-      {body}
+      {icon}
+      {!collapsed && <span className="truncate">{label}</span>}
+      {badge > 0 &&
+        (collapsed ? (
+          <span className="absolute top-1.5 right-2 w-2.5 h-2.5 rounded-full bg-red-500" />
+        ) : (
+          <span className="ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-500 text-white text-xs font-semibold flex items-center justify-center">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        ))}
     </Link>
   );
 }
@@ -210,12 +208,7 @@ export default function DashboardLayout({
     price?: string;
   } | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [userOpen, setUserOpen] = useState(false);
-  const menusRef = useRef<HTMLDivElement | null>(null);
-  const navRef = useRef<HTMLElement | null>(null);
-  // How many tabs the bar shows. Each has its icon and its name; when they do not all fit, the last ones move under More.
-  const [shown, setShown] = useState(99);
+  const [collapsed, setCollapsed] = useState(false);
   // Phones only: the sidebar is replaced by a top bar with a slide-down menu.
   const [mobileOpen, setMobileOpen] = useState(false);
   // Unread team messages (Team/Brokerage plans) -- shown on the Collaborate link, or on Messages for a broker and for brokerage agents.
@@ -296,18 +289,41 @@ export default function DashboardLayout({
     };
   }, [plan, isAgentAccount, hasWorkspace]);
 
-  // The top menus close when you click elsewhere or go to another page.
+  // Default to collapsed on small screens (phones/narrow tablets) so the
+  // nav doesn't eat most of the viewport, but respect an explicit choice
+  // the user already made on this device.
   useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (menusRef.current && !menusRef.current.contains(e.target as Node)) { setMoreOpen(false); setUserOpen(false); }
+    const initCollapsed = async () => {
+      // Deferred a tick past mount (matching the checkAuth effect's own
+      // async pattern below) so the client's first render always matches
+      // the server-rendered markup before this reads client-only state.
+      await Promise.resolve();
+      try {
+        const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+        if (stored === 'true' || stored === 'false') {
+          setCollapsed(stored === 'true');
+        } else if (window.innerWidth < 768) {
+          setCollapsed(true);
+        }
+      } catch {
+        // localStorage can throw in some private-browsing modes -- the
+        // sidebar just defaults to expanded, which is harmless.
+      }
     };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    initCollapsed();
   }, []);
-  useEffect(() => {
-    const t = setTimeout(() => { setMoreOpen(false); setUserOpen(false); }, 0);
-    return () => clearTimeout(t);
-  }, [pathname]);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        // Non-critical -- the preference just won't persist.
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -437,49 +453,22 @@ export default function DashboardLayout({
       ]
     : baseNav;
 
-  const userItems = [
-    { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
-    { href: '/dashboard/account', label: 'Account', icon: 'account' },
-  ];
-  // Everything with its own page sits in the bar; only Contacts and Search live under More.
-  const barExtras: { href: string; label: string; icon: string; badge?: number }[] = [
+  const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
+    { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
     ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }] : []),
     ...(isFeatureOnClient('templates') && !(isAgentAccount && !hasWorkspace) ? [{ href: '/dashboard/templates', label: 'Templates', icon: 'templates' }] : []),
+    { href: '/dashboard/search', label: 'Search', icon: 'search' },
     ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: collaborateUnread }] : []),
     ...(brokerageAdmin?.delegated ? [{ href: '/dashboard/brokerage-admin', label: 'Brokerage agents', icon: 'collaborate' }] : []),
+    { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
+    { href: '/dashboard/account', label: 'Account', icon: 'account' },
     ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin', icon: 'admin' }] : []),
-  ];
-  const barItems = [...primaryNav, ...barExtras];
-  const barKey = barItems.map((i) => i.href).join('|');
-  const [measureTick, setMeasureTick] = useState(0);
-  // Whenever the screen size or the set of tabs changes, try the full bar again.
-  useEffect(() => {
-    const again = () => { setShown(99); setMeasureTick((t) => t + 1); };
-    const t = setTimeout(again, 0);
-    window.addEventListener('resize', again);
-    return () => { clearTimeout(t); window.removeEventListener('resize', again); };
-  }, [barKey]);
-  // If they do not fit, move the last tab under More and look again.
-  useEffect(() => {
-    const el = navRef.current;
-    const count = Math.min(shown, barItems.length);
-    if (el && el.scrollWidth > el.clientWidth + 1 && count > 3) {
-      const t = setTimeout(() => setShown(count - 1), 0);
-      return () => clearTimeout(t);
-    }
-  }, [shown, measureTick, barKey, messagesUnread, collaborateUnread, barItems.length]);
-  const barShown = barItems.slice(0, Math.min(shown, barItems.length));
-  const barHidden = barItems.slice(barShown.length);
-  const moreItems: { href: string; label: string; icon: string }[] = [
-    { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
-    { href: '/dashboard/search', label: 'Search', icon: 'search' },
   ];
 
   // Only a paid tier (Pro / Team) is ever named on screen, and never on an agent inside a brokerage.
   const showPlanChip = Boolean(plan) && plan !== 'starter' && !fromBrokerage;
   // A brokerage's own account (owner or managing account) is labelled Brokerage, never Team.
   const chipLabel = brokerOwner === true || brokerageAdmin?.delegated === true || plan === 'brokerage' ? 'Brokerage' : plan ?? '';
-
 
   if (isLoading) {
     return (
@@ -493,7 +482,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="h-screen app-bg flex flex-col overflow-hidden">
+    <div className="h-screen app-bg flex flex-col md:flex-row overflow-hidden">
       {/* Phones: compact top bar + menu (the desktop sidebar below is hidden under md) */}
       <div className="md:hidden shrink-0 relative z-40 bg-slate-950/70 backdrop-blur border-b border-white/10">
         <div className="flex items-center justify-between px-4 py-2.5">
@@ -501,7 +490,11 @@ export default function DashboardLayout({
             <span className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1">
               <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
             </span>
-            <span className="text-white font-display font-semibold">Relay TC</span>
+            <span className="text-white font-display font-semibold">Relay TC{showPlanChip && (
+              <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40">
+                {chipLabel}
+              </span>
+            )}</span>
           </Link>
           <div className="flex items-center">
           <NotificationBell variant="topbar" />
@@ -572,93 +565,140 @@ export default function DashboardLayout({
         )}
       </div>
 
-      {/* Top navigation (tablet and desktop) */}
-      <header ref={menusRef} className="hidden md:flex shrink-0 relative z-40 items-center gap-2 h-14 px-4 bg-slate-950/70 backdrop-blur border-b border-white/10">
-        <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0 mr-3" title="Relay TC">
-          <span className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm shrink-0">
-            <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
-          </span>
-        </Link>
-
-        <nav ref={navRef} className="flex items-stretch min-w-0 flex-1 self-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Main">
-          {barShown.map((item, i) => (
-            <Fragment key={item.href}>
-              {i > 0 && <span aria-hidden="true" className="self-center h-5 w-px bg-white/20 shrink-0" />}
-            <TopNavLink
-              href={item.href}
-              label={item.label}
-              tone={item.href === '/dashboard/admin' ? 'admin' : 'default'}
-              active={isActivePath(pathname, item.href)}
-              badge={item.href === '/dashboard/messages' ? messagesUnread : item.href === '/dashboard/collaborate' ? collaborateUnread : 0}
-              icon={NAV_ICONS[item.icon]}
-            />
-            </Fragment>
-          ))}
-        </nav>
-
-        <div className="relative shrink-0 self-stretch">
-            <button
-              type="button"
-              onClick={() => { setMoreOpen((o) => !o); setUserOpen(false); }}
-              aria-expanded={moreOpen}
-              aria-haspopup="menu"
-              className={`flex items-center gap-1 px-2.5 h-14 border-b-2 text-[13px] font-medium transition-colors ${[...barHidden, ...moreItems].some((i) => isActivePath(pathname, i.href)) ? 'border-blue-400 text-white' : moreOpen ? 'border-transparent text-white' : 'border-transparent text-slate-400 hover:text-white'}`}
-            >
-              More
-              <svg className={`w-3.5 h-3.5 transition ${moreOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-            </button>
-            {moreOpen && (
-              <div role="menu" className="absolute left-0 top-full mt-1 w-56 bg-slate-900 border border-white/15 rounded-xl shadow-2xl p-1.5 space-y-0.5">
-                {[...barHidden, ...moreItems].map((item) => (
-                  <TopNavLink
-                    key={item.href}
-                    href={item.href}
-                    label={item.label}
-                    menu
-                    active={isActivePath(pathname, item.href)}
-                    icon={NAV_ICONS[item.icon]}
-                  />
-                ))}
+      {/* Sidebar (tablet and desktop) */}
+      <div
+        className={`${
+          collapsed ? 'w-20' : 'w-64'
+        } shrink-0 h-full bg-slate-950/50 backdrop-blur border-r border-white/10 hidden md:flex flex-col transition-all duration-200`}
+      >
+        {/* Logo */}
+        <div
+          className={`border-b border-white/10 flex items-center ${
+            collapsed ? 'justify-center px-3 py-3' : 'justify-between px-4 py-3.5 tiny:py-2.5'
+          }`}
+        >
+          <Link href="/dashboard" className="flex items-center gap-3 min-w-0" title={collapsed ? 'Relay TC' : undefined}>
+            <span className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm shrink-0">
+              <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
+            </span>
+            {!collapsed && (
+              <div className="min-w-0">
+                <h1 className="text-white font-display font-semibold text-lg truncate">Relay TC</h1>
+                {showPlanChip && (
+                  <span className="inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40">
+                    {chipLabel}
+                  </span>
+                )}
               </div>
             )}
-          </div>
-
-        <NotificationBell variant="topbar" />
-
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => { setUserOpen((o) => !o); setMoreOpen(false); }}
-            aria-expanded={userOpen}
-            aria-haspopup="menu"
-            aria-label="Your account menu"
-            className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg text-slate-400 hover:text-white transition-colors"
-          >
-            <span className="w-8 h-8 rounded-full bg-blue-500/30 text-blue-100 text-sm font-semibold flex items-center justify-center uppercase">{(userName || 'U').charAt(0)}</span>
-            <svg className={`w-3.5 h-3.5 text-slate-400 transition ${userOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-          </button>
-          {userOpen && (
-            <div role="menu" className="absolute right-0 top-full mt-1 w-64 bg-slate-900 border border-white/15 rounded-xl shadow-2xl p-2 space-y-1">
-              {userName && <p className="px-3 py-1.5 text-sm font-semibold text-slate-100 truncate">{userName}</p>}
-              {plan && !fromBrokerage && (
-                <div className="flex items-center justify-between px-3 py-1.5 bg-slate-700/60 border border-slate-600 rounded-lg">
-                  {showPlanChip ? (
-                    <span className="text-xs text-slate-400"><span className="text-slate-200 font-semibold capitalize">{chipLabel}</span> plan</span>
-                  ) : (
-                    <span className="text-xs text-slate-400">Get more with Pro</span>
-                  )}
-                  <Link href="/dashboard/account" className="text-xs text-blue-400 hover:text-blue-300 font-medium">{showPlanChip ? 'Manage' : 'Upgrade'}</Link>
-                </div>
-              )}
-              {userItems.map((item) => (
-                <TopNavLink key={item.href} href={item.href} label={item.label} menu active={isActivePath(pathname, item.href)} icon={NAV_ICONS[item.icon]} />
-              ))}
-              <button onClick={() => { setUserOpen(false); setTutorialMenuOpen(true); }} title="Open a quick tutorial" className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-slate-100 rounded-lg transition">Tutorial</button>
-              <button onClick={handleLogout} className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition">Logout</button>
-            </div>
+          </Link>
+          {!collapsed && (
+            <button
+              onClick={toggleCollapsed}
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+              className="shrink-0 p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-md transition"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              </svg>
+            </button>
           )}
         </div>
-      </header>
+        {collapsed && (
+          <div className="flex justify-center py-2 border-b border-white/10">
+            <button
+              onClick={toggleCollapsed}
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+              className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-md transition"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <nav className={`flex-1 min-h-0 overflow-y-auto py-3 tiny:py-1.5 space-y-0.5 ${collapsed ? 'px-2' : 'px-3'}`}>
+          {primaryNav.map((item) => (
+            <NavLink
+              key={item.href}
+              href={item.href}
+              label={item.label}
+              collapsed={collapsed}
+              active={isActivePath(pathname, item.href)}
+              badge={item.href === '/dashboard/messages' ? messagesUnread : 0}
+              icon={NAV_ICONS[item.icon]}
+            />
+          ))}
+
+          {moreItems.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                collapsed={collapsed}
+                active={isActivePath(pathname, item.href)}
+                tone={item.href === '/dashboard/admin' ? 'admin' : 'default'}
+                badge={'badge' in item ? item.badge : 0}
+                icon={NAV_ICONS[item.icon]}
+              />
+            ))}
+        </nav>
+
+        {/* User Section */}
+        <div className={`border-t border-white/10 space-y-1.5 ${collapsed ? 'p-2' : 'p-3'}`}>
+          {userName && !collapsed && (
+            <div className="px-2 tiny:hidden">
+              <p className="text-sm font-semibold text-slate-100 truncate">{userName}</p>
+            </div>
+          )}
+          {plan && !fromBrokerage && !collapsed && (
+            <div className="flex items-center justify-between px-3 py-1.5 bg-slate-700/60 border border-slate-600 rounded-lg">
+              {showPlanChip ? (
+                <span className="text-xs text-slate-400">
+                  <span className="text-slate-200 font-semibold capitalize">{chipLabel}</span> plan
+                </span>
+              ) : (
+                <span className="text-xs text-slate-400">Get more with Pro</span>
+              )}
+              <Link href="/dashboard/account" className="text-xs text-blue-400 hover:text-blue-300 font-medium">
+                {showPlanChip ? 'Manage' : 'Upgrade'}
+              </Link>
+            </div>
+          )}
+          {plan && !fromBrokerage && collapsed && (
+            <Link
+              href="/dashboard/account"
+              title={showPlanChip ? `${chipLabel} plan -- Manage` : 'Upgrade'}
+              className="flex items-center justify-center py-2 bg-slate-700/60 border border-slate-600 rounded-lg text-xs text-slate-200 font-semibold uppercase"
+            >
+              {showPlanChip ? chipLabel.charAt(0) : '↑'}
+            </Link>
+          )}
+          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={16} />
+          <button
+            onClick={() => setTutorialMenuOpen(true)}
+            title="Open a quick tutorial"
+            className={`w-full flex items-center justify-center text-slate-400 hover:bg-white/5 hover:text-slate-200 rounded-lg transition text-sm py-1.5 ${
+              collapsed ? 'px-0' : 'px-4'
+            }`}
+          >
+            {collapsed ? '?' : 'Tutorial'}
+          </button>
+          <button
+            onClick={handleLogout}
+            title={collapsed ? 'Logout' : undefined}
+            className={`w-full flex items-center justify-center text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition text-sm py-1.5 ${
+              collapsed ? 'px-0' : 'px-4'
+            }`}
+          >
+            Logout
+          </button>
+        </div>
+      </div>
 
       {/* Main Content */}
       <div className="flex-1 min-w-0 overflow-auto">

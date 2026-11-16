@@ -13,7 +13,7 @@ export default function LegalPage({
 }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-      <header className="border-b border-slate-700">
+      <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-900/90 backdrop-blur">
         <div className="max-w-3xl mx-auto px-4 md:px-6 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
             <span className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1">

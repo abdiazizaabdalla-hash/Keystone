@@ -2,6 +2,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&display=swap');
 @import "tailwindcss";
 
+/* The whole app is a little denser than the browser default: every rem-based size (text, spacing, widths) is 12.5% smaller, so more fits on a screen at 100% zoom. */
+html {
+  font-size: 87.5%;
+}
+
 :root {
   --background: #0c1636;
   --foreground: #e8eefb;

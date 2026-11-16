@@ -35,6 +35,7 @@ export const BROKERAGE_TIERS = {
       'Automations that watch the whole office: stalled files, closing deadlines, missing documents, new-agent welcome and a daily digest',
       'Team board and private messages',
       'Commission statements: confirm, accept, mark paid',
+      'Pay agents their commissions through Relay with your connected Stripe account',
       'Agent-by-month production export',
       'Reports tab: trends and comparisons across agents and time, configurable deal-level reports, and scheduled team activity workbooks',
       'Custom workflow builder with a template library, run history and active-workflow stats',
@@ -52,9 +53,6 @@ export const BROKERAGE_TIERS = {
       'Up to 25 agents included',
       'Several required-document lists, by deal type',
       'Scoped roles for administrators (up to five extra)',
-    ],
-    rollingOut: [
-      'Pay commissions through Relay with your connected Stripe account',
     ],
   },
   extraAgent: '$6',

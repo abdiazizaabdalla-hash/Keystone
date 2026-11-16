@@ -44,7 +44,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-900">
       {/* Nav */}
-      <header className="border-b border-slate-700">
+      <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-900/90 backdrop-blur">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <PublicMobileMenu />

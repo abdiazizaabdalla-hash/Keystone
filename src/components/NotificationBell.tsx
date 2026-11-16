@@ -190,7 +190,7 @@ export default function NotificationBell({
   const panelClass =
     variant === 'sidebar'
       ? 'fixed bottom-4 z-[60] w-[22rem] max-w-[calc(100vw-2rem)]'
-      : 'fixed left-2 right-2 top-14 md:left-auto md:right-4 md:w-[24rem] z-[60]';
+      : 'fixed left-2 right-2 top-14 z-[60]';
 
   return (
     <div ref={rootRef} className={variant === 'sidebar' ? 'w-full' : 'relative'}>

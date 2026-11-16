@@ -32,7 +32,6 @@ const FAQ: { q: string; a: string }[] = [
 
 const check = <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>;
 const cross = <svg className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>;
-const soon = <span className="w-1.5 h-1.5 rounded-full bg-slate-500 mt-2 flex-shrink-0" />;
 const eyebrow = 'text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3';
 const h2 = 'font-display text-3xl font-semibold text-slate-100 mb-3';
 
@@ -126,12 +125,9 @@ export default function ForBrokeragesPage() {
             'Commission calculated from your splits, caps and deductions',
             'Commission statements as PDFs, with your brokerage logo',
             'A commission ledger you can export to CSV or QuickBooks bills',
+            'Pay agents their commissions from the statement through Relay, with your connected Stripe account',
           ].map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
         </ul>
-        <div className="mt-6 rounded-xl border border-slate-700 bg-slate-800/60 p-5 max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Next to add</p>
-          <p className="flex items-start gap-2.5 text-sm text-slate-300">{soon}Pay commissions through Relay. Connect your Stripe account and pay agents from the statement, with nothing else needed.</p>
-        </div>
       </section>
 
       <section id="team" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
@@ -193,12 +189,6 @@ export default function ForBrokeragesPage() {
               <p className="mb-1"><span className="text-4xl font-display font-semibold text-slate-100">{t.price}</span><span className="text-slate-400 ml-1">{t.period}</span></p>
               <p className="text-sm text-slate-300 mb-6">Includes {t.agents} agents</p>
               <ul className="space-y-2.5 text-sm text-slate-300">{t.built.map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}</ul>
-              {'rollingOut' in t && (
-                <>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mt-6 mb-2">Rolling out during the pilot</p>
-                  <ul className="space-y-2.5 text-sm text-slate-400">{t.rollingOut.map((l) => <li key={l} className="flex items-start gap-2.5">{soon}{l}</li>)}</ul>
-                </>
-              )}
             </div>
           ))}
         </div>

@@ -797,7 +797,7 @@ function SettingsContent() {
               <>
                 Connect Stripe and Relay handles your payments. Every invoice gets a &quot;Pay Online&quot; link, agents pay by card or bank
                 transfer without creating an account, and the money lands directly in your own Stripe account (Relay never touches the funds).
-                {brokerOwner === true && ' Paying commissions to your agents through Relay is coming next.'}
+                {brokerOwner === true && ' You can also pay your agents their commissions through Relay.'}
                 {paymentPreference === 'manual' && ' You are currently collecting payment yourself; connect Stripe to switch.'}
               </>
             ) : isAgentAcct ? (
