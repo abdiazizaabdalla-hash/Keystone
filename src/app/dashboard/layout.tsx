@@ -129,10 +129,6 @@ function isActivePath(pathname: string | null, href: string) {
   return pathname === href || pathname.startsWith(href + '/');
 }
 
-// Which screen width a top-bar tab appears from. The first four always fit; later ones wait for more room and sit under More until then.
-const tabShow = (i: number) => (i < 4 ? 'flex' : i < 6 ? 'hidden lg:flex' : i < 7 ? 'hidden xl:flex' : 'hidden 2xl:flex');
-const tabHideInMore = (i: number) => (i < 4 ? 'hidden' : i < 6 ? 'lg:hidden' : i < 7 ? 'xl:hidden' : '2xl:hidden');
-
 function TopNavLink({
   href,
   label,
@@ -141,7 +137,7 @@ function TopNavLink({
   tone = 'default',
   badge = 0,
   menu = false,
-  index = 0,
+  compact = false,
 }: {
   href: string;
   label: string;
@@ -151,15 +147,15 @@ function TopNavLink({
   badge?: number;
   /** Inside a dropdown: a full-width row. */
   menu?: boolean;
-  /** Position in the bar, which decides how wide the screen must be for it to show there. */
-  index?: number;
+  /** In the bar when the names do not all fit: icon only (the name is the tooltip). */
+  compact?: boolean;
 }) {
   const body = (
     <>
       <span className={menu ? '' : '[&>svg]:w-4 [&>svg]:h-4'}>{icon}</span>
-      <span className="truncate">{label}</span>
+      <span className={compact && !menu ? 'sr-only' : 'truncate'}>{label}</span>
       {badge > 0 && (
-        <span className={`${menu ? 'ml-auto' : 'ml-1'} min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center`}>
+        <span className={`${menu ? 'ml-auto' : 'ml-0.5'} min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center`}>
           {badge > 99 ? '99+' : badge}
         </span>
       )}
@@ -180,7 +176,7 @@ function TopNavLink({
       data-tour={`nav-${label.toLowerCase()}`}
       title={label}
       aria-current={active ? 'page' : undefined}
-      className={`${tabShow(index)} items-center shrink-0 gap-1.5 px-3 h-full border-b-2 text-[13px] lg:text-sm font-medium whitespace-nowrap transition-colors ${active ? 'border-blue-400 text-white' : 'border-transparent text-slate-400 hover:text-white'}`}
+      className={`relative flex items-center shrink-0 gap-1.5 ${compact ? 'px-3' : 'px-3'} h-full border-b-2 text-[13px] lg:text-sm font-medium whitespace-nowrap transition-colors ${active ? 'border-blue-400 text-white' : tone === 'admin' ? 'border-transparent text-amber-200 hover:text-amber-100' : 'border-transparent text-slate-400 hover:text-white'}`}
     >
       {body}
     </Link>
@@ -220,6 +216,9 @@ export default function DashboardLayout({
   const [moreOpen, setMoreOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const menusRef = useRef<HTMLDivElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
+  // The bar shows icon and name; when that does not fit the screen it falls back to icons alone (names stay as tooltips).
+  const [compactBar, setCompactBar] = useState(false);
   // Phones only: the sidebar is replaced by a top bar with a slide-down menu.
   const [mobileOpen, setMobileOpen] = useState(false);
   // Unread team messages (Team/Brokerage plans) -- shown on the Collaborate link, or on Messages for a broker and for brokerage agents.
@@ -441,19 +440,40 @@ export default function DashboardLayout({
       ]
     : baseNav;
 
-  // Contacts sits in the top bar itself (the tours point at it); the rest of the secondary pages live under More.
-  const contactsItem = { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' };
   const userItems = [
     { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
     { href: '/dashboard/account', label: 'Account', icon: 'account' },
   ];
-  const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
+  // Everything with its own page sits in the bar; only Contacts and Search live under More.
+  const barExtras: { href: string; label: string; icon: string; badge?: number }[] = [
     ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }] : []),
     ...(isFeatureOnClient('templates') && !(isAgentAccount && !hasWorkspace) ? [{ href: '/dashboard/templates', label: 'Templates', icon: 'templates' }] : []),
-    { href: '/dashboard/search', label: 'Search', icon: 'search' },
     ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: collaborateUnread }] : []),
     ...(brokerageAdmin?.delegated ? [{ href: '/dashboard/brokerage-admin', label: 'Brokerage agents', icon: 'collaborate' }] : []),
     ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin', icon: 'admin' }] : []),
+  ];
+  const barItems = [...primaryNav, ...barExtras];
+  const barKey = barItems.map((i) => i.href).join('|');
+  const [measureTick, setMeasureTick] = useState(0);
+  // Whenever the screen size or the set of tabs changes, try the full bar (icon and name) again.
+  useEffect(() => {
+    const again = () => { setCompactBar(false); setMeasureTick((t) => t + 1); };
+    const t = setTimeout(again, 0);
+    window.addEventListener('resize', again);
+    return () => { clearTimeout(t); window.removeEventListener('resize', again); };
+  }, [barKey]);
+  // If the names do not fit, fall back to icons alone.
+  useEffect(() => {
+    if (compactBar) return;
+    const el = navRef.current;
+    if (el && el.scrollWidth > el.clientWidth + 1) {
+      const t = setTimeout(() => setCompactBar(true), 0);
+      return () => clearTimeout(t);
+    }
+  }, [compactBar, measureTick, barKey, messagesUnread, collaborateUnread]);
+  const moreItems: { href: string; label: string; icon: string }[] = [
+    { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
+    { href: '/dashboard/search', label: 'Search', icon: 'search' },
   ];
 
   // Only a paid tier (Pro / Team) is ever named on screen, and never on an agent inside a brokerage.
@@ -560,15 +580,16 @@ export default function DashboardLayout({
           </span>
         </Link>
 
-        <nav className="flex items-stretch gap-1 min-w-0 flex-1 self-stretch" aria-label="Main">
-          {[...primaryNav, contactsItem].map((item, i) => (
+        <nav ref={navRef} className="flex items-stretch gap-1 min-w-0 flex-1 self-stretch overflow-hidden" aria-label="Main">
+          {barItems.map((item) => (
             <TopNavLink
               key={item.href}
-              index={i}
               href={item.href}
               label={item.label}
+              compact={compactBar}
+              tone={item.href === '/dashboard/admin' ? 'admin' : 'default'}
               active={isActivePath(pathname, item.href)}
-              badge={item.href === '/dashboard/messages' ? messagesUnread : 0}
+              badge={item.href === '/dashboard/messages' ? messagesUnread : item.href === '/dashboard/collaborate' ? collaborateUnread : 0}
               icon={NAV_ICONS[item.icon]}
             />
           ))}
@@ -583,16 +604,10 @@ export default function DashboardLayout({
               className={`flex items-center gap-1 px-3 h-14 border-b-2 text-[13px] lg:text-sm font-medium transition-colors ${moreItems.some((i) => isActivePath(pathname, i.href)) ? 'border-blue-400 text-white' : moreOpen ? 'border-transparent text-white' : 'border-transparent text-slate-400 hover:text-white'}`}
             >
               More
-              {collaborateUnread > 0 && <span className="w-2 h-2 rounded-full bg-red-500" aria-hidden="true" />}
               <svg className={`w-3.5 h-3.5 transition ${moreOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
             </button>
             {moreOpen && (
               <div role="menu" className="absolute left-0 top-full mt-1 w-56 bg-slate-900 border border-white/15 rounded-xl shadow-2xl p-1.5 space-y-0.5">
-                {[...primaryNav, contactsItem].map((item, i) => i < 4 ? null : (
-                  <div key={item.href} className={tabHideInMore(i)}>
-                    <TopNavLink href={item.href} label={item.label} menu active={isActivePath(pathname, item.href)} badge={item.href === '/dashboard/messages' ? messagesUnread : 0} icon={NAV_ICONS[item.icon]} />
-                  </div>
-                ))}
                 {moreItems.map((item) => (
                   <TopNavLink
                     key={item.href}
@@ -600,8 +615,6 @@ export default function DashboardLayout({
                     label={item.label}
                     menu
                     active={isActivePath(pathname, item.href)}
-                    tone={item.href === '/dashboard/admin' ? 'admin' : 'default'}
-                    badge={'badge' in item ? item.badge : 0}
                     icon={NAV_ICONS[item.icon]}
                   />
                 ))}
