@@ -1,7 +1,7 @@
 import { supabaseServer } from './supabase';
 import { CLOSED_STAGE, brokerageOwnersForAgent, isOpenListing } from './oversight';
 import { rosterFor, teamOwnerFor } from './oversightRoster';
-import { stepsToAdd, type RequiredStep, type StepKind } from './brokerageRequiredStepsRules';
+import { DEFAULT_REQUIRED_STEPS, stepsToAdd, type RequiredStep, type StepKind } from './brokerageRequiredStepsRules';
 
 export * from './brokerageRequiredStepsRules';
 
@@ -23,8 +23,28 @@ export async function loadRequiredSteps(ownerId: string, kind?: StepKind): Promi
     if (missingTable(error)) return out;
     throw error;
   }
-  for (const r of data ?? []) out[r.kind as StepKind].push({ name: r.name as string, dueDays: r.due_days === null ? null : Number(r.due_days) });
+  const seen = new Set<string>();
+  for (const r of data ?? []) {
+    const key = `${r.kind}|${String(r.name).toLowerCase()}`;
+    if (seen.has(key)) continue; // two first visits at once must not double the list
+    seen.add(key);
+    out[r.kind as StepKind].push({ name: r.name as string, dueDays: r.due_days === null ? null : Number(r.due_days) });
+  }
   return out;
+}
+
+/** The first time an owner opens this, Relay's baseline checklists become their saved default. Does nothing once either list has steps. */
+export async function seedDefaultRequiredSteps(ownerId: string): Promise<boolean> {
+  const have = await loadRequiredSteps(ownerId);
+  if (have.transaction.length || have.listing.length) return false;
+  const rows = (['transaction', 'listing'] as StepKind[]).flatMap((kind) => DEFAULT_REQUIRED_STEPS[kind].map((s, i) => ({ owner_user_id: ownerId, kind, name: s.name, due_days: s.dueDays, position: i })));
+  const { error } = await supabaseServer.from('brokerage_required_steps').insert(rows);
+  if (error) {
+    // Before the database update that allows negative days has run, the listing steps cannot be saved; keep the transaction ones.
+    const { error: again } = await supabaseServer.from('brokerage_required_steps').insert(rows.filter((r) => r.kind === 'transaction'));
+    if (again) return false;
+  }
+  return true;
 }
 
 /** Adds the steps the file lacks. Returns how many were added. */

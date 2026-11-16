@@ -62,12 +62,12 @@ export default function CompliancePage() {
       {tab === 'files' && <BrokerageFileReview part="files" />}
       {tab === 'requirements' && (
         <div className="space-y-8">
-          <BrokerageRequiredSteps canEdit={owner === true || (admin.scopes ?? []).includes('compliance')} />
           <div>
             <h2 className="text-slate-100 font-semibold mb-1">Required documents</h2>
             <p className="text-sm text-slate-400 mb-3 max-w-2xl">The documents every file must hold. The default list applies to all agents; add lists for particular deal types below it.</p>
             <BrokerageFileReview part="requirements" />
           </div>
+          <BrokerageRequiredSteps canEdit={owner === true || (admin.scopes ?? []).includes('compliance')} />
         </div>
       )}
     </div>

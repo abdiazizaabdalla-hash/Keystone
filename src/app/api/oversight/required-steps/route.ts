@@ -6,7 +6,7 @@ import { assertBrokerageManageable } from '@/lib/brokerageAccount';
 import { resolveOversightActor } from '@/lib/brokerageAdminsServer';
 import { ownerKind } from '@/lib/oversightRoster';
 import { oversightError } from '@/lib/oversightServer';
-import { DEFAULT_REQUIRED_STEPS, applyRequiredStepsToOpenFiles, cleanRequiredSteps, isStepKind, loadRequiredSteps } from '@/lib/brokerageRequiredSteps';
+import { DEFAULT_REQUIRED_STEPS, applyRequiredStepsToOpenFiles, cleanRequiredSteps, isStepKind, loadRequiredSteps, seedDefaultRequiredSteps } from '@/lib/brokerageRequiredSteps';
 
 // The required steps for transactions and listings, added to every agent's files (a brokerage) or every coordinator's files (a TC team).
 //   GET                          -> { transaction: [{name, dueDays}], listing: [...] }
@@ -16,13 +16,16 @@ export async function GET(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
     const { owner } = await resolveOversightActor(caller, 'view');
-    // Until the owner saves a list, show Relay's starting checklist so they can edit it and make it the default for everyone.
-    const saved = await loadRequiredSteps(owner.id);
-    const isDefault = { transaction: saved.transaction.length === 0, listing: saved.listing.length === 0 };
+    // The first visit saves Relay's baseline checklists as the default, so the owner starts from them and edits from there.
+    let saved = await loadRequiredSteps(owner.id);
+    if (saved.transaction.length === 0 && saved.listing.length === 0) {
+      await seedDefaultRequiredSteps(owner.id).catch(() => false);
+      saved = await loadRequiredSteps(owner.id);
+    }
+    // Where it could not be saved (the database update has not run), still show the baseline.
     return NextResponse.json({
-      transaction: isDefault.transaction ? DEFAULT_REQUIRED_STEPS.transaction : saved.transaction,
-      listing: isDefault.listing ? DEFAULT_REQUIRED_STEPS.listing : saved.listing,
-      isDefault,
+      transaction: saved.transaction.length ? saved.transaction : DEFAULT_REQUIRED_STEPS.transaction,
+      listing: saved.listing.length ? saved.listing : DEFAULT_REQUIRED_STEPS.listing,
       mode: await ownerKind(owner.id),
     });
   } catch (error) {
