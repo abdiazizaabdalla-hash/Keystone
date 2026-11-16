@@ -101,7 +101,7 @@ export default function MessagePreview({
                     )}
                   </span>
                 )}
-                {!m.body && !m.attachment && <p className="italic opacity-70">Attachment</p>}
+                {!m.body && !m.attachment && <p className="opacity-70">Attachment</p>}
               </div>
               {isSelf && (
                 <span className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0" aria-hidden>

@@ -1162,7 +1162,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                     {!isCollapsed && (
                       <div className="px-4 pb-4 space-y-2">
                         {catDocs.length === 0 ? (
-                          <p className="text-sm text-slate-500 italic">No documents in this category yet.</p>
+                          <p className="text-sm text-slate-500">No documents in this category yet.</p>
                         ) : (
                           catDocs.map((doc) => (
                             <div
@@ -1242,7 +1242,7 @@ export default function AgentTransactionPage({ params }: { params: Promise<{ id:
                 );
               })}
               {docSearch && filteredDocuments.length === 0 && (
-                <p className="text-sm text-slate-500 italic">No documents match &quot;{docSearch}&quot;.</p>
+                <p className="text-sm text-slate-500">No documents match &quot;{docSearch}&quot;.</p>
               )}
             </div>
           </section>

@@ -2638,7 +2638,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           {!isCollapsed && (
             <div className="px-4 pb-4 space-y-2">
               {catDocs.length === 0 ? (
-                <p className="text-sm text-slate-500 italic">No documents in this category yet.</p>
+                <p className="text-sm text-slate-500">No documents in this category yet.</p>
               ) : (
                 catDocs.map((doc) => renderDocRow(doc))
               )}
@@ -2840,7 +2840,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           <div className="space-y-3">
             {renderDocumentCategories()}
             {docSearch && filteredDocuments.length === 0 && (
-              <p className="text-sm text-slate-500 italic">No documents match "{docSearch}".</p>
+              <p className="text-sm text-slate-500">No documents match "{docSearch}".</p>
             )}
           </div>
         </div>
@@ -4016,7 +4016,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
                             ) : email.body_text ? (
                               <p className="text-xs text-slate-300 whitespace-pre-wrap">{email.body_text}</p>
                             ) : (
-                              <p className="text-xs text-slate-500 italic">No readable content in this email.</p>
+                              <p className="text-xs text-slate-500">No readable content in this email.</p>
                             )}
 
                             {attachmentCount > 0 && (
@@ -4590,7 +4590,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
           {externalLinksError && <p className="text-xs text-red-400 mb-3">{externalLinksError}</p>}
 
           {externalLinks.length === 0 ? (
-            <p className="text-sm text-slate-500 italic">No external links yet -- share a document or this deal&apos;s dates without giving anyone a login.</p>
+            <p className="text-sm text-slate-500">No external links yet -- share a document or this deal&apos;s dates without giving anyone a login.</p>
           ) : (
             <div className="space-y-2">
               {externalLinks.map((link) => {

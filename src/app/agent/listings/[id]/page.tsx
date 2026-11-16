@@ -552,7 +552,7 @@ export default function AgentListingPage({ params }: { params: Promise<{ id: str
                   {!folded && (
                     <div className="px-4 pb-4">
                       {inType.length === 0 ? (
-                        <p className="text-sm text-slate-500 italic">Nothing here yet. Upload or drag a file onto this area.</p>
+                        <p className="text-sm text-slate-500">Nothing here yet. Upload or drag a file onto this area.</p>
                       ) : (
                         <ul className="space-y-2">
                           {inType.map((d) => (

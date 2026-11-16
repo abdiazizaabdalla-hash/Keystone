@@ -19,6 +19,17 @@ export const AGENT_PRO = {
   ],
 } as const;
 
+// What an agent gets on each of the two agent plans. The first is the plain workspace (no name, $0 to the agent when their brokerage provides it).
+export const AGENT_COMPARE: { feature: string; regular: boolean; pro: boolean }[] = [
+  { feature: 'Your own deals and listings', regular: true, pro: true },
+  { feature: 'AI reads a contract and creates the deal', regular: true, pro: true },
+  { feature: 'Follow-ups, contacts and invoices', regular: true, pro: true },
+  { feature: 'Your brokerage’s shared templates and Relay’s standard forms', regular: true, pro: true },
+  { feature: 'Your own templates, emails and checklists', regular: false, pro: true },
+  { feature: 'Automations that send reminders and follow-ups', regular: false, pro: true },
+  { feature: 'Keep it if you change brokerages', regular: false, pro: true },
+];
+
 export const BROKERAGE_TIERS = {
   basic: {
     name: 'Brokerage Basic',

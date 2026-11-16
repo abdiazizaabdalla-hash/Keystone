@@ -333,3 +333,36 @@ export function AutomationAudiencesIllustration() {
     </svg>
   );
 }
+
+/** Home hero: one deal in the middle, everyone who works on it around it. Same weight for each role. */
+export function HeroIllustration() {
+  const roles = [
+    { x: 30, y: 30, h: 'Agents', s: 'Their deals and listings' },
+    { x: 410, y: 30, h: 'Coordinators', s: 'Checklists, dates, documents' },
+    { x: 30, y: 300, h: 'Teams', s: 'Shared desk, private files' },
+    { x: 410, y: 300, h: 'Brokerages', s: 'Compliance and commissions' },
+  ];
+  return (
+    <svg viewBox="0 0 640 450" className={frame} role="img" aria-label="Agents, coordinators, coordinator teams and brokerages all work on the same deal in Relay">
+      {roles.map((r) => (
+        <g key={r.h}>
+          <path d={`M${r.x + 100} ${r.y + 60 + (r.y > 100 ? -0 : 0)} L320 225`} className={line} strokeWidth="1.5" strokeDasharray="4 5" />
+          <rect x={r.x} y={r.y} width="200" height="100" rx="16" className={box} strokeWidth="1.5" />
+          <circle cx={r.x + 28} cy={r.y + 34} r="13" className="fill-blue-500/20 stroke-blue-400" />
+          <circle cx={r.x + 28} cy={r.y + 31} r="4" className="fill-blue-300" />
+          <path d={`M${r.x + 20} ${r.y + 42} a8 6 0 0 1 16 0`} className="fill-blue-300" />
+          <text x={r.x + 52} y={r.y + 39} className={t1}>{r.h}</text>
+          <text x={r.x + 18} y={r.y + 72} className={t2}>{r.s}</text>
+        </g>
+      ))}
+      <rect x="200" y="160" width="240" height="130" rx="18" className={hot} strokeWidth="2" />
+      <text x="320" y="192" textAnchor="middle" className="fill-slate-100 text-[15px] font-semibold">123 Main Street</text>
+      <text x="320" y="210" textAnchor="middle" className={t2}>Under contract · closes Dec 12</text>
+      <rect x="226" y="226" width="188" height="8" rx="4" className="fill-slate-700" />
+      <rect x="226" y="226" width="126" height="8" rx="4" className="fill-blue-500" />
+      <text x="226" y="256" className={t2}>Checklist</text>
+      <text x="414" y="256" textAnchor="end" className="fill-blue-300 text-[11px] font-semibold">67%</text>
+      <text x="320" y="278" textAnchor="middle" className={t2}>Dates · Documents · Messages · Invoice</text>
+    </svg>
+  );
+}

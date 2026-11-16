@@ -3,12 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { PUBLIC_PLANS } from '@/lib/plans';
 import { decodeStoredRole } from '@/lib/authClient';
 import DemoRequestButton from '@/components/DemoRequestButton';
-import HomeVideo from '@/components/HomeVideo';
 import PublicMobileMenu from '@/components/PublicMobileMenu';
-import { DealFlowIllustration, PortalIllustration, TeamIllustration, AgentPathsIllustration, BrokerageDashboardIllustration, AutomationFlowIllustration, PayFlowIllustration, TemplateSharingIllustration, AutomationAudiencesIllustration } from '@/components/marketing/Illustrations';
+import { HeroIllustration, DealFlowIllustration, PortalIllustration, TeamIllustration, AgentPathsIllustration, BrokerageDashboardIllustration, AutomationFlowIllustration, PayFlowIllustration, TemplateSharingIllustration, AutomationAudiencesIllustration } from '@/components/marketing/Illustrations';
 
 export default function Home() {
   const router = useRouter();
@@ -93,11 +91,11 @@ export default function Home() {
             Contract to closing
           </div>
           <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight text-slate-100 leading-[1.1] mb-6">
-            Transaction coordination,<br />
-            <span className="text-blue-400">without the coordination headache.</span>
+            One deal. Everyone on it.<br />
+            <span className="text-blue-400">One workspace.</span>
           </h1>
           <p className="text-lg text-slate-400 mb-8 max-w-lg">
-            One place for every deal, for the coordinators who run them, the agents who close them and the brokerages that oversee them.
+            Relay puts agents, coordinators, coordinator teams and brokerages on the same file, from contract to closing, each with the view and tools they need.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <Link
@@ -107,7 +105,7 @@ export default function Home() {
               Get started
             </Link>
             <a
-              href="#demo"
+              href="#how-it-works"
               className="px-6 py-3 border border-slate-700 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition"
             >
               Explore Relay
@@ -115,75 +113,26 @@ export default function Home() {
           </div>
           <p className="text-xs text-slate-500 mt-4">
             Free for 14 days. No credit card required.{' '}
-            <a href="#demo" className="text-blue-400 hover:text-blue-300">Watch the video</a>
+            <a href="#who" className="text-blue-400 hover:text-blue-300">See who it is for</a>
           </p>
         </div>
 
-        {/* Mock product preview */}
         <div className="relative">
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 border border-slate-700 rounded-xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <span className="inline-block px-2.5 py-1 bg-blue-500/20 border border-blue-500/50 text-blue-300 text-xs font-semibold rounded-full">
-                  Under Contract
-                </span>
-                <h3 className="text-xl font-semibold text-slate-100 mt-3">123 Main Street</h3>
-                <p className="text-sm text-slate-500">FL-2026-00412</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-slate-500 uppercase tracking-wide">Price</p>
-                <p className="text-lg font-semibold text-blue-400">$415,000</p>
-              </div>
-            </div>
-            <div className="mb-5">
-              <div className="flex justify-between text-xs text-slate-500 mb-1.5">
-                <span>Checklist progress</span>
-                <span className="text-blue-400 font-semibold">67%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-                <div className="h-full w-2/3 bg-blue-500" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              {[
-                { name: 'Contract & File Setup', done: true, files: 1 },
-                { name: 'Earnest Money & Option', done: true, files: 2 },
-                { name: 'Inspection & Repairs', done: true, files: 3 },
-                { name: 'Title, Appraisal & Financing', done: false, files: 1 },
-              ].map((task) => (
-                <div key={task.name} className="flex items-center gap-3 px-3 py-2 bg-slate-900/60 border border-slate-700/80 rounded-lg text-sm">
-                  <span
-                    className={`w-4 h-4 rounded-sm border flex items-center justify-center flex-shrink-0 ${
-                      task.done ? 'bg-blue-500 border-blue-500' : 'border-slate-600'
-                    }`}
-                  >
-                    {task.done && (
-                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </span>
-                  <span className={`flex-1 ${task.done ? 'text-slate-400 line-through' : 'text-slate-200'}`}>{task.name}</span>
-                  <span className="text-xs text-blue-400 text-right flex-shrink-0 w-16">
-                    📄 {task.files} {task.files === 1 ? 'file' : 'files'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <HeroIllustration />
           <div className="absolute -z-10 -top-8 -right-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl" />
         </div>
       </section>
 
-      {/* Product video: click to play, nothing loads until then */}
+      {/* Four audiences, equal weight */}
       <section className="max-w-6xl mx-auto px-6 pb-16">
-        <div className="grid md:grid-cols-3 gap-5">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
-            { href: '/for-tcs', who: 'TCs', line: 'Run every file from contract to closing. Teams welcome.', price: 'From $19 a month' },
-            { href: '/for-agents', who: 'Agents', line: 'Your own workspace for your deals, from your brokerage or on your own.', price: '$0 with your brokerage, or $19' },
+            { href: '/for-agents', who: 'Agents', line: 'Your own workspace for your deals, from your brokerage or on your own.', price: 'Free with your brokerage, or $19 a month' },
+            { href: '/for-tcs', who: 'Coordinators', line: 'Run every file from contract to closing, with agents following along.', price: 'From $19 a month' },
+            { href: '/for-tcs#teams', who: 'TC teams', line: 'A shared desk and checklist for the team, with each file kept private.', price: '$89 a month for three seats' },
             { href: '/for-brokerages', who: 'Brokerages', line: 'See every agent and every file, with required documents checked.', price: 'From $99 a month' },
           ].map((c) => (
-            <Link key={c.href} href={c.href} className="block bg-slate-800/60 border border-slate-700 hover:border-blue-400/60 rounded-xl p-6 transition">
+            <Link key={c.who} href={c.href} className="block bg-slate-800/60 border border-slate-700 hover:border-blue-400/60 rounded-xl p-6 transition">
               <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-2">For</p>
               <h2 className="font-display text-2xl font-semibold text-slate-100 mb-2">{c.who}</h2>
               <p className="text-sm text-slate-400 mb-4">{c.line}</p>
@@ -193,16 +142,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="demo" className="max-w-4xl mx-auto px-6 pb-16 scroll-mt-4">
-        <div className="text-center mb-8">
-          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">See it in a minute</p>
-          <h2 className="font-display text-3xl font-semibold text-slate-100">Every closing has moving parts. Relay brings them together.</h2>
-        </div>
-        <HomeVideo />
-      </section>
-
       {/* Snapshot: one deal, start to finish */}
-      <section id="how-it-works" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+      <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">How it works</p>
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">One deal, from contract to closing.</h2>
         <p className="text-slate-400 mb-8 max-w-2xl">Upload the contract and Relay builds the deal. From there the dates, checklist, documents, messages and invoice all live on one page.</p>
@@ -224,7 +165,7 @@ export default function Home() {
       </section>
 
       {/* Snapshot: who it is for */}
-      <section id="who" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+      <section id="who" className="max-w-7xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Who it is for</p>
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">The same deal, seen from each seat.</h2>
         <p className="text-slate-400 mb-10 max-w-2xl">Relay works the same way for everyone on the file. What changes is what you see and what you can do.</p>
@@ -232,14 +173,25 @@ export default function Home() {
         <div className="space-y-14">
           {[
             {
+              id: 'agents',
+              label: 'Agents',
+              title: 'Your own deals, your own workspace.',
+              body: 'Get a workspace from your brokerage at no cost to you, or subscribe to Agent Pro on your own.',
+              bullets: ['Run your own deals and listings', 'Read a contract and fill in the deal', 'Your TC’s updates and documents in one place', 'Templates and automations on Agent Pro'],
+              href: '/for-agents',
+              cta: 'See Relay for agents',
+              art: <AgentPathsIllustration />,
+            },
+            {
               id: 'tcs',
-              label: 'Transaction coordinators',
+              label: 'Coordinators',
               title: 'Run every file from one workspace.',
               body: 'Contracts, dates, checklists, documents, invoices and your agents’ logins, without the spreadsheet.',
               bullets: ['AI contract intake, listings and transactions', 'Your own checklist templates and automated reminders', 'Invoices with online payment and QuickBooks files', 'Agent portal with the deals you choose to share'],
               href: '/for-tcs',
               cta: 'See Relay for TCs',
               art: <PortalIllustration />,
+              reverse: true,
             },
             {
               id: 'teams',
@@ -250,17 +202,6 @@ export default function Home() {
               href: '/for-tcs#teams',
               cta: 'See team features',
               art: <TeamIllustration />,
-              reverse: true,
-            },
-            {
-              id: 'agents',
-              label: 'Agents',
-              title: 'Your own deals, your own workspace.',
-              body: 'Get a workspace from your brokerage at no cost to you, or subscribe to Agent Pro on your own.',
-              bullets: ['Run your own deals and listings', 'Read a contract and fill in the deal', 'Your TC’s updates and documents in one place', 'Templates and automations on Agent Pro'],
-              href: '/for-agents',
-              cta: 'See Relay for agents',
-              art: <AgentPathsIllustration />,
             },
             {
               id: 'brokerages',
@@ -274,7 +215,7 @@ export default function Home() {
               reverse: true,
             },
           ].map((a) => (
-            <div key={a.id} id={a.id} className="grid lg:grid-cols-2 gap-8 items-center scroll-mt-4">
+            <div key={a.id} id={a.id} className={`grid ${a.reverse ? 'lg:grid-cols-[3fr_2fr]' : 'lg:grid-cols-[2fr_3fr]'} gap-10 items-center scroll-mt-4`}>
               <div className={a.reverse ? 'lg:order-2' : ''}>
                 <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">{a.label}</p>
                 <h3 className="font-display text-2xl font-semibold text-slate-100 mb-3">{a.title}</h3>
@@ -296,11 +237,11 @@ export default function Home() {
       </section>
 
       {/* Snapshot: workflows that run themselves */}
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
+      <section className="max-w-7xl mx-auto px-6 py-16 border-t border-slate-700">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Workflow</p>
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Reminders, templates and payments that run themselves.</h2>
         <p className="text-slate-400 mb-8 max-w-2xl">Set it up once. Relay sends the reminders, shares the templates and keeps the money with the deal.</p>
-        <div className="grid md:grid-cols-2 gap-5">
+        <div className="grid gap-8">
           <div>
             <p className="text-sm text-slate-400 mb-3">Automations: a reminder that sends itself.</p>
             <AutomationFlowIllustration />
@@ -344,29 +285,30 @@ export default function Home() {
 
       {/* Pricing teaser */}
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
-        <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
+        <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
           <div>
-            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple plans for every seat.</h2>
-            <p className="text-slate-400">Try Relay free and see how it fits into your workflow. Upgrade when you need more agents, automations or team features.</p>
+            <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Simple pricing for every seat.</h2>
+            <p className="text-slate-400">Try Relay free and see how it fits. Pick the row that describes you.</p>
           </div>
           <Link href="/pricing" className="text-blue-400 hover:text-blue-300 font-medium text-sm">
             Full pricing details →
           </Link>
         </div>
-        <div className="grid sm:grid-cols-3 gap-6">
-          {PUBLIC_PLANS.map((plan) => (
-            <div key={plan.id} className={`p-6 rounded-xl border flex flex-col ${plan.popular ? 'border-blue-500/60 bg-blue-500/5' : 'border-slate-700 bg-slate-800/60'}`}>
-              {plan.popular && <p className="text-xs font-semibold text-blue-400 uppercase tracking-wide mb-2">Most popular</p>}
-              <h3 className="font-semibold text-slate-100">{plan.name}</h3>
-              <p className="text-2xl font-display font-semibold text-slate-100 mt-1">
-                {plan.price}
-                <span className="text-sm font-sans font-normal text-slate-400">{plan.period}</span>
-              </p>
-              <p className="text-sm text-slate-400 mt-3">{plan.description}</p>
-            </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { who: 'Agents', price: '$0', note: 'with your brokerage', extra: 'Or Agent Pro at $19 a month', href: '/pricing#agents' },
+            { who: 'Coordinators', price: '$19', note: 'a month, to start', extra: 'Pro adds automations and templates', href: '/pricing#coordinators' },
+            { who: 'TC teams', price: '$89', note: 'a month, three seats', extra: '$30 a month for each extra seat', href: '/pricing#coordinators' },
+            { who: 'Brokerages', price: '$99', note: 'a month, 10 agents', extra: 'Pro is $199 a month for 25 agents', href: '/pricing#brokerages' },
+          ].map((p) => (
+            <Link key={p.who} href={p.href} className="p-6 rounded-xl border border-slate-700 bg-slate-800/60 hover:border-blue-400/60 transition flex flex-col">
+              <h3 className="font-semibold text-slate-100">{p.who}</h3>
+              <p className="text-3xl font-display font-semibold text-slate-100 mt-2">{p.price}</p>
+              <p className="text-sm text-slate-400">{p.note}</p>
+              <p className="text-sm text-slate-300 mt-4">{p.extra}</p>
+            </Link>
           ))}
         </div>
-        <p className="text-xs text-slate-500 mt-6">Agent and brokerage plans are on the <Link href="/pricing" className="text-blue-400 hover:text-blue-300">pricing page</Link>.</p>
       </section>
 
       {/* CTA */}

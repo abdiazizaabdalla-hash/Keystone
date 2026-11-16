@@ -2155,7 +2155,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
                           </div>
                         </li>
                       ))}
-                      {inType.length === 0 && <li className="text-sm text-slate-500 italic">Nothing here yet. Upload or drag a file onto this area.</li>}
+                      {inType.length === 0 && <li className="text-sm text-slate-500">Nothing here yet. Upload or drag a file onto this area.</li>}
                     </ul>
                     </div>
                     )}

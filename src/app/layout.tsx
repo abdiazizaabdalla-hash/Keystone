@@ -4,8 +4,8 @@ import SiteAnalytics from '@/components/SiteAnalytics';
 import GlobalFileDrop from '@/components/GlobalFileDrop';
 
 export const metadata: Metadata = {
-  title: 'Relay TC - Transaction coordination software for TCs',
-  description: 'Manage every real estate transaction from contract to closing: contract intake, checklists, documents, e-signature, invoicing and client portals for transaction coordinators.',
+  title: 'Relay TC - Transaction workspace for agents, coordinators and brokerages',
+  description: 'Manage every real estate transaction from contract to closing: contract intake, checklists, documents, e-signature, invoicing and client portals for agents, coordinators, teams and brokerages.',
 };
 
 export default function RootLayout({

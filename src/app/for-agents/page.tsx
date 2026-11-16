@@ -22,7 +22,7 @@ export default function ForAgentsPage() {
       <section className="max-w-4xl mx-auto px-6 pt-20 pb-12 text-center">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">For agents</p>
         <h1 className="font-display text-4xl sm:text-5xl font-semibold text-slate-100 mb-5">
-          Your deals and listings, <span className="italic text-blue-400">in one workspace.</span>
+          Your deals and listings, <span className="text-blue-400">in one workspace.</span>
         </h1>
         <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">
           Run your own transactions and listings in one workspace. Your brokerage can provide Relay for you, or you can start with Agent Pro on your own.
@@ -33,9 +33,9 @@ export default function ForAgentsPage() {
         </div>
       </section>
 
-      <section className="max-w-5xl mx-auto px-6 pb-16"><AgentPathsIllustration /></section>
+      <section className="max-w-7xl mx-auto px-6 pb-16"><AgentPathsIllustration /></section>
 
-      <section className="max-w-5xl mx-auto px-6 pb-16">
+      <section className="max-w-7xl mx-auto px-6 pb-16">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Templates and automations</h2>
         <p className="text-slate-400 max-w-3xl mb-8">Use your brokerage’s shared templates and Relay’s standard forms on any plan. Agent Pro adds your own templates and automations that send reminders and follow-ups for you.</p>
         <div className="space-y-6">
@@ -45,19 +45,19 @@ export default function ForAgentsPage() {
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Two ways to get Relay</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">You have one or the other, never both bills. If your brokerage provides it, it costs you nothing. If not, Agent Pro is {AGENT_PRO.price} a month.</p>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-3">Two plans for agents</h2>
+        <p className="text-slate-400 mb-8 max-w-2xl">The regular workspace is $0 to you when your brokerage provides Relay. Agent Pro is {AGENT_PRO.price} a month on your own. You are never billed for both.</p>
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-7">
-            <span className="inline-block text-xs font-semibold text-emerald-300 bg-emerald-500/10 border border-emerald-400/40 rounded-full px-2.5 py-0.5 mb-3">No cost to you</span>
-            <h3 className="font-display text-xl font-semibold text-slate-100 mb-1">Provided by your brokerage</h3>
-            <p className="text-sm text-slate-400 mb-5">Your brokerage invites you and covers it. Your broker can see your deals, so there is no separate reporting.</p>
+            
+            <p className="text-3xl font-display font-semibold text-slate-100 mb-1">$0 <span className="text-base font-sans font-normal text-slate-400">to you</span></p>
+            <p className="text-sm text-slate-400 mb-5">When your brokerage provides Relay. They invite you and cover it. </p>
             <ul className="space-y-2.5 text-sm text-slate-300">{AGENT_PRO.includedByBrokerage.map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}</ul>
           </div>
           <div className="bg-slate-800/60 border border-blue-500/40 ring-2 ring-blue-500/10 rounded-2xl p-7">
-            <span className="inline-block text-xs font-semibold text-blue-200 bg-blue-500/15 border border-blue-400/40 rounded-full px-2.5 py-0.5 mb-3">{AGENT_PRO.price}{AGENT_PRO.period}</span>
+            <p className="text-3xl font-display font-semibold text-slate-100 mb-1">{AGENT_PRO.price} <span className="text-base font-sans font-normal text-slate-400">{AGENT_PRO.period}</span></p>
             <h3 className="font-display text-xl font-semibold text-slate-100 mb-1">Agent Pro</h3>
-            <p className="text-sm text-slate-400 mb-5">Everything above, on your own subscription, plus the tools that save you the most time.</p>
+            <p className="text-sm text-slate-400 mb-5">Everything in the regular workspace, on your own subscription, plus the tools that save you the most time.</p>
             <ul className="space-y-2.5 text-sm text-slate-300">
               <li className="flex items-start gap-2.5">{check}Everything in the brokerage-provided workspace</li>
               {AGENT_PRO.proAdds.map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}

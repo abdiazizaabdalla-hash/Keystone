@@ -54,7 +54,7 @@ export default function ForTcsPage() {
         <p className="text-xs text-slate-500 mt-5">Free for 14 days. No credit card required.</p>
       </section>
 
-      <section className="max-w-5xl mx-auto px-6 pb-16"><DealFlowIllustration /></section>
+      <section className="max-w-7xl mx-auto px-6 pb-16"><DealFlowIllustration /></section>
 
       <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -85,7 +85,7 @@ export default function ForTcsPage() {
         </div>
       </section>
 
-      <section className="max-w-5xl mx-auto px-6 pb-16 -mt-4">
+      <section className="max-w-7xl mx-auto px-6 pb-16 -mt-4">
         <div className="space-y-6">
           <TemplateSharingIllustration />
           <AutomationAudiencesIllustration />
