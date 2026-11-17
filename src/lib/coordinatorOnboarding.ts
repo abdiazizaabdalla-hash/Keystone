@@ -78,6 +78,7 @@ export async function addInvitingAgentForCoordinator(params: {
         brokerage,
         flat_fee: num(coordinator.user_metadata?.default_flat_fee, 400),
         commission_percent: num(coordinator.user_metadata?.default_percent_fee, 0),
+        ...(typeof coordinator.user_metadata?.default_listing_fee === 'number' ? { listing_fee: coordinator.user_metadata.default_listing_fee } : {}),
       })
       .select('id, name')
       .single();
@@ -115,7 +116,7 @@ export async function addInvitingAgentForListing(params: { coordinator: Person; 
     }
     const { data: created, error } = await supabaseServer
       .from('agents')
-      .insert({ tc_user_id: coordinator.id, name: agentName, email: agentEmail, phone, flat_fee: num(coordinator.user_metadata?.default_flat_fee, 400), commission_percent: num(coordinator.user_metadata?.default_percent_fee, 0) })
+      .insert({ tc_user_id: coordinator.id, name: agentName, email: agentEmail, phone, flat_fee: num(coordinator.user_metadata?.default_flat_fee, 400), commission_percent: num(coordinator.user_metadata?.default_percent_fee, 0), ...(typeof coordinator.user_metadata?.default_listing_fee === 'number' ? { listing_fee: coordinator.user_metadata.default_listing_fee } : {}) })
       .select('id, name')
       .single();
     if (error || !created) throw error || new Error('no row');

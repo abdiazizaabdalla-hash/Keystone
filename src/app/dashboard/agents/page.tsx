@@ -58,7 +58,7 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
-  const [defaultFees, setDefaultFees] = useState({ flatFee: '400', percentFee: '0' });
+  const [defaultFees, setDefaultFees] = useState({ flatFee: '400', percentFee: '0', listingFee: '' });
   // The brokerage's own agent directory (see /api/team/agents) -- lets a
   // TC on a Team/Brokerage plan link a new contact to an existing real
   // person instead of re-typing their info from scratch, so the
@@ -156,10 +156,11 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
       const data = await response.json();
       const flatFee = String(data.defaultFlatFee ?? 400);
       const percentFee = String(data.defaultPercentFee ?? 0);
-      setDefaultFees({ flatFee, percentFee });
+      const listingFee = typeof data.defaultListingFee === 'number' ? String(data.defaultListingFee) : '';
+      setDefaultFees({ flatFee, percentFee, listingFee });
       // Only overwrite the still-untouched "Add Agent" defaults, never a form in progress.
       setFormData((prev) =>
-        prev.id || prev.name ? prev : { ...prev, flatFee, percentFee }
+        prev.id || prev.name ? prev : { ...prev, flatFee, percentFee, listingFee }
       );
     } catch {
       // Non-critical — keep the built-in defaults ($400 flat, 0%) if this fails.
@@ -192,7 +193,7 @@ function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?:
       phone: '',
       flatFee: defaultFees.flatFee,
       percentFee: defaultFees.percentFee,
-      listingFee: '',
+      listingFee: defaultFees.listingFee,
     });
     setPriceRows([]);
     setSelectedDirectoryId('');

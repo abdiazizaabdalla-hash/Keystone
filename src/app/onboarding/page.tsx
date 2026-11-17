@@ -163,6 +163,7 @@ function OnboardingContent() {
   const [orgName, setOrgName] = useState('');
   const [orgIsBrokerage, setOrgIsBrokerage] = useState(false);
   const [defaultFlatFee, setDefaultFlatFee] = useState('400');
+  const [defaultListingFee, setDefaultListingFee] = useState('');
   const [defaultPercentFee, setDefaultPercentFee] = useState('0');
   const [invoiceDueDays, setInvoiceDueDays] = useState('30');
   const [isSavingStep, setIsSavingStep] = useState(false);
@@ -250,6 +251,7 @@ function OnboardingContent() {
       }
       setFullName(data.fullName ?? '');
       setDefaultFlatFee(String(data.defaultFlatFee ?? 400));
+      setDefaultListingFee(typeof data.defaultListingFee === 'number' ? String(data.defaultListingFee) : '');
       setDefaultPercentFee(String(data.defaultPercentFee ?? 0));
       setInvoiceDueDays(String(data.invoiceDueDays ?? 30));
       setDueDateWorkflowEnabled(data.dueDateWorkflowEnabled === true);
@@ -479,7 +481,12 @@ function OnboardingContent() {
       setStepError('Enter a number of days between 1 and 365.');
       return;
     }
-    savePatch({ defaultFlatFee: flat || 0, defaultPercentFee: 0, invoiceDueDays: days }, 4);
+    const listing = parseFloat(defaultListingFee);
+    if (defaultListingFee.trim() !== '' && (Number.isNaN(listing) || listing < 0)) {
+      setStepError('Listing fee must be 0 or more.');
+      return;
+    }
+    savePatch({ defaultFlatFee: flat || 0, defaultListingFee: defaultListingFee.trim() === '' ? null : listing, defaultPercentFee: 0, invoiceDueDays: days }, 4);
   };
 
   const handleSaveDueDateWorkflow = () => savePatch({ dueDateWorkflowEnabled, dueDateWorkflowSteps }, 5);
@@ -806,8 +813,22 @@ function OnboardingContent() {
                   className={inputClass}
                 />
               </div>
+              <div>
+                <label htmlFor="ob-listing" className="text-sm text-slate-400 block mb-2">
+                  Listing fee <span className="text-slate-500">(optional)</span>
+                </label>
+                <MoneyInput
+                  id="ob-listing"
+                  value={defaultListingFee}
+                  onValueChange={setDefaultListingFee}
+                  placeholder="250"
+                  aria-label="Default listing fee"
+                  className={inputClass}
+                />
+                <p className="text-xs text-slate-500 mt-2">What you charge when you coordinate a listing. Leave it blank if you do not charge one.</p>
+              </div>
             </div>
-            <p className="text-xs text-slate-500 mt-2">You can add a listing fee and other charges for each agent later.</p>
+            <p className="text-xs text-slate-500 mt-2">You can add other charges for each agent later.</p>
 
             <div className="border-t border-white/10 mt-6 pt-6">
               <label htmlFor="ob-due" className="text-sm text-slate-400 block mb-2">

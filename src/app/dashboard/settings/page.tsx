@@ -26,6 +26,7 @@ function SettingsContent() {
   const [message, setMessage] = useState('');
   const [fullName, setFullName] = useState('');
   const [defaultFlatFee, setDefaultFlatFee] = useState('400');
+  const [defaultListingFee, setDefaultListingFee] = useState('');
   const [invoiceDueDays, setInvoiceDueDays] = useState('30');
 
   // Due-date workflow: whether new transactions get auto-calculated
@@ -346,6 +347,7 @@ function SettingsContent() {
       const data = await response.json();
       setFullName(data.fullName ?? '');
       setDefaultFlatFee(String(data.defaultFlatFee ?? 400));
+      setDefaultListingFee(typeof data.defaultListingFee === 'number' ? String(data.defaultListingFee) : '');
       setInvoiceDueDays(String(data.invoiceDueDays ?? 30));
       setDueDateWorkflowEnabled(data.dueDateWorkflowEnabled === true);
       if (Array.isArray(data.dueDateWorkflowSteps)) {
@@ -416,6 +418,7 @@ function SettingsContent() {
         body: JSON.stringify({
           fullName,
           defaultFlatFee: parseFloat(defaultFlatFee) || 0,
+          defaultListingFee: defaultListingFee.trim() === '' ? null : parseFloat(defaultListingFee) || 0,
           defaultPercentFee: 0,
           invoiceDueDays: parseInt(invoiceDueDays, 10) || 30,
         }),
@@ -426,6 +429,7 @@ function SettingsContent() {
 
       setFullName(data.fullName ?? '');
       setDefaultFlatFee(String(data.defaultFlatFee));
+      setDefaultListingFee(typeof data.defaultListingFee === 'number' ? String(data.defaultListingFee) : '');
       setInvoiceDueDays(String(data.invoiceDueDays));
       setMessage('Settings saved.');
     } catch (error) {
@@ -516,6 +520,16 @@ function SettingsContent() {
                 onValueChange={setDefaultFlatFee}
                 placeholder="400"
                 aria-label="Default flat fee per deal"
+                className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-400 block mb-2">Default listing fee (optional)</label>
+              <MoneyInput
+                value={defaultListingFee}
+                onValueChange={setDefaultListingFee}
+                placeholder="250"
+                aria-label="Default listing fee"
                 className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>

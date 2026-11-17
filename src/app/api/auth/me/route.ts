@@ -46,6 +46,8 @@ function shapeUser(user: {
     coordinationMode: getCoordinationMode(meta),
     defaultFlatFee:
       typeof meta.default_flat_fee === 'number' ? meta.default_flat_fee : DEFAULT_FLAT_FEE,
+    // The listing fee that pre-fills each new agent; null when the coordinator has not set one.
+    defaultListingFee: typeof meta.default_listing_fee === 'number' ? meta.default_listing_fee : null,
     defaultPercentFee:
       typeof meta.default_percent_fee === 'number' ? meta.default_percent_fee : DEFAULT_PERCENT_FEE,
     invoiceDueDays:
@@ -231,6 +233,7 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const {
       defaultFlatFee,
+      defaultListingFee,
       defaultPercentFee,
       invoiceDueDays,
       fullName,
@@ -269,6 +272,18 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: 'defaultFlatFee must be a non-negative number' }, { status: 400 });
       }
       changes.default_flat_fee = n;
+    }
+
+    if (defaultListingFee !== undefined) {
+      if (defaultListingFee === null || defaultListingFee === '') {
+        changes.default_listing_fee = null;
+      } else {
+        const n = Number(defaultListingFee);
+        if (Number.isNaN(n) || n < 0 || n > 10_000_000) {
+          return NextResponse.json({ error: 'defaultListingFee must be a non-negative number' }, { status: 400 });
+        }
+        changes.default_listing_fee = Math.round(n * 100) / 100;
+      }
     }
 
     if (defaultPercentFee !== undefined) {
