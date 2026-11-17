@@ -231,6 +231,9 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
   // Has the listing's agent been given a portal login? (the listing only shows in their portal once they can sign in)
   const [portal, setPortal] = useState<{ hasAgent: boolean; agentName: string | null; agentEmail: string | null; shared: boolean; invitedAt: string | null; visibleToAgent?: boolean; lookupError?: string | null; login?: 'none' | 'agent' | 'other' | 'unknown'; workspace?: boolean; listingStatus?: string | null } | null>(null);
   const [invitingPortal, setInvitingPortal] = useState(false);
+  const [fixingEmail, setFixingEmail] = useState(false);
+  const [newAgentEmail, setNewAgentEmail] = useState('');
+  const [savingAgentEmail, setSavingAgentEmail] = useState(false);
   const [portalMsg, setPortalMsg] = useState('');
 
   // Add forms
@@ -447,6 +450,30 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
       if (!handleAuth(err)) setPortalMsg(err instanceof Error ? err.message : 'Could not send the invite');
     } finally {
       setInvitingPortal(false);
+    }
+  };
+
+  // Fixes the agent's email on the agent record from right here, then sends the portal invite to the new address.
+  const saveAgentEmail = async () => {
+    const email = newAgentEmail.trim();
+    if (!data?.agent?.id || !/^\S+@\S+\.\S+$/.test(email)) {
+      setPortalMsg('Enter a valid email address.');
+      return;
+    }
+    setSavingAgentEmail(true);
+    setPortalMsg('');
+    try {
+      await call('PATCH', '/api/agents', { id: data.agent.id, email });
+      setFixingEmail(false);
+      setNewAgentEmail('');
+      await load();
+      await call('POST', `/api/listings/${id}/invite-agent`);
+      setPortalMsg(`Email changed to ${email} and the invite was sent.`);
+      await loadPortal();
+    } catch (err) {
+      if (!handleAuth(err)) setPortalMsg(err instanceof Error ? err.message : 'Could not change the email');
+    } finally {
+      setSavingAgentEmail(false);
     }
   };
 
@@ -667,7 +694,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
     : !portal
       ? { ok: false, text: 'Checking the agent portal…' }
       : !portal.agentEmail
-        ? { ok: false, text: `${data.agent.name} has no email on file, so there is no portal login to show this listing in.`, action: { label: 'Fix on the Agents page', run: () => router.push('/dashboard/agents') } }
+        ? { ok: false, text: `${data.agent.name} has no email on file, so there is no portal login to show this listing in.`, action: { label: 'Add an email', run: () => { setNewAgentEmail(''); setFixingEmail(true); } } }
         : !portal.shared
           ? { ok: false, text: 'Sharing with the agent is off, so the agent cannot see this listing.', action: { label: 'Turn it on in Details', run: () => selectTab('details') } }
           : portal.lookupError
@@ -677,7 +704,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
               : portal.login === 'none'
                 ? { ok: false, text: `${portal.agentEmail} has no Relay login yet, so there is nothing for them to sign in to. Send the portal invite.`, action: { label: invitingPortal ? 'Sending…' : 'Send portal invite', run: () => void invitePortal() } }
                 : portal.login === 'other'
-                  ? { ok: false, text: `${portal.agentEmail} is already a coordinator login, not an agent login, so it cannot open the agent portal. Put a different email on the agent record, then send the invite.`, action: { label: 'Fix on the Agents page', run: () => router.push('/dashboard/agents') } }
+                  ? { ok: false, text: `${portal.agentEmail} is already a coordinator login, not an agent login, so it cannot open the agent portal. Put a different email on the agent record, then send the invite.`, action: { label: 'Change the agent’s email', run: () => { setNewAgentEmail(''); setFixingEmail(true); } } }
                   : portal.visibleToAgent === false
                     ? { ok: false, text: `${portal.agentEmail} has a login, but this listing is not coming back for it. Check that the agent record's email matches the email they sign in with exactly, and that this listing's agent is that record.`, action: { label: 'Check the Agents page', run: () => router.push('/dashboard/agents') } }
                     : portal.login === 'unknown'
@@ -1315,9 +1342,25 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
                 <p className="font-semibold text-slate-100">{portalStatus.ok ? 'Visible to your agent' : 'Not visible to your agent yet'}</p>
                 <p className="text-sm text-slate-400 mt-0.5">{portalStatus.text}</p>
                 {portalMsg && <p className="text-xs text-slate-400 mt-1">{portalMsg}</p>}
+                {fixingEmail && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <input
+                      type="email"
+                      value={newAgentEmail}
+                      onChange={(e) => setNewAgentEmail(e.target.value)}
+                      placeholder="Agent's own email"
+                      aria-label="Agent's email"
+                      className="w-64 max-w-full bg-slate-800/70 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    <button type="button" onClick={saveAgentEmail} disabled={savingAgentEmail} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50">
+                      {savingAgentEmail ? 'Saving…' : 'Save and send invite'}
+                    </button>
+                    <button type="button" onClick={() => setFixingEmail(false)} className="px-3 py-2 text-sm text-slate-400 hover:text-slate-200">Cancel</button>
+                  </div>
+                )}
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
-                {portalStatus.action && (
+                {portalStatus.action && !fixingEmail && (
                   <button
                     type="button"
                     onClick={portalStatus.action.run}

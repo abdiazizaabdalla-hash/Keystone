@@ -182,6 +182,29 @@ export default function TemplatesPage() {
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   const missingStarters = section === 'emails' ? starters.filter((s) => !s.installed) : [];
 
+  // The starter emails and letters are put in your library the first time you open this tab, so nobody has to press a button.
+  // Done once per browser: if you later delete some on purpose they stay deleted (the "Add the starters" button brings them back).
+  useEffect(() => {
+    if (!enabled || section !== 'emails' || basicAgent || starters.length === 0) return;
+    if (starters.some((s) => s.installed)) return;
+    let seen = false;
+    try {
+      seen = localStorage.getItem('relay-starters-auto') === '1';
+      localStorage.setItem('relay-starters-auto', '1');
+    } catch {
+      /* private mode: just try once */
+    }
+    if (seen) return;
+    void (async () => {
+      try {
+        const res = await authFetch('/api/templates/starters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        if (res.ok) reload();
+      } catch {
+        /* the button is still there */
+      }
+    })();
+  }, [enabled, section, basicAgent, starters, reload]);
+
   const installStarters = async () => {
     if (basicAgent) {
       setNotice('Saving your own templates and emails is part of Agent Pro. You can use your brokerage’s templates and Relay’s standard forms from any deal.');
