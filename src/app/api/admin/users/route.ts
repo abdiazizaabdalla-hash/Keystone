@@ -200,6 +200,12 @@ export async function GET(request: NextRequest) {
       console.error('admin users: activity failed:', err);
       return new Map<string, { lastActiveAt: string | null; lastActiveWhat: string | null }>();
     });
+    // Brokerage accounts (Brokerage / Brokerage Pro), by owner. A missing table just means none.
+    const brokerageByOwner = new Map<string, { tier: string; status: string }>();
+    {
+      const { data: bRows } = await supabaseServer.from('brokerage_accounts').select('owner_user_id, tier, status').limit(2000);
+      for (const b of bRows ?? []) brokerageByOwner.set(b.owner_user_id as string, { tier: b.tier as string, status: b.status as string });
+    }
     const users = tcAuthUsers.map((u) => {
       const stats = statsByTcUser.get(u.id);
       const plan = (getUserPlan(u) as string | undefined) || DEFAULT_PLAN;
@@ -216,6 +222,8 @@ export async function GET(request: NextRequest) {
         email: u.email,
         is_admin: isPlatformAdmin(u),
         plan,
+        brokerage_tier: brokerageByOwner.get(u.id)?.tier ?? null,
+        brokerage_status: brokerageByOwner.get(u.id)?.status ?? null,
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at || null,
         last_active_at: activity.get(u.id)?.lastActiveAt || u.last_sign_in_at || null,

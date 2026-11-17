@@ -31,6 +31,9 @@ interface TCUser {
   email: string;
   is_admin: boolean;
   plan?: string;
+  /** Set when this owner has a brokerage account: 'basic' (Brokerage) or 'pro' (Brokerage Pro). */
+  brokerage_tier?: 'basic' | 'pro' | null;
+  brokerage_status?: string | null;
   created_at: string;
   last_sign_in_at?: string | null;
   last_active_at?: string | null;
@@ -235,7 +238,38 @@ export default function AdminPage() {
     await saveCompEnd(user, compEndsAt);
   };
 
+  // Brokerage and Brokerage Pro are plans of their own here. They are recorded by hand (nothing is charged), per brokerage account.
+  const handleBrokerageChange = async (user: TCUser, tier: 'basic' | 'pro') => {
+    if (user.brokerage_tier === tier) return;
+    const label = tier === 'pro' ? 'Brokerage Pro' : 'Brokerage';
+    if (!window.confirm(`Put ${user.email} on ${label}?${user.brokerage_tier ? '' : '\n\nThey have no brokerage account yet, so a 30-day pilot at this level starts.'}\n\nThis only records the plan in Relay. Nothing is charged.`)) return;
+    setActionError(null);
+    setActionLoadingId(user.id);
+    try {
+      const response = await authFetch(`/api/admin/brokerages/${user.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_tier', tier }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to change the brokerage plan');
+      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, brokerage_tier: tier, brokerage_status: data.status ?? u.brokerage_status } : u)));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setActionError(error instanceof Error ? error.message : 'Failed to change the brokerage plan');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const handlePlanChange = async (user: TCUser, newPlan: string) => {
+    if (newPlan === 'brokerage_basic' || newPlan === 'brokerage_pro') {
+      void handleBrokerageChange(user, newPlan === 'brokerage_pro' ? 'pro' : 'basic');
+      return;
+    }
     if (newPlan === (user.plan || 'starter')) return;
     const billingNote = user.stripe_subscription_id
       ? '\n\nNote: this user has a live Stripe subscription. Changing the plan here does NOT change or cancel their billing.'
@@ -511,7 +545,7 @@ export default function AdminPage() {
                   </td>
                   <td className="px-6 py-4 text-slate-300 text-sm">
                     <select
-                      value={user.plan || 'starter'}
+                      value={user.brokerage_tier && user.brokerage_status !== 'terminated' ? (user.brokerage_tier === 'pro' ? 'brokerage_pro' : 'brokerage_basic') : user.plan || 'starter'}
                       onChange={(e) => handlePlanChange(user, e.target.value)}
                       disabled={actionLoadingId === user.id}
                       aria-label={`Plan for ${user.email}`}
@@ -522,7 +556,12 @@ export default function AdminPage() {
                           {getPlan(id).name}
                         </option>
                       ))}
+                      <option value="brokerage_basic">Brokerage</option>
+                      <option value="brokerage_pro">Brokerage Pro</option>
                     </select>
+                    {user.brokerage_tier && user.brokerage_status && (
+                      <span className="block mt-1 text-xs text-slate-500">{user.brokerage_status.replace(/_/g, ' ')}{user.plan && user.plan !== 'starter' ? ` · own plan ${getPlan(user.plan).name}` : ''}</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm">
                     {user.subscription_status ? (

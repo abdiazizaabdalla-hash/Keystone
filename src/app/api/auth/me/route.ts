@@ -119,6 +119,8 @@ export async function GET(request: NextRequest) {
     // the same "already paying" check assertTrialActive uses server-side,
     // and the fuller version account/summary exposes for the Account page.
     let trial: Record<string, unknown> | null = null;
+    // True for a Starter account that has paid, so the sidebar stops showing "Free plan / Upgrade".
+    let starterPaid = false;
     // A paid plan an admin gave for free until a date: show the same banner, with that plan's price, until they pay.
     if (shaped.plan !== 'starter' && !hasBrokerageAccess(user) && !inBrokerage) {
       const comp = compStatus(user.app_metadata as Record<string, unknown> | null);
@@ -149,6 +151,7 @@ export async function GET(request: NextRequest) {
         billing?.plan === 'starter' &&
         !!billing.stripe_subscription_id &&
         ['active', 'trialing'].includes(billing.subscription_status || '');
+      starterPaid = hasActivePaidStarter;
       if (!hasActivePaidStarter) {
         const status = await getTrialStatus(user.id, user.created_at, user.app_metadata as Record<string, unknown> | null);
         trial = {
@@ -192,7 +195,7 @@ export async function GET(request: NextRequest) {
       : [];
     const hintsEligible = Date.now() - new Date(user.created_at).getTime() < 30 * 24 * 60 * 60 * 1000;
 
-    return NextResponse.json({ ...shaped, inBrokerage, trial, needsOnboarding: needsOnboardingFlow, firstRunGuides: guides, seenHints, hintsEligible });
+    return NextResponse.json({ ...shaped, starterPaid, inBrokerage, trial, needsOnboarding: needsOnboardingFlow, firstRunGuides: guides, seenHints, hintsEligible });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

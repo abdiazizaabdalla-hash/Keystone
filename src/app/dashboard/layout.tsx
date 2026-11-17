@@ -197,6 +197,7 @@ export default function DashboardLayout({
   // The brokerage's plan has ended: this workspace is read-only (the server enforces it; this only explains it).
   const [readOnly, setReadOnly] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [starterPaid, setStarterPaid] = useState(false);
   const [trial, setTrial] = useState<{
     applies: boolean;
     trialEndsAt: string | null;
@@ -374,6 +375,7 @@ export default function DashboardLayout({
           setFromBrokerage(data.agentLevel === 'basic' || data.inBrokerage === true);
           setReadOnly(data.readOnly === true);
           setTrial(data.trial || null);
+          setStarterPaid(data.starterPaid === true);
           setUserName(data.fullName || data.email || '');
           setIsAdmin(Boolean(data.is_admin));
           const g = {
@@ -689,8 +691,8 @@ export default function DashboardLayout({
           {userName && !collapsed && <p className="px-2 text-xs font-semibold text-slate-200 truncate tiny:hidden">{userName}</p>}
           {plan && !fromBrokerage && !collapsed && (
             <p className="px-2 text-[11px] text-slate-400">
-              {showPlanChip ? <span className="text-slate-200 font-semibold capitalize">{chipLabel}</span> : 'Free'} plan{' '}
-              <Link href="/dashboard/account" className="text-blue-400 hover:text-blue-300">{showPlanChip ? 'Manage' : 'Upgrade'}</Link>
+              {showPlanChip ? <span className="text-slate-200 font-semibold capitalize">{chipLabel}</span> : starterPaid ? <span className="text-slate-200 font-semibold">Starter</span> : 'Free'} plan{' '}
+              <Link href="/dashboard/account" className="text-blue-400 hover:text-blue-300">{showPlanChip || starterPaid ? 'Manage' : 'Upgrade'}</Link>
             </p>
           )}
           <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={11} />

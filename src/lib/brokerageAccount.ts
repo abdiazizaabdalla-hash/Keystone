@@ -173,3 +173,18 @@ export async function runPilotLifecycle(todayIso: string): Promise<{ checked: nu
   }
   return { checked: (data ?? []).length, notices, expired };
 }
+
+/** Admin: put an owner on Brokerage (basic) or Brokerage Pro. With no account yet, one is created (a 30-day pilot at that tier). Records only Relay's decision; nothing is charged. */
+export async function setBrokerageTier(ownerId: string, adminId: string, tier: 'basic' | 'pro'): Promise<AccountFull> {
+  const account = await getAccount(ownerId);
+  if (!account) {
+    const pilot = newPilot(today());
+    const { error } = await supabaseServer.from('brokerage_accounts').insert({ owner_user_id: ownerId, ...pilot, tier, notes: null });
+    if (error) throw error;
+    await recordEvent(ownerId, 'granted', { endsOn: pilot.pilot_ends_on, actorId: adminId, note: `Started on ${tier === 'pro' ? 'Brokerage Pro' : 'Brokerage'}` });
+  } else {
+    await save(ownerId, { tier });
+    await recordEvent(ownerId, 'tier_changed', { actorId: adminId, note: `Set to ${tier === 'pro' ? 'Brokerage Pro' : 'Brokerage'}` });
+  }
+  return (await getAccount(ownerId))!;
+}
