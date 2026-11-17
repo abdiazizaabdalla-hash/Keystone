@@ -223,6 +223,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
   const [archiveReason, setArchiveReason] = useState<ArchiveReason>('listing_ended');
   const [archiveNote, setArchiveNote] = useState('');
   const [archiveBusy, setArchiveBusy] = useState(false);
+  const [deletingListing, setDeletingListing] = useState(false);
   const [notice, setNotice] = useState('');
 
   // Details form
@@ -990,11 +991,13 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
   };
 
   const deleteListing = async () => {
-    if (!confirm(`Delete the listing for ${listing.property_address}? Its checklist, offers and notes will be removed.`)) return;
+    if (!confirm(`Delete the listing for ${listing.property_address}? Its checklist, offers, documents and notes will be removed. This cannot be undone.`)) return;
+    setDeletingListing(true);
     try {
       await call('DELETE', `/api/listings/${id}`);
       router.push('/dashboard/listings');
     } catch (err) {
+      setDeletingListing(false);
       if (!handleAuth(err)) setError(err instanceof Error ? err.message : 'Failed to delete');
     }
   };
@@ -2528,7 +2531,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
             )}
           </div>
 
-          {!data?.shared && !data?.coordinated && !listing.archived_at && listing.status !== 'converted' && (
+          {!data?.shared && !data?.coordinated && !ownerView && !listing.archived_at && listing.status !== 'converted' && (
             <div className="mb-6 rounded-xl border border-slate-700 p-4">
               <p className="text-sm font-semibold text-slate-200 mb-1">Archive this listing</p>
               <p className="text-sm text-slate-400 mb-3">Did it not go anywhere? Archive it instead of deleting it. It leaves your open work, calendar and reminders, and keeps its checklist, offers and documents. You can restore it any time.</p>
@@ -2552,9 +2555,20 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
               )}
             </div>
           )}
-          {!data?.shared && !data?.coordinated && <button type="button" onClick={deleteListing} className="text-sm text-slate-500 hover:text-red-300">
-            Delete this listing
-          </button>}
+          {!data?.shared && !data?.coordinated && !ownerView && (
+            <div className="rounded-xl border border-red-900/60 bg-red-950/20 p-4">
+              <p className="text-sm font-semibold text-red-200 mb-1">Delete this listing</p>
+              <p className="text-sm text-slate-400 mb-3">Permanently delete this listing, its checklist, offers, uploaded documents and notes. This cannot be undone. If it just did not go anywhere, archive it instead.</p>
+              <button
+                type="button"
+                onClick={deleteListing}
+                disabled={deletingListing}
+                className="px-4 py-2 bg-red-900/40 hover:bg-red-900/70 border border-red-800 text-red-300 hover:text-red-100 rounded-xl text-sm font-medium transition disabled:opacity-50"
+              >
+                {deletingListing ? 'Deleting...' : 'Delete listing'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
