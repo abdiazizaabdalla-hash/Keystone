@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { getValidToken, clearSession, authFetch } from '@/lib/authClient';
 import NotificationBell from '@/components/NotificationBell';
 import ToastHost from '@/components/ToastHost';
-import BrokerageWelcome from '@/components/BrokerageWelcome';
+import BrokerageWelcome, { resetBrokerageTour } from '@/components/BrokerageWelcome';
 import FirstRunGuide, { saveFirstRunGuideDone, resetFirstRunGuideLocal, type GuideKind } from '@/components/FirstRunGuide';
 import PageHint from '@/components/PageHint';
 import { isTeamPlan } from '@/lib/plans';
@@ -244,6 +244,7 @@ export default function DashboardLayout({
 
   const startGuide = (kind: GuideKind) => {
     resetFirstRunGuideLocal(kind);
+    resetBrokerageTour();
     setTutorialMenuOpen(false);
     setMobileOpen(false);
     setGuides((prev) => ({ ...prev, [kind]: true }));
