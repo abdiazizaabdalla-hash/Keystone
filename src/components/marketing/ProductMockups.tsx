@@ -489,3 +489,67 @@ export function ContractIntakeMockup() {
     </div>
   );
 }
+
+/** Coordinator invoice: sent from the deal, paid by card or bank into the coordinator's own Stripe. */
+export function InvoiceMockup() {
+  return (
+    <Chrome label="Invoice 1042 · 412 Larkspur Lane">
+      <div className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-lg bg-blue-500/20 border border-blue-400/40 flex items-center justify-center text-xs font-bold text-blue-200">NC</span>
+            <div><p className="text-xs font-semibold text-slate-100">Northline Coordination</p><p className="text-[10px] text-slate-500">Your logo on every invoice</p></div>
+          </div>
+          <Chip tone="emerald">Paid</Chip>
+        </div>
+        <div className={PANEL}>
+          <IntakeField k="Billed to" v="Jordan Ellis, agent" />
+          <IntakeField k="Transaction coordination fee" v="$450.00" />
+          <IntakeField k="Rush add-on" v="$75.00" />
+          <IntakeField k="Total" v="$525.00" />
+        </div>
+        <div className={PANEL}>
+          <Title>Payment</Title>
+          <IntakeField k="Paid by card through your Stripe" v="Nov 18" />
+          <p className="text-[10px] text-slate-500 mt-1">Zelle and check payments can be recorded too.</p>
+        </div>
+        <div className={`${PANEL} flex items-center justify-between`}>
+          <p className="text-[11px] text-slate-200">Export for QuickBooks</p>
+          <div className="flex gap-1.5"><Chip tone="blue">Invoices CSV</Chip><Chip tone="blue">Payments CSV</Chip></div>
+        </div>
+      </div>
+    </Chrome>
+  );
+}
+
+/** Brokerage commission statement and ledger export. */
+export function CommissionStatementMockup() {
+  return (
+    <Chrome label="Commission statement · 412 Larkspur Lane">
+      <div className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-lg bg-blue-500/20 border border-blue-400/40 flex items-center justify-center text-xs font-bold text-blue-200">HR</span>
+            <div><p className="text-xs font-semibold text-slate-100">Harbor Realty Group</p><p className="text-[10px] text-slate-500">Your logo on every statement</p></div>
+          </div>
+          <Chip tone="amber">Ready to pay</Chip>
+        </div>
+        <div className={PANEL}>
+          <IntakeField k="Agent" v="Jordan Ellis" />
+          <IntakeField k="Gross commission" v="$12,450.00" />
+          <IntakeField k="Brokerage split (20%)" v="-$2,490.00" />
+          <IntakeField k="Transaction fee" v="-$395.00" />
+          <IntakeField k="Agent payout" v="$9,565.00" />
+        </div>
+        <div className={`${PANEL} flex items-center justify-between`}>
+          <p className="text-[11px] text-slate-200">Agent has connected Stripe</p>
+          <Chip tone="emerald">Connected</Chip>
+        </div>
+        <div className={`${PANEL} flex items-center justify-between`}>
+          <p className="text-[11px] text-slate-200">Export the ledger for QuickBooks</p>
+          <div className="flex gap-1.5"><Chip tone="blue">CSV</Chip><Chip tone="blue">Bills</Chip></div>
+        </div>
+      </div>
+    </Chrome>
+  );
+}
