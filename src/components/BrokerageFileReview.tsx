@@ -105,7 +105,7 @@ export default function BrokerageFileReview({ part }: { part?: 'files' | 'requir
               {data.required.length === 0 ? 'Choose the documents every file must contain. Files missing any of them are marked below.' : `${data.required.length} required: ${data.required.join(', ')}.`}
             </p>
           </div>
-          <button type="button" onClick={() => { setDraft(data.required); setEditing((v) => !v); }} className="px-3 py-1.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-xs font-semibold rounded-lg transition">
+          <button type="button" onClick={() => { setDraft(data.required.length === 0 ? allTypes : data.required); setEditing((v) => !v); }} className="px-3 py-1.5 border border-slate-600 hover:border-slate-500 text-slate-200 text-xs font-semibold rounded-lg transition">
             {editing ? 'Close' : data.required.length === 0 ? 'Choose documents' : 'Change'}
           </button>
         </div>
