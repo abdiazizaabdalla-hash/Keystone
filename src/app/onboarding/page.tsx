@@ -1,5 +1,6 @@
 'use client';
 
+import LogoSettingsCard from '@/components/LogoSettingsCard';
 import MoneyInput from '@/components/MoneyInput';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -778,6 +779,7 @@ function OnboardingContent() {
                 <p className="text-xs text-slate-500 mt-2">{orgLabel === 'Brokerage name' ? 'Your agents see this, and it heads your dashboard.' : 'Your teammates see this, and it heads your dashboard.'}</p>
               </div>
             )}
+            <div className="mt-5"><LogoSettingsCard compact pdfs="your invoices and compliance reports" /></div>
           </StepShell>
         )}
 

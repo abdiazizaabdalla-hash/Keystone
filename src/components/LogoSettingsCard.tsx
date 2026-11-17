@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
 
 /** Upload the logo that is printed at the top of every PDF you send: invoices, statements, compliance reports. */
-export default function LogoSettingsCard() {
+export default function LogoSettingsCard({ compact = false, pdfs }: { compact?: boolean; pdfs?: string } = {}) {
   const [url, setUrl] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -60,11 +60,11 @@ export default function LogoSettingsCard() {
   };
 
   return (
-    <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8" data-testid="logo-settings">
-      <h2 className="text-lg font-bold text-slate-100 mb-1">Your Logo</h2>
-      <p className="text-sm text-slate-400 mb-6">
-        Printed at the top of every PDF you send: invoices, commission statements and compliance reports. PNG or JPEG, up to 1 MB.
-        A wide logo on a white or transparent background looks best.
+    <div className={compact ? 'bg-white/5 border border-white/10 rounded-xl p-4' : 'bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8'} data-testid="logo-settings">
+      <h2 className={compact ? 'text-sm font-semibold text-slate-100 mb-1' : 'text-lg font-bold text-slate-100 mb-1'}>Your Logo{compact ? ' (optional)' : ''}</h2>
+      <p className={`text-sm text-slate-400 ${compact ? 'mb-4' : 'mb-6'}`}>
+        Printed at the top of every PDF you send: {pdfs ?? 'invoices, commission statements and compliance reports'}. PNG or JPEG, up to 1 MB.
+        A wide logo on a white or transparent background looks best.{compact ? ' You can add or change it later in Settings.' : ''}
       </p>
       <div className="flex flex-wrap items-center gap-5">
         <div className="h-20 w-56 rounded-xl bg-white flex items-center justify-center overflow-hidden border border-white/10">

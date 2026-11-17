@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
 import { BROKERAGE_PRICING, dollars } from '@/lib/brokeragePricing';
+import LogoSettingsCard from '@/components/LogoSettingsCard';
 import { DOCUMENT_CATEGORIES } from '@/lib/documentTaxonomy';
 
 // Setup for a brokerage owner. Nothing here is about fees, invoices or Stripe: those belong to coordinators. A brokerage sets up
@@ -159,6 +160,7 @@ export default function BrokerageOnboardingPage() {
               <label className="block sm:col-span-2"><span className="text-sm text-slate-400 block mb-1.5">Your name</span>
                 <input className={inputClass} value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Broker or owner name" autoComplete="name" /></label>
             </div>
+            <div className="mt-5"><LogoSettingsCard compact pdfs="commission statements and compliance reports" /></div>
           </section>
         )}
 

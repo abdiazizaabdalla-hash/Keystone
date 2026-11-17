@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
 import { AGENT_FOCUS, AGENT_VOLUME, COORDINATION_MODES, type CoordinationMode } from '@/lib/accountType';
 import { isFeatureOnClient } from '@/lib/features';
+import LogoSettingsCard from '@/components/LogoSettingsCard';
 import { US_STATES } from '@/lib/usStates';
 
 // Setup for an agent, in short steps. An agent on a brokerage's roster sees their brokerage and what it includes; an independent agent
@@ -164,6 +165,7 @@ export default function AgentOnboardingPage() {
               <label className="block"><span className="text-sm text-slate-400 block mb-1.5">Brokerage{rosterOf ? '' : ' (optional)'}</span>
                 <input className={`${inputClass} ${rosterOf ? 'opacity-70' : ''}`} value={brokerage} onChange={(e) => setBrokerage(e.target.value)} readOnly={Boolean(rosterOf)} placeholder="Your brokerage" /></label>
             </div>
+            <div className="mt-5"><LogoSettingsCard compact pdfs="your invoices" /></div>
             {invitedBy && (
               <p className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 mt-4">
                 {invitedBy} has invited you to join their brokerage. You can review exactly what they would see, and accept or decline, from the Brokerage page once you are set up. Nothing is shared until you accept.
