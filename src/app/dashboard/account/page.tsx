@@ -15,6 +15,8 @@ interface AccountSummary {
   deletionRequestedAt?: string | null;
   createdAt: string;
   plan: { id: string; name: string };
+  /** A brokerage owner's plan (Brokerage or Brokerage Pro) and agent seats; null for everyone else. */
+  brokerage?: { tier: 'basic' | 'pro'; label: string; status: string; seats: { active: number; pending: number; limit: number } } | null;
   usage: {
     agents: number;
     maxAgents: number | null;
@@ -279,8 +281,13 @@ function AccountContent() {
             <p className="text-sm text-slate-400">
               {summary.plan.id === 'starter'
                 ? 'Upgrade to Pro for custom templates, automation and more.'
-                : `You're on the ${summary.plan.name} plan.`}
+                : `You're on the ${summary.brokerage ? summary.brokerage.label : summary.plan.name} plan.`}
             </p>
+            {summary.brokerage && (
+              <p className="text-sm text-slate-400">
+                Your plan includes up to {summary.brokerage.seats.limit} agents. You have {summary.brokerage.seats.active} joined{summary.brokerage.seats.pending ? ` and ${summary.brokerage.seats.pending} invited` : ''}, so you can invite {Math.max(0, summary.brokerage.seats.limit - summary.brokerage.seats.active - summary.brokerage.seats.pending)} more. Brokerage billing is arranged with Relay directly.
+              </p>
+            )}
             {otherPlans.length > 0 && (
               <div className="flex flex-wrap gap-3">
                 {otherPlans.map((p) => (

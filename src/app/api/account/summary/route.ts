@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getPlan, getPlanLimits, isTeamPlan, DEFAULT_PLAN } from '@/lib/plans';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
@@ -9,6 +8,9 @@ import { getTeamForUser, getVisibleTcUserIds } from '@/lib/team';
 import { getUserPlan } from '@/lib/privileged';
 import { activeLinkForAgent, brokerageOn } from '@/lib/oversight';
 import { hasBrokerageAccess } from '@/lib/brokerageAccessMeta';
+import { getAccount } from '@/lib/brokerageAccount';
+import { accessFor } from '@/lib/brokeragePilot';
+import { supabaseServer } from '@/lib/supabase';
 import { hasAgentRole } from '@/lib/appMetadata';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
@@ -107,9 +109,26 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    // A brokerage owner's own plan: Brokerage or Brokerage Pro, and how many agents they can have. Null for everyone else.
+    let brokerage: { tier: 'basic' | 'pro'; label: string; status: string; seats: { active: number; pending: number; limit: number } } | null = null;
+    if (brokerageOn() && !inBrokerage) {
+      try {
+        const acct = await getAccount(user.id);
+        if (acct) {
+          const access = accessFor(acct, new Date().toISOString().slice(0, 10));
+          const { data: links } = await supabaseServer.from('brokerage_links').select('status').eq('owner_user_id', user.id).in('status', ['active', 'pending']);
+          const active = (links ?? []).filter((l) => l.status === 'active').length;
+          brokerage = { tier: acct.tier, label: acct.tier === 'pro' ? 'Brokerage Pro' : 'Brokerage', status: access.status, seats: { active, pending: (links ?? []).length - active, limit: access.seatLimit } };
+        }
+      } catch {
+        brokerage = null;
+      }
+    }
+
     return NextResponse.json({
       email: user.email,
       inBrokerage,
+      brokerage,
       createdAt: user.created_at,
       deletionRequestedAt: (user.app_metadata as { deletion_requested_at?: string } | null)?.deletion_requested_at ?? null,
       plan: {

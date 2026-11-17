@@ -7,6 +7,7 @@ import { authFetch } from '@/lib/authClient';
 // for the upgrade. Shows nothing for an account that is not under a pilot or plan yet, or one that is already on the paid plan.
 
 interface Account {
+  tier?: 'basic' | 'pro';
   status: 'pilot' | 'pilot_expired' | 'converted' | 'terminated';
   endsOn: string | null;
   daysLeft: number | null;
@@ -49,7 +50,18 @@ export default function BrokerageAccountBanner() {
     }
   };
 
-  if (!account || account.status === 'converted') return null;
+  if (!account) return null;
+  const planLabel = account.tier === 'basic' ? 'Brokerage' : 'Brokerage Pro';
+  const room = Math.max(0, account.seats.limit - account.seats.active - account.seats.pending);
+  const seatLine = `${account.seats.active} joined${account.seats.pending ? `, ${account.seats.pending} invited` : ''} of ${account.seats.limit} agents included. You can invite ${room} more.`;
+  if (account.status === 'converted') {
+    return (
+      <div className="mb-5 rounded-2xl border border-blue-500/30 bg-blue-500/10 px-5 py-3 text-sm" role="status">
+        <p className="text-slate-100 font-semibold">{planLabel}</p>
+        <p className="text-slate-400">{seatLine}</p>
+      </div>
+    );
+  }
 
   const ended = account.status === 'pilot_expired';
   const paused = account.status === 'terminated';
@@ -61,8 +73,8 @@ export default function BrokerageAccountBanner() {
       <div className="text-sm">
         {account.status === 'pilot' && (
           <>
-            <p className="text-slate-100 font-semibold">Brokerage Pro pilot: {account.daysLeft} {account.daysLeft === 1 ? 'day' : 'days'} left</p>
-            <p className="text-slate-400">Full Pro until {fmt(account.endsOn)}, up to {account.seats.limit} agents ({account.seats.active} joined{account.seats.pending ? `, ${account.seats.pending} invited` : ''}). No payment needed and nothing renews automatically.</p>
+            <p className="text-slate-100 font-semibold">{planLabel} pilot: {account.daysLeft} {account.daysLeft === 1 ? 'day' : 'days'} left</p>
+            <p className="text-slate-400">{account.tier === 'basic' ? 'Brokerage' : 'Full Pro'} until {fmt(account.endsOn)}. {seatLine} No payment needed and nothing renews automatically.</p>
           </>
         )}
         {ended && (
