@@ -10,9 +10,8 @@ import { DOCUMENT_CATEGORIES } from '@/lib/documentTaxonomy';
 // Every step saves as it goes, using the same endpoints as the Compliance, Automations and Roster screens, so it can all be changed later.
 
 const inputClass = 'w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none';
-const STEPS = ['Your brokerage', 'Required documents', 'Steps on every file', 'Office automations', 'Invite your agents'];
+const STEPS = ['Your brokerage', 'Required documents', 'Office automations', 'Invite your agents'];
 
-interface Step { name: string; dueDays: number | null }
 interface Automation { kind: string; name: string; blurb: string; enabled: boolean; settings: Record<string, number> }
 
 function Toggle({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
@@ -34,8 +33,6 @@ export default function BrokerageOnboardingPage() {
   const [fullName, setFullName] = useState('');
   const [brokerageName, setBrokerageName] = useState('');
   const [required, setRequired] = useState<string[]>([]);
-  const [txSteps, setTxSteps] = useState<Step[]>([]);
-  const [listSteps, setListSteps] = useState<Step[]>([]);
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [agentEmails, setAgentEmails] = useState<string[]>(['', '', '']);
   const [seats, setSeats] = useState<{ tier: 'basic' | 'pro'; limit: number; used: number } | null>(null);
@@ -56,12 +53,6 @@ export default function BrokerageOnboardingPage() {
         if (!check.ok) { router.replace('/onboarding'); return; }
         const team = await authFetch('/api/team');
         if (team.ok) setBrokerageName(((await team.json()) as { team?: { name?: string | null } }).team?.name ?? '');
-        const rs = await authFetch('/api/oversight/required-steps');
-        if (rs.ok) {
-          const b = (await rs.json()) as { transaction: Step[]; listing: Step[] };
-          setTxSteps(b.transaction);
-          setListSteps(b.listing);
-        }
         const au = await authFetch('/api/brokerage/automations');
         if (au.ok) setAutomations(((await au.json()) as { automations: Automation[] }).automations);
         const acct = await authFetch('/api/brokerage/account');
@@ -95,9 +86,6 @@ export default function BrokerageOnboardingPage() {
       } else if (step === 1) {
         await call('/api/oversight/file-review/requirements', 'PUT', { types: required });
       } else if (step === 2) {
-        await call('/api/oversight/required-steps', 'PUT', { kind: 'transaction', steps: txSteps });
-        await call('/api/oversight/required-steps', 'PUT', { kind: 'listing', steps: listSteps });
-      } else if (step === 3) {
         for (const a of automations) await call('/api/brokerage/automations', 'PUT', { kind: a.kind, enabled: a.enabled, params: a.settings });
       }
       setStep(step + 1);
@@ -139,29 +127,6 @@ export default function BrokerageOnboardingPage() {
 
   const last = step === STEPS.length - 1;
   const toggleType = (t: string) => setRequired((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
-  const removeStep = (kind: 'tx' | 'list', i: number) => (kind === 'tx' ? setTxSteps((s) => s.filter((_, j) => j !== i)) : setListSteps((s) => s.filter((_, j) => j !== i)));
-
-  const dueText = (kind: 'tx' | 'list', d: number | null) => {
-    if (d === null) return 'No due date';
-    const n = Math.abs(d);
-    const days = `${n} ${n === 1 ? 'day' : 'days'}`;
-    if (kind === 'tx') return d === 0 ? 'Due the day the contract is accepted' : `Due ${days} after the contract is accepted`;
-    if (d === 0) return 'Due the day it goes live';
-    return d < 0 ? `Due ${days} before it goes live` : `Due ${days} after it goes live`;
-  };
-  const stepList = (kind: 'tx' | 'list', items: Step[]) => (
-    <ul className="space-y-1.5">
-      {items.map((s, i) => (
-        <li key={`${s.name}-${i}`} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm">
-          <span className="flex-1 text-slate-100">{s.name}</span>
-          <span className="text-xs text-slate-400">{dueText(kind, s.dueDays)}</span>
-          <button type="button" onClick={() => removeStep(kind, i)} className="text-xs text-slate-400 hover:text-red-300" aria-label={`Remove ${s.name}`}>Remove</button>
-        </li>
-      ))}
-      {items.length === 0 && <li className="text-sm text-slate-500">No steps. Files start with Relay’s own checklist only.</li>}
-    </ul>
-  );
-
   return (
     <div className="min-h-screen app-bg text-slate-100">
       <header className="border-b border-white/10">
@@ -224,14 +189,6 @@ export default function BrokerageOnboardingPage() {
 
         {step === 2 && (
           <section>
-            <p className="text-slate-400 mb-6">These steps are added to every new file your agents open, so every deal starts with the same checks. Remove any you do not want. You can add your own later under Compliance.</p>
-            <p className="text-sm font-semibold text-slate-200 mb-2">Transactions</p>{stepList('tx', txSteps)}
-            <p className="text-sm font-semibold text-slate-200 mt-6 mb-2">Listings</p>{stepList('list', listSteps)}
-          </section>
-        )}
-
-        {step === 3 && (
-          <section>
             <p className="text-slate-400 mb-6">Relay can watch every agent’s files for you and tell you, or the agent, when something needs attention. Switch on the ones you want. Each runs on its own once on.</p>
             <ul className="space-y-3">
               {automations.map((a) => (
@@ -245,7 +202,7 @@ export default function BrokerageOnboardingPage() {
           </section>
         )}
 
-        {step === 4 && (
+        {step === 3 && (
           <section>
             <p className="text-slate-400 mb-3">Each agent gets a free Relay workspace while on your roster, and nothing is shared with you until they accept.</p>
             <div className="grid sm:grid-cols-2 gap-3 mb-4 text-sm">
