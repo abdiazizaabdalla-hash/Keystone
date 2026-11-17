@@ -235,6 +235,18 @@ function OnboardingContent() {
       if (data.accountType === 'agent' && (!preselected || preselected === 'starter') && !checkoutStatus) {
         router.replace('/onboarding/agent');
       }
+      // A brokerage owner has their own setup: no coordination fees, invoices or Stripe.
+      if (data.accountType !== 'agent' && !checkoutStatus) {
+        try {
+          const owner = await authFetch('/api/oversight?check=1');
+          if (owner.ok) {
+            router.replace('/onboarding/brokerage');
+            return null;
+          }
+        } catch {
+          /* not a brokerage owner: carry on with the coordinator setup */
+        }
+      }
       setFullName(data.fullName ?? '');
       setDefaultFlatFee(String(data.defaultFlatFee ?? 400));
       setDefaultPercentFee(String(data.defaultPercentFee ?? 0));
@@ -667,6 +679,7 @@ function OnboardingContent() {
           </div>
         )}
 
+        <p className="max-w-3xl mx-auto text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Coordinator setup</p>
         <ProgressHeader current={currentStep} />
 
         {currentStep === 1 && (
@@ -770,7 +783,7 @@ function OnboardingContent() {
 
         {currentStep === 3 && (
           <StepShell
-            title="Fees and invoicing"
+            title="Your coordination fees and invoicing"
             description="These pre-fill every new agent and invoice. You can change them for any individual agent or invoice later."
             saving={isSavingStep}
             error={stepError}
@@ -816,7 +829,7 @@ function OnboardingContent() {
 
         {currentStep === 4 && (
           <StepShell
-            title="Your deal checklist"
+            title="Your coordinator deal checklist"
             description="Every deal starts from a checklist. Choose whether Relay should set due dates for you."
             badge={canUseCustomTemplates ? 'Pro / Team' : undefined}
             saving={isSavingStep}
