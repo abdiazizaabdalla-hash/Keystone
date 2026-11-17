@@ -203,7 +203,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Invoicing & payments',
     q: 'Does Relay work with QuickBooks?',
-    a: 'Yes, by file. Under Invoices, QuickBooks import / export lets you download your invoices, a payments report and your agents as CSV files that QuickBooks Online can import, and upload an Excel or CSV export from QuickBooks to bring invoices into Relay. You check every match before anything is saved. It does not connect to your QuickBooks account or sync on its own.',
+    a: 'Yes. Coordinators can connect QuickBooks Online in Settings. New invoices are then created in QuickBooks for you, and when an invoice is paid in Relay, including by Stripe, a payment is recorded against it. Relay only sends to QuickBooks and never edits or deletes anything there. You can also work by file: under Invoices, QuickBooks import / export lets you download your invoices, a payments report and your agents as CSV files that QuickBooks Online can import, and upload an Excel or CSV export from QuickBooks to bring invoices into Relay. You check every match before anything is saved. Brokerage commission ledgers export as CSV or as QuickBooks bills and vendors, which you import into QuickBooks yourself.',
   },
   {
     category: 'Invoicing & payments',

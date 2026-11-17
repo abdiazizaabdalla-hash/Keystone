@@ -202,7 +202,7 @@ export default function Home() {
               <ul className="space-y-3 text-sm text-slate-300">
               <li><span className="font-semibold text-slate-100">Invoice from the deal.</span> Create an invoice on the transaction, with your logo, and send it to the agent.</li>
               <li><span className="font-semibold text-slate-100">Get paid into your own Stripe.</span> Agents pay by card or bank through your connected Stripe account. The money goes to you, Relay takes no platform fee, and standard Stripe fees apply. You can also record Zelle or check payments.</li>
-              <li><span className="font-semibold text-slate-100">Export to QuickBooks.</span> Download invoices, a payments report and your agents as CSV files QuickBooks Online can import.</li>
+              <li><span className="font-semibold text-slate-100">Sync with QuickBooks.</span> Connect QuickBooks Online and new invoices are created there for you, and payments are recorded against them when an invoice is paid. Prefer files? Download invoices, a payments report and your agents as CSV files instead.</li>
               </ul>
             </div>
             <InvoiceMockup />
@@ -215,13 +215,13 @@ export default function Home() {
               <ul className="space-y-3 text-sm text-slate-300">
               <li><span className="font-semibold text-slate-100">Commission statements.</span> Commission is calculated from your splits, caps and deductions, and agents get a statement with your logo.</li>
               <li><span className="font-semibold text-slate-100">Pay through Stripe.</span> Agents connect their Stripe account, and you pay commissions from the statement through your own Stripe. Commission payouts through Relay are coming soon, and until then you record payments made the usual way.</li>
-              <li><span className="font-semibold text-slate-100">Export to QuickBooks.</span> Export the commission ledger as CSV or QuickBooks bills.</li>
+              <li><span className="font-semibold text-slate-100">Export to QuickBooks.</span> Export the commission ledger as CSV or as QuickBooks bills and vendors, and import them into QuickBooks Online.</li>
               </ul>
             </div>
           </div>
         </div>
         <MockupCaption>Illustration of an invoice and a commission statement. Names and numbers are made up.</MockupCaption>
-        <p className="text-xs text-slate-500 mt-4">Relay does not sync with QuickBooks on its own: you import the files you export.</p>
+        <p className="text-xs text-slate-500 mt-4">The direct QuickBooks connection is for coordinators and sends invoices and payments one way, from Relay to QuickBooks. Relay never edits or deletes anything in your QuickBooks. Brokerage commission exports are files you import.</p>
       </section>
 
       {/* 7. Brokerage advantage */}
