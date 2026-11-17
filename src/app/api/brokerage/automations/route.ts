@@ -17,7 +17,19 @@ export async function GET(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
     const { owner: user } = await resolveOversightActor(caller, 'full');
-    const [configs, roster, workflows] = await Promise.all([loadConfigs(user.id), rosterFor(user.id), loadWorkflows(user.id)]);
+    const [loadedConfigs, roster, workflows] = await Promise.all([loadConfigs(user.id), rosterFor(user.id), loadWorkflows(user.id)]);
+    let configs = loadedConfigs;
+    // The first visit switches every built-in rule on, the same starting point onboarding offers. After that the owner's own choices are kept.
+    if (configs.size === 0) {
+      try {
+        await assertBrokerageManageable(user.id);
+        const rows = kindsFor(roster.mode).map((kind) => ({ owner_user_id: user.id, kind, enabled: true, params: cleanParams(kind, {}), agent_ids: [] as string[], notify_agents: defOf(kind).agentNotice, updated_at: new Date().toISOString() }));
+        const seed = await supabaseServer.from('brokerage_automations').upsert(rows, { onConflict: 'owner_user_id,kind', ignoreDuplicates: true });
+        if (!seed.error) configs = await loadConfigs(user.id);
+      } catch {
+        /* an account that cannot manage yet, or tables not updated: show the rules off as before */
+      }
+    }
     const mode = roster.mode;
     const kinds = new Set<string>(kindsFor(mode));
     let runsRes = await supabaseServer.from('brokerage_automation_runs').select('id, kind, label, workflow_id, ran_at, status, flagged, emails, summary, detail').eq('owner_user_id', user.id).order('ran_at', { ascending: false }).limit(40);

@@ -4,7 +4,7 @@ import { getUserFromRequest } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabase';
 import { CLOSED_STAGE, agentLabels, listOwnerLinks, loadOversightDeals } from '@/lib/oversight';
 import { oversightError, todayIso } from '@/lib/oversightServer';
-import { compareReviewRows, inReviewWindow, missingRequired, requiredForDeal, type DocumentList, type ReviewStatus } from '@/lib/fileReview';
+import { REQUIRABLE_TYPES, compareReviewRows, inReviewWindow, missingRequired, requiredForDeal, type DocumentList, type ReviewStatus } from '@/lib/fileReview';
 
 // The brokerage owner's file review list: closed files from the last 180 days and files closing within 30 days, each with the
 // required documents that are missing and whether the owner has reviewed or flagged it. Only agents with an active link.
@@ -28,7 +28,12 @@ export async function GET(request: NextRequest) {
     const listsMissing = listsRes.error && (listsRes.error.code === 'PGRST205' || listsRes.error.code === '42P01');
     if (listsRes.error && !listsMissing) throw listsRes.error;
     const lists: DocumentList[] = (listsRes.data ?? []).map((r) => ({ name: r.name as string, templateNames: (r.template_names as string[]) ?? [], documentTypes: (r.document_types as string[]) ?? [] }));
-    const required = ((reqRes.data?.document_types as string[] | undefined) ?? []).slice();
+    let required = ((reqRes.data?.document_types as string[] | undefined) ?? []).slice();
+    // The first visit saves every document as required, the same starting point onboarding offers, so the owner removes what they do not want.
+    if (!reqRes.data) {
+      const seed = await supabaseServer.from('brokerage_file_requirements').upsert({ owner_user_id: user.id, document_types: REQUIRABLE_TYPES, updated_at: new Date().toISOString() }, { onConflict: 'owner_user_id', ignoreDuplicates: true });
+      if (!seed.error) required = [...REQUIRABLE_TYPES];
+    }
 
     const listed = deals.filter((d) => inReviewWindow(d, CLOSED_STAGE, today));
     const listedIds = listed.map((d) => d.id);
