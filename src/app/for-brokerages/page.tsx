@@ -128,7 +128,7 @@ export default function ForBrokeragesPage() {
             'Commission calculated from your splits, caps and deductions',
             'Commission statements as PDFs, with your brokerage logo',
             'A commission ledger you can export to CSV or QuickBooks bills',
-            'Pay agents their commissions from the statement through Relay, with your connected Stripe account',
+            'Pay agents their commissions from the statement through your connected Stripe account (coming soon; for now you record payments made the usual way)',
           ].map((l) => <li key={l} className="flex items-start gap-2.5">{check}{l}</li>)}
         </ul>
       </section>
