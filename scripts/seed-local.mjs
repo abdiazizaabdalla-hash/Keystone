@@ -37,6 +37,17 @@ if (existsSync('.local-accounts.txt')) {
   }
 }
 
+// A real name for each demo account, so screens show a person's name instead of their email address.
+const NAMES = {
+  'agent-in-basic@local.relay': 'Avery Basic',
+  'agent-in-pro@local.relay': 'Alex Pro',
+  'agent-workspace@local.relay': 'Wendy Workspace',
+  'agent-free@local.relay': 'Frankie Free',
+  'agent-starter@local.relay': 'Sam Starter',
+  'agent-pro@local.relay': 'Parker Pro',
+};
+const nameFor = (email) => NAMES[email] || email.split('@')[0].split(/[-_.]/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
 const { data: list } = await admin.auth.admin.listUsers({ perPage: 1000 });
 const lines = ['# Local demo logins (relay-test database only). Not for production.', ''];
 for (const a of ACCOUNTS) {
@@ -44,9 +55,9 @@ for (const a of ACCOUNTS) {
   const password = process.env.LOCAL_DEMO_PASSWORD || 'LocalRelay-2026!';
   const found = list.users.find((u) => u.email === a.email);
   if (found) {
-    await admin.auth.admin.updateUserById(found.id, { password, app_metadata: { ...found.app_metadata, ...a.app }, email_confirm: true });
+    await admin.auth.admin.updateUserById(found.id, { password, app_metadata: { ...found.app_metadata, ...a.app }, user_metadata: { ...found.user_metadata, full_name: found.user_metadata?.full_name || nameFor(a.email) }, email_confirm: true });
   } else {
-    const { error } = await admin.auth.admin.createUser({ email: a.email, password, email_confirm: true, app_metadata: a.app });
+    const { error } = await admin.auth.admin.createUser({ email: a.email, password, email_confirm: true, app_metadata: a.app, user_metadata: { full_name: nameFor(a.email) } });
     if (error) throw error;
   }
   lines.push(`${a.email}  ${password}  # ${a.label}`);
