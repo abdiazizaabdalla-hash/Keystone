@@ -32,7 +32,7 @@ export default function BrokerageOnboardingPage() {
 
   const [fullName, setFullName] = useState('');
   const [brokerageName, setBrokerageName] = useState('');
-  const [required, setRequired] = useState<string[]>([]);
+  const [required, setRequired] = useState<string[]>(() => DOCUMENT_CATEGORIES.flatMap((c) => c.types).filter((t) => t !== 'General'));
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [agentEmails, setAgentEmails] = useState<string[]>(['', '', '']);
   const [seats, setSeats] = useState<{ tier: 'basic' | 'pro'; limit: number; used: number } | null>(null);
@@ -54,7 +54,7 @@ export default function BrokerageOnboardingPage() {
         const team = await authFetch('/api/team');
         if (team.ok) setBrokerageName(((await team.json()) as { team?: { name?: string | null } }).team?.name ?? '');
         const au = await authFetch('/api/brokerage/automations');
-        if (au.ok) setAutomations(((await au.json()) as { automations: Automation[] }).automations);
+        if (au.ok) setAutomations(((await au.json()) as { automations: Automation[] }).automations.map((a) => ({ ...a, enabled: true })));
         const acct = await authFetch('/api/brokerage/account');
         if (acct.ok) {
           const a = ((await acct.json()) as { account: { tier: 'basic' | 'pro'; seats: { active: number; pending: number; limit: number } } | null }).account;
@@ -163,7 +163,7 @@ export default function BrokerageOnboardingPage() {
 
         {step === 1 && (
           <section>
-            <p className="text-slate-400 text-sm mb-4">Tick the documents every file must contain. Relay flags missing ones on your compliance desk. Change this any time. <span className="text-slate-300">{required.length} chosen.</span></p>
+            <p className="text-slate-400 text-sm mb-4">Every document is ticked to start. Untick any you do not require. Relay flags missing ones on your compliance desk, and you can change this any time. <span className="text-slate-300">{required.length} chosen.</span></p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {categories.map((c) => {
                 const all = c.types.every((t) => required.includes(t));
@@ -189,7 +189,7 @@ export default function BrokerageOnboardingPage() {
 
         {step === 2 && (
           <section>
-            <p className="text-slate-400 mb-6">Relay can watch every agent’s files for you and tell you, or the agent, when something needs attention. Switch on the ones you want. Each runs on its own once on.</p>
+            <p className="text-slate-400 mb-6">Relay can watch every agent’s files for you and tell you, or the agent, when something needs attention. They are all on to start. Switch off any you do not want. Each runs on its own once on.</p>
             <ul className="space-y-3">
               {automations.map((a) => (
                 <li key={a.kind} className="flex items-start gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
