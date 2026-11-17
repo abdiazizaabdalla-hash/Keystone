@@ -1620,6 +1620,44 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
               <p className="text-sm text-slate-400">Choose a listing agent and turn on sharing in Details to message them here.</p>
             </div>
           )}
+          {!data?.shared && !data?.coordinated && !ownerView && !listing.archived_at && listing.status !== 'converted' && (
+            <div className="mb-6 rounded-xl border border-slate-700 p-4">
+              <p className="text-sm font-semibold text-slate-200 mb-1">Archive this listing</p>
+              <p className="text-sm text-slate-400 mb-3">Did it not go anywhere? Archive it instead of deleting it. It leaves your open work, calendar and reminders, and keeps its checklist, offers and documents. You can restore it any time.</p>
+              {!archiveOpen ? (
+                <button type="button" onClick={() => setArchiveOpen(true)} className="px-4 py-2 bg-amber-900/30 hover:bg-amber-900/50 border border-amber-800 text-amber-200 rounded-xl text-sm font-medium transition">Archive listing…</button>
+              ) : (
+                <div className="space-y-3 max-w-md">
+                  <label className="block text-xs text-slate-400">Why is it being archived?
+                    <select value={archiveReason} onChange={(e) => setArchiveReason(e.target.value as ArchiveReason)} className="mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100">
+                      {ARCHIVE_REASONS.map((r) => (<option key={r.id} value={r.id}>{r.label}</option>))}
+                    </select>
+                  </label>
+                  <label className="block text-xs text-slate-400">Note {archiveReason === 'other' ? '(required)' : '(optional)'}
+                    <textarea value={archiveNote} onChange={(e) => setArchiveNote(e.target.value)} maxLength={500} rows={2} className="mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100" placeholder="A few words for your own records" />
+                  </label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={archiveListing} disabled={archiveBusy} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium disabled:opacity-50">{archiveBusy ? 'Archiving…' : 'Archive'}</button>
+                    <button type="button" onClick={() => setArchiveOpen(false)} disabled={archiveBusy} className="px-4 py-2 border border-slate-600 text-slate-300 rounded-xl text-sm">Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {!data?.shared && !data?.coordinated && !ownerView && (
+            <div className="rounded-xl border border-red-900/60 bg-red-950/20 p-4">
+              <p className="text-sm font-semibold text-red-200 mb-1">Delete this listing</p>
+              <p className="text-sm text-slate-400 mb-3">Permanently delete this listing, its checklist, offers, uploaded documents and notes. This cannot be undone. If it just did not go anywhere, archive it instead.</p>
+              <button
+                type="button"
+                onClick={deleteListing}
+                disabled={deletingListing}
+                className="px-4 py-2 bg-red-900/40 hover:bg-red-900/70 border border-red-800 text-red-300 hover:text-red-100 rounded-xl text-sm font-medium transition disabled:opacity-50"
+              >
+                {deletingListing ? 'Deleting...' : 'Delete listing'}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className={tab === 'checklist' ? 'space-y-6' : 'hidden'}>
@@ -2531,44 +2569,6 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
             )}
           </div>
 
-          {!data?.shared && !data?.coordinated && !ownerView && !listing.archived_at && listing.status !== 'converted' && (
-            <div className="mb-6 rounded-xl border border-slate-700 p-4">
-              <p className="text-sm font-semibold text-slate-200 mb-1">Archive this listing</p>
-              <p className="text-sm text-slate-400 mb-3">Did it not go anywhere? Archive it instead of deleting it. It leaves your open work, calendar and reminders, and keeps its checklist, offers and documents. You can restore it any time.</p>
-              {!archiveOpen ? (
-                <button type="button" onClick={() => setArchiveOpen(true)} className="px-4 py-2 bg-amber-900/30 hover:bg-amber-900/50 border border-amber-800 text-amber-200 rounded-xl text-sm font-medium transition">Archive listing…</button>
-              ) : (
-                <div className="space-y-3 max-w-md">
-                  <label className="block text-xs text-slate-400">Why is it being archived?
-                    <select value={archiveReason} onChange={(e) => setArchiveReason(e.target.value as ArchiveReason)} className="mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100">
-                      {ARCHIVE_REASONS.map((r) => (<option key={r.id} value={r.id}>{r.label}</option>))}
-                    </select>
-                  </label>
-                  <label className="block text-xs text-slate-400">Note {archiveReason === 'other' ? '(required)' : '(optional)'}
-                    <textarea value={archiveNote} onChange={(e) => setArchiveNote(e.target.value)} maxLength={500} rows={2} className="mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100" placeholder="A few words for your own records" />
-                  </label>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={archiveListing} disabled={archiveBusy} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium disabled:opacity-50">{archiveBusy ? 'Archiving…' : 'Archive'}</button>
-                    <button type="button" onClick={() => setArchiveOpen(false)} disabled={archiveBusy} className="px-4 py-2 border border-slate-600 text-slate-300 rounded-xl text-sm">Cancel</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {!data?.shared && !data?.coordinated && !ownerView && (
-            <div className="rounded-xl border border-red-900/60 bg-red-950/20 p-4">
-              <p className="text-sm font-semibold text-red-200 mb-1">Delete this listing</p>
-              <p className="text-sm text-slate-400 mb-3">Permanently delete this listing, its checklist, offers, uploaded documents and notes. This cannot be undone. If it just did not go anywhere, archive it instead.</p>
-              <button
-                type="button"
-                onClick={deleteListing}
-                disabled={deletingListing}
-                className="px-4 py-2 bg-red-900/40 hover:bg-red-900/70 border border-red-800 text-red-300 hover:text-red-100 rounded-xl text-sm font-medium transition disabled:opacity-50"
-              >
-                {deletingListing ? 'Deleting...' : 'Delete listing'}
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
