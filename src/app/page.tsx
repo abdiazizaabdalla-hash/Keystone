@@ -194,33 +194,31 @@ export default function Home() {
           <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">Run the whole business in one place, from the deal to the books.</h2>
           <p className="text-slate-400">Invoice or pay commissions through your own Stripe account, and export to QuickBooks when it is time to close the month. No retyping, no second system for money.</p>
         </div>
-        <div className="space-y-8 mt-10">
-        <div className="grid lg:grid-cols-2 gap-8 items-center">
-          <InvoiceMockup />
-        </div>
-        <div className="grid lg:grid-cols-2 gap-8 items-center">
-          <div className="lg:order-2">
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-7">
+        <div className="space-y-10 mt-10">
+          <div className="grid lg:grid-cols-2 gap-8 items-center">
+            <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-7">
               <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-2">For coordinators</p>
               <h3 className="font-display text-xl font-semibold text-slate-100 mb-4">Invoice the agent, get paid, export.</h3>
               <ul className="space-y-3 text-sm text-slate-300">
-                <li><span className="font-semibold text-slate-100">Invoice from the deal.</span> Create an invoice on the transaction, with your logo, and send it to the agent.</li>
-                <li><span className="font-semibold text-slate-100">Get paid into your own Stripe.</span> Agents pay by card or bank through your connected Stripe account. The money goes to you, Relay takes no platform fee, and standard Stripe fees apply. You can also record Zelle or check payments.</li>
-                <li><span className="font-semibold text-slate-100">Export to QuickBooks.</span> Download invoices, a payments report and your agents as CSV files QuickBooks Online can import.</li>
+              <li><span className="font-semibold text-slate-100">Invoice from the deal.</span> Create an invoice on the transaction, with your logo, and send it to the agent.</li>
+              <li><span className="font-semibold text-slate-100">Get paid into your own Stripe.</span> Agents pay by card or bank through your connected Stripe account. The money goes to you, Relay takes no platform fee, and standard Stripe fees apply. You can also record Zelle or check payments.</li>
+              <li><span className="font-semibold text-slate-100">Export to QuickBooks.</span> Download invoices, a payments report and your agents as CSV files QuickBooks Online can import.</li>
               </ul>
             </div>
+            <InvoiceMockup />
+          </div>
+          <div className="grid lg:grid-cols-2 gap-8 items-center">
+            <CommissionStatementMockup />
             <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-7">
               <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-2">For brokerages</p>
               <h3 className="font-display text-xl font-semibold text-slate-100 mb-4">Statement, pay commission, export.</h3>
               <ul className="space-y-3 text-sm text-slate-300">
-                <li><span className="font-semibold text-slate-100">Commission statements.</span> Commission is calculated from your splits, caps and deductions, and agents get a statement with your logo.</li>
-                <li><span className="font-semibold text-slate-100">Pay through Stripe.</span> Agents connect their Stripe account, and you pay commissions from the statement through your own Stripe. Commission payouts through Relay are coming soon, and until then you record payments made the usual way.</li>
-                <li><span className="font-semibold text-slate-100">Export to QuickBooks.</span> Export the commission ledger as CSV or QuickBooks bills.</li>
+              <li><span className="font-semibold text-slate-100">Commission statements.</span> Commission is calculated from your splits, caps and deductions, and agents get a statement with your logo.</li>
+              <li><span className="font-semibold text-slate-100">Pay through Stripe.</span> Agents connect their Stripe account, and you pay commissions from the statement through your own Stripe. Commission payouts through Relay are coming soon, and until then you record payments made the usual way.</li>
+              <li><span className="font-semibold text-slate-100">Export to QuickBooks.</span> Export the commission ledger as CSV or QuickBooks bills.</li>
               </ul>
             </div>
           </div>
-          <div className="lg:order-1"><CommissionStatementMockup /></div>
-        </div>
         </div>
         <MockupCaption>Illustration of an invoice and a commission statement. Names and numbers are made up.</MockupCaption>
         <p className="text-xs text-slate-500 mt-4">Relay does not sync with QuickBooks on its own: you import the files you export.</p>
