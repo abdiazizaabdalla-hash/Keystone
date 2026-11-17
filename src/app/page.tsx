@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { decodeStoredRole } from '@/lib/authClient';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import PublicHeader from '@/components/PublicHeader';
-import { PayFlowIllustration } from '@/components/marketing/Illustrations';
 import { HeroWorkspaceMockup, ProblemContrastMockup, ContractIntakeMockup, TransactionWorkspaceMockup, ListingDashboardMockup, WorkflowBuilderMockup, BrokerageDashboardMockup, ConnectedMockup, AgentMini, CoordinatorMini, BrokerageMini, MockupCaption } from '@/components/marketing/ProductMockups';
 
 export default function Home() {
@@ -195,7 +194,6 @@ export default function Home() {
           <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">Run the whole business in one place, from the deal to the books.</h2>
           <p className="text-slate-400">Invoice or pay commissions through your own Stripe account, and export to QuickBooks when it is time to close the month. No retyping, no second system for money.</p>
         </div>
-        <PayFlowIllustration />
         <div className="grid lg:grid-cols-2 gap-6 mt-10">
           <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-7">
             <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-2">For coordinators</p>
