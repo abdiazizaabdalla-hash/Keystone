@@ -3,6 +3,7 @@ import { rosterFor } from '@/lib/oversightRoster';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
 import { agentLabels, loadOversightDeals } from '@/lib/oversight';
+import { assertBrokerageHas } from '@/lib/brokerageAccount';
 import { oversightError, todayIso } from '@/lib/oversightServer';
 import { compareAgents, lastMonths, monthlySeries, percentChange, periodKpis, pipelineNow, totalsOf } from '@/lib/oversightTrends';
 
@@ -14,6 +15,7 @@ export async function GET(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
     const { owner: user } = await resolveOversightActor(caller, 'view');
+    await assertBrokerageHas(user.id, 'advanced_analytics', 'Want deeper insight into brokerage performance? Upgrade to Brokerage Pro for historical production analytics.');
     const q = request.nextUrl.searchParams;
     const months = pick(q.get('months'), [6, 12, 24], 12);
     const period = pick(q.get('period'), [1, 3, 6, 12], 3);

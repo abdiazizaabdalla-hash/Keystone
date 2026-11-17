@@ -1,3 +1,4 @@
+import { assertBrokerageHas } from '@/lib/brokerageAccount';
 import { resolveBrokerageActor } from '@/lib/brokerageAdminsServer';
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
@@ -16,6 +17,7 @@ export async function GET(request: NextRequest) {
   try {
     const { user: caller } = await getUserFromRequest(request);
     const { owner: user } = await resolveBrokerageActor(caller, 'view');
+    await assertBrokerageHas(user.id, 'reporting_advanced', 'Want custom reports? Upgrade to Brokerage Pro for configurable deal-level reports.');
     const q = request.nextUrl.searchParams;
     const columns = cleanColumns(q.get('columns'));
     const filters = cleanFilters({ agents: q.get('agents'), scope: q.get('scope'), stages: q.get('stages'), from: q.get('from'), to: q.get('to') });

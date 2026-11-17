@@ -4,7 +4,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { rosterFor } from '@/lib/oversightRoster';
 import { oversightError } from '@/lib/oversightServer';
-import { assertBrokerageManageable } from '@/lib/brokerageAccount';
+import { assertBrokerageManageable, assertBrokerageHas } from '@/lib/brokerageAccount';
 import { resolveOversightActor } from '@/lib/brokerageAdminsServer';
 import { MAX_WORKFLOWS, cleanWorkflow } from '@/lib/brokerageAutomationRules';
 
@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
     const { user: caller } = await getUserFromRequest(request);
     const { owner: user } = await resolveOversightActor(caller, 'full');
     await assertBrokerageManageable(user.id);
+    await assertBrokerageHas(user.id, 'custom_workflows', 'Want to automate workflows across your entire brokerage? Upgrade to Brokerage Pro to create custom brokerage-wide workflows. Your six built-in office automations stay on.');
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const roster = await rosterFor(user.id);
     const checked = cleanWorkflow(body, new Set(roster.userIds));

@@ -93,7 +93,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Brokerages',
     q: 'What does a brokerage pay?',
-    a: 'Brokerage Basic is $99 a month for up to 10 agents and Brokerage Pro is $199 a month for up to 25. Extra agents are $8 a month each on Basic and $6 on Pro. Agents you include are covered by the brokerage plan.',
+    a: 'Brokerage Basic is $99 a month for up to 10 agents and Brokerage Pro is $199 a month for up to 25. Extra agents are $15 a month each on Basic and $20 on Pro. Prices shown are the recurring price; during the pilot nothing is charged. Agents you include are covered by the brokerage plan.',
   },
   {
     category: 'Brokerages',

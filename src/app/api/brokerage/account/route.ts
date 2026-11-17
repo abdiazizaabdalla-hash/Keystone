@@ -5,6 +5,7 @@ import { brokerageOn, assertBrokerageOwner } from '@/lib/oversight';
 import { oversightError } from '@/lib/oversightServer';
 import { getAccount, requestUpgrade } from '@/lib/brokerageAccount';
 import { PilotError, accessFor } from '@/lib/brokeragePilot';
+import { BROKERAGE_PRICING, estimatedMonthly, extraAgents } from '@/lib/brokeragePricing';
 
 // The brokerage owner's own account: where the pilot stands, how many seats, and a way to ask for the upgrade.
 //   GET                          -> { account: null } when not under a pilot or plan yet, else the status below
@@ -31,6 +32,8 @@ export async function GET(request: NextRequest) {
         canRequestUpgrade: access.canRequestUpgrade,
         upgradeRequested: Boolean(account.upgrade_requested_at),
         seats: { active, pending, limit: access.seatLimit },
+        // An estimate of the recurring price for the agents on the roster, not a bill: billing is a manual record today.
+        pricing: { included: BROKERAGE_PRICING[account.tier].includedAgents, extraAgents: extraAgents(account.tier, active), estimatedMonthly: estimatedMonthly(account.tier, active), billedAutomatically: false },
       },
     });
   } catch (error) {

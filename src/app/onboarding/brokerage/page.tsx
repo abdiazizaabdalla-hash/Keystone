@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
+import { BROKERAGE_PRICING, dollars } from '@/lib/brokeragePricing';
 import { DOCUMENT_CATEGORIES } from '@/lib/documentTaxonomy';
 
 // Setup for a brokerage owner. Nothing here is about fees, invoices or Stripe: those belong to coordinators. A brokerage sets up
@@ -206,8 +207,8 @@ export default function BrokerageOnboardingPage() {
           <section>
             <p className="text-slate-400 mb-3">Each agent gets a free Relay workspace while on your roster, and nothing is shared with you until they accept.</p>
             <div className="grid sm:grid-cols-2 gap-3 mb-4 text-sm">
-              <div className={`rounded-xl border p-3 ${seats?.tier === 'basic' ? 'border-blue-400 bg-blue-500/10' : 'border-white/10 bg-white/5'}`}><p className="font-semibold text-slate-100">Brokerage Basic</p><p className="text-slate-400">10 agents included, extra agents $8 a month</p></div>
-              <div className={`rounded-xl border p-3 ${seats?.tier === 'pro' ? 'border-blue-400 bg-blue-500/10' : 'border-white/10 bg-white/5'}`}><p className="font-semibold text-slate-100">Brokerage Pro</p><p className="text-slate-400">25 agents included, extra agents $6 a month</p></div>
+              <div className={`rounded-xl border p-3 ${seats?.tier === 'basic' ? 'border-blue-400 bg-blue-500/10' : 'border-white/10 bg-white/5'}`}><p className="font-semibold text-slate-100">Brokerage Basic</p><p className="text-slate-400">{BROKERAGE_PRICING.basic.includedAgents} agents included, extra agents {dollars(BROKERAGE_PRICING.basic.extraAgent)} a month. Agent Basic workspaces.</p></div>
+              <div className={`rounded-xl border p-3 ${seats?.tier === 'pro' ? 'border-blue-400 bg-blue-500/10' : 'border-white/10 bg-white/5'}`}><p className="font-semibold text-slate-100">Brokerage Pro</p><p className="text-slate-400">{BROKERAGE_PRICING.pro.includedAgents} agents included, extra agents {dollars(BROKERAGE_PRICING.pro.extraAgent)} a month. Agent Pro workspaces.</p></div>
             </div>
             {seats && <p className="text-sm text-slate-300 mb-3">Your plan includes {seats.limit} agents. {openSeats} {openSeats === 1 ? 'seat is' : 'seats are'} open.</p>}
             <div className="space-y-2">

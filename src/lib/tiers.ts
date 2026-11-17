@@ -29,14 +29,15 @@ export type BrokerageFeature =
   | 'compliance_templates_advanced' // several required-document lists by deal type
   | 'reporting_advanced' // configurable, deal-level reports
   | 'advanced_analytics' // trends and comparisons across agents and time
-  | 'advanced_permissions'; // scoped roles for administrators
+  | 'advanced_permissions' // scoped roles for administrators
+  | 'custom_workflows'; // the brokerage's own workflows (the six built-in rules are on both tiers)
 
 /** Planned, but not part of either tier yet. `brokerageHas` is false for these on every tier until they are built and placed. */
 export type UnreleasedBrokerageFeature = 'checklist_policies' | 'commission_oversight';
 export const UNRELEASED_BROKERAGE_FEATURES: readonly UnreleasedBrokerageFeature[] = ['checklist_policies', 'commission_oversight'];
 
 const BASIC_BROKERAGE: BrokerageFeature[] = ['dashboard', 'agent_management', 'deal_visibility', 'file_review', 'team_messaging', 'commission_statements', 'reporting_basic', 'multiple_administrators'];
-const PRO_BROKERAGE: BrokerageFeature[] = [...BASIC_BROKERAGE, 'compliance_templates_advanced', 'reporting_advanced', 'advanced_analytics', 'advanced_permissions'];
+const PRO_BROKERAGE: BrokerageFeature[] = [...BASIC_BROKERAGE, 'compliance_templates_advanced', 'reporting_advanced', 'advanced_analytics', 'advanced_permissions', 'custom_workflows'];
 
 export const BROKERAGE_FEATURES: Record<Tier, readonly BrokerageFeature[]> = { basic: BASIC_BROKERAGE, pro: PRO_BROKERAGE };
 

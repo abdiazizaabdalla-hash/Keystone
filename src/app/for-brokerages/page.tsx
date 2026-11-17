@@ -183,7 +183,7 @@ export default function ForBrokeragesPage() {
 
       <section id="plans" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <h2 className={h2}>Plans for brokerages</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">One price covers the brokerage and the agents you include. Your agents pay nothing. Need more agents? {extraAgent.basic} a month each on Basic, {extraAgent.pro} on Pro.</p>
+        <p className="text-slate-400 mb-8 max-w-2xl">One price covers the brokerage and the agents you include. Your agents pay nothing. Need more agents? {extraAgent.basic} a month each on Basic, {extraAgent.pro} a month each on Pro.</p>
         <div className="grid md:grid-cols-2 gap-6">
           {[basic, pro].map((t, i) => (
             <div key={t.name} className={`rounded-2xl border p-7 flex flex-col ${i === 1 ? 'border-blue-500 bg-slate-700 ring-2 ring-blue-500/20' : 'border-slate-700 bg-slate-800/60'}`}>

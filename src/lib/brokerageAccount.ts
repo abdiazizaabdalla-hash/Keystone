@@ -1,5 +1,6 @@
 import { AuthError } from './auth';
 import { supabaseServer } from './supabase';
+import { brokerageHas, type BrokerageFeature } from './tiers';
 import { sendBrokerageEmail } from './oversightServer';
 import { PilotError, accessFor, convert, daysLeft, effectiveStatus, extend, newPilot, noticeDue, noticeText, seatCheck, terminate, type AccountRow, type AccountStatus } from './brokeragePilot';
 
@@ -19,6 +20,15 @@ export interface AccountFull extends AccountRow {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const missingTable = (e: { code?: string } | null | undefined) => e?.code === 'PGRST205' || e?.code === '42P01';
+
+/**
+ * Server-side tier gate. A brokerage on Basic is refused a Pro feature with the message given. An owner with no account record
+ * (an older brokerage that predates tiers) is not newly blocked, so nothing is taken away from an existing customer.
+ */
+export async function assertBrokerageHas(ownerId: string, feature: BrokerageFeature, message: string): Promise<void> {
+  const account = await getAccount(ownerId);
+  if (account && !brokerageHas(account.tier, feature)) throw new AuthError(message, 403);
+}
 
 export async function getAccount(ownerId: string): Promise<AccountFull | null> {
   const { data, error } = await supabaseServer.from('brokerage_accounts').select('*').eq('owner_user_id', ownerId).maybeSingle();

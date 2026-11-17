@@ -5,6 +5,7 @@ import DemoRequestButton from '@/components/DemoRequestButton';
 import { PUBLIC_PLANS } from '@/lib/plans';
 import AgentPlanCards from '@/components/marketing/AgentPlanCards';
 import { BROKERAGE_TIERS, PILOT } from '@/lib/marketingPricing';
+import { BROKERAGE_PRICING, dollars } from '@/lib/brokeragePricing';
 import { WhoPaysIllustration } from '@/components/marketing/Illustrations';
 
 type Cell = boolean | string;
@@ -37,17 +38,17 @@ const COORDINATOR_TEAM_ONLY: Row[] = [
   { feature: 'Seats', cells: ['1', '1', '3 included'] },
 ];
 const BROKERAGE_ROWS: Row[] = [
-  { feature: 'Agents included', cells: ['10', '25'] },
-  { feature: 'Dashboard: open deals, late items, closings this week, last activity', cells: [true, true] },
-  { feature: 'Read-only view of every agent’s deals, deadlines and listings', cells: [true, true] },
-  { feature: 'Compliance desk with missing-document flags and a review record', cells: [true, true] },
-  { feature: 'Default required steps added to new files automatically', cells: [true, true] },
-  { feature: 'Office-wide automations: stalled files, deadlines, daily digest', cells: [true, true] },
+  { feature: 'Agents included', cells: [String(BROKERAGE_PRICING.basic.includedAgents), String(BROKERAGE_PRICING.pro.includedAgents)] },
+  { feature: 'Each additional agent, per month', cells: [dollars(BROKERAGE_PRICING.basic.extraAgent), dollars(BROKERAGE_PRICING.pro.extraAgent)] },
+  { feature: 'Workspace for every agent', cells: ['Agent Basic', 'Agent Pro'] },
+  { feature: 'Dashboard, read-only file view and compliance desk', cells: [true, true] },
+  { feature: 'Six built-in office automations', cells: [true, true] },
   { feature: 'Team board and private messages', cells: [true, true] },
   { feature: 'Commission statements, and paying agents through Stripe', cells: [true, true] },
-  { feature: 'Agent-by-month production export and Reports tab', cells: [true, true] },
-  { feature: 'Custom workflow builder with a template library', cells: [true, true] },
-  { feature: 'Several required-document lists, by deal type', cells: [false, true] },
+  { feature: 'Agent-by-month production export', cells: [true, true] },
+  { feature: 'Required-document lists', cells: ['One for every file', 'Up to 10, by deal type'] },
+  { feature: 'Trends and configurable deal-level reports', cells: [false, true] },
+  { feature: 'Custom brokerage workflow builder', cells: [false, true] },
   { feature: 'Extra administrators', cells: ['One', 'Up to five, with scoped roles'] },
 ];
 
