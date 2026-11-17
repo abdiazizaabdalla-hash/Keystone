@@ -37,8 +37,9 @@ export default function BrokerageOnboardingPage() {
   const [txSteps, setTxSteps] = useState<Step[]>([]);
   const [listSteps, setListSteps] = useState<Step[]>([]);
   const [automations, setAutomations] = useState<Automation[]>([]);
-  const [emails, setEmails] = useState('');
-  const [inviteResults, setInviteResults] = useState<{ email: string; ok: boolean; message: string }[]>([]);
+  const [agentEmails, setAgentEmails] = useState<string[]>(['', '', '']);
+  const [seats, setSeats] = useState<{ tier: 'basic' | 'pro'; limit: number; used: number } | null>(null);
+  const [inviteResults, setInviteResults] = useState<Record<number, { ok: boolean; message: string }>>({});
 
   const categories = useMemo(() => DOCUMENT_CATEGORIES.map((c) => ({ key: c.key, label: c.label, types: c.types.filter((t) => t !== 'General') })).filter((c) => c.types.length > 0), []);
 
@@ -63,6 +64,11 @@ export default function BrokerageOnboardingPage() {
         }
         const au = await authFetch('/api/brokerage/automations');
         if (au.ok) setAutomations(((await au.json()) as { automations: Automation[] }).automations);
+        const acct = await authFetch('/api/brokerage/account');
+        if (acct.ok) {
+          const a = ((await acct.json()) as { account: { tier: 'basic' | 'pro'; seats: { active: number; pending: number; limit: number } } | null }).account;
+          if (a) setSeats({ tier: a.tier, limit: a.seats.limit, used: a.seats.active + a.seats.pending });
+        }
         setReady(true);
       } catch (e) {
         if (e instanceof AuthRequiredError) { clearSession(); router.replace('/auth'); return; }
@@ -103,17 +109,17 @@ export default function BrokerageOnboardingPage() {
     }
   };
 
+  const openSeats = seats ? Math.max(seats.limit - seats.used, 0) : 10;
   const invite = async () => {
-    const list = [...new Set(emails.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter((e) => e.includes('@')))];
-    if (!list.length) return;
     setSaving(true);
-    const out: { email: string; ok: boolean; message: string }[] = [];
-    for (const email of list) {
-      try { await call('/api/oversight', 'POST', { email }); out.push({ email, ok: true, message: 'Invited' }); }
-      catch (e) { out.push({ email, ok: false, message: e instanceof Error ? e.message : 'Could not invite' }); }
+    const out: Record<number, { ok: boolean; message: string }> = {};
+    for (let i = 0; i < agentEmails.length; i++) {
+      const email = agentEmails[i].trim().toLowerCase();
+      if (!email.includes('@')) continue;
+      try { await call('/api/oversight', 'POST', { email }); out[i] = { ok: true, message: 'Invitation sent' }; }
+      catch (e) { out[i] = { ok: false, message: e instanceof Error ? e.message : 'Could not invite' }; }
     }
     setInviteResults(out);
-    setEmails(out.filter((r) => !r.ok).map((r) => r.email).join('\n'));
     setSaving(false);
   };
 
@@ -135,12 +141,20 @@ export default function BrokerageOnboardingPage() {
   const toggleType = (t: string) => setRequired((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
   const removeStep = (kind: 'tx' | 'list', i: number) => (kind === 'tx' ? setTxSteps((s) => s.filter((_, j) => j !== i)) : setListSteps((s) => s.filter((_, j) => j !== i)));
 
+  const dueText = (kind: 'tx' | 'list', d: number | null) => {
+    if (d === null) return 'No due date';
+    const n = Math.abs(d);
+    const days = `${n} ${n === 1 ? 'day' : 'days'}`;
+    if (kind === 'tx') return d === 0 ? 'Due the day the contract is accepted' : `Due ${days} after the contract is accepted`;
+    if (d === 0) return 'Due the day it goes live';
+    return d < 0 ? `Due ${days} before it goes live` : `Due ${days} after it goes live`;
+  };
   const stepList = (kind: 'tx' | 'list', items: Step[]) => (
     <ul className="space-y-1.5">
       {items.map((s, i) => (
         <li key={`${s.name}-${i}`} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm">
           <span className="flex-1 text-slate-100">{s.name}</span>
-          <span className="text-xs text-slate-400">{s.dueDays === null ? 'No due date' : `${s.dueDays} days`}</span>
+          <span className="text-xs text-slate-400">{dueText(kind, s.dueDays)}</span>
           <button type="button" onClick={() => removeStep(kind, i)} className="text-xs text-slate-400 hover:text-red-300" aria-label={`Remove ${s.name}`}>Remove</button>
         </li>
       ))}
@@ -160,12 +174,15 @@ export default function BrokerageOnboardingPage() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+      <main className={`${step === 1 ? 'max-w-6xl' : 'max-w-3xl'} mx-auto px-4 sm:px-6 py-6`}>
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Set up your brokerage · Step {step + 1} of {STEPS.length}</p>
         <ol className="flex gap-1.5 mb-8" aria-label="Progress">
           {STEPS.map((label, i) => <li key={label} className={`h-1.5 flex-1 rounded-full ${i <= step ? 'bg-blue-500' : 'bg-white/10'}`} aria-current={i === step ? 'step' : undefined} title={label} />)}
         </ol>
-        <h1 className="font-display text-3xl font-semibold mb-2">{STEPS[step]}</h1>
+        <div className="flex items-center justify-between gap-4 mb-2">
+          <h1 className="font-display text-3xl font-semibold">{STEPS[step]}</h1>
+          {step >= 1 && step < STEPS.length - 1 && <button type="button" onClick={() => { setError(''); setStep(step + 1); }} disabled={saving} className="shrink-0 text-sm text-slate-400 hover:text-slate-100 underline underline-offset-4">Skip this step</button>}
+        </div>
 
         {step === 0 && (
           <section>
@@ -181,23 +198,27 @@ export default function BrokerageOnboardingPage() {
 
         {step === 1 && (
           <section>
-            <p className="text-slate-400 mb-2">Choose the documents every file must contain. Relay checks each agent’s files against this list and flags what is missing on your compliance desk.</p>
-            <p className="text-xs text-slate-500 mb-5">You can change this any time. Brokerage Pro can also keep separate lists by deal type.</p>
-            <div className="space-y-5">
-              {categories.map((c) => (
-                <div key={c.key}>
-                  <p className="text-sm font-semibold text-slate-200 mb-2">{c.label}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {c.types.map((t) => {
-                      const on = required.includes(t);
-                      return <button key={t} type="button" aria-pressed={on} onClick={() => toggleType(t)}
-                        className={`px-3 py-1.5 rounded-lg border text-sm transition ${on ? 'bg-blue-500/20 border-blue-500/50 text-blue-100' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}>{on ? '✓ ' : ''}{t}</button>;
-                    })}
+            <p className="text-slate-400 text-sm mb-4">Tick the documents every file must contain. Relay flags missing ones on your compliance desk. Change this any time. <span className="text-slate-300">{required.length} chosen.</span></p>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {categories.map((c) => {
+                const all = c.types.every((t) => required.includes(t));
+                return (
+                  <div key={c.key} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-semibold text-slate-100">{c.label}</p>
+                      <button type="button" onClick={() => setRequired((cur) => (all ? cur.filter((t) => !c.types.includes(t)) : [...new Set([...cur, ...c.types])]))} className="text-xs text-blue-300 hover:text-blue-200">{all ? 'Clear all' : 'Select all'}</button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {c.types.map((t) => {
+                        const on = required.includes(t);
+                        return <button key={t} type="button" aria-pressed={on} onClick={() => toggleType(t)}
+                          className={`px-2 py-1 rounded-md border text-xs transition ${on ? 'bg-blue-500/25 border-blue-400/60 text-blue-100' : 'bg-transparent border-white/10 text-slate-400 hover:bg-white/10'}`}>{t}</button>;
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-            <p className="text-xs text-slate-500 mt-4">{required.length} required. Skip this if you want to decide later.</p>
           </section>
         )}
 
@@ -226,17 +247,24 @@ export default function BrokerageOnboardingPage() {
 
         {step === 4 && (
           <section>
-            <p className="text-slate-400 mb-4">Invite your agents by email. They get a free Relay workspace while they are on your roster, and nothing is shared with you until they accept.</p>
-            <textarea className={`${inputClass} min-h-32`} value={emails} onChange={(e) => setEmails(e.target.value)} placeholder={'agent@example.com\nanother@example.com'} aria-label="Agent emails" />
-            <div className="flex items-center gap-3 mt-3">
-              <button type="button" onClick={invite} disabled={saving || !emails.trim()} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg disabled:opacity-50">Send invitations</button>
-              <span className="text-xs text-slate-500">Separate addresses with a comma or a new line.</span>
+            <p className="text-slate-400 mb-3">Each agent gets a free Relay workspace while on your roster, and nothing is shared with you until they accept.</p>
+            <div className="grid sm:grid-cols-2 gap-3 mb-4 text-sm">
+              <div className={`rounded-xl border p-3 ${seats?.tier === 'basic' ? 'border-blue-400 bg-blue-500/10' : 'border-white/10 bg-white/5'}`}><p className="font-semibold text-slate-100">Brokerage Basic</p><p className="text-slate-400">10 agents included, extra agents $8 a month</p></div>
+              <div className={`rounded-xl border p-3 ${seats?.tier === 'pro' ? 'border-blue-400 bg-blue-500/10' : 'border-white/10 bg-white/5'}`}><p className="font-semibold text-slate-100">Brokerage Pro</p><p className="text-slate-400">25 agents included, extra agents $6 a month</p></div>
             </div>
-            {inviteResults.length > 0 && (
-              <ul className="mt-4 space-y-1 text-sm">
-                {inviteResults.map((r) => <li key={r.email} className={r.ok ? 'text-emerald-300' : 'text-red-300'}>{r.ok ? '✓' : '✗'} {r.email}: {r.message}</li>)}
-              </ul>
-            )}
+            {seats && <p className="text-sm text-slate-300 mb-3">Your plan includes {seats.limit} agents. {openSeats} {openSeats === 1 ? 'seat is' : 'seats are'} open.</p>}
+            <div className="space-y-2">
+              {agentEmails.map((v, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <input type="email" className={inputClass} value={v} onChange={(e) => setAgentEmails((cur) => cur.map((x, j) => (j === i ? e.target.value : x)))} placeholder={`Agent ${i + 1} email`} aria-label={`Agent ${i + 1} email`} />
+                  {inviteResults[i] && <span className={`text-xs whitespace-nowrap ${inviteResults[i].ok ? 'text-emerald-300' : 'text-red-300'}`}>{inviteResults[i].ok ? '✓ ' : ''}{inviteResults[i].message}</span>}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 mt-3">
+              <button type="button" onClick={() => setAgentEmails((cur) => [...cur, ''])} disabled={agentEmails.length >= Math.max(openSeats, 1)} className="text-sm text-blue-300 hover:text-blue-200 disabled:opacity-40">+ Add another agent</button>
+              <button type="button" onClick={invite} disabled={saving || !agentEmails.some((e) => e.includes('@'))} className="ml-auto px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg disabled:opacity-50">Send invitations</button>
+            </div>
           </section>
         )}
 
@@ -247,7 +275,6 @@ export default function BrokerageOnboardingPage() {
           {last
             ? <button type="button" onClick={finish} disabled={saving} className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg disabled:opacity-50">{saving ? 'Finishing...' : 'Go to your dashboard'}</button>
             : <button type="button" onClick={next} disabled={saving} className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg disabled:opacity-50">{saving ? 'Saving...' : 'Continue'}</button>}
-          {step >= 1 && !last && <button type="button" onClick={() => setStep(step + 1)} disabled={saving} className="text-sm text-slate-400 hover:text-slate-100">Skip for now</button>}
         </div>
       </main>
     </div>
