@@ -302,3 +302,78 @@ export async function createPayment(c: QbClient, p: { customerId: string; invoic
   });
   return r.Payment.Id;
 }
+
+// ---- vendors, bills and bill payments (brokerage commissions) ----
+
+export async function findOrCreateVendor(c: QbClient, a: { name: string; email?: string | null }): Promise<string> {
+  const name = a.name.replace(/[:\t\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Unknown agent';
+  const found = await query<{ Id: string }>(c, 'Vendor', `select Id from Vendor where DisplayName = ${qbQuote(name)}`);
+  if (found[0]) return found[0].Id;
+  const create = async (display: string) =>
+    (
+      await call<{ Vendor: { Id: string } }>(c, 'POST', 'vendor', {
+        DisplayName: display,
+        ...(a.email ? { PrimaryEmailAddr: { Address: a.email.slice(0, 100) } } : {}),
+      })
+    ).Vendor.Id;
+  try {
+    return await create(name);
+  } catch (e) {
+    // 6240: the name is already used by a customer or employee. Use a variant instead of failing.
+    if (e instanceof QbApiError && e.code === '6240') return create(`${name} (agent)`.slice(0, 100));
+    throw e;
+  }
+}
+
+/** The expense account commissions are filed under; created when the company does not have it yet. */
+export async function ensureExpenseAccount(c: QbClient, name: string): Promise<string> {
+  const found = await query<{ Id: string }>(c, 'Account', `select Id from Account where Name = ${qbQuote(name)}`);
+  if (found[0]) return found[0].Id;
+  const r = await call<{ Account: { Id: string } }>(c, 'POST', 'account', { Name: name.slice(0, 100), AccountType: 'Expense' });
+  return r.Account.Id;
+}
+
+export async function findBankAccountId(c: QbClient): Promise<string> {
+  const accounts = await query<{ Id: string; Active?: boolean }>(c, 'Account', "select Id, Active from Account where AccountType = 'Bank' MAXRESULTS 20");
+  const first = accounts.find((a) => a.Active !== false);
+  if (!first) throw new QbApiError('Your QuickBooks has no bank account to record the commission payment from. Add one, then try again.', 400);
+  return first.Id;
+}
+
+export async function findBillByNumber(c: QbClient, docNumber: string): Promise<{ id: string; balance: number; total: number } | null> {
+  const r = await query<{ Id: string; Balance: number; TotalAmt: number }>(c, 'Bill', `select Id, Balance, TotalAmt from Bill where DocNumber = ${qbQuote(docNumber)}`);
+  return r[0] ? { id: r[0].Id, balance: Number(r[0].Balance), total: Number(r[0].TotalAmt) } : null;
+}
+
+export async function createBill(c: QbClient, b: { docNumber: string; vendorId: string; accountId: string; amount: number; date: string; dueDate: string; description: string }): Promise<string> {
+  const amount = money(b.amount);
+  const r = await call<{ Bill: { Id: string } }>(c, 'POST', 'bill', {
+    DocNumber: b.docNumber.slice(0, 21),
+    TxnDate: b.date,
+    DueDate: b.dueDate,
+    VendorRef: { value: b.vendorId },
+    PrivateNote: 'Created by Relay TC',
+    Line: [{ Amount: amount, Description: b.description.slice(0, 4000), DetailType: 'AccountBasedExpenseLineDetail', AccountBasedExpenseLineDetail: { AccountRef: { value: b.accountId } } }],
+  });
+  return r.Bill.Id;
+}
+
+export async function getBillBalance(c: QbClient, id: string): Promise<{ balance: number; total: number }> {
+  const r = await call<{ Bill: { Balance: number; TotalAmt: number } }>(c, 'GET', `bill/${encodeURIComponent(id)}`);
+  return { balance: Number(r.Bill.Balance), total: Number(r.Bill.TotalAmt) };
+}
+
+export async function createBillPayment(c: QbClient, p: { vendorId: string; billId: string; bankAccountId: string; amount: number; date: string; ref?: string; note?: string }): Promise<string> {
+  const amount = money(p.amount);
+  const r = await call<{ BillPayment: { Id: string } }>(c, 'POST', 'billpayment', {
+    VendorRef: { value: p.vendorId },
+    PayType: 'Check',
+    TotalAmt: amount,
+    TxnDate: p.date,
+    ...(p.ref ? { DocNumber: p.ref.slice(0, 21) } : {}),
+    PrivateNote: p.note || 'Recorded by Relay TC',
+    CheckPayment: { BankAccountRef: { value: p.bankAccountId } },
+    Line: [{ Amount: amount, LinkedTxn: [{ TxnId: p.billId, TxnType: 'Bill' }] }],
+  });
+  return r.BillPayment.Id;
+}

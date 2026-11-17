@@ -898,7 +898,7 @@ function SettingsContent() {
         </div>
 
 
-        <QuickBooksConnectCard />
+        <QuickBooksConnectCard audience={brokerOwner === true ? 'brokerage' : 'tc'} />
 
         <CalendarConnectCard audience="tc" />
 

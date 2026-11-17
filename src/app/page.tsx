@@ -215,13 +215,13 @@ export default function Home() {
               <ul className="space-y-3 text-sm text-slate-300">
               <li><span className="font-semibold text-slate-100">Commission statements.</span> Commission is calculated from your splits, caps and deductions, and agents get a statement with your logo.</li>
               <li><span className="font-semibold text-slate-100">Pay through Stripe.</span> Agents connect their Stripe account, and you pay commissions from the statement through your own Stripe. Commission payouts through Relay are coming soon, and until then you record payments made the usual way.</li>
-              <li><span className="font-semibold text-slate-100">Export to QuickBooks.</span> Export the commission ledger as CSV or as QuickBooks bills and vendors, and import them into QuickBooks Online.</li>
+              <li><span className="font-semibold text-slate-100">Sync with QuickBooks.</span> Connect QuickBooks Online and each commission your agent agrees to is created there as a bill, and a payment is recorded when you mark it paid. Prefer files? Export the commission ledger as CSV or QuickBooks bills and vendors.</li>
               </ul>
             </div>
           </div>
         </div>
         <MockupCaption>Illustration of an invoice and a commission statement. Names and numbers are made up.</MockupCaption>
-        <p className="text-xs text-slate-500 mt-4">The direct QuickBooks connection is for coordinators and sends invoices and payments one way, from Relay to QuickBooks. Relay never edits or deletes anything in your QuickBooks. Brokerage commission exports are files you import.</p>
+        <p className="text-xs text-slate-500 mt-4">The QuickBooks connection sends one way, from Relay to QuickBooks: invoices and payments for coordinators, commission bills and payments for brokerages. Relay never edits or deletes anything in your QuickBooks.</p>
       </section>
 
       {/* 7. Brokerage advantage */}

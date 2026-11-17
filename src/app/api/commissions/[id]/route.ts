@@ -1,4 +1,5 @@
 import { assertBrokerageManageable } from '@/lib/brokerageAccount';
+import { queueQuickBooksCommissionSync } from '@/lib/quickbooksSync';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { actingBrokerage } from '@/lib/brokerageAdminsServer';
@@ -134,6 +135,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (error) throw error;
     if (!data) return bad('That changed while you were looking. Reload and try again.', 409);
     await logAudit(request, user, `commission.${action}`, { entityType: 'commission', entityId: row.id, metadata: { transactionId: row.transaction_id, side } });
+    if (data.status === 'accepted' || data.status === 'paid') queueQuickBooksCommissionSync(row.id);
     if (notify) await notifyCommission({ ...notify, actorId: user.id, transactionId: row.transaction_id });
     return NextResponse.json(viewOf(data as CommissionRow));
   } catch (error) {
