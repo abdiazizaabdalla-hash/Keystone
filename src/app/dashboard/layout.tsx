@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { getValidToken, clearSession, authFetch } from '@/lib/authClient';
 import NotificationBell from '@/components/NotificationBell';
 import ToastHost from '@/components/ToastHost';
+import BrokerageWelcome from '@/components/BrokerageWelcome';
 import FirstRunGuide, { saveFirstRunGuideDone, resetFirstRunGuideLocal, type GuideKind } from '@/components/FirstRunGuide';
 import PageHint from '@/components/PageHint';
 import { isTeamPlan } from '@/lib/plans';
@@ -743,7 +744,19 @@ export default function DashboardLayout({
       <ToastHost />
       </div>
       {isFeatureOnClient('automation') && automationAllowed && brokerOperator !== true && !(isAgentAccount && !hasWorkspace) && <ApprovalPopup />}
-      {guideKind && <FirstRunGuide key={`${guideKind}-${guideRestartKey}`} kind={guideKind} restartKey={guideRestartKey} onFinished={handleGuideFinished} onHintSeen={markHintSeen} />}
+      {guideKind && brokerOwner === true && (
+        <BrokerageWelcome
+          onClose={(done) => {
+            if (done) {
+              saveFirstRunGuideDone('transaction', true);
+              saveFirstRunGuideDone('listing', true);
+              setGuides({ transaction: false, listing: false });
+            }
+            setGuideKind(null);
+          }}
+        />
+      )}
+      {guideKind && brokerOwner === false && <FirstRunGuide key={`${guideKind}-${guideRestartKey}`} kind={guideKind} restartKey={guideRestartKey} onFinished={handleGuideFinished} onHintSeen={markHintSeen} />}
       {hintsEligible && <PageHint seen={seenHints} suspended={guideKind !== null || tutorialMenuOpen} onSeen={markHintSeen} />}
       {tutorialMenuOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Tutorials" onClick={() => setTutorialMenuOpen(false)}>
@@ -751,6 +764,13 @@ export default function DashboardLayout({
             <h2 className="text-lg font-display font-semibold text-slate-100 mb-1">Tutorials</h2>
             <p className="text-sm text-slate-400 mb-4">Walk through the real screens again, as many times as you like.</p>
             <div className="space-y-2.5">
+              {brokerOwner === true ? (
+                <button type="button" onClick={() => startGuide('transaction')} className="w-full text-left px-4 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition">
+                  Brokerage welcome
+                  <span className="block text-xs font-normal text-blue-100">Invite agents, compliance, automations and reports</span>
+                </button>
+              ) : (
+                <>
               <button type="button" onClick={() => startGuide('transaction')} className="w-full text-left px-4 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition">
                 Transactions tour
                 <span className="block text-xs font-normal text-blue-100">Add an agent, create a deal, explore it</span>
@@ -759,6 +779,8 @@ export default function DashboardLayout({
                 Listings tour
                 <span className="block text-xs font-normal text-slate-400">Create a listing, offers, showings, documents</span>
               </button>
+                </>
+              )}
             </div>
             <button type="button" onClick={() => setTutorialMenuOpen(false)} className="mt-4 text-sm text-slate-400 hover:text-slate-200 transition">
               Close
