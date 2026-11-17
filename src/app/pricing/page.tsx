@@ -89,8 +89,8 @@ export default function PricingPage() {
 
       <section className="max-w-4xl mx-auto px-6 pt-20 pb-10 text-center">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Pricing</p>
-        <h1 className="font-display text-4xl sm:text-5xl font-semibold text-slate-100 mb-5">One product, priced for who you are.</h1>
-        <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">Pick the row that describes you. Each one is separate, so you only ever read your own prices.</p>
+        <h1 className="font-display text-4xl sm:text-5xl font-semibold text-slate-100 mb-5">One platform. Pricing that fits how you work.</h1>
+        <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">Agents run their own deals. Coordinators run deals for agents. Brokerages bring all of their agents onto one workspace. Pick the one that describes you and see only your own prices.</p>
         <nav className="flex flex-wrap items-center justify-center gap-3 text-sm">
           <a href="#agents" className="px-4 py-2 rounded-full border border-slate-700 text-slate-200 hover:border-slate-500 transition">I’m an agent</a>
           <a href="#coordinators" className="px-4 py-2 rounded-full border border-slate-700 text-slate-200 hover:border-slate-500 transition">I’m a coordinator</a>
@@ -102,7 +102,7 @@ export default function PricingPage() {
 
       <section id="coordinators" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">TCs and teams</h2>
-        <p className="text-slate-400 mb-8">Free for 14 days, no card needed. Templates are on every plan. Automations are on Pro and Team.</p>
+        <p className="text-slate-400 mb-8">Free for 14 days, no card needed. Document and email templates are included on every plan. Custom checklist templates and automations are available on Pro and Team.</p>
         <div className="grid md:grid-cols-3 gap-6">
           {PUBLIC_PLANS.map((plan) => (
             <div key={plan.id} className={`rounded-xl border p-8 flex flex-col ${plan.popular ? 'border-blue-500 bg-slate-700 ring-2 ring-blue-500/20' : 'border-slate-700 bg-slate-800/60'}`}>
@@ -132,14 +132,14 @@ export default function PricingPage() {
 
       <section id="agents" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Agents</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">Free for 14 days, no card needed. Automations are on Pro. If your brokerage uses Relay, ask them to invite you.</p>
+        <p className="text-slate-400 mb-8 max-w-2xl">Free for 14 days, no card needed. Document and email templates are included on every plan. Custom checklist templates and automations are on Pro. If your brokerage uses Relay, ask them to invite you.</p>
         <AgentPlanCards />
         <ComparisonTable columns={['Starter', 'Pro']} rows={AGENT_ROWS} />
       </section>
 
       <section id="brokerages" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Brokerages</h2>
-        <p className="text-slate-400 mb-8 max-w-2xl">One price for the brokerage and the agents you include. Your agents pay nothing. {PILOT}</p>
+        <p className="text-slate-400 mb-8 max-w-2xl">Every agent gets a full individual Relay Pro account, paid for by the brokerage. Brokerage Pro is $199 a month for 25 agents. The same 25 Agent Pro accounts would cost $975 a month bought one by one. Your agents pay nothing. {PILOT}</p>
         <div className="grid md:grid-cols-2 gap-6">
           {[basic, pro].map((t, i) => (
             <div key={t.name} className={`rounded-xl border p-8 ${i === 1 ? 'border-blue-500 bg-slate-700 ring-2 ring-blue-500/20' : 'border-slate-700 bg-slate-800/60'}`}>
@@ -161,12 +161,12 @@ export default function PricingPage() {
           <li className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />You pay Relay for your plan, the one you picked above. That is the only thing Relay charges you for.</li>
           <li className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />Money between the people on a deal is theirs. Coordinators invoice agents, agents can invoice for other work, and brokerages issue commission statements to their agents.</li>
         </ul>
-        <p className="text-slate-400">Take payments through your own connected Stripe account, or record payments received another way, such as Zelle or a check. Relay charges no platform fee on invoice payments.</p>
+        <p className="text-slate-400">Take payments through your own connected Stripe account, or record payments received another way, such as Zelle or a check. Relay charges no platform fee on invoice payments. Standard Stripe processing fees apply, and the money goes straight to your own Stripe account.</p>
       </section>
 
       <section className="max-w-4xl mx-auto px-6 py-20 border-t border-slate-700 text-center">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Start where you are</h2>
-        <p className="text-slate-400 mb-8">Coordinators start free today. Agents and brokerages start with a pilot.</p>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Get started with Relay</h2>
+        <p className="text-slate-400 mb-8">Coordinators and agents start with a free trial. Brokerages start with a pilot.</p>
         <div className="flex items-center justify-center gap-4 flex-wrap">
           <Link href="/auth?mode=signup&plan=starter" className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition">Start free as a coordinator</Link>
           <DemoRequestButton className="px-6 py-3 border border-slate-600 text-slate-200 hover:border-slate-500 font-semibold rounded-lg transition" label="Request a demo" />

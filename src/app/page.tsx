@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { decodeStoredRole } from '@/lib/authClient';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import PublicHeader from '@/components/PublicHeader';
+import { PayFlowIllustration } from '@/components/marketing/Illustrations';
 import { HeroWorkspaceMockup, ProblemContrastMockup, ContractIntakeMockup, TransactionWorkspaceMockup, ListingDashboardMockup, WorkflowBuilderMockup, BrokerageDashboardMockup, ConnectedMockup, AgentMini, CoordinatorMini, BrokerageMini, MockupCaption } from '@/components/marketing/ProductMockups';
 
 export default function Home() {
@@ -187,6 +188,25 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Invoicing, Stripe and QuickBooks */}
+      <section id="get-paid" className="max-w-7xl mx-auto px-6 py-20 border-t border-slate-700 scroll-mt-20">
+        <div className="max-w-3xl mb-10">
+          <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Invoicing, Stripe and QuickBooks</p>
+          <h2 className="font-display text-3xl sm:text-4xl font-semibold text-slate-100 mb-4">Run the whole business in one place, from the deal to the books.</h2>
+          <p className="text-slate-400">Invoice from the deal, get paid through your own Stripe account, and export to QuickBooks when it is time to close the month. No retyping, no second system for money.</p>
+        </div>
+        <PayFlowIllustration />
+        <div className="grid md:grid-cols-3 gap-5 mt-10">
+          {[
+            ['Invoice from the deal', 'Create an invoice on the transaction, with your logo, and send it to the agent. The fee and the deal are already attached.'],
+            ['Get paid into your own Stripe', 'Agents pay by card or bank through your connected Stripe account. The money goes to you, and Relay takes no platform fee. Standard Stripe processing fees apply. You can also record Zelle or check payments.'],
+            ['Export to QuickBooks', 'Download invoices, a payments report and your agents as CSV files QuickBooks Online can import. Relay does not sync with QuickBooks on its own: you import the files.'],
+          ].map(([t, b]) => (
+            <div key={t} className="rounded-xl border border-slate-700 bg-slate-800/50 p-6"><h3 className="font-semibold text-slate-100 mb-1.5">{t}</h3><p className="text-sm text-slate-400">{b}</p></div>
+          ))}
+        </div>
+      </section>
+
       {/* 7. Brokerage advantage */}
       <section className="max-w-7xl mx-auto px-6 py-20 border-t border-slate-700">
         <div className="max-w-3xl mb-12">
@@ -237,23 +257,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Trust strip */}
-      <section className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700">
-        <div className="grid md:grid-cols-2 gap-5">
-          <Link href="/compare" className="block p-7 bg-slate-800/60 border border-slate-700 hover:border-blue-400/60 rounded-xl transition">
-            <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-2">How we compare</p>
-            <h3 className="font-display text-xl font-semibold text-slate-100 mb-2">Next to Dotloop, SkySlope and the rest.</h3>
-            <p className="text-sm text-slate-400 mb-3">What each is built for, what it costs, and where each one is ahead today.</p>
-            <span className="text-sm text-blue-400">Read the comparison →</span>
-          </Link>
-          <Link href="/security" className="block p-7 bg-slate-800/60 border border-slate-700 hover:border-blue-400/60 rounded-xl transition">
-            <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-2">Security and trust</p>
-            <h3 className="font-display text-xl font-semibold text-slate-100 mb-2">Private files, two-step sign-in, an audit log.</h3>
-            <p className="text-sm text-slate-400 mb-3">What protects your transactions today, and what we are working on next.</p>
-            <span className="text-sm text-blue-400">See how we protect your files →</span>
-          </Link>
-        </div>
-      </section>
 
       {/* Pricing teaser */}
       <section className="max-w-6xl mx-auto px-6 py-20 border-t border-slate-700">
@@ -308,8 +311,6 @@ export default function Home() {
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
             <Link href="/for-brokerages" className="hover:text-slate-200 transition">For Brokerages</Link>
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
-            <Link href="/compare" className="hover:text-slate-200 transition">Compare</Link>
-            <Link href="/security" className="hover:text-slate-200 transition">Security</Link>
             <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
