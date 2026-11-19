@@ -40,7 +40,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen bg-slate-900 flex flex-col">
       <PublicHeader />
 
-      <div className="flex-1 flex items-center justify-center p-4">
+      <div className="flex-1 flex items-start justify-center px-4 pt-8 pb-12 sm:pt-14">
         <div className="w-full max-w-md">
           <div className="flex justify-center mb-6">
             <span className="w-14 h-14 bg-white rounded-xl flex items-center justify-center p-2 shadow-md">
