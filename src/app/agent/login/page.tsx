@@ -105,14 +105,6 @@ function AgentLoginContent() {
 
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          {/* Logo */}
-          <div className="text-center mb-8">
-            <span className="inline-block bg-white rounded-xl p-3 shadow-md mb-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/relay-logo.png" alt="Relay TC" className="h-10 w-auto object-contain" />
-            </span>
-          </div>
-
           {/* Card */}
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl">
             <h2 className="text-2xl font-display font-semibold text-slate-100 mb-1">

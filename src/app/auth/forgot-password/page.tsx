@@ -42,12 +42,6 @@ export default function ForgotPasswordPage() {
 
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <span className="inline-block bg-white rounded-xl p-3 shadow-md mb-4">
-              <img src="/relay-logo.png" alt="Relay TC" className="h-10 w-auto object-contain" />
-            </span>
-          </div>
-
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl">
             {sent ? (
               <>
