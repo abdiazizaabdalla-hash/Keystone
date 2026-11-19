@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import PublicHeader from '@/components/PublicHeader';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -36,26 +37,19 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col">
-      <div className="px-6 py-5">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-              <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
-            </span>
-          </Link>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-900 flex flex-col">
+      <PublicHeader />
 
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="text-center mb-8">
-            <span className="inline-block bg-white rounded-xl p-3 shadow-md mb-4">
-              <img src="/relay-logo.png" alt="Relay TC" className="h-10 w-auto object-contain" />
+          <div className="flex justify-center mb-6">
+            <span className="w-14 h-14 bg-white rounded-xl flex items-center justify-center p-2 shadow-md">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/relay-icon.png" alt="Relay" className="w-full h-full object-contain" />
             </span>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl min-h-[26rem] flex flex-col justify-center">
             {sent ? (
               <>
                 <h2 className="text-2xl font-display font-semibold text-slate-100 mb-3">Check your email</h2>

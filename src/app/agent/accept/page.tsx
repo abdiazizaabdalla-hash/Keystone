@@ -124,7 +124,7 @@ function AcceptContent() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md text-center">
         <img src="/relay-icon.png" alt="Relay TC" className="w-16 h-16 object-contain inline-block mb-6 bg-white rounded-xl p-2" />
 
@@ -134,7 +134,7 @@ function AcceptContent() {
             <p className="text-slate-400 text-sm">Hang tight, this only takes a second.</p>
           </>
         ) : (
-          <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl min-h-[26rem] flex flex-col justify-center">
             <h1 className="text-xl font-display font-semibold text-slate-100 mb-3">Couldn&apos;t log you in</h1>
             <p className="text-slate-400 text-sm mb-6">{errorMessage}</p>
             <Link href="/agent/login?mode=link" className="text-blue-400 hover:text-blue-300 font-medium text-sm">

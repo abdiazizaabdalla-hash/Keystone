@@ -188,3 +188,37 @@ export async function setBrokerageTier(ownerId: string, adminId: string, tier: '
   }
   return (await getAccount(ownerId))!;
 }
+
+// ---- Stripe subscription (Relay's own record follows what Stripe confirms) ----
+
+/** A brokerage paid for a tier through Stripe: the account becomes converted at that tier. Creates the record when there is none. */
+export async function markSubscribed(ownerId: string, tier: 'basic' | 'pro'): Promise<void> {
+  const account = await getAccount(ownerId);
+  if (!account) {
+    const { error } = await supabaseServer.from('brokerage_accounts').insert({ owner_user_id: ownerId, status: 'converted', tier, extra_seats: 0, extension_used: false, converted_on: today() });
+    if (error) throw error;
+  } else {
+    await save(ownerId, { status: 'converted', tier, converted_on: today(), terminated_on: null });
+  }
+  await recordEvent(ownerId, 'subscribed', { note: `Subscribed to ${tier === 'pro' ? 'Brokerage Pro' : 'Brokerage'} through Stripe` });
+  await tellOwner(ownerId, null, 'brokerage_subscribed', `Welcome to ${tier === 'pro' ? 'Brokerage Pro' : 'Brokerage'}`, [
+    `Your subscription is active. Your plan includes ${tier === 'pro' ? 25 : 10} agents. You can add more agents any time from Collaborate.`,
+  ]);
+}
+
+/** The Stripe subscription ended or stopped being paid: management pauses and every record is kept, the same as an ended pilot. */
+export async function markSubscriptionEnded(ownerId: string): Promise<void> {
+  const account = await getAccount(ownerId);
+  if (!account || account.status === 'terminated') return;
+  await save(ownerId, { status: 'terminated', terminated_on: today() });
+  await recordEvent(ownerId, 'subscription_ended', { note: 'The Stripe subscription ended' });
+  await tellOwner(ownerId, null, 'brokerage_subscription_ended', 'Your brokerage subscription has ended', [
+    'Your agents, deals and records are untouched and stay readable. Managing the brokerage is paused. Subscribe again from Collaborate to continue.',
+  ]);
+}
+
+/** Saves how many extra agents the brokerage has bought. */
+export async function recordExtraSeats(ownerId: string, extraSeats: number, actorId: string | null): Promise<void> {
+  await save(ownerId, { extra_seats: extraSeats });
+  await recordEvent(ownerId, 'extra_seats_changed', { actorId, note: `Extra agents set to ${extraSeats}` });
+}

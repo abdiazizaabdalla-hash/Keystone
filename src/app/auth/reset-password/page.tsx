@@ -119,13 +119,13 @@ function ResetPasswordContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src="/relay-icon.png" alt="Relay TC" className="w-16 h-16 object-contain inline-block mb-2" />
         </div>
 
-        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl min-h-[26rem] flex flex-col justify-center">
           {linkStatus === 'checking' && (
             <>
               <h1 className="text-xl font-display font-semibold text-slate-100 mb-2">Verifying your link…</h1>

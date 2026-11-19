@@ -177,6 +177,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/signing-requests/public/[token]': { kind: 'token', methods: ['GET', 'POST'], why: "Signer opens and signs via emailed token; rate limited." },
   '/api/step-email-templates': { kind: 'session', methods: ['DELETE', 'GET', 'PUT'] },
   '/api/stripe/checkout': { kind: 'session', methods: ['POST'] },
+  '/api/stripe/brokerage/checkout': { kind: 'session', methods: ['POST'], why: 'A brokerage owner starts Checkout for Brokerage or Brokerage Pro; refused unless the caller owns a brokerage, and nothing is granted until Stripe confirms payment by webhook.' },
   '/api/stripe/connect/account': { kind: 'session', methods: ['GET'] },
   '/api/stripe/connect/return': { kind: 'oauth-callback', methods: ['GET'], why: "Browser return from Stripe onboarding; re-verifies account status with Stripe." },
   '/api/stripe/connect/start': { kind: 'session', methods: ['POST'] },

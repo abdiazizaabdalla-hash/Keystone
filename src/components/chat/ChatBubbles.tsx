@@ -35,8 +35,8 @@ export function colourFor(key: string) {
   return PALETTE[colourIndex(key, PALETTE.length)];
 }
 
-export function Avatar({ name, id, size = 'md' }: { name: string; id: string; size?: 'sm' | 'md' | 'lg' }) {
-  const dim = size === 'lg' ? 'h-10 w-10 text-sm' : size === 'sm' ? 'h-6 w-6 text-[10px]' : 'h-8 w-8 text-xs';
+export function Avatar({ name, id, size = 'md' }: { name: string; id: string; size?: 'sm' | 'md' | 'lg' | 'xl' }) {
+  const dim = size === 'xl' ? 'h-12 w-12 text-base' : size === 'lg' ? 'h-10 w-10 text-sm' : size === 'sm' ? 'h-6 w-6 text-[10px]' : 'h-8 w-8 text-xs';
   return (
     <span aria-hidden className={`${dim} ${colourFor(id).dot} shrink-0 rounded-full flex items-center justify-center font-semibold text-white`}>
       {initials(name)}

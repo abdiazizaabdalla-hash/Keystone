@@ -226,13 +226,13 @@ export default function MessagesInbox({ members, isOwner, viewer = isOwner ? 'ow
   const sectionLabel = (text: string) => <p className="px-4 pt-3 pb-1 text-[11px] uppercase tracking-wide text-slate-500">{text}</p>;
 
   return (
-    <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg overflow-hidden mb-6">
+    <div className="bg-slate-900/40 border border-white/10 rounded-2xl overflow-hidden mb-6">
       <div className="px-4 md:px-6 py-4 border-b border-slate-600">
         <h2 className="font-display font-semibold text-slate-100">Messages</h2>
         <p className="text-xs text-slate-400 mt-0.5">{isAgentViewer ? 'The brokerage board is seen by the whole brokerage. Messages with your broker are private between the two of you.' : 'The brokerage board is seen by your whole brokerage. Messages with an agent or teammate are private between the two of you.'}</p>
       </div>
 
-      <div className="md:flex md:h-[36rem]">
+      <div className="md:flex md:h-[calc(100vh-14rem)] md:min-h-[30rem]">
         <div className={`${showChat ? 'hidden' : 'block'} md:block md:w-80 md:shrink-0 md:border-r border-slate-600 overflow-y-auto max-h-[32rem] md:max-h-none`}>
           {row({ kind: 'board' }, active.kind === 'board', <span className="h-10 w-10 shrink-0 rounded-full bg-blue-500/20 text-blue-300 flex items-center justify-center" aria-hidden><svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V5Z" /></svg></span>, 'Brokerage board', boardPreview ? `${boardPreview.who}: ${boardPreview.body}` : 'Posts for the whole brokerage', boardPreview ? short(boardPreview.at) : null, boardUnread)}
 
@@ -276,12 +276,12 @@ export default function MessagesInbox({ members, isOwner, viewer = isOwner ? 'ow
                 value={draft}
                 onChange={(e) => setDraft(e.target.value.slice(0, MAX_LENGTH))}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-                rows={2}
+                rows={1}
                 placeholder={active.kind === 'board' ? 'Post to the brokerage board… (Enter to send)' : `Message ${title}… (Enter to send)`}
                 aria-label="Write a message"
-                className="flex-1 min-w-0 px-3 py-2 bg-slate-900/60 border border-slate-600 rounded-xl text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:border-blue-400 resize-none"
+                className="flex-1 min-w-0 px-4 py-2 bg-transparent border border-white/15 rounded-full text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:border-blue-400 resize-none"
               />
-              <button type="button" onClick={send} disabled={sending || !draft.trim()} className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition disabled:opacity-50">{sending ? 'Sending…' : 'Send'}</button>
+              <button type="button" onClick={send} disabled={sending || !draft.trim()} className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-full transition disabled:opacity-50">{sending ? 'Sending…' : 'Send'}</button>
             </div>
           </div>
         </div>

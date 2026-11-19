@@ -33,7 +33,7 @@ export default function AgentMessagesPage() {
   }, [on]);
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl">
+    <div className="p-4 md:p-8">
       <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-4">Messages</h1>
       {(!on || state === null) && <p className="text-sm text-slate-400">Join a brokerage to message your broker and team here. Messages about a deal are inside that deal.</p>}
       {on && state === undefined && <p className="text-sm text-slate-400">Loading…</p>}

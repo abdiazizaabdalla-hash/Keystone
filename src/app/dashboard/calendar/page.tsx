@@ -165,7 +165,7 @@ export default function CalendarPage() {
   const openDayEvents = openDay ? byDay.get(openDay) || [] : [];
 
   return (
-    <div className="p-4 md:p-10 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8">
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <div className="mr-auto">
           <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100">Calendar</h1>

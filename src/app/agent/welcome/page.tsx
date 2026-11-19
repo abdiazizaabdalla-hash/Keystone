@@ -91,14 +91,14 @@ function WelcomeContent() {
 
   if (checkingSession) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
         <p className="text-slate-400 text-sm">Hang tight…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <img src="/relay-icon.png" alt="Relay TC" className="w-16 h-16 object-contain inline-block mb-4 bg-white rounded-xl p-2" />
@@ -108,7 +108,7 @@ function WelcomeContent() {
           </p>
         </div>
 
-        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl min-h-[26rem] flex flex-col justify-center">
           {error && (
             <div className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-200 text-sm">
               {error}
