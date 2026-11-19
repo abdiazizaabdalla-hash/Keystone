@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { priceIdFor, brokeragePriceIds, brokerageBillingReady, STRIPE_PRICE_ENV_VARS } from '@/lib/stripePrices';
+import { priceIdFor, brokeragePriceId, brokerageBillingReady, STRIPE_PRICE_ENV_VARS } from '@/lib/stripePrices';
 
 describe('priceIdFor', () => {
   it('uses the separate agent and coordinator variables when both are set', () => {
@@ -26,21 +26,18 @@ describe('priceIdFor', () => {
 });
 
 describe('brokerage prices', () => {
-  const env = {
-    STRIPE_PRICE_BROKERAGE_BASIC: 'b', STRIPE_PRICE_BROKERAGE_BASIC_EXTRA_AGENT: 'bx',
-    STRIPE_PRICE_BROKERAGE_PRO: 'p', STRIPE_PRICE_BROKERAGE_PRO_EXTRA_AGENT: 'px',
-  };
+  const env = { STRIPE_PRICE_BROKERAGE_BASIC: 'b', STRIPE_PRICE_BROKERAGE_PRO: 'p' };
   it('keeps Basic and Pro separate', () => {
-    expect(brokeragePriceIds('basic', env)).toEqual({ base: 'b', extraAgent: 'bx' });
-    expect(brokeragePriceIds('pro', env)).toEqual({ base: 'p', extraAgent: 'px' });
+    expect(brokeragePriceId('basic', env)).toBe('b');
+    expect(brokeragePriceId('pro', env)).toBe('p');
   });
-  it('is ready for sale only when both prices of a tier are set', () => {
+  it('is ready for sale only when that tier\'s price is set', () => {
     expect(brokerageBillingReady('pro', env)).toBe(true);
-    expect(brokerageBillingReady('basic', { STRIPE_PRICE_BROKERAGE_BASIC: 'b' })).toBe(false);
+    expect(brokerageBillingReady('basic', { STRIPE_PRICE_BROKERAGE_PRO: 'p' })).toBe(false);
     expect(brokerageBillingReady('pro', {})).toBe(false);
   });
-  it('lists the nine variables', () => {
-    expect(STRIPE_PRICE_ENV_VARS).toHaveLength(9);
-    expect(new Set(STRIPE_PRICE_ENV_VARS).size).toBe(9);
+  it('lists the seven variables', () => {
+    expect(STRIPE_PRICE_ENV_VARS).toHaveLength(7);
+    expect(new Set(STRIPE_PRICE_ENV_VARS).size).toBe(7);
   });
 });

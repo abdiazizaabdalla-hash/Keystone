@@ -5,8 +5,8 @@ import { supabaseServer } from './supabase';
 import { getUserPlan, type WithAppMetadata } from './appMetadata';
 import { ensureTeamForOwner } from './team';
 import { getAccount, markSubscribed, markSubscriptionEnded, recordEvent } from './brokerageAccount';
-import { brokeragePriceIds, type BrokerageBillingTier } from './stripePrices';
-import { BROKERAGE_SUBSCRIPTION_KIND, accountStatusForSubscription, isBrokerageTier } from './brokerageBilling';
+import { brokeragePriceId, type BrokerageBillingTier } from './stripePrices';
+import { BROKERAGE_SUBSCRIPTION_KIND, accountStatusForSubscription, brokerageQuantity, isBrokerageTier } from './brokerageBilling';
 
 // The Stripe side of a brokerage subscription. Kept apart from stripeCustomers (which holds a person's own plan) so a brokerage
 // subscription never changes anyone's personal plan.
@@ -27,22 +27,18 @@ export async function findBrokerageSubscription(ownerId: string): Promise<{ subs
 }
 
 /**
- * Sets the per-agent item on the owner's subscription to `extraSeats`: adds it, changes its quantity, or removes it at zero.
- * Stripe prorates the change on the next invoice. Throws when there is no live subscription or the price is not configured.
+ * Sets the subscription's quantity to the agents paid for: the included agents plus `extraSeats`. Stripe prorates the change on the
+ * next invoice. Throws when there is no live subscription or the tier's price is not configured.
  */
 export async function setExtraAgentsOnSubscription(ownerId: string, extraSeats: number): Promise<void> {
   const found = await findBrokerageSubscription(ownerId);
   if (!found) throw new Error('No active brokerage subscription');
   const { subscription, tier } = found;
-  const prices = brokeragePriceIds(tier);
-  if (!prices.extraAgent) throw new Error('The extra-agent price is not configured');
-  const item = subscription.items.data.find((i) => i.price.id === prices.extraAgent);
-  const items: Stripe.SubscriptionUpdateParams.Item[] = [];
-  if (extraSeats > 0 && item) items.push({ id: item.id, quantity: extraSeats });
-  else if (extraSeats > 0) items.push({ price: prices.extraAgent, quantity: extraSeats });
-  else if (item) items.push({ id: item.id, deleted: true });
-  else return;
-  await stripe.subscriptions.update(subscription.id, { items, proration_behavior: 'create_prorations' });
+  const priceId = brokeragePriceId(tier);
+  if (!priceId) throw new Error('The brokerage price is not configured');
+  const item = subscription.items.data.find((i) => i.price.id === priceId) ?? subscription.items.data[0];
+  if (!item) throw new Error('The subscription has no items');
+  await stripe.subscriptions.update(subscription.id, { items: [{ id: item.id, quantity: brokerageQuantity(tier, extraSeats) }], proration_behavior: 'create_prorations' });
 }
 
 /**

@@ -1,17 +1,26 @@
 import { describe, it, expect } from 'vitest';
-import { brokerageLineItems, minimumExtraSeats, validateExtraSeats, accountStatusForSubscription } from '@/lib/brokerageBilling';
+import { brokerageLineItems, brokerageQuantity, extraSeatsFromQuantity, minimumExtraSeats, validateExtraSeats, accountStatusForSubscription } from '@/lib/brokerageBilling';
 
-const prices = { base: 'price_base', extraAgent: 'price_extra' };
-
-describe('brokerageLineItems', () => {
-  it('charges only the base when no extra agents are bought', () => {
-    expect(brokerageLineItems(prices, 0)).toEqual([{ price: 'price_base', quantity: 1 }]);
+describe('brokerage quantity', () => {
+  it('bills the included agents when no extra agents are bought', () => {
+    expect(brokerageQuantity('basic', 0)).toBe(10);
+    expect(brokerageQuantity('pro', 0)).toBe(25);
   });
-  it('adds the per-agent price with the number of extra agents', () => {
-    expect(brokerageLineItems(prices, 4)).toEqual([{ price: 'price_base', quantity: 1 }, { price: 'price_extra', quantity: 4 }]);
+  it('adds the extra agents to the included number', () => {
+    expect(brokerageQuantity('basic', 2)).toBe(12);
+    expect(brokerageQuantity('pro', 5)).toBe(30);
   });
   it('ignores a negative number', () => {
-    expect(brokerageLineItems(prices, -2)).toEqual([{ price: 'price_base', quantity: 1 }]);
+    expect(brokerageQuantity('basic', -3)).toBe(10);
+  });
+  it('reads extra agents back from a quantity', () => {
+    expect(extraSeatsFromQuantity('basic', 12)).toBe(2);
+    expect(extraSeatsFromQuantity('basic', 10)).toBe(0);
+    expect(extraSeatsFromQuantity('pro', 20)).toBe(0);
+  });
+  it('makes one Checkout line item at that quantity', () => {
+    expect(brokerageLineItems('price_x', 'basic', 2)).toEqual([{ price: 'price_x', quantity: 12 }]);
+    expect(brokerageLineItems('price_y', 'pro', 0)).toEqual([{ price: 'price_y', quantity: 25 }]);
   });
 });
 

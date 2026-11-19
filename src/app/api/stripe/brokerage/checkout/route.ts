@@ -5,12 +5,12 @@ import { stripe } from '@/lib/stripe';
 import { ensureStripeCustomerId } from '@/lib/stripeCustomerEnsure';
 import { brokerageOn, assertBrokerageOwner } from '@/lib/oversight';
 import { getAccount } from '@/lib/brokerageAccount';
-import { brokeragePriceIds } from '@/lib/stripePrices';
+import { brokeragePriceId } from '@/lib/stripePrices';
 import { BROKERAGE_SUBSCRIPTION_KIND, brokerageLineItems, isBrokerageTier } from '@/lib/brokerageBilling';
 import { findBrokerageSubscription } from '@/lib/brokerageStripe';
 
-// POST { tier: 'basic' | 'pro' }: starts Stripe Checkout for a brokerage subscription (the tier's monthly base, plus the per-agent
-// price for any extra agents already bought). Nothing about the account changes here: it becomes Brokerage / Brokerage Pro only
+// POST { tier: 'basic' | 'pro' }: starts Stripe Checkout for a brokerage subscription (the tier's one graduated price, at the
+// included agents plus any extra agents already bought). Nothing about the account changes here: it becomes Brokerage / Brokerage Pro only
 // when Stripe confirms payment through the webhook, so calling this route without paying grants nothing.
 export async function POST(request: NextRequest) {
   try {
@@ -23,9 +23,9 @@ export async function POST(request: NextRequest) {
     if (!isBrokerageTier(body.tier)) return NextResponse.json({ error: 'Choose Brokerage or Brokerage Pro.' }, { status: 400 });
     const tier = body.tier;
 
-    const prices = brokeragePriceIds(tier);
-    if (!prices.base || !prices.extraAgent) {
-      console.error(`Brokerage billing is not configured for "${tier}" -- set STRIPE_PRICE_BROKERAGE_${tier.toUpperCase()} and STRIPE_PRICE_BROKERAGE_${tier.toUpperCase()}_EXTRA_AGENT`);
+    const priceId = brokeragePriceId(tier);
+    if (!priceId) {
+      console.error(`Brokerage billing is not configured for "${tier}" -- set STRIPE_PRICE_BROKERAGE_${tier.toUpperCase()}`);
       return NextResponse.json({ error: 'Online billing is not switched on for this plan yet. Use "Request upgrade" and we will set it up with you.' }, { status: 503 });
     }
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       mode: 'subscription',
       customer: customerId,
       client_reference_id: user.id,
-      line_items: brokerageLineItems({ base: prices.base, extraAgent: prices.extraAgent }, account?.extra_seats ?? 0),
+      line_items: brokerageLineItems(priceId, tier, account?.extra_seats ?? 0),
       subscription_data: { metadata },
       metadata,
       success_url: `${origin}/dashboard/collaborate?billing=success`,

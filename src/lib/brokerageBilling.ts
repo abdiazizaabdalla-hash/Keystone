@@ -4,17 +4,25 @@ import type { BrokerageBillingTier } from './stripePrices';
 
 // Pure rules for billing a brokerage through Stripe. No database and no Stripe calls here, so every rule can be tested.
 //
-// A brokerage subscription has one required item (the tier's monthly base, which includes the first agents) and an optional
-// second item: the per-agent price, with the quantity set to the number of EXTRA agents the brokerage has bought.
+// A brokerage subscription is one item on one graduated price per tier: a flat monthly fee for the first agents (the included
+// ones), then a per-agent price for each agent after that. The quantity is the number of agents paid for, so it is the included
+// number plus the extra agents the brokerage has bought. An owner with no extra agents is billed just the flat base.
 
 export const BROKERAGE_SUBSCRIPTION_KIND = 'brokerage';
 
-/** The Checkout line items: the base, plus the extra-agent price only when at least one extra agent is already bought. */
-export function brokerageLineItems(prices: { base: string; extraAgent: string }, extraSeats: number): { price: string; quantity: number }[] {
-  const items = [{ price: prices.base, quantity: 1 }];
-  const extra = Math.max(0, Math.floor(extraSeats));
-  if (extra > 0) items.push({ price: prices.extraAgent, quantity: extra });
-  return items;
+/** The subscription quantity for a tier with this many extra agents bought. */
+export function brokerageQuantity(tier: BrokerageBillingTier, extraSeats: number): number {
+  return BROKERAGE_PRICING[tier].includedAgents + Math.max(0, Math.floor(extraSeats));
+}
+
+/** The extra agents a subscription quantity stands for (never below zero). */
+export function extraSeatsFromQuantity(tier: BrokerageBillingTier, quantity: number): number {
+  return Math.max(0, Math.floor(quantity) - BROKERAGE_PRICING[tier].includedAgents);
+}
+
+/** The Checkout line items: the tier's graduated price at the quantity of agents paid for. */
+export function brokerageLineItems(priceId: string, tier: BrokerageBillingTier, extraSeats: number): { price: string; quantity: number }[] {
+  return [{ price: priceId, quantity: brokerageQuantity(tier, extraSeats) }];
 }
 
 /** The fewest extra seats a brokerage can have without going under the agents it already has (joined plus invited). */

@@ -43,17 +43,17 @@ export function priceIdFor(plan: PersonalPlan, audience: Audience = 'tc', env: E
   }
 }
 
-/** The two prices a brokerage tier bills: the monthly base (which includes the first agents) and the per-agent price beyond that. */
-export function brokeragePriceIds(tier: BrokerageBillingTier, env: Env = process.env): { base: string | undefined; extraAgent: string | undefined } {
-  return tier === 'pro'
-    ? { base: pick(env, 'STRIPE_PRICE_BROKERAGE_PRO'), extraAgent: pick(env, 'STRIPE_PRICE_BROKERAGE_PRO_EXTRA_AGENT') }
-    : { base: pick(env, 'STRIPE_PRICE_BROKERAGE_BASIC'), extraAgent: pick(env, 'STRIPE_PRICE_BROKERAGE_BASIC_EXTRA_AGENT') };
+/**
+ * The one graduated price a brokerage tier bills: the monthly base covers the included agents (a flat fee on the first tier), and each
+ * agent beyond that is the per-unit price on the second tier. The subscription quantity is the number of agents paid for.
+ */
+export function brokeragePriceId(tier: BrokerageBillingTier, env: Env = process.env): string | undefined {
+  return tier === 'pro' ? pick(env, 'STRIPE_PRICE_BROKERAGE_PRO') : pick(env, 'STRIPE_PRICE_BROKERAGE_BASIC');
 }
 
-/** A brokerage tier can be sold only when both its prices are configured. */
+/** A brokerage tier can be sold only when its price is configured. */
 export function brokerageBillingReady(tier: BrokerageBillingTier, env: Env = process.env): boolean {
-  const p = brokeragePriceIds(tier, env);
-  return Boolean(p.base && p.extraAgent);
+  return Boolean(brokeragePriceId(tier, env));
 }
 
 /** Every variable, for the setup guide and the tests. */
@@ -64,7 +64,5 @@ export const STRIPE_PRICE_ENV_VARS = [
   'STRIPE_PRICE_TC_PRO',
   'STRIPE_PRICE_TC_TEAM',
   'STRIPE_PRICE_BROKERAGE_BASIC',
-  'STRIPE_PRICE_BROKERAGE_BASIC_EXTRA_AGENT',
   'STRIPE_PRICE_BROKERAGE_PRO',
-  'STRIPE_PRICE_BROKERAGE_PRO_EXTRA_AGENT',
 ] as const;

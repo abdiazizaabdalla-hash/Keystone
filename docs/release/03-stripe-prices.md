@@ -16,24 +16,22 @@ Every price Relay bills has its own environment variable (see `src/lib/stripePri
 | `STRIPE_PRICE_TC_STARTER` | Coordinator Starter | $19 / month |
 | `STRIPE_PRICE_TC_PRO` | Coordinator Pro | $39 / month |
 | `STRIPE_PRICE_TC_TEAM` | Coordinator Team | graduated: $89 flat for 3 seats, then $30 per seat |
-| `STRIPE_PRICE_BROKERAGE_BASIC` | Brokerage base (10 agents included) | $99 / month |
-| `STRIPE_PRICE_BROKERAGE_BASIC_EXTRA_AGENT` | Brokerage extra agent | $15 / month each |
-| `STRIPE_PRICE_BROKERAGE_PRO` | Brokerage Pro base (25 agents included) | $199 / month |
-| `STRIPE_PRICE_BROKERAGE_PRO_EXTRA_AGENT` | Brokerage Pro extra agent | $20 / month each |
+| `STRIPE_PRICE_BROKERAGE_BASIC` | Brokerage, graduated: first 10 agents flat $99, then $15 each | $99 / month for 10 agents |
+| `STRIPE_PRICE_BROKERAGE_PRO` | Brokerage Pro, graduated: first 25 agents flat $199, then $20 each | $199 / month for 25 agents |
 
 Fallbacks, so nothing breaks while you switch over: an unset agent variable uses the coordinator one, and an unset coordinator
 variable uses the original shared `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PRO` or `STRIPE_PRICE_TEAM`.
 
-Brokerage billing is offered to an owner only when BOTH prices of that tier are set. Until then the owner sees "Request upgrade".
+Brokerage billing is offered to an owner only when that tier's price is set. Until then the owner sees "Request upgrade".
 
 Use Secret or Config for the type; the `price_...` ids are not sensitive. Production gets live ids, Preview gets test-mode ids.
 
 ## How brokerage billing works
 
-- The owner subscribes from Collaborate (after a pilot ends, or any time the account is not paid). Checkout charges the tier's base
-  price, and the per-agent price for any extra agents already bought.
+- The owner subscribes from Collaborate (after a pilot ends, or any time the account is not paid). Checkout starts one subscription on the
+  tier's graduated price, at the included agents plus any extra agents already bought (quantity 10 or 25 means no extras).
 - Stripe confirms payment by webhook (`checkout.session.completed`); only then does the account become Brokerage / Brokerage Pro.
-- Extra agents: the owner sets the number in Collaborate. Relay updates the subscription (prorated) and the seat allowance together.
+- Extra agents: the owner sets the number in Collaborate. Relay sets the subscription quantity to the included agents plus the extras (prorated) and records the seat allowance together.
 - A cancelled or unpaid subscription pauses management and keeps every record, like an ended pilot. Subscribing again restores it.
 - A paying brokerage owner is put on the **Brokerage** plan, a plan of its own, never Team. An owner who already pays for a Team
   subscription is left as they are (and a note is added to the account history): cancel Team in billing, then set Brokerage in Admin.
