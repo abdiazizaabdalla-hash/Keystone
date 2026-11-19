@@ -1072,6 +1072,11 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
                   <button type="button" onClick={() => openConvert('none')} className="text-sm px-3 py-1.5 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 rounded-lg transition">
                     Convert to deal
                   </button>
+                  {!data?.shared && !data?.coordinated && !listing.archived_at && (
+                    <button type="button" onClick={() => { setTab('overview'); setArchiveOpen(true); setTimeout(() => document.getElementById('archive-listing')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); }} className="text-sm px-3 py-1.5 border border-amber-700/60 text-amber-200 hover:bg-amber-900/20 rounded-lg transition">
+                      Archive
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -1599,29 +1604,9 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
           </OverviewCard>
             </div>
           </div>
-        </div>
-
-        <div className={tab === 'messages' ? '' : 'hidden'}>
-          {hasCoordinator ? (
-            <ListingThread key={threadKey} endpoint={`/api/listings/${id}/comments`} self={speaksAsAgent ? 'agent' : 'tc'} otherLabel={otherName} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
-          ) : ownerAgent ? (
-            <div className={cardCls}>
-              <h2 className="text-lg font-bold text-slate-100 mb-1">Messages</h2>
-              <p className="text-sm text-slate-400 mb-3">{coordInvites.length > 0 ? `Invitation sent to ${coordInvites[0].email}. You can message each other here once they accept.` : 'Invite your coordinator to run this listing with you and message them here.'}</p>
-              <button type="button" onClick={() => setShowInvite(true)} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl">
-                {coordInvites.length > 0 ? 'Invite someone else / resend' : 'Invite your coordinator'}
-              </button>
-            </div>
-          ) : data.agent && listing.share_with_agent !== false ? (
-            <ListingThread key={threadKey} endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
-          ) : (
-            <div className={cardCls}>
-              <h2 className="text-lg font-bold text-slate-100 mb-1">Messages</h2>
-              <p className="text-sm text-slate-400">Choose a listing agent and turn on sharing in Details to message them here.</p>
-            </div>
-          )}
+          <div id="archive-listing" className="pt-2 space-y-4 scroll-mt-4">
           {!data?.shared && !data?.coordinated && !ownerView && !listing.archived_at && listing.status !== 'converted' && (
-            <div className="mb-6 rounded-xl border border-slate-700 p-4">
+            <div className="rounded-xl border border-slate-700 p-4">
               <p className="text-sm font-semibold text-slate-200 mb-1">Archive this listing</p>
               <p className="text-sm text-slate-400 mb-3">Did it not go anywhere? Archive it instead of deleting it. It leaves your open work, calendar and reminders, and keeps its checklist, offers and documents. You can restore it any time.</p>
               {!archiveOpen ? (
@@ -1656,6 +1641,28 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
               >
                 {deletingListing ? 'Deleting...' : 'Delete listing'}
               </button>
+            </div>
+          )}
+          </div>
+        </div>
+
+        <div className={tab === 'messages' ? '' : 'hidden'}>
+          {hasCoordinator ? (
+            <ListingThread key={threadKey} endpoint={`/api/listings/${id}/comments`} self={speaksAsAgent ? 'agent' : 'tc'} otherLabel={otherName} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
+          ) : ownerAgent ? (
+            <div className={cardCls}>
+              <h2 className="text-lg font-bold text-slate-100 mb-1">Messages</h2>
+              <p className="text-sm text-slate-400 mb-3">{coordInvites.length > 0 ? `Invitation sent to ${coordInvites[0].email}. You can message each other here once they accept.` : 'Invite your coordinator to run this listing with you and message them here.'}</p>
+              <button type="button" onClick={() => setShowInvite(true)} className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl">
+                {coordInvites.length > 0 ? 'Invite someone else / resend' : 'Invite your coordinator'}
+              </button>
+            </div>
+          ) : data.agent && listing.share_with_agent !== false ? (
+            <ListingThread key={threadKey} endpoint={`/api/listings/${id}/comments`} self="tc" otherLabel={data.agent.name} attachTo={`/api/listings/${id}/documents`} onChange={setThreadComments} onFileAdded={() => void loadDocs()} />
+          ) : (
+            <div className={cardCls}>
+              <h2 className="text-lg font-bold text-slate-100 mb-1">Messages</h2>
+              <p className="text-sm text-slate-400">Choose a listing agent and turn on sharing in Details to message them here.</p>
             </div>
           )}
         </div>
