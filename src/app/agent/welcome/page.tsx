@@ -108,7 +108,7 @@ function WelcomeContent() {
           </p>
         </div>
 
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl min-h-[26rem] flex flex-col justify-center">
           {error && (
             <div className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-200 text-sm">
               {error}

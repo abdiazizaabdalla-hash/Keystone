@@ -85,7 +85,7 @@ function ConfirmContent() {
             <p className="text-slate-400 text-sm">Hang tight, this only takes a second.</p>
           </>
         ) : (
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl min-h-[26rem] flex flex-col justify-center">
             <h1 className="text-xl font-display font-semibold text-slate-100 mb-3">Couldn&apos;t confirm your account</h1>
             <p className="text-slate-400 text-sm mb-6">{errorMessage}</p>
             <Link

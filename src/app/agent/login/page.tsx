@@ -103,7 +103,7 @@ function AgentLoginContent() {
     <div className="min-h-screen bg-slate-900 flex flex-col">
       <PublicHeader />
 
-      <div className="flex-1 flex items-start justify-center px-4 pt-8 pb-12 sm:pt-14">
+      <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="flex justify-center mb-6">
             <span className="w-14 h-14 bg-white rounded-xl flex items-center justify-center p-2 shadow-md">
@@ -113,7 +113,7 @@ function AgentLoginContent() {
           </div>
 
           {/* Card */}
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl min-h-[26rem] flex flex-col justify-center">
             <h2 className="text-2xl font-display font-semibold text-slate-100 mb-1">
               {invited && mode === 'link' ? 'Set up your portal login' : 'Portal Sign In'}
             </h2>

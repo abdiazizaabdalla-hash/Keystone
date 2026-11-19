@@ -125,7 +125,7 @@ function ResetPasswordContent() {
           <img src="/relay-icon.png" alt="Relay TC" className="w-16 h-16 object-contain inline-block mb-2" />
         </div>
 
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl min-h-[26rem] flex flex-col justify-center">
           {linkStatus === 'checking' && (
             <>
               <h1 className="text-xl font-display font-semibold text-slate-100 mb-2">Verifying your link…</h1>
