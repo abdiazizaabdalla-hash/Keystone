@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import PublicMobileMenu from '@/components/PublicMobileMenu';
+import PublicHeader from '@/components/PublicHeader';
 
 const FAQS: { category: string; q: string; a: string }[] = [
   // Getting started
@@ -255,45 +255,7 @@ export default function FAQPage() {
 
   return (
     <div className="min-h-screen bg-slate-900">
-      {/* Nav */}
-      <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-900/90 backdrop-blur">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <PublicMobileMenu />
-            <Link href="/" className="flex items-center gap-2">
-              <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-                <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
-              </span>
-            </Link>
-          </div>
-          <nav className="hidden sm:flex items-center gap-8 text-sm text-slate-300">
-            <Link href="/" className="hover:text-slate-100 transition">Home</Link>
-            <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
-            <Link href="/faq" className="text-slate-100">FAQ</Link>
-            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
-            <Link href="/for-brokerages" className="hover:text-slate-100 transition">For Brokerages</Link>
-          </nav>
-          <div className="flex items-center gap-2 sm:gap-4">
-            <Link
-              href="/agent/login"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
-            >
-              <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-              Portal Login
-            </Link>
-            <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
-            <Link
-              href="/get-started"
-              className="px-3 sm:px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
-            >
-              Start a 14-day trial
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PublicHeader active="/faq" />
 
       {/* Header */}
       <section className="max-w-3xl mx-auto px-6 pt-20 pb-12 text-center">
