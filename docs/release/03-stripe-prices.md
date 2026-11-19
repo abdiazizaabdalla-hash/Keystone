@@ -35,5 +35,7 @@ Use Secret or Config for the type; the `price_...` ids are not sensitive. Produc
 - Stripe confirms payment by webhook (`checkout.session.completed`); only then does the account become Brokerage / Brokerage Pro.
 - Extra agents: the owner sets the number in Collaborate. Relay updates the subscription (prorated) and the seat allowance together.
 - A cancelled or unpaid subscription pauses management and keeps every record, like an ended pilot. Subscribing again restores it.
-- A brokerage subscription never changes anyone's personal plan.
+- A paying brokerage owner is put on the **Brokerage** plan, a plan of its own, never Team. An owner who already pays for a Team
+  subscription is left as they are (and a note is added to the account history): cancel Team in billing, then set Brokerage in Admin.
+- A brokerage subscription ending never changes the owner's personal plan, so the owner can still open Collaborate and subscribe again.
 - No new webhook events are needed: the existing endpoint already receives checkout, subscription updated and subscription deleted.
