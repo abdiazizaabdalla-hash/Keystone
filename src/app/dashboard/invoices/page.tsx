@@ -213,7 +213,7 @@ function CoordinatorInvoicesPage() {
   if (loading) {
     return (
       <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
-        <div className="max-w-5xl mx-auto">
+        <div className="w-full">
           <div className="flex items-center justify-center py-24">
             <div className="text-center">
               <div className="w-12 h-12 rounded-full border-4 border-slate-600 border-t-blue-400 animate-spin mx-auto mb-4" />
@@ -227,7 +227,7 @@ function CoordinatorInvoicesPage() {
 
   return (
     <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full">
         {/* Header */}
         <div className="mb-8 md:mb-10">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -506,7 +506,7 @@ function CoordinatorWithOtherInvoices() {
   const [tab, setTab] = useState<'agents' | 'other'>('agents');
   return (
     <div>
-      <div className="px-4 pt-6 md:px-6 md:pt-12 max-w-7xl mx-auto">
+      <div className="px-4 pt-6 md:px-6 md:pt-12">
         <div className="flex flex-wrap gap-2 text-sm" role="tablist" aria-label="Invoices">
           {([['agents', 'Agent invoices'], ['other', 'Other invoices']] as const).map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full border transition ${tab === id ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}>
@@ -542,7 +542,7 @@ export default function InvoicesPage() {
   if (!owner) return (isFeatureOnClient('other_invoices') || isFeatureOnClient('agent_workspace')) ? <CoordinatorWithOtherInvoices /> : <CoordinatorInvoicesPage />;
   return (
     <div>
-      <div className="px-4 pt-6 md:px-6 md:pt-12 max-w-7xl mx-auto">
+      <div className="px-4 pt-6 md:px-6 md:pt-12">
         <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">Invoices</h1>
         <p className="text-slate-400 mb-4">Commissions by agent, agent fee invoices, and invoices to anyone.</p>
         <div className="flex flex-wrap gap-2 text-sm" role="tablist" aria-label="Invoices">
@@ -558,7 +558,7 @@ export default function InvoicesPage() {
           {tab === 'custom' && 'One-off invoices to anyone, not tied to a deal or an agent.'}
         </p>
       </div>
-      {tab === 'commissions' && <div className="px-4 py-6 md:px-6 max-w-7xl mx-auto"><BrokerageInvoices onCreateInvoice={() => setTab('custom')} /></div>}
+      {tab === 'commissions' && <div className="px-4 py-6 md:px-6"><BrokerageInvoices onCreateInvoice={() => setTab('custom')} /></div>}
       {tab === 'fees' && <CoordinatorInvoicesPage />}
       {tab === 'custom' && <AgentInvoices />}
     </div>

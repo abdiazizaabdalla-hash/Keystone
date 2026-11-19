@@ -27,7 +27,7 @@ export default function CompliancePage() {
   if (teamOwner) {
     // A coordinator who runs a team: workload and a default checklist. Their members' files are private, so no document review here.
     return (
-      <div className="p-4 md:p-8 max-w-6xl">
+      <div className="p-4 md:p-8">
         <h1 className="font-display text-2xl md:text-3xl font-semibold text-slate-100">Team desk</h1>
         <p className="text-sm text-slate-400 mb-5">See who is carrying what, which files need a word, and set the checklist your whole team starts from.</p>
         <div className="flex gap-1 border-b border-slate-700 mb-6" role="tablist">
@@ -50,7 +50,7 @@ export default function CompliancePage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl">
+    <div className="p-4 md:p-8">
       <h1 className="font-display text-2xl md:text-3xl font-semibold text-slate-100">Compliance</h1>
       <p className="text-sm text-slate-400 mb-5">Know which files need you, and what every file must hold.</p>
       <div className="flex gap-1 border-b border-slate-700 mb-6 overflow-x-auto" role="tablist">

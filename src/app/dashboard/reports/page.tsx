@@ -28,7 +28,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl">
+    <div className="p-4 md:p-8">
       <h1 className="font-display text-2xl md:text-3xl font-semibold text-slate-100">Reports</h1>
       <p className="text-sm text-slate-400 mb-5">{teamOwner ? 'How your team is trending, and scheduled team activity workbooks. Prices stay private to each coordinator.' : 'Trends and comparisons, a deal report you build, and scheduled team activity workbooks.'}</p>
       <div className="flex gap-1 border-b border-slate-700 mb-6" role="tablist">

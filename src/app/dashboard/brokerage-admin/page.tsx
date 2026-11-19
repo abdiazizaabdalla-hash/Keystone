@@ -21,7 +21,7 @@ export default function BrokerageAdminPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl">
+    <div className="p-4 md:p-8">
       <h1 className="font-display text-2xl font-semibold text-slate-100">{access.brokerage}</h1>
       <p className="text-sm text-slate-400 mb-6">You are an administrator here as a {roleLabel(access.role ?? '')}.{access.role === 'viewer' ? ' You can look but not change anything.' : ''}</p>
       <BrokerageRoster />

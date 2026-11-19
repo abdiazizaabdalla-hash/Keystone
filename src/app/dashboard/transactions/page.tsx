@@ -189,7 +189,7 @@ function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
 
   if (loading) {
     return (
-      <div className="p-4 md:p-10 max-w-5xl mx-auto">
+      <div className="p-4 md:p-8">
         <p className="text-slate-400">Loading transactions…</p>
       </div>
     );
@@ -197,7 +197,7 @@ function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
 
   if (error) {
     return (
-      <div className="p-4 md:p-10 max-w-5xl mx-auto">
+      <div className="p-4 md:p-8">
         <div className="bg-red-900/30 border border-red-700 rounded-2xl p-6">
           <h2 className="text-lg font-bold text-red-300 mb-2">Error Loading Transactions</h2>
           <p className="text-red-200 mb-4">{error}</p>
@@ -219,7 +219,7 @@ function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
   ];
 
   return (
-    <div className="p-4 md:p-10 max-w-5xl mx-auto">
+    <div className="p-4 md:p-8">
       <TcInvitationBanner onAccepted={fetchData} />
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         {hideTitle ? <div /> : (
@@ -367,7 +367,7 @@ export default function TransactionsPage() {
   if (!owner) return <OwnTransactions />;
   return (
     <div>
-      <div className="px-4 md:px-10 pt-4 md:pt-10 max-w-5xl mx-auto">
+      <div className="px-4 md:px-8 pt-4 md:pt-8">
         <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Transactions</h1>
         <p className="text-slate-400 mb-4">Every deal from contract to closing, with the next step.</p>
         <div className="flex gap-2 text-sm" role="tablist" aria-label="Whose transactions">
@@ -379,7 +379,7 @@ export default function TransactionsPage() {
         </div>
       </div>
       {tab === 'agents' ? (
-        <div className="p-4 md:p-10 max-w-5xl mx-auto"><AgentDealsList /></div>
+        <div className="p-4 md:p-8"><AgentDealsList /></div>
       ) : (
         <OwnTransactions hideTitle />
       )}

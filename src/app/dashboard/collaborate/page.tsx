@@ -254,7 +254,7 @@ export default function CollaboratePage() {
 
   if ((!data || !data.team) && isWorkspaceAgent && isFeatureOnClient('brokerage')) {
     return (
-      <div className="p-4 md:p-8 max-w-6xl">
+      <div className="p-4 md:p-8">
         <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Collaborate</h1>
         <p className="text-slate-400 mb-6 max-w-3xl">Your brokerage’s team, messages, templates and contacts show up here once you join one.</p>
         <BrokerageMembership onChanged={load} />
@@ -318,7 +318,7 @@ export default function CollaboratePage() {
   const recentShared = [...teamContacts].sort((a, b) => (b.shared_at || b.created_at).localeCompare(a.shared_at || a.created_at)).slice(0, 5);
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl">
+    <div className="p-4 md:p-8">
       <div className="flex flex-wrap items-center gap-3 mb-1">
         <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100">{teamLabel}</h1>
         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 capitalize">{data.role}</span>
