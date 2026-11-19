@@ -10,6 +10,8 @@ import {
 } from '@/lib/stripeCustomers';
 import { ensureTeamForOwner, dissolveTeamMembership } from '@/lib/team';
 import { applyFullRefund, latestChargeFullyRefunded } from '@/lib/refundSuspend';
+import { applyBrokerageCheckout, applyBrokerageSubscriptionEvent, isBrokerageSubscription } from '@/lib/brokerageStripe';
+import { BROKERAGE_SUBSCRIPTION_KIND } from '@/lib/brokerageBilling';
 
 // Stripe calls this directly (no user session), authenticating itself via
 // the signature header instead — so this route reads the RAW body rather
@@ -46,6 +48,12 @@ export async function POST(request: NextRequest) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         if (session.mode !== 'subscription') break;
+
+        // A brokerage subscription is Relay's brokerage tiers, handled apart from personal plans: it never changes anyone's own plan.
+        if (session.metadata?.kind === BROKERAGE_SUBSCRIPTION_KIND) {
+          await applyBrokerageCheckout(session);
+          break;
+        }
 
         const userId = session.client_reference_id || session.metadata?.user_id;
         const plan = session.metadata?.plan;
@@ -101,6 +109,10 @@ export async function POST(request: NextRequest) {
 
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
+        if (isBrokerageSubscription(subscription)) {
+          await applyBrokerageSubscriptionEvent(subscription);
+          break;
+        }
         const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
 
         const existing = await getStripeCustomerByCustomerId(customerId);
@@ -134,6 +146,10 @@ export async function POST(request: NextRequest) {
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
+        if (isBrokerageSubscription(subscription)) {
+          await applyBrokerageSubscriptionEvent(subscription);
+          break;
+        }
         const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
 
         const existing = await getStripeCustomerByCustomerId(customerId);

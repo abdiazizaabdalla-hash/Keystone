@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { stripe, STRIPE_PRICE_IDS, isBillablePlan } from '@/lib/stripe';
-import { getStripeCustomerByUserId, upsertStripeCustomer } from '@/lib/stripeCustomers';
+import { stripe, isBillablePlan } from '@/lib/stripe';
+import { ensureStripeCustomerId } from '@/lib/stripeCustomerEnsure';
+import { priceIdFor } from '@/lib/stripePrices';
+import { isAgentUser } from '@/lib/agentPortal';
 import { TEAM_SEAT_LIMIT, BROKERAGE_SEAT_LIMIT } from '@/lib/team';
 
 // Starts a Stripe Checkout session for Starter (once its trial has ended),
@@ -23,44 +25,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'plan must be one of: starter, pro, team, brokerage' }, { status: 400 });
     }
 
-    const priceId = STRIPE_PRICE_IDS[plan];
+    // Agents and coordinators have separate prices (STRIPE_PRICE_AGENT_* and STRIPE_PRICE_TC_*); an unset agent price falls back
+    // to the coordinator one, then to the original shared variable (see lib/stripePrices.ts).
+    const priceId = priceIdFor(plan, isAgentUser(user) ? 'agent' : 'tc');
     if (!priceId) {
-      console.error(`Missing Stripe price id for plan "${plan}" — check STRIPE_PRICE_STARTER/STRIPE_PRICE_PRO/STRIPE_PRICE_TEAM/STRIPE_PRICE_BROKERAGE env vars`);
+      console.error(`Missing Stripe price id for plan "${plan}" -- set the STRIPE_PRICE_* variables listed in lib/stripePrices.ts`);
       return NextResponse.json({ error: 'Billing is not configured for this plan yet' }, { status: 500 });
     }
 
-    // Reuse an existing Stripe customer for this user if we have one,
-    // otherwise create one now so repeat checkouts/portal sessions share
-    // a single customer record instead of creating duplicates.
-    let customerId: string;
-    const existing = await getStripeCustomerByUserId(user.id);
-    // A stored customer id can be stale — e.g. it was created under test
-    // keys and we've since switched to live keys, or the customer was
-    // deleted in Stripe. In that case Stripe answers "resource_missing", so
-    // we make a fresh customer instead of failing checkout for that user.
-    let reusable: string | null = null;
-    if (existing && existing.stripe_customer_id.startsWith('cus_')) {
-      try {
-        const found = await stripe.customers.retrieve(existing.stripe_customer_id);
-        if (!('deleted' in found && found.deleted)) reusable = existing.stripe_customer_id;
-      } catch (err) {
-        const code = (err as { code?: string } | null)?.code;
-        if (code !== 'resource_missing') throw err;
-      }
-    } else if (existing) {
-      // Non-Stripe placeholder id (e.g. an admin bypass row): keep old behavior.
-      reusable = existing.stripe_customer_id;
-    }
-    if (reusable) {
-      customerId = reusable;
-    } else {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        metadata: { user_id: user.id },
-      });
-      customerId = customer.id;
-      await upsertStripeCustomer({ user_id: user.id, stripe_customer_id: customerId });
-    }
+    // Reuse this user's Stripe customer, or create one, so repeat checkouts and portal sessions share a single customer record.
+    const customerId = await ensureStripeCustomerId(user);
 
     const origin = new URL(request.url).origin;
 
