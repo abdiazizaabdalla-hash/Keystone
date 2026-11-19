@@ -1,12 +1,16 @@
 'use client';
 
+import AgentPriceList, { cleanPriceRows, type PriceRow } from '@/components/AgentPriceList';
 import MoneyInput from '@/components/MoneyInput';
 import PhoneInput from '@/components/PhoneInput';
 import { useEffect, useMemo, useState } from 'react';
+import AgentPortalAccess from '@/components/AgentPortalAccess';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatPhoneNumber } from '@/lib/formatPhone';
+import { readPersona } from '@/lib/persona';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
 
 interface Agent {
   id: string;
@@ -16,6 +20,9 @@ interface Agent {
   phone: string;
   flat_fee: number;
   commission_percent: number;
+  services?: Array<{ id: string; name: string; amount: number }> | null;
+  /** Optional flat fee for a listing invoice. */
+  listing_fee?: number | null;
   /** 'quickbooks' when the agent was created by a QuickBooks import. */
   source?: string | null;
 }
@@ -28,6 +35,7 @@ interface FormData {
   phone: string;
   flatFee: string;
   percentFee: string;
+  listingFee: string;
 }
 
 interface DirectoryAgent {
@@ -37,15 +45,20 @@ interface DirectoryAgent {
   phone: string | null;
 }
 
-export default function AgentsPage() {
+function ClientAgentsPage({ hideTitle = false, embedded = false }: { hideTitle?: boolean; embedded?: boolean }) {
   const router = useRouter();
+  // An agent is the agent: there is no agents list for them to manage.
+  useEffect(() => {
+    const p = readPersona();
+    if (p.workspace || p.accountType === 'agent') router.replace('/dashboard');
+  }, [router]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
-  const [defaultFees, setDefaultFees] = useState({ flatFee: '400', percentFee: '0' });
+  const [defaultFees, setDefaultFees] = useState({ flatFee: '400', percentFee: '0', listingFee: '' });
   // The brokerage's own agent directory (see /api/team/agents) -- lets a
   // TC on a Team/Brokerage plan link a new contact to an existing real
   // person instead of re-typing their info from scratch, so the
@@ -80,6 +93,7 @@ export default function AgentsPage() {
     });
   }, [agents, query, source]);
 
+  const [priceRows, setPriceRows] = useState<PriceRow[]>([]);
   const [formData, setFormData] = useState<FormData>({
     name: '',
     brokerage: '',
@@ -87,6 +101,7 @@ export default function AgentsPage() {
     phone: '',
     flatFee: '400',
     percentFee: '0',
+    listingFee: '',
   });
 
   useEffect(() => {
@@ -141,10 +156,11 @@ export default function AgentsPage() {
       const data = await response.json();
       const flatFee = String(data.defaultFlatFee ?? 400);
       const percentFee = String(data.defaultPercentFee ?? 0);
-      setDefaultFees({ flatFee, percentFee });
+      const listingFee = typeof data.defaultListingFee === 'number' ? String(data.defaultListingFee) : '';
+      setDefaultFees({ flatFee, percentFee, listingFee });
       // Only overwrite the still-untouched "Add Agent" defaults, never a form in progress.
       setFormData((prev) =>
-        prev.id || prev.name ? prev : { ...prev, flatFee, percentFee }
+        prev.id || prev.name ? prev : { ...prev, flatFee, percentFee, listingFee }
       );
     } catch {
       // Non-critical — keep the built-in defaults ($400 flat, 0%) if this fails.
@@ -177,7 +193,9 @@ export default function AgentsPage() {
       phone: '',
       flatFee: defaultFees.flatFee,
       percentFee: defaultFees.percentFee,
+      listingFee: defaultFees.listingFee,
     });
+    setPriceRows([]);
     setSelectedDirectoryId('');
     setEditingId(null);
     setShowForm(false);
@@ -208,7 +226,7 @@ export default function AgentsPage() {
     setMessage('');
 
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...(editingId && { id: editingId }),
         ...(!editingId && selectedDirectoryId && { brokerageAgentId: selectedDirectoryId }),
         name: formData.name.trim(),
@@ -216,8 +234,22 @@ export default function AgentsPage() {
         email: formData.email?.trim() || null,
         phone: formData.phone?.trim() || null,
         flatFee: parseFloat(String(formData.flatFee)) || 0,
-        percentFee: parseFloat(String(formData.percentFee)) || 0,
+        percentFee: 0,
       };
+      // Other charges are only sent when there are some (or some to clear), so agents who never use them don't touch the column.
+      const hadServices = editingId ? (agents.find((a) => a.id === editingId)?.services || []).length > 0 : false;
+      const cleaned = cleanPriceRows(priceRows);
+      if (!cleaned.ok) {
+        setMessage(cleaned.error);
+        setIsSubmitting(false);
+        return;
+      }
+      if (cleaned.services.length > 0 || hadServices) payload.services = cleaned.services;
+      // Only send the listing fee when there is one to save (or one to clear) so
+      // agents who never use it don't touch the column.
+      const hadListingFee = editingId ? agents.find((a) => a.id === editingId)?.listing_fee != null : false;
+      if (formData.listingFee.trim() !== '') payload.listingFee = parseFloat(formData.listingFee) || 0;
+      else if (hadListingFee) payload.listingFee = null;
 
       const response = await authFetch('/api/agents', {
         method: editingId ? 'PATCH' : 'POST',
@@ -253,26 +285,6 @@ export default function AgentsPage() {
     }
   };
 
-  const handleGiveAccess = async (agent: Agent) => {
-    setMessage('');
-    try {
-      const response = await authFetch(`/api/agents/${agent.id}/portal-access`, { method: 'POST' });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Could not give access');
-      const total = (data.deals ?? 0) + (data.listings ?? 0);
-      setMessage(
-        total === 0
-          ? `${agent.name} already has portal access to all of their open deals and listings.`
-          : `${agent.name} now has portal access to ${data.deals} open deal${data.deals === 1 ? '' : 's'}${data.listings ? ` and ${data.listings} listing${data.listings === 1 ? '' : 's'}` : ''}${data.emailed ? ', and was emailed once' : ''}.`
-      );
-    } catch (error) {
-      if (error instanceof AuthRequiredError) {
-        router.push('/auth');
-        return;
-      }
-      setMessage(error instanceof Error ? error.message : 'Could not give access');
-    }
-  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this agent?')) return;
@@ -303,7 +315,9 @@ export default function AgentsPage() {
       phone: agent.phone || '',
       flatFee: String(agent.flat_fee ?? 400),
       percentFee: String(agent.commission_percent ?? 0),
+      listingFee: agent.listing_fee != null ? String(agent.listing_fee) : '',
     });
+    setPriceRows((agent.services || []).map((x) => ({ id: x.id, name: x.name, amount: String(x.amount) })));
     setEditingId(agent.id);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -323,14 +337,16 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8">
+    <div className={embedded ? '' : 'p-4 md:p-8'}>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Agents</h1>
-          <p className="text-slate-400">
-            {agents.length === 0 ? 'Manage your real estate agents' : `${agents.length} agent${agents.length === 1 ? '' : 's'}`}
-          </p>
-        </div>
+        {hideTitle ? <div /> : (
+          <div>
+            <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Agents</h1>
+            <p className="text-slate-400">
+              {agents.length === 0 ? 'Manage your real estate agents' : `${agents.length} agent${agents.length === 1 ? '' : 's'}`}
+            </p>
+          </div>
+        )}
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
@@ -434,38 +450,15 @@ export default function AgentsPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-sm text-slate-400 block mb-2">
-                  Flat Fee per Deal ($)
-                </label>
-                <MoneyInput
-                  name="flatFee"
-                  value={formData.flatFee}
-                  onValueChange={(v) => setFormData((prev) => ({ ...prev, flatFee: v }))}
-                  placeholder="400"
-                  aria-label="Flat fee per deal"
-                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              <div className="md:col-span-2">
+                <AgentPriceList
+                  transactionFee={formData.flatFee}
+                  listingFee={formData.listingFee}
+                  services={priceRows}
+                  onTransactionFee={(v) => setFormData((prev) => ({ ...prev, flatFee: v }))}
+                  onListingFee={(v) => setFormData((prev) => ({ ...prev, listingFee: v }))}
+                  onServices={setPriceRows}
                 />
-                <p className="text-xs text-slate-500 mt-1">Fixed fee per transaction closed</p>
-              </div>
-
-              <div>
-                <label className="text-sm text-slate-400 block mb-2">
-                  Percentage Fee (%)
-                </label>
-                <input
-                  type="number"
-                  name="percentFee"
-                  value={formData.percentFee}
-                  onChange={handleInputChange}
-                  onWheel={blurOnWheel}
-                  placeholder="0"
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                />
-                <p className="text-xs text-slate-500 mt-1">Percentage of purchase price (optional)</p>
               </div>
             </div>
 
@@ -496,8 +489,8 @@ export default function AgentsPage() {
           <svg className="w-16 h-16 text-slate-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.856-1.487M15 10a3 3 0 11-6 0 3 3 0 016 0zM6 20a3 3 0 003-3v-2a3 3 0 00-3-3H3a3 3 0 00-3 3v2a3 3 0 003 3h3z" />
           </svg>
-          <h3 className="text-lg font-semibold text-slate-300 mb-2">No agents yet</h3>
-          <p className="text-slate-400">Add your first agent to get started</p>
+          <h3 className="text-lg font-semibold text-slate-300 mb-2">{embedded ? 'Nobody else yet' : 'No agents yet'}</h3>
+          <p className="text-slate-400">{embedded ? 'Add an agent or client you coordinate deals for who is not in your brokerage.' : 'Add your first agent to get started'}</p>
         </div>
       ) : (
         <>
@@ -574,7 +567,6 @@ export default function AgentsPage() {
                       </span>
                       <span className="hidden sm:inline text-sm text-slate-400">
                         ${Number(agent.flat_fee ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        {Number(agent.commission_percent) > 0 ? ` + ${agent.commission_percent}%` : ''}
                       </span>
                       <svg className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -609,15 +601,25 @@ export default function AgentsPage() {
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-xs uppercase tracking-wider text-slate-500">Flat fee per deal</dt>
+                            <dt className="text-xs uppercase tracking-wider text-slate-500">Transaction coordination fee</dt>
                             <dd className="mt-0.5 font-semibold text-blue-400">
                               ${Number(agent.flat_fee ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                             </dd>
                           </div>
-                          <div>
-                            <dt className="text-xs uppercase tracking-wider text-slate-500">Percentage fee</dt>
-                            <dd className="mt-0.5 font-semibold text-blue-400">{agent.commission_percent ?? 0}%</dd>
-                          </div>
+                          {agent.listing_fee != null && (
+                            <div>
+                              <dt className="text-xs uppercase tracking-wider text-slate-500">Listing coordination fee</dt>
+                              <dd className="mt-0.5 font-semibold text-blue-400">
+                                ${Number(agent.listing_fee).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                              </dd>
+                            </div>
+                          )}
+                          {(agent.services || []).map((sv) => (
+                            <div key={sv.id}>
+                              <dt className="text-xs uppercase tracking-wider text-slate-500">{sv.name}</dt>
+                              <dd className="mt-0.5 font-semibold text-blue-400">${Number(sv.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</dd>
+                            </div>
+                          ))}
                         </dl>
                         <div className="mt-4 flex flex-wrap gap-2">
                           <Link
@@ -626,15 +628,7 @@ export default function AgentsPage() {
                           >
                             Profile &amp; history
                           </Link>
-                          {agent.email && (
-                            <button
-                              onClick={() => handleGiveAccess(agent)}
-                              title="Give this agent a portal login for every open deal and shared listing they are on"
-                              className="px-3.5 py-1.5 text-sm border border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition font-medium"
-                            >
-                              Give access to open deals
-                            </button>
-                          )}
+                          {agent.email && <AgentPortalAccess agentId={agent.id} agentName={agent.name} onDone={setMessage} />}
                           <button
                             onClick={() => handleEdit(agent)}
                             className="px-3.5 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition font-medium"
@@ -659,4 +653,16 @@ export default function AgentsPage() {
       )}
     </div>
   );
+}
+
+// A brokerage owner manages their agents from Collaborate → Agents, so this page (client-agent records with fees, for
+// coordinators) sends them there.
+export default function AgentsPage() {
+  const owner = useBrokerageOwner();
+  const router = useRouter();
+  useEffect(() => {
+    if (owner) router.replace('/dashboard/collaborate#agents');
+  }, [owner, router]);
+  if (owner) return <p className="p-8 text-sm text-slate-400">Opening your agents…</p>;
+  return <ClientAgentsPage />;
 }

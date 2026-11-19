@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { syncDocumentToChecklist } from '@/lib/documentSync';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { isValidCategory, isValidDocumentType, typesForCategory, DEFAULT_CATEGORY_KEY, DEFAULT_DOCUMENT_TYPE } from '@/lib/documentTaxonomy';
-import { getVisibleTcUserIds } from '@/lib/team';
-import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
+import { authorizeDeal, actsAsCollaborator, assertTrialForOwnWork } from '@/lib/authorize';
+import { isAgentUser, isCollaboratorOnly } from '@/lib/agentPortal';
 import { logAudit } from '@/lib/audit';
 import { queueDealNotification } from '@/lib/notifications';
+import { emitDealEvent } from '@/lib/automation/events';
 import { IncomingError, parseUploadRequest, removeIncoming } from '@/lib/incomingUploads';
 
 const BUCKET = 'transaction-documents';
@@ -79,51 +81,15 @@ async function ensureBucket() {
 // owner just opening a teammate's transaction's document list.
 async function assertTransactionAccess(
   transactionId: string,
-  userId: string,
+  user: { id: string; app_metadata?: Record<string, unknown> | null },
   isAdmin: boolean,
-  { readOnly = false, allowAgent = false, isAgent = false }: { readOnly?: boolean; allowAgent?: boolean; isAgent?: boolean } = {}
+  { readOnly = false, allowAgent = false }: { readOnly?: boolean; allowAgent?: boolean } = {}
 ) {
-  // An invited agent is scoped to exactly this one transaction, via
-  // transaction_agents -- never the TC ownership check below, which an
-  // agent (no `agents` row of their own) would always fail anyway.
-  if (allowAgent && isAgent) {
-    await assertAgentOnTransaction(transactionId, userId);
-    const { data: transaction, error } = await supabaseServer
-      .from('transactions')
-      .select('id, agent_id')
-      .eq('id', transactionId)
-      .single();
-    if (error || !transaction) {
-      throw new AuthError('Transaction not found', 404);
-    }
-    return transaction;
-  }
-
-  const { data: transaction, error } = await supabaseServer
-    .from('transactions')
-    .select('id, agent_id')
-    .eq('id', transactionId)
-    .single();
-
-  if (error || !transaction) {
-    throw new AuthError('Transaction not found', 404);
-  }
-
-  if (!isAdmin) {
-    const ownerIds = readOnly ? await getVisibleTcUserIds(userId) : [userId];
-    const { data: agent } = await supabaseServer
-      .from('agents')
-      .select('id')
-      .eq('id', transaction.agent_id)
-      .in('tc_user_id', ownerIds)
-      .single();
-
-    if (!agent) {
-      throw new AuthError('You do not have permission to access documents for this transaction', 403);
-    }
-  }
-
-  return transaction;
+  return authorizeDeal(user, isAdmin, transactionId, {
+    scope: readOnly ? 'team' : 'owner',
+    collaborators: allowAgent,
+    deniedMessage: 'You do not have permission to access documents for this transaction',
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -135,10 +101,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
     }
 
-    await assertTransactionAccess(transactionId, user.id, isAdmin, {
+    await assertTransactionAccess(transactionId, user, isAdmin, {
       readOnly: true,
       allowAgent: true,
-      isAgent: isAgentUser(user),
     });
     await ensureBucket();
 
@@ -246,9 +211,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await assertTransactionAccess(transactionId, user.id, isAdmin, {
+    if (callerIsAgent) await assertTrialForOwnWork(user, isAdmin, transactionId);
+    // A brokerage owner has a read-only view of the agent's deal, so they cannot add documents here.
+    await assertTransactionAccess(transactionId, user, isAdmin, {
       allowAgent: true,
-      isAgent: callerIsAgent,
     });
     await ensureBucket();
 
@@ -303,6 +269,12 @@ export async function POST(request: NextRequest) {
       body: file.name,
       coalesce: { title: (n) => `${n} documents added` },
     });
+    // Automation events (inert unless the `automation` flag is on; never fail this request).
+    await emitDealEvent(transactionId, 'document_added', { documentId: docRow.id, category, documentType });
+    await syncDocumentToChecklist(transactionId as string, { id: docRow.id as string, file_name: file.name, file_size: file.size, document_type: documentType as string, task_id: (docRow.task_id as string | null) ?? null });
+    if (category === 'contract_disclosures' && documentType === 'Purchase Contract') {
+      await emitDealEvent(transactionId, 'contract_uploaded', { documentId: docRow.id });
+    }
     return NextResponse.json({ ...docRow, url: signed?.signedUrl || null }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -354,7 +326,7 @@ export async function PATCH(request: NextRequest) {
     }
     // Filing a document under a different category is a TC job; invited
     // agents can upload and view but not reorganise the file.
-    if ((category !== undefined || documentType !== undefined) && isAgentUser(user)) {
+    if ((category !== undefined || documentType !== undefined) && isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Only the coordinator can move documents' }, { status: 403 });
     }
     if (isSigned !== undefined && typeof isSigned !== 'boolean') {
@@ -373,15 +345,20 @@ export async function PATCH(request: NextRequest) {
     if (fetchError || !doc) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
+    if (isAgentUser(user)) {
+      await assertTrialForOwnWork(user, isAdmin, doc.transaction_id);
+      if ((category !== undefined || documentType !== undefined) && (await actsAsCollaborator(user, isAdmin, doc.transaction_id))) {
+        return NextResponse.json({ error: 'Only the coordinator can move documents' }, { status: 403 });
+      }
+    }
 
     // Agents may toggle a document's signed / requires-signature state on
     // their own transactions -- the same as any other document mutation
     // they're allowed (upload, view). Actually *sending* a signature
     // request (and voiding one) is a separate endpoint
     // (/api/signing-requests) that deliberately stays TC-only.
-    await assertTransactionAccess(doc.transaction_id, user.id, isAdmin, {
+    await assertTransactionAccess(doc.transaction_id, user, isAdmin, {
       allowAgent: true,
-      isAgent: isAgentUser(user),
     });
 
     const updates: Record<string, boolean | string> = {};
@@ -459,7 +436,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    await assertTransactionAccess(doc.transaction_id, user.id, isAdmin);
+    await assertTransactionAccess(doc.transaction_id, user, isAdmin);
 
     const { error: removeError } = await supabaseServer.storage.from(BUCKET).remove([doc.storage_path]);
     if (removeError) console.warn('Warning: storage removal failed, deleting DB row anyway', removeError);

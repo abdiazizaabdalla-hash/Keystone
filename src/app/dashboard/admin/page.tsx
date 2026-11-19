@@ -4,6 +4,10 @@ import { Fragment, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { getPlan } from '@/lib/plans';
+import AdminUserProfile from '@/components/AdminUserProfile';
+import AdminActivity from '@/components/AdminActivity';
+import AdminBrokeragePilots from '@/components/AdminBrokeragePilots';
+import { isFeatureOnClient } from '@/lib/features';
 
 interface AgentAccount {
   id: string;
@@ -12,6 +16,8 @@ interface AgentAccount {
   last_sign_in_at: string | null;
   suspended: boolean;
   deals: number;
+  workspace?: boolean;
+  workspace_trial_ends_at?: string | null;
 }
 
 interface AgentProfile {
@@ -25,10 +31,17 @@ interface TCUser {
   email: string;
   is_admin: boolean;
   plan?: string;
+  /** Set when this owner has a brokerage account: 'basic' (Brokerage) or 'pro' (Brokerage Pro). */
+  brokerage_tier?: 'basic' | 'pro' | null;
+  brokerage_status?: string | null;
   created_at: string;
   last_sign_in_at?: string | null;
+  last_active_at?: string | null;
+  last_active_what?: string | null;
   suspended?: boolean;
   trial?: { applies: boolean; expired: boolean; trialEndsAt: string | null } | null;
+  // A paid plan given for free until a date: after it, payment is needed. Null = no end date.
+  comp?: { expired: boolean; endsAt: string | null } | null;
   subscription_status?: string | null;
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
@@ -62,6 +75,8 @@ export default function AdminPage() {
   const [users, setUsers] = useState<TCUser[]>([]);
   const [unlinkedAgents, setUnlinkedAgents] = useState<AgentAccount[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [profileOpen, setProfileOpen] = useState<string | null>(null);
+  const [tab, setTab] = useState<'users' | 'activity'>('users');
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -145,7 +160,116 @@ export default function AdminPage() {
     }
   };
 
+  // Gives an agent login (or removes) a workspace of their own. Admin-granted only for now.
+  const handleWorkspaceToggle = async (agent: AgentAccount) => {
+    const enable = !agent.workspace;
+    const question = enable
+      ? `Give ${agent.email} their own agent workspace?\n\nThey will be able to create their own transactions, checklists, documents and client portals, and they start a 14-day trial. They keep working the deals coordinators added them to.`
+      : `Remove the agent workspace from ${agent.email}?\n\nThey go back to a free portal login. They keep access to deals they were added to; their own transactions stay in their account but they can no longer open or change them.`;
+    if (!window.confirm(question)) return;
+    setActionError(null);
+    setActionLoadingId(agent.id);
+    try {
+      const response = await authFetch(`/api/admin/users/${agent.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_agent_workspace', enabled: enable }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to update the agent workspace');
+      const mark = <T extends { id: string }>(list: T[]) =>
+        list.map(u => (u.id === agent.id ? { ...u, workspace: data.workspace, workspace_trial_ends_at: data.trialEndsAt } : u));
+      setUsers(prev => prev.map(u => ({ ...u, portal_agents: u.portal_agents ? mark(u.portal_agents) : u.portal_agents })));
+      setUnlinkedAgents(prev => mark(prev));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error updating agent workspace:', error);
+      setActionError(error instanceof Error ? error.message : 'Failed to update the agent workspace');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Set, change or clear "free until" on a Pro or Team account. Blank = no end date (free until you change it).
+  const saveCompEnd = async (user: TCUser, compEndsAt: string | null) => {
+    setActionError(null);
+    setActionLoadingId(user.id);
+    try {
+      const response = await authFetch(`/api/admin/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_comp_end', compEndsAt }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to update the free-until date');
+      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, comp: data.comp } : u)));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      console.error('Error updating comp end:', error);
+      setActionError(error instanceof Error ? error.message : 'Failed to update the free-until date');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleCompEdit = async (user: TCUser) => {
+    const current = user.comp?.endsAt ? new Date(user.comp.endsAt).toISOString().slice(0, 10) : '';
+    const typed = window.prompt(
+      `${getPlan(user.plan).name} is free for ${user.email} until (YYYY-MM-DD).\n\nAfter that date they must add payment to keep creating and editing. Leave blank for no end date.`,
+      current
+    );
+    if (typed === null) return;
+    const trimmed = typed.trim();
+    let compEndsAt: string | null = null;
+    if (trimmed) {
+      const parsed = new Date(`${trimmed}T23:59:59`);
+      if (Number.isNaN(parsed.getTime())) {
+        setActionError('Enter the date as YYYY-MM-DD');
+        return;
+      }
+      compEndsAt = parsed.toISOString();
+    }
+    await saveCompEnd(user, compEndsAt);
+  };
+
+  // Brokerage and Brokerage Pro are plans of their own here. They are recorded by hand (nothing is charged), per brokerage account.
+  const handleBrokerageChange = async (user: TCUser, tier: 'basic' | 'pro') => {
+    if (user.brokerage_tier === tier) return;
+    const label = tier === 'pro' ? 'Brokerage Pro' : 'Brokerage';
+    if (!window.confirm(`Put ${user.email} on ${label}?${user.brokerage_tier ? '' : '\n\nThey have no brokerage account yet, so a 30-day pilot at this level starts.'}\n\nThis only records the plan in Relay. Nothing is charged.`)) return;
+    setActionError(null);
+    setActionLoadingId(user.id);
+    try {
+      const response = await authFetch(`/api/admin/brokerages/${user.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_tier', tier }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to change the brokerage plan');
+      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, brokerage_tier: tier, brokerage_status: data.status ?? u.brokerage_status } : u)));
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        router.push('/auth');
+        return;
+      }
+      setActionError(error instanceof Error ? error.message : 'Failed to change the brokerage plan');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const handlePlanChange = async (user: TCUser, newPlan: string) => {
+    if (newPlan === 'brokerage_basic' || newPlan === 'brokerage_pro') {
+      void handleBrokerageChange(user, newPlan === 'brokerage_pro' ? 'pro' : 'basic');
+      return;
+    }
     if (newPlan === (user.plan || 'starter')) return;
     const billingNote = user.stripe_subscription_id
       ? '\n\nNote: this user has a live Stripe subscription. Changing the plan here does NOT change or cancel their billing.'
@@ -153,19 +277,39 @@ export default function AdminPage() {
     if (!window.confirm(`Change ${user.email} from ${getPlan(user.plan).name} to ${getPlan(newPlan).name}?${billingNote}`)) {
       return;
     }
+    // Upgrading by hand: optionally free only until a date, then payment is needed (default 30 days from today).
+    let compEndsAt: string | null = null;
+    if (newPlan !== 'starter') {
+      const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const suggested = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const typed = window.prompt(
+        `${getPlan(newPlan).name} is free for ${user.email} until (YYYY-MM-DD).\n\nAfter that date they must add payment to keep creating and editing. Leave blank for no end date.`,
+        suggested
+      );
+      if (typed === null) return;
+      const trimmed = typed.trim();
+      if (trimmed) {
+        const parsed = new Date(`${trimmed}T23:59:59`);
+        if (Number.isNaN(parsed.getTime())) {
+          setActionError('Enter the date as YYYY-MM-DD');
+          return;
+        }
+        compEndsAt = parsed.toISOString();
+      }
+    }
     setActionError(null);
     setActionLoadingId(user.id);
     try {
       const response = await authFetch(`/api/admin/users/${user.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'set_plan', plan: newPlan }),
+        body: JSON.stringify({ action: 'set_plan', plan: newPlan, compEndsAt }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.error || 'Failed to change plan');
       }
-      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, plan: data.plan } : u)));
+      setUsers(prev => prev.map(u => (u.id === user.id ? { ...u, plan: data.plan, comp: data.comp ?? null } : u)));
     } catch (error) {
       if (error instanceof AuthRequiredError) {
         router.push('/auth');
@@ -287,6 +431,20 @@ export default function AdminPage() {
         <p className="text-slate-400">Manage all TC users and accounts</p>
       </div>
 
+      <div className="flex gap-2 mb-6 border-b border-slate-700">
+        {(['users', 'activity'] as const).map((t) => (
+          <button key={t} type="button" onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 transition ${tab === t ? 'border-blue-400 text-blue-300' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+            {t === 'users' ? 'Users' : 'Activity'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'activity' ? (
+        <AdminActivity />
+      ) : (
+        <>
+      {isFeatureOnClient('brokerage') && <AdminBrokeragePilots />}
+
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-6">
@@ -368,7 +526,7 @@ export default function AdminPage() {
                       ) : (
                         <span className="w-5 shrink-0" />
                       )}
-                      <span>{user.email}</span>
+                      <button type="button" onClick={() => setProfileOpen(profileOpen === user.id ? null : user.id)} className="text-left text-blue-300 hover:text-blue-200 underline-offset-2 hover:underline" title="Show everything about this account">{user.email}</button>
                     </div>
                     {user.suspended && (
                       <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/30 text-red-300">
@@ -387,7 +545,7 @@ export default function AdminPage() {
                   </td>
                   <td className="px-6 py-4 text-slate-300 text-sm">
                     <select
-                      value={user.plan || 'starter'}
+                      value={user.brokerage_tier && user.brokerage_status !== 'terminated' ? (user.brokerage_tier === 'pro' ? 'brokerage_pro' : 'brokerage_basic') : user.plan || 'starter'}
                       onChange={(e) => handlePlanChange(user, e.target.value)}
                       disabled={actionLoadingId === user.id}
                       aria-label={`Plan for ${user.email}`}
@@ -398,7 +556,12 @@ export default function AdminPage() {
                           {getPlan(id).name}
                         </option>
                       ))}
+                      <option value="brokerage_basic">Brokerage</option>
+                      <option value="brokerage_pro">Brokerage Pro</option>
                     </select>
+                    {user.brokerage_tier && user.brokerage_status && (
+                      <span className="block mt-1 text-xs text-slate-500">{user.brokerage_status.replace(/_/g, ' ')}{user.plan && user.plan !== 'starter' ? ` · own plan ${getPlan(user.plan).name}` : ''}</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm">
                     {user.subscription_status ? (
@@ -424,6 +587,21 @@ export default function AdminPage() {
                     ) : (
                       <span className="text-slate-500">—</span>
                     )}
+                    {(user.plan || 'starter') !== 'starter' && user.comp && (
+                      <span className={`block text-xs ${user.comp.expired ? 'text-red-400' : 'text-emerald-300'}`}>
+                        {user.comp.expired ? 'Free period ended' : 'Free until'} {user.comp.endsAt ? new Date(user.comp.endsAt).toLocaleDateString() : ''}
+                      </span>
+                    )}
+                    {(user.plan || 'starter') !== 'starter' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCompEdit(user)}
+                        disabled={actionLoadingId === user.id}
+                        className="mt-1 block text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                      >
+                        {user.comp ? 'Change free-until date' : 'Set free-until date'}
+                      </button>
+                    )}
                     {(user.plan || 'starter') === 'starter' && (
                       <button
                         type="button"
@@ -439,7 +617,8 @@ export default function AdminPage() {
                     {new Date(user.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-slate-400 text-sm">
-                    {user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleDateString() : 'Never'}
+                    {user.last_active_at || user.last_sign_in_at ? new Date((user.last_active_at || user.last_sign_in_at) as string).toLocaleDateString() : 'Never'}
+                    {user.last_active_what && <span className="block text-xs text-slate-500">{user.last_active_what}</span>}
                   </td>
                   <td className="px-6 py-4 text-slate-300">{user.agents_count || 0}</td>
                   <td className="px-6 py-4 text-slate-300">{user.active_transactions || 0}</td>
@@ -513,6 +692,7 @@ export default function AdminPage() {
                                   agent={agent}
                                   busy={actionLoadingId === agent.id}
                                   onSuspend={() => handleSuspendToggle(agent)}
+                                  onWorkspace={() => handleWorkspaceToggle(agent)}
                                   onDelete={() => handleDelete(agent)}
                                 />
                               ))}
@@ -540,6 +720,9 @@ export default function AdminPage() {
                     </td>
                   </tr>
                 )}
+                {profileOpen === user.id && (
+                  <tr className="bg-slate-900/40 border-b border-slate-600"><td colSpan={14} className="px-6 py-5"><AdminUserProfile userId={user.id} /></td></tr>
+                )}
                 </Fragment>
                 );
               })}
@@ -559,11 +742,14 @@ export default function AdminPage() {
                 agent={agent}
                 busy={actionLoadingId === agent.id}
                 onSuspend={() => handleSuspendToggle(agent)}
+                onWorkspace={() => handleWorkspaceToggle(agent)}
                 onDelete={() => handleDelete(agent)}
               />
             ))}
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );
@@ -573,11 +759,13 @@ function AgentRow({
   agent,
   busy,
   onSuspend,
+  onWorkspace,
   onDelete,
 }: {
   agent: AgentAccount;
   busy: boolean;
   onSuspend: () => void;
+  onWorkspace: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -588,6 +776,14 @@ function AgentRow({
           {agent.suspended && (
             <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/30 text-red-300">Suspended</span>
           )}
+          {agent.workspace && (
+            <span
+              className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-900/30 text-blue-300"
+              title={agent.workspace_trial_ends_at ? `Trial ends ${new Date(agent.workspace_trial_ends_at).toLocaleDateString()}` : undefined}
+            >
+              Agent workspace
+            </span>
+          )}
         </p>
         <p className="text-xs text-slate-500">
           {agent.deals > 0 ? `${agent.deals} deal${agent.deals === 1 ? '' : 's'} · ` : ''}
@@ -596,6 +792,17 @@ function AgentRow({
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        <button
+          onClick={onWorkspace}
+          disabled={busy}
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
+            agent.workspace
+              ? 'bg-slate-700/60 text-slate-300 hover:bg-slate-600/60'
+              : 'bg-blue-900/30 text-blue-300 hover:bg-blue-900/50'
+          }`}
+        >
+          {agent.workspace ? 'Remove workspace' : 'Give workspace'}
+        </button>
         <button
           onClick={onSuspend}
           disabled={busy}

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { sharedDealIdsFor } from '@/lib/authorize';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 
 // GET /api/calendar/events?from=YYYY-MM-DD&to=YYYY-MM-DD
 //
@@ -27,7 +28,7 @@ interface CalEvent {
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
 
     const from = request.nextUrl.searchParams.get('from') || '';
     const to = request.nextUrl.searchParams.get('to') || '';
@@ -38,11 +39,11 @@ export async function GET(request: NextRequest) {
     const events: CalEvent[] = [];
 
     // Deals this login owns.
-    const { data: txs, error: txError } = await supabaseServer
-      .from('transactions')
-      .select('id, file_number, property_address, closing_date, status')
-      .eq('tc_user_id', user.id)
-      .limit(1000);
+    // Plus the deals other people added this login to (a paid or in-trial participant).
+    const sharedIds = await sharedDealIdsFor(user);
+    let txQuery = supabaseServer.from('transactions').select('id, file_number, property_address, closing_date, status, archived_at').is('archived_at', null).limit(1000);
+    txQuery = sharedIds.length ? txQuery.or(`tc_user_id.eq.${user.id},id.in.(${sharedIds.join(',')})`) : txQuery.eq('tc_user_id', user.id);
+    const { data: txs, error: txError } = await txQuery;
     if (txError) throw txError;
     const txById = new Map((txs || []).map((t) => [t.id as string, t]));
     const txIds = [...txById.keys()];

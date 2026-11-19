@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isPlatformAdmin } from '@/lib/privileged';
+import { isPlatformAdmin, hasAgentRole } from '@/lib/privileged';
+import { hasAgentWorkspace } from '@/lib/entitlements';
 import { logAudit } from '@/lib/audit';
 import { isValidPlan, isTeamPlan, DEFAULT_PLAN } from '@/lib/plans';
 import { setUserPlan } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
+import { compStatus } from '@/lib/compPeriod';
 import { mergeAppMetadata } from '@/lib/privileged';
 import { ensureTeamForOwner, dissolveTeamMembership } from '@/lib/team';
 import { deleteUserCompletely, DeleteAccountError } from '@/lib/deleteAccount';
@@ -20,6 +22,11 @@ import { deleteUserCompletely, DeleteAccountError } from '@/lib/deleteAccount';
 const INDEFINITE_BAN = '876000h';
 
 type Action = 'suspend' | 'reactivate';
+
+function compPayload(iso: string | null) {
+  const c = compStatus(iso ? { comp_ends_at: iso } : null);
+  return c.applies ? { expired: c.expired, endsAt: iso } : null;
+}
 
 function isAction(value: unknown): value is Action {
   return value === 'suspend' || value === 'reactivate';
@@ -57,12 +64,43 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         await ensureTeamForOwner(targetUserId);
       }
       await setUserPlan(targetUserId, newPlan);
+      // Optional "free until" date for a paid plan. Moving to Starter, or sending no date, clears any earlier one.
+      let compEndsAt: string | null = null;
+      if (newPlan !== 'starter' && body.compEndsAt) {
+        const parsed = new Date(body.compEndsAt);
+        if (Number.isNaN(parsed.getTime())) return NextResponse.json({ error: 'Invalid date' }, { status: 400 });
+        compEndsAt = parsed.toISOString();
+      }
+      await mergeAppMetadata(targetUserId, { comp_ends_at: compEndsAt });
       await logAudit(request, caller, 'admin.set_plan', {
         entityType: 'user',
         entityId: targetUserId,
-        metadata: { from: oldPlan, to: newPlan },
+        metadata: { from: oldPlan, to: newPlan, compEndsAt },
       });
-      return NextResponse.json({ id: targetUserId, plan: newPlan });
+      return NextResponse.json({ id: targetUserId, plan: newPlan, comp: compPayload(compEndsAt) });
+    }
+
+    // Set, change or clear the "free until" date on an account that is already on a paid plan.
+    // After the date, creating and editing needs an active subscription on that plan. Billing is not touched.
+    if (body?.action === 'set_comp_end') {
+      const { data: compTarget, error: compTargetError } = await supabaseServer.auth.admin.getUserById(targetUserId);
+      if (compTargetError || !compTarget.user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      const plan = (compTarget.user.app_metadata as { plan?: string } | null)?.plan || DEFAULT_PLAN;
+      if (plan === 'starter') return NextResponse.json({ error: 'A free-until date is for Pro or Team accounts. Starter uses the trial date.' }, { status: 400 });
+      let newValue: string | null = null;
+      if (body.compEndsAt) {
+        const parsed = new Date(body.compEndsAt);
+        if (Number.isNaN(parsed.getTime())) return NextResponse.json({ error: 'Invalid date' }, { status: 400 });
+        newValue = parsed.toISOString();
+      }
+      const oldValue = (compTarget.user.app_metadata as { comp_ends_at?: string } | null)?.comp_ends_at || null;
+      await mergeAppMetadata(targetUserId, { comp_ends_at: newValue });
+      await logAudit(request, caller, 'admin.set_comp_end', {
+        entityType: 'user',
+        entityId: targetUserId,
+        metadata: { plan, from: oldValue, to: newValue },
+      });
+      return NextResponse.json({ id: targetUserId, comp: compPayload(newValue) });
     }
 
     // Set (or clear) a user's trial end date by hand -- for testing what
@@ -93,6 +131,45 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         id: targetUserId,
         trial: { applies: status.applies, expired: status.expired, trialEndsAt: status.trialEndsAt ? status.trialEndsAt.toISOString() : null },
       });
+    }
+
+    // Give an agent login (or take away) a workspace of their own: their own transactions,
+    // checklists, documents and client portals, on top of working the deals coordinators
+    // added them to. Admin-granted only for now; no billing is involved. Switching it off puts
+    // them back to a free collaborator and keeps their access to the deals they were added to.
+    // Granting also starts a trial (default 14 days) unless a longer one is already running.
+    if (body?.action === 'set_agent_workspace') {
+      if (typeof body.enabled !== 'boolean') {
+        return NextResponse.json({ error: 'enabled must be true or false' }, { status: 400 });
+      }
+      const { data: wsTarget, error: wsTargetError } = await supabaseServer.auth.admin.getUserById(targetUserId);
+      if (wsTargetError || !wsTarget.user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+      if (!hasAgentRole(wsTarget.user) || isPlatformAdmin(wsTarget.user)) {
+        return NextResponse.json({ error: 'Only agent portal logins can be given an agent workspace' }, { status: 400 });
+      }
+      const wasEnabled = hasAgentWorkspace(wsTarget.user);
+      const changes: Record<string, unknown> = { agent_workspace: body.enabled };
+      let trialEndsAt = (wsTarget.user.app_metadata as { trial_ends_at?: string } | null)?.trial_ends_at || null;
+      if (body.enabled) {
+        // The workspace shows agent wording (own deals, invoices) rather than coordinator wording.
+        changes.account_type = 'agent';
+        const days = Number.isInteger(body.trialDays) && body.trialDays > 0 && body.trialDays <= 365 ? body.trialDays : 14;
+        const proposed = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+        const existing = trialEndsAt ? new Date(trialEndsAt) : null;
+        if (!existing || Number.isNaN(existing.getTime()) || existing < proposed) {
+          trialEndsAt = proposed.toISOString();
+          changes.trial_ends_at = trialEndsAt;
+        }
+      }
+      await mergeAppMetadata(targetUserId, changes);
+      await logAudit(request, caller, body.enabled ? 'admin.grant_agent_workspace' : 'admin.revoke_agent_workspace', {
+        entityType: 'user',
+        entityId: targetUserId,
+        metadata: { was_enabled: wasEnabled, trial_ends_at: trialEndsAt },
+      });
+      return NextResponse.json({ id: targetUserId, workspace: body.enabled, trialEndsAt });
     }
 
     if (targetUserId === caller.id) {

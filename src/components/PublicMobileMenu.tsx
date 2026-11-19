@@ -9,7 +9,7 @@ const LINKS = [
   { href: '/faq', label: 'FAQ' },
   { href: '/for-agents', label: 'For Agents' },
   { href: '/for-tcs', label: 'For TCs' },
-  { href: '/for-teams', label: 'For Teams' },
+  { href: '/for-brokerages', label: 'For Brokerages' },
   { href: '/auth', label: 'Sign In' },
   { href: '/agent/login', label: 'Agent Login' },
 ];

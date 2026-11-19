@@ -8,6 +8,14 @@ import { formatDisplayDate } from '@/lib/dueDates';
 import { netReceived, paidInMonth } from '@/lib/invoiceMath';
 import CriticalDatesCard from '@/components/CriticalDatesCard';
 import ListingsOverviewCard from '@/components/ListingsOverviewCard';
+import BrokerageTrendsSummary from '@/components/BrokerageTrendsSummary';
+import BrokerageHome from '@/components/BrokerageHome';
+import AgentBrokerageStrip from '@/components/AgentBrokerageStrip';
+import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
+import TeamDesk from '@/components/TeamDesk';
+import { useBrokerageOwner, useOrgName, useTeamOwner } from '@/lib/useBrokerageOwner';
+import TcInvitationBanner from '@/components/TcInvitationBanner';
+import ClosedDealAlerts from '@/components/ClosedDealAlerts';
 import AttentionPanel, { type AttentionSummary } from '@/components/AttentionPanel';
 import { readPersona, type Persona } from '@/lib/persona';
 
@@ -130,6 +138,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   // Wording only: an agent running their own deals sees agent-focused copy. See lib/accountType.ts.
   const [persona, setPersona] = useState<Persona>({ accountType: 'tc', coordinationMode: null });
+  // The Team board card (Team/Brokerage plans, behind the brokerage flag). It tells us whether this person has a team, so the right column only exists then.
+  const brokerageOwner = useBrokerageOperator();
+  const trueOwner = useBrokerageOwner();
+  const teamOwner = useTeamOwner();
+  const org = useOrgName();
   useEffect(() => { setPersona(readPersona()); }, []);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -153,7 +166,8 @@ export default function Dashboard() {
         const txData = await txRes.json();
         const agentsData = await agentsRes.json();
         const invoicesData = await invoicesRes.json();
-        setTransactions(Array.isArray(txData) ? txData : []);
+        // Archived deals (did not close) are out of everyday numbers; they live under Transactions → Archived.
+        setTransactions(Array.isArray(txData) ? txData.filter((t: { archived_at?: string | null }) => !t.archived_at) : []);
         setAgents(Array.isArray(agentsData) ? agentsData : []);
         setInvoices(Array.isArray(invoicesData) ? invoicesData : []);
       }
@@ -266,6 +280,13 @@ export default function Dashboard() {
   }, [invoices]);
 
   const todayStr = new Date().toISOString().split('T')[0];
+
+  const closingSoonCount = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const end = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    return transactions.filter((t) => t.status !== 'Closed' && t.closing_date && t.closing_date >= today && t.closing_date <= end).length;
+  }, [transactions]);
+  const overdueDealCount = useMemo(() => transactions.filter((t) => t.status !== 'Closed' && (t.overdue_count ?? 0) > 0).length, [transactions]);
 
   const stats = useMemo(() => {
     const activeTransactions = transactions.filter((t) => t.status !== 'Closed');
@@ -387,6 +408,52 @@ export default function Dashboard() {
     );
   }
 
+  // A brokerage owner with no deals of their own still gets a dashboard: their brokerage, with the team board beside it.
+  if (transactions.length === 0 && brokerageOwner === null) {
+    return <div className="p-4 md:p-8"><p className="text-slate-400">Loading dashboard...</p></div>;
+  }
+  if (transactions.length === 0 && brokerageOwner) {
+    return (
+      <div className={"p-4 md:p-10 mx-auto max-w-6xl"}>
+        <div>
+          <div className="min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <div>
+                <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">{org.name ?? 'Your brokerage'}</h1>
+                <p className="text-slate-400">{org.ready && !org.name && trueOwner ? <>Your agents, their pipeline and what needs you today. <Link href="/dashboard/collaborate#settings" className="text-blue-400 hover:text-blue-300">Add your brokerage’s name</Link></> : 'Your agents, their pipeline and what needs you today.'}</p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Link href={trueOwner ? '/dashboard/collaborate#agents' : '/dashboard/brokerage-admin'} className="px-5 py-3 border border-white/10 hover:bg-white/5 text-slate-200 font-semibold rounded-xl transition text-center">Invite an agent</Link>
+                <Link href="/dashboard/transactions/new" className="px-5 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-500/20 text-center">+ New deal</Link>
+              </div>
+            </div>
+            <BrokerageHome />
+            <BrokerageTrendsSummary />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (transactions.length === 0 && teamOwner === true) {
+    return (
+      <div className="p-4 md:p-10 mx-auto max-w-6xl">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">{org.name ?? 'Your team'}</h1>
+            <p className="text-slate-400">{org.ready && !org.name && trueOwner ? <>Your coordinators, their workload and what needs a word today. <Link href="/dashboard/collaborate#settings" className="text-blue-400 hover:text-blue-300">Add your team’s name</Link></> : 'Your coordinators, their workload and what needs a word today.'}</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/dashboard/collaborate" className="px-5 py-3 border border-white/10 hover:bg-white/5 text-slate-200 font-semibold rounded-xl transition text-center">Invite a coordinator</Link>
+            <Link href="/dashboard/transactions/new" className="px-5 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-500/20 text-center">+ New deal</Link>
+          </div>
+        </div>
+        <TeamDesk />
+        <div className="mt-6"><BrokerageTrendsSummary /></div>
+      </div>
+    );
+  }
+
   if (transactions.length === 0) {
     const isAgent = persona.accountType === 'agent';
     const agentLine =
@@ -396,7 +463,9 @@ export default function Dashboard() {
           ? 'Upload an executed contract. Relay reads it, builds the deal, the checklist and the deadlines, and reminds you before each one.'
           : 'Upload an executed contract and Relay builds the deal, the checklist and the deadlines for you.';
     return (
-      <div className="p-4 md:p-8">
+      <div className={"p-4 md:p-8 mx-auto"}>
+        <div>
+        <div className="min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">{isAgent ? 'Your transactions' : 'Dashboard'}</h1>
@@ -419,16 +488,21 @@ export default function Dashboard() {
             {isAgent ? 'Upload a contract' : 'Create Your First Deal'}
           </Link>
         </div>
+        </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-10 max-w-6xl mx-auto">
+    <div className={"p-4 md:p-10 mx-auto max-w-6xl"}>
+      {/* With a team, a small Team board card sits in a narrow column on the right; otherwise the page is exactly as before. */}
+      <div>
+      <div className="min-w-0">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Welcome back</h1>
+          <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">{teamOwner === true && org.name ? org.name : 'Welcome back'}</h1>
           <p className="text-slate-400">Here is what needs you today.</p>
         </div>
         <Link
@@ -439,6 +513,10 @@ export default function Dashboard() {
         </Link>
       </div>
 
+      {brokerageOwner && <BrokerageHome compact />}
+      {teamOwner === true && !brokerageOwner && <TeamDesk compact />}
+      {persona.workspace === true && <AgentBrokerageStrip deals={transactions.map((t) => ({ id: t.id, address: t.property_address, status: t.status, closingDate: t.closing_date }))} />}
+
       {/* KPI row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
@@ -446,6 +524,19 @@ export default function Dashboard() {
           <div className="text-3xl font-bold text-blue-400">{stats.activeCount}</div>
         </div>
 
+        {persona.workspace === true ? (
+          <>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <div className="text-xs text-slate-400 mb-1">Closing in 30 days</div>
+              <div className="text-3xl font-bold text-emerald-400">{closingSoonCount}</div>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+              <div className="text-xs text-slate-400 mb-1">Deals with overdue steps</div>
+              <div className={`text-3xl font-bold ${overdueDealCount > 0 ? 'text-red-400' : 'text-slate-200'}`}>{overdueDealCount}</div>
+            </div>
+          </>
+        ) : (
+          <>
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
           <div className="text-xs text-slate-400 mb-1">Unpaid Invoices</div>
           <div className={`text-3xl font-bold ${stats.overdueUnpaidCount > 0 ? 'text-red-400' : 'text-amber-400'}`}>
@@ -464,6 +555,8 @@ export default function Dashboard() {
           <div className="text-3xl font-bold text-green-400">{formatCurrency(stats.revenueThisMonth)}</div>
           <div className="text-xs text-slate-500 mt-1">{formatCurrency(stats.revenueAllTime)} received all time</div>
         </div>
+          </>
+        )}
       </div>
 
       <details className="mb-8 group">
@@ -497,6 +590,8 @@ export default function Dashboard() {
           /api/dashboard/attention) so the first thing a TC sees is what
           actually needs action. Renders nothing until the fetch resolves.
           Critical dates sits right under it as a thin full-width bar. */}
+      <ClosedDealAlerts />
+      <TcInvitationBanner onAccepted={fetchData} />
       {attentionNote && <p className="mb-3 text-sm text-red-400">{attentionNote}</p>}
       <div className="mb-8 space-y-4">
         {attention && <AttentionPanel attention={attention} onDismiss={dismissAttention} onRestore={restoreAttention} />}
@@ -544,10 +639,10 @@ export default function Dashboard() {
                 <thead>
                   <tr className="border-b border-slate-700 bg-slate-800/60">
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Property</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Agent</th>
+                    {persona.workspace !== true && <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Agent</th>}
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Stage</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Closing</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Fee</th>
+                    {persona.workspace !== true && <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Fee</th>}
                     <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
@@ -568,7 +663,7 @@ export default function Dashboard() {
                           <div className="text-slate-100 font-medium truncate max-w-xs">{tx.property_address}</div>
                           <div className="text-xs text-slate-500 font-mono">{tx.file_number}</div>
                         </td>
-                        <td className="px-4 py-3 text-slate-300">{agentById.get(tx.agent_id)?.name || 'Unknown'}</td>
+                        {persona.workspace !== true && <td className="px-4 py-3 text-slate-300">{agentById.get(tx.agent_id)?.name || 'Unknown'}</td>}
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(tx.status)}`}>
                             {tx.status}
@@ -580,12 +675,14 @@ export default function Dashboard() {
                           </div>
                           <div className="mt-0.5">{getDueBadge(tx)}</div>
                         </td>
+                        {persona.workspace !== true && (
                         <td className="px-4 py-3">
                           <div className="text-slate-200 text-sm font-medium">{fee !== null ? formatCurrency(fee) : '—'}</div>
                           <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${paymentBadgeClasses(invoice, isOverdue)}`}>
                             {paymentBadgeLabel(invoice, isOverdue)}
                           </span>
                         </td>
+                        )}
                         <td className="px-4 py-3 text-right">
                           <Link
                             href={`/dashboard/transactions/${tx.id}`}
@@ -624,16 +721,18 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm text-slate-400 mb-2">
-                      <span>{agentById.get(tx.agent_id)?.name || 'Unknown'}</span>
+                      <span>{persona.workspace === true ? '' : agentById.get(tx.agent_id)?.name || 'Unknown'}</span>
                       <span>{tx.closing_date ? new Date(`${tx.closing_date}T00:00:00`).toLocaleDateString() : 'No closing date'}</span>
                     </div>
                     <div className="flex items-center justify-between">
+                      {persona.workspace === true ? <span /> : (
                       <div className="flex items-center gap-2">
                         <span className="text-slate-200 text-sm font-medium">{fee !== null ? formatCurrency(fee) : '—'}</span>
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${paymentBadgeClasses(invoice, isOverdue)}`}>
                           {paymentBadgeLabel(invoice, isOverdue)}
                         </span>
                       </div>
+                      )}
                       {getDueBadge(tx)}
                     </div>
                   </Link>
@@ -698,6 +797,9 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      </div>
+      </div>
+      {(brokerageOwner || teamOwner === true) && <BrokerageTrendsSummary />}
     </div>
   );
 }

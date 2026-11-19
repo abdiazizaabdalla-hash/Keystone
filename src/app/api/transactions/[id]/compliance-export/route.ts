@@ -1,7 +1,9 @@
+import { loadLogo } from '@/lib/brandLogo';
 import { NextRequest, NextResponse } from 'next/server';
+import { isFullParticipant } from '@/lib/authorize';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { generateComplianceExportPdf } from '@/lib/complianceExportPdf';
 
@@ -16,7 +18,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { user, isAdmin } = await getUserFromRequest(request);
     const { id: transactionId } = await params;
 
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Not available on the agent portal' }, { status: 403 });
     }
 
@@ -39,10 +41,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .eq('id', transaction.agent_id)
         .in('tc_user_id', visibleIds)
         .single();
-      if (!agentRow) {
+      if (agentRow) {
+        agent = { name: agentRow.name, brokerage: agentRow.brokerage };
+      } else if (await isFullParticipant(user.id, transactionId)) {
+        const { data: ownerAgent } = await supabaseServer.from('agents').select('name, brokerage').eq('id', transaction.agent_id).single();
+        agent = ownerAgent ? { name: ownerAgent.name, brokerage: ownerAgent.brokerage } : null;
+      } else {
         return NextResponse.json({ error: 'You do not have permission to export this transaction' }, { status: 403 });
       }
-      agent = { name: agentRow.name, brokerage: agentRow.brokerage };
     } else {
       const { data: agentRow } = await supabaseServer
         .from('agents')
@@ -88,6 +94,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       tasks: tasksRes.data || [],
       generatedByName: user.user_metadata?.full_name || user.email || 'Unknown',
       generatedByEmail: user.email || null,
+      logo: await loadLogo(user.id),
     });
 
     const safeFileNumber = transaction.file_number.replace(/[^a-zA-Z0-9._-]/g, '_');

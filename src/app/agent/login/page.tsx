@@ -3,7 +3,7 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { saveSession } from '@/lib/authClient';
+import { saveSession, fetchHasWorkspace } from '@/lib/authClient';
 
 // Returning-agent login. Password is the default now that every agent
 // sets one during /agent/welcome (their first-ever invite acceptance) --
@@ -51,7 +51,7 @@ function AgentLoginContent() {
         return;
       }
       saveSession(data.session.access_token, data.session.refresh_token, data.user.id);
-      router.push('/agent');
+      router.push((await fetchHasWorkspace()) ? '/dashboard' : '/agent');
     } catch (err) {
       console.error('Error signing in as agent:', err);
       setError('Something went wrong signing you in. Please try again.');
@@ -114,7 +114,7 @@ function AgentLoginContent() {
             <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
-            <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-100 transition">For Brokerages</Link>
             <Link
               href="/auth"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
@@ -122,7 +122,7 @@ function AgentLoginContent() {
               <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>
-              TC Login
+              Sign In
             </Link>
           </div>
         </div>
@@ -142,7 +142,7 @@ function AgentLoginContent() {
           {/* Card */}
           <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
             <h2 className="text-2xl font-display font-semibold text-slate-100 mb-1">
-              {invited && mode === 'link' ? 'Set up your agent account' : 'Agent Sign In'}
+              {invited && mode === 'link' ? 'Set up your portal login' : 'Portal Sign In'}
             </h2>
             <p className="text-slate-400 text-sm mb-6">
               {mode === 'password'

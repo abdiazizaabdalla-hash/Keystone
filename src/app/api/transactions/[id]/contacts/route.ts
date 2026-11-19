@@ -3,8 +3,10 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getVisibleTcUserIds } from '@/lib/team';
-import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
+import { assertAgentOnTransaction } from '@/lib/agentPortal';
+import { actsAsCollaborator, isFullParticipant } from '@/lib/authorize';
 import { autoAddContact } from '@/lib/contactsAuto';
+import { syncDealPartyToCoordinators, dealOwnerUserId } from '@/lib/coordinatorOnboarding';
 
 // The "Deal Contacts" list shown right under the Checklist card on the
 // transaction detail page -- buyer, seller, lender, title/escrow, etc.
@@ -36,7 +38,7 @@ async function assertCanAccessTransaction(
     .in('tc_user_id', visibleIds)
     .single();
 
-  return Boolean(agent);
+  return Boolean(agent) || (await isFullParticipant(userId, transactionId));
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -47,7 +49,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // An invited agent reads the same contact list the TC sees (view-only
     // -- see /agent/transactions/[id]), scoped via transaction_agents
     // rather than the TC-ownership check below.
-    if (isAgentUser(user)) {
+    if (await actsAsCollaborator(user, isAdmin, transactionId)) {
       await assertAgentOnTransaction(transactionId, user.id);
     } else if (!(await assertCanAccessTransaction(transactionId, user.id, isAdmin))) {
       return NextResponse.json({ error: 'You do not have permission to view this transaction' }, { status: 403 });
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id: transactionId } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
-    const callerIsAgent = isAgentUser(user);
+    const callerIsAgent = await actsAsCollaborator(user, isAdmin, transactionId);
     // Agents aren't TCs and have no plan/trial of their own -- same
     // reasoning as the document-upload trial-gate skip in
     // /api/documents.
@@ -128,16 +130,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (error) throw error;
 
     // Save the person to the deal owner's Contacts directory too (skips duplicates).
-    if (email) {
-      const { data: owner } = await supabaseServer
-        .from('transactions')
-        .select('agents(tc_user_id)')
-        .eq('id', transactionId)
-        .maybeSingle();
-      const agentRel = (owner as { agents?: { tc_user_id?: string } | { tc_user_id?: string }[] | null } | null)?.agents;
-      const ownerId = Array.isArray(agentRel) ? agentRel[0]?.tc_user_id : agentRel?.tc_user_id;
-      if (ownerId) await autoAddContact(ownerId, { name, email, phone, role });
+    // Everyone on the deal goes in, with or without an email yet (a buyer's name from the contract, say).
+    {
+      const ownerId = await dealOwnerUserId(transactionId);
+      if (ownerId) await autoAddContact(ownerId, { name, email, phone, role }, { allowNameOnly: true });
     }
+    await syncDealPartyToCoordinators(transactionId, { name, email, phone, role });
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {

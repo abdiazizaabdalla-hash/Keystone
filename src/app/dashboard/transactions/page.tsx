@@ -1,10 +1,16 @@
 'use client';
 
+import { archiveLabel, isArchived } from '@/lib/archive';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
+import { useWorkspaceAgent } from '@/lib/useWorkspaceAgent';
 import { formatDisplayDate } from '@/lib/dueDates';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { useAgentAccess } from '@/lib/useAgentAccess';
+import AgentDealsList from '@/components/AgentDealsList';
+import TcInvitationBanner from '@/components/TcInvitationBanner';
 
 interface Transaction {
   id: string;
@@ -25,6 +31,13 @@ interface Transaction {
   tasks_done?: number;
   /** 'quickbooks' when the deal was created by a QuickBooks import. */
   source?: string | null;
+  /** True when someone else owns this deal and added you to it. */
+  shared?: boolean;
+  limited?: boolean;
+  shared_agent?: { name: string | null } | null;
+  /** Set when the deal did not close and was archived (see lib/archive.ts). */
+  archived_at?: string | null;
+  archive_reason?: string | null;
 }
 
 // Deals saved by the QuickBooks import (also recognised before the source column exists: closed, named after an invoice number).
@@ -35,14 +48,17 @@ interface Agent {
   name: string;
 }
 
-export default function TransactionsPage() {
+function OwnTransactions({ hideTitle = false }: { hideTitle?: boolean }) {
+  const { readOnly } = useAgentAccess();
   const router = useRouter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [agents, setAgents] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isWorkspaceAgent = useWorkspaceAgent();
   const [query, setQuery] = useState('');
-  const [view, setView] = useState<'active' | 'attention' | 'closed' | 'quickbooks' | 'all'>('active');
+  // Deals an agent has invited this account to coordinate, waiting to be accepted.
+  const [view, setView] = useState<'active' | 'attention' | 'closed' | 'quickbooks' | 'archived' | 'all'>('active');
   useEffect(() => {
     fetchData();
   }, []);
@@ -137,8 +153,10 @@ export default function TransactionsPage() {
       .filter((tx) => {
         const isClosed = tx.status === 'Closed';
         const qb = isQb(tx);
-        // QuickBooks imports have their own filter; the everyday views leave them out (All shows everything).
-        if (view === 'quickbooks' ? !qb : view !== 'all' && qb) return false;
+        const archived = isArchived(tx);
+        // Archived deals (did not close) and QuickBooks imports each have their own filter; the everyday views leave them out (All shows everything).
+        if (view === 'archived' ? !archived : view !== 'all' && archived) return false;
+        if (view === 'quickbooks' ? !qb : view !== 'all' && view !== 'archived' && qb) return false;
         if (view === 'active' && isClosed) return false;
         if (view === 'closed' && !isClosed) return false;
         if (view === 'attention' && (isClosed || !(tx.overdue_count && tx.overdue_count > 0))) return false;
@@ -156,14 +174,16 @@ export default function TransactionsPage() {
   }, [transactions, agents, query, view]);
 
   const totals = useMemo(() => {
-    const own = transactions.filter((t) => !isQb(t));
+    const archivedCount = transactions.filter((t) => isArchived(t)).length;
+    const own = transactions.filter((t) => !isQb(t) && !isArchived(t));
     const active = own.filter((t) => t.status !== 'Closed');
     return {
       all: transactions.length,
       active: active.length,
       closed: own.length - active.length,
       overdue: active.filter((t) => (t.overdue_count || 0) > 0).length,
-      quickbooks: transactions.length - own.length,
+      quickbooks: transactions.filter((t) => isQb(t) && !isArchived(t)).length,
+      archived: archivedCount,
     };
   }, [transactions]);
 
@@ -194,26 +214,34 @@ export default function TransactionsPage() {
     ...(totals.overdue > 0 ? [{ id: 'attention' as const, label: `Needs attention (${totals.overdue})` }] : []),
     { id: 'closed', label: `Closed (${totals.closed})` },
     ...(totals.quickbooks > 0 ? [{ id: 'quickbooks' as const, label: `QuickBooks (${totals.quickbooks})` }] : []),
+    ...(totals.archived > 0 ? [{ id: 'archived' as const, label: `Archived (${totals.archived})` }] : []),
     { id: 'all', label: 'All' },
   ];
 
   return (
     <div className="p-4 md:p-10 max-w-5xl mx-auto">
+      <TcInvitationBanner onAccepted={fetchData} />
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Transactions</h1>
-          <p className="text-slate-400">Every deal from contract to closing, with the next step due.</p>
-        </div>
+        {hideTitle ? <div /> : (
+          <div>
+            <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Transactions</h1>
+            <p className="text-slate-400">Every deal from contract to closing, with the next step due.</p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
-          <Link href="/dashboard/transactions/import" className="hidden sm:inline text-sm text-slate-400 hover:text-slate-200">
-            Import CSV
-          </Link>
-          <Link
-            href="/dashboard/transactions/new"
-            className="px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition whitespace-nowrap"
-          >
-            + New deal
-          </Link>
+          {!readOnly && (
+            <Link href="/dashboard/transactions/import" className="hidden sm:inline text-sm text-slate-400 hover:text-slate-200">
+              Import CSV
+            </Link>
+          )}
+          {!readOnly && (
+            <Link
+              href="/dashboard/transactions/new"
+              className="px-4 py-2.5 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-xl transition whitespace-nowrap"
+            >
+              + New deal
+            </Link>
+          )}
         </div>
       </div>
 
@@ -283,7 +311,7 @@ export default function TransactionsPage() {
                 const done = tx.tasks_done ?? 0;
                 const pct = total ? Math.round((done / total) * 100) : 0;
                 const closed = tx.status === 'Closed';
-                const agentName = agents.get(tx.agent_id);
+                const agentName = agents.get(tx.agent_id) || tx.shared_agent?.name;
                 const price = tx.purchase_price ? `$${Number(tx.purchase_price).toLocaleString()}` : null;
                 return (
                   <Link
@@ -293,12 +321,16 @@ export default function TransactionsPage() {
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className={`font-semibold break-words ${closed ? 'text-slate-400' : 'text-slate-100'}`}>{tx.property_address || 'No address'}</p>
+                        <p className={`font-semibold break-words ${closed ? 'text-slate-400' : 'text-slate-100'}`}>
+                          {tx.property_address || 'No address'}
+                          {tx.shared && <span className="ml-2 align-middle text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border border-sky-400/40 bg-sky-500/10 text-sky-300">{tx.limited ? 'Shared · view only' : 'Shared'}</span>}
+                        </p>
                         <p className="text-xs text-slate-500">
-                          {[agentName && `Agent: ${agentName}`, tx.file_number && `File ${tx.file_number}`, price].filter(Boolean).join(' · ')}
+                          {[!isWorkspaceAgent && agentName && `Agent: ${agentName}`, tx.file_number && `File ${tx.file_number}`, price].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
+                        {isArchived(tx) && <span className="rounded-full border border-amber-600/50 bg-amber-900/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300">Archived · {archiveLabel(tx.archive_reason)}</span>}
                         {isQb(tx) && <span className="rounded-full border border-emerald-600/50 bg-emerald-900/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">QuickBooks</span>}
                         <span className={`text-xs px-2.5 py-0.5 rounded-full border ${STATUS_STYLE[tx.status] || 'bg-slate-500/10 text-slate-300 border-slate-500/40'}`}>{tx.status}</span>
                       </div>
@@ -323,6 +355,33 @@ export default function TransactionsPage() {
             </div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+// A brokerage owner opens on their agents' deals (read-only, with the next step on each); their own deals are one tab away.
+export default function TransactionsPage() {
+  const owner = useBrokerageOwner();
+  const [tab, setTab] = useState<'agents' | 'mine'>('agents');
+  if (!owner) return <OwnTransactions />;
+  return (
+    <div>
+      <div className="px-4 md:px-10 pt-4 md:pt-10 max-w-5xl mx-auto">
+        <h1 className="text-3xl md:text-4xl font-semibold text-slate-100 mb-1">Transactions</h1>
+        <p className="text-slate-400 mb-4">Every deal from contract to closing, with the next step.</p>
+        <div className="flex gap-2 text-sm" role="tablist" aria-label="Whose transactions">
+          {([['agents', 'Your agents’ deals'], ['mine', 'Your own deals']] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full border transition ${tab === id ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {tab === 'agents' ? (
+        <div className="p-4 md:p-10 max-w-5xl mx-auto"><AgentDealsList /></div>
+      ) : (
+        <OwnTransactions hideTitle />
       )}
     </div>
   );

@@ -1,7 +1,10 @@
+import { applyRequiredStepsToNewFile } from '@/lib/brokerageRequiredSteps';
 import { NextRequest, NextResponse } from 'next/server';
+import { userMayAutomate } from '@/lib/automation/plan';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
+import { authorizeDeal, participantLevel } from '@/lib/authorize';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getPlanLimits } from '@/lib/plans';
 import { getVisibleTcUserIds } from '@/lib/team';
@@ -14,10 +17,14 @@ import {
 import { computeDueDates, NO_DUE_DATE, DueDateSpec } from '@/lib/dueDates';
 import crypto from 'crypto';
 import { getUserPlan } from '@/lib/privileged';
+import { isFeatureOn } from '@/lib/features';
+import { hasAgentRole } from '@/lib/appMetadata';
 import { queueCalendarSync, removeTransactionCalendarEvents } from '@/lib/calendarSync';
 import { logAudit } from '@/lib/audit';
+import { queueBrokerageNewFile } from '@/lib/notifications';
 import { findOpenTransactionDuplicate } from '@/lib/duplicates';
 import { inviteAgentToTransaction } from '@/lib/agentInvite';
+import { isStateCode, stateFromAddress } from '@/lib/usStates';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -40,6 +47,12 @@ export async function GET(request: NextRequest) {
       .select('*')
       .order('created_at', { ascending: false });
 
+    // Deals this person was added to by someone else. A paid (or in-trial)
+    // participant sees them inline with their own deals; a free
+    // collaborator uses the limited /agent portal instead, so gets none.
+    let sharedIds: string[] = [];
+    let limitedParticipant = false;
+
     if (!isAdmin) {
       // transactions.tc_user_id is the explicit, reassignable "who's
       // running this deal" column (see add-brokerage-org.sql) -- filtering
@@ -48,12 +61,63 @@ export async function GET(request: NextRequest) {
       // can be reassigned to a TC other than whoever owns its agent
       // contact.
       const visibleIds = await getVisibleTcUserIds(user.id);
-      query = query.in('tc_user_id', visibleIds);
+      // A coordinator whose trial ended unpaid still sees the deals they were added to (read-mostly, flagged limited);
+      // a free agent login uses the /agent portal instead.
+      const level = isFeatureOn('agent_workspace') ? await participantLevel(user) : null;
+      // Only a coordinator account: an agent whose workspace trial ended keeps using the /agent portal for shared deals.
+      limitedParticipant = level === 'limited' && !hasAgentRole(user);
+      if (level === 'full' || limitedParticipant) {
+        const { data: links } = await supabaseServer
+          .from('transaction_agents')
+          .select('transaction_id')
+          .eq('agent_user_id', user.id);
+        sharedIds = (links || []).map((l) => l.transaction_id as string);
+      }
+      if (sharedIds.length > 0) {
+        query = query.or(`tc_user_id.in.(${visibleIds.join(',')}),id.in.(${sharedIds.join(',')})`);
+      } else {
+        query = query.in('tc_user_id', visibleIds);
+      }
     }
 
-    const { data, error } = await query;
+    const { data: rawData, error } = await query;
 
     if (error) throw error;
+    const sharedSet = new Set(sharedIds);
+    // For deals owned by someone else, show who the agent is without the
+    // owner's private fee terms.
+    const sharedAgentIds = Array.from(new Set((rawData || [])
+      .filter((t) => !isAdmin && sharedSet.has(t.id as string) && t.tc_user_id !== user.id)
+      .map((t) => t.agent_id as string)));
+    const sharedAgents = new Map<string, { id: string; name: string | null; brokerage: string | null; email: string | null; phone: string | null }>();
+    if (sharedAgentIds.length > 0) {
+      const { data: agentRows } = await supabaseServer
+        .from('agents')
+        .select('id, name, brokerage, email, phone')
+        .in('id', sharedAgentIds);
+      (agentRows || []).forEach((a) => sharedAgents.set(a.id as string, a as never));
+    }
+    // For a deal shared with this coordinator, their own Agents record for the agent who owns it (their fees, what they bill).
+    const myProfiles = new Map<string, { id: string; name: string | null; flat_fee: number | null; commission_percent: number | null; brokerage: string | null }>();
+    const sharedOwnerIds = Array.from(new Set((rawData || [])
+      .filter((t) => !isAdmin && sharedSet.has(t.id as string) && t.tc_user_id !== user.id)
+      .map((t) => t.tc_user_id as string)
+      .filter(Boolean)));
+    if (sharedOwnerIds.length > 0) {
+      const visibleIds = await getVisibleTcUserIds(user.id);
+      const { data: mine } = await supabaseServer.from('agents').select('id, name, email, flat_fee, commission_percent, brokerage').in('tc_user_id', visibleIds);
+      for (const ownerId of sharedOwnerIds) {
+        const { data: owner } = await supabaseServer.auth.admin.getUserById(ownerId);
+        const ownerEmail = (owner.user?.email || '').trim().toLowerCase();
+        const hit = ownerEmail ? (mine || []).find((m) => (m.email || '').trim().toLowerCase() === ownerEmail) : undefined;
+        if (hit) myProfiles.set(ownerId, hit as never);
+      }
+    }
+    const data = (rawData || []).map((t) => {
+      const shared = !isAdmin && sharedSet.has(t.id as string) && t.tc_user_id !== user.id;
+      // Automations belong to the account that owns the deal: not to someone it is shared with, a teammate, or an admin looking in.
+      return { ...t, shared, canAutomate: !isAdmin && t.tc_user_id === user.id && userMayAutomate(user), ...(shared && limitedParticipant ? { limited: true } : {}), ...(shared ? { shared_agent: sharedAgents.get(t.agent_id as string) ?? null, tc_agent: myProfiles.get(t.tc_user_id as string) ?? null } : {}) };
+    });
 
     if (!data || data.length === 0) {
       return NextResponse.json(data);
@@ -134,7 +198,7 @@ export async function POST(request: NextRequest) {
     const { user, isAdmin } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { agentId, fileNumber, propertyAddress, purchasePrice, templateId, acceptanceDate, closingDate, allowDuplicate, fromListingId } = body;
+    const { agentId, fileNumber, propertyAddress, purchasePrice, templateId, acceptanceDate, closingDate, allowDuplicate, fromListingId, propertyState } = body;
 
     if (!isAdmin) {
       const { data: agent } = await supabaseServer
@@ -234,6 +298,10 @@ export async function POST(request: NextRequest) {
     // collision (astronomically unlikely with 32 bits of randomness, but
     // the UNIQUE constraint is what actually guarantees safety, not the
     // odds -- see add-email-ingestion.sql) rather than ever reusing one.
+    // The deal's state decides which templates are suggested. Taken from the form when given, otherwise guessed from the
+    // address; stored only when the templates feature is on (the column comes with add-templates-automation.sql).
+    const dealState = isStateCode(propertyState) ? propertyState : stateFromAddress(typeof propertyAddress === 'string' ? propertyAddress : null);
+    const stateField = isFeatureOn('templates') && dealState ? { property_state: dealState } : {};
     let transaction: ({ id: string; agent_id: string } & Record<string, unknown>) | null = null;
     let txError: { code?: string; message?: string } | null = null;
     for (let attempt = 0; attempt < 5 && !transaction; attempt++) {
@@ -250,6 +318,7 @@ export async function POST(request: NextRequest) {
           acceptance_date: acceptanceDate || null,
           closing_date: closingDate || null,
           inbound_token: generateInboundToken(),
+          ...stateField,
         })
         .select()
         .single();
@@ -324,15 +393,17 @@ export async function POST(request: NextRequest) {
       .select();
 
     if (tasksError) throw tasksError;
+    // A brokerage's required steps are added to its agents' new deals (a no-op for everyone else).
+    await applyRequiredStepsToNewFile('transaction', transaction.id, user.id, acceptanceDate || null);
 
     // Put the new checklist's due dates on a connected calendar (after the
     // response; a no-op if the TC hasn't connected one).
     queueCalendarSync(transaction.id);
 
-
     await logAudit(request, user, 'transaction.create', { entityType: 'transaction', entityId: transaction.id });
+    queueBrokerageNewFile({ kind: 'deal', id: transaction.id, agentUserId: user.id, address: typeof propertyAddress === 'string' ? propertyAddress : null, actorUserId: user.id });
 
-    // The agent gets a portal invite right away when they have an email (turn off with inviteAgent: false). It never
+    // The agent gets a portal invite only when the coordinator ticks it (inviteAgent: true); access is otherwise chosen per agent on the Agents page. It never
     // blocks or undoes the deal; the outcome comes back so the screen can say what happened.
     // A deal converted from this agent's own listing says so in the email.
     let fromListing = false;
@@ -341,7 +412,7 @@ export async function POST(request: NextRequest) {
       const visibleForListing = await getVisibleTcUserIds(user.id);
       fromListing = Boolean(src && src.agent_id === transaction.agent_id && (isAdmin || visibleForListing.includes(src.tc_user_id as string)));
     }
-    const agentInvite = body.inviteAgent === false ? 'skipped' : await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, fromListing });
+    const agentInvite = body.inviteAgent !== true ? 'skipped' : await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, fromListing });
     return NextResponse.json({ ...transaction, agentInvite }, { status: 201 });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -377,18 +448,11 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
 
-    if (!isAdmin) {
-      const { data: agent } = await supabaseServer
-        .from('agents')
-        .select('id')
-        .eq('id', transaction.agent_id)
-        .eq('tc_user_id', user.id)
-        .single();
-
-      if (!agent) {
-        return NextResponse.json({ error: 'You do not have permission to delete this transaction' }, { status: 403 });
-      }
-    }
+    await authorizeDeal(user, isAdmin, id, {
+      scope: 'owner',
+      collaborators: false,
+      deniedMessage: 'You do not have permission to delete this transaction',
+    });
 
     // Clean up everything tied to this transaction before removing it:
     // uploaded documents (storage files + rows), tasks, and any

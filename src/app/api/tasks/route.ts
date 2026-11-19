@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { queueDealNotification } from '@/lib/notifications';
-import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
+import { isAgentUser } from '@/lib/agentPortal';
+import { authorizeDeal, assertTrialForOwnWork } from '@/lib/authorize';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { statusFromTasks } from '@/lib/transactionStages';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { queueCalendarSync } from '@/lib/calendarSync';
+import { emitDealEvent } from '@/lib/automation/events';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,31 +17,14 @@ export async function GET(request: NextRequest) {
 
     if (transactionId) {
       if (!isAdmin) {
-        // Read access follows the same team-wide rule as
-        // /api/transactions and /api/agents (see getVisibleTcUserIds): a
-        // Team owner can view a teammate's checklist too, not just their
-        // own. Fixed 2026-09 -- this previously only checked the
-        // caller's own tc_user_id, which 403'd a team owner opening a
-        // teammate's transaction.
-        const { data: transaction } = await supabaseServer
-          .from('transactions')
-          .select('agent_id')
-          .eq('id', transactionId)
-          .single();
-
-        if (transaction) {
-          const visibleIds = await getVisibleTcUserIds(user.id);
-          const { data: agent } = await supabaseServer
-            .from('agents')
-            .select('id')
-            .eq('id', transaction.agent_id)
-            .in('tc_user_id', visibleIds)
-            .single();
-
-          if (!agent) {
-            return NextResponse.json({ error: 'You do not have permission to view these tasks' }, { status: 403 });
-          }
-        }
+        // Read access follows the same team-wide rule as /api/transactions and
+        // /api/agents: a Team owner can view a teammate's checklist too. Agent
+        // logins read their checklist through /api/agent/transactions/[id] instead.
+        await authorizeDeal(user, isAdmin, transactionId, {
+          scope: 'team',
+          participants: 'full',
+          deniedMessage: 'You do not have permission to view these tasks',
+        });
       }
 
       const { data, error } = await supabaseServer
@@ -114,37 +99,28 @@ export async function PATCH(request: NextRequest) {
 
     if (getError) throw getError;
 
-    if (callerIsAgent) {
-      await assertAgentOnTransaction(task.transaction_id as string, user.id);
-    } else if (!isAdmin) {
-      const { data: transaction } = await supabaseServer
-        .from('transactions')
-        .select('agent_id')
-        .eq('id', task.transaction_id)
-        .single();
-
-      if (transaction) {
-        const { data: agent } = await supabaseServer
-          .from('agents')
-          .select('id')
-          .eq('id', transaction.agent_id)
-          .eq('tc_user_id', user.id)
-          .single();
-
-        if (!agent) {
-          return NextResponse.json({ error: 'You do not have permission to update this task' }, { status: 403 });
-        }
-      }
-    }
+    await authorizeDeal(user, isAdmin, task.transaction_id as string, {
+      scope: 'owner',
+      collaborators: true,
+      deniedMessage: 'You do not have permission to update this task',
+    });
+    if (callerIsAgent) await assertTrialForOwnWork(user, isAdmin, task.transaction_id as string);
 
     // Toggle completed
     const nowCompleted = !task.completed;
-    const { error: updateError } = await supabaseServer
+    // completed_at feeds the team's activity report (add-team-reports.sql). Before that script is run the column does not exist,
+    // so fall back to the plain update rather than failing the checkbox.
+    let { error: updateError } = await supabaseServer
       .from('tasks')
-      .update({ completed: nowCompleted })
+      .update({ completed: nowCompleted, completed_at: nowCompleted ? new Date().toISOString() : null })
       .eq('id', taskId);
+    if (updateError && (updateError.code === '42703' || /completed_at/.test(updateError.message || ''))) {
+      ({ error: updateError } = await supabaseServer.from('tasks').update({ completed: nowCompleted }).eq('id', taskId));
+    }
 
     if (updateError) throw updateError;
+    // Completing a step settles any pending document review on it. Best effort: the column exists once add-task-documents.sql has run.
+    if (nowCompleted) await supabaseServer.from('tasks').update({ needs_review: false }).eq('id', taskId).eq('needs_review', true);
 
     // Auto-advance (or roll back) the transaction status to match the
     // checklist, so the two stay in sync without a manual status change.
@@ -181,11 +157,17 @@ export async function PATCH(request: NextRequest) {
           type: 'stage_changed',
           title: `Stage moved to ${newStatus}`,
         });
+        // Automation: the checklist closed the deal (same once-only key as the stage change in the deal PATCH route).
+        if (newStatus === 'Closed') await emitDealEvent(transaction.id as string, 'deal_closed', {}, `deal_closed:${transaction.id}`);
       }
 
     }
 
+    if (!nowCompleted) await emitDealEvent(task.transaction_id as string, 'task_reopened', { taskId, name: task.name });
     if (nowCompleted) {
+      // Automation event (inert unless the `automation` flag is on).
+      await emitDealEvent(task.transaction_id as string, 'step_ticked', { taskId, name: task.name });
+      await emitDealEvent(task.transaction_id as string, 'task_completed', { taskId, name: task.name });
       queueDealNotification({
         transactionId: task.transaction_id as string,
         actorUserId: user.id,

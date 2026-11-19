@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { categoryForRole } from '@/lib/contactCategories';
 import { cleanTags } from '@/lib/contactsCrm';
 import { EMAIL_RE } from '@/lib/stepEmailTemplates';
+import { coordinatedListingIds } from '@/lib/listingCoordinators';
 
 // Builds the address book from what the TC has already entered: the agents they
 // work with plus every person added to their deals (lender, title, buyer...).
@@ -15,13 +16,17 @@ import { EMAIL_RE } from '@/lib/stepEmailTemplates';
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     await assertTrialActive(user);
 
-    const [{ data: existing }, { data: agents }, { data: txs }] = await Promise.all([
+    const [{ data: existing }, { data: agents }, { data: txs }, { data: worked }, { data: ownListings }, coordListings] = await Promise.all([
       supabaseServer.from('contacts').select('name, email').eq('tc_user_id', user.id).limit(5000),
       supabaseServer.from('agents').select('name, email, phone, brokerage').eq('tc_user_id', user.id),
       supabaseServer.from('transactions').select('id').eq('tc_user_id', user.id).limit(1000),
+      // Deals someone else owns that this person works on (a coordinator an agent invited, an agent a coordinator shared with).
+      supabaseServer.from('transaction_agents').select('transaction_id').eq('agent_user_id', user.id).limit(1000),
+      supabaseServer.from('listings').select('id').eq('tc_user_id', user.id).limit(1000),
+      coordinatedListingIds(user.id),
     ]);
 
     const have = new Set((existing || []).filter((r) => r.email).map((r) => String(r.email).toLowerCase()));
@@ -66,7 +71,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const txIds = (txs || []).map((t) => t.id as string);
+    const txIds = [...new Set([...(txs || []).map((t) => t.id as string), ...(worked || []).map((t) => t.transaction_id as string)])];
     for (let i = 0; i < txIds.length; i += 200) {
       const { data: parties } = await supabaseServer
         .from('transaction_contacts')
@@ -74,12 +79,37 @@ export async function POST(request: NextRequest) {
         .in('transaction_id', txIds.slice(i, i + 200));
       for (const p of parties || []) {
         const role = typeof p.role === 'string' ? p.role.trim().slice(0, 60) : '';
+        const pName = String(p.name || '').trim();
+        // Someone on a deal with no email yet is still someone you work with: add them by name, once.
+        if (!(typeof p.email === 'string' && EMAIL_RE.test(p.email.trim())) && pName && !haveNames.has(pName.toLowerCase())) {
+          haveNames.add(pName.toLowerCase());
+          noEmail.push({ tc_user_id: user.id, name: pName.slice(0, 120), email: null, phone: p.phone ? String(p.phone).slice(0, 40) : null, role: role || null, tags: cleanTags(categoryForRole(role) ? [categoryForRole(role)] : []), newsletter: false, source: 'deals' });
+          continue;
+        }
         consider(p.email, {
           name: String(p.name || '').slice(0, 120),
           phone: p.phone ? String(p.phone).slice(0, 40) : null,
           role: role || null,
           tags: cleanTags(categoryForRole(role) ? [categoryForRole(role)] : []),
         });
+      }
+    }
+
+    // The people on this person's listings too.
+    const listingIds = [...new Set([...(ownListings || []).map((l) => l.id as string), ...coordListings])];
+    for (let i = 0; i < listingIds.length; i += 200) {
+      const { data: parties } = await supabaseServer.from('listing_contacts').select('name, email, phone, role').in('listing_id', listingIds.slice(i, i + 200));
+      for (const p of parties || []) {
+        const role = typeof p.role === 'string' ? p.role.trim().slice(0, 60) : '';
+        const pName = String(p.name || '').trim();
+        if (!(typeof p.email === 'string' && EMAIL_RE.test(p.email.trim()))) {
+          if (pName && !haveNames.has(pName.toLowerCase())) {
+            haveNames.add(pName.toLowerCase());
+            noEmail.push({ tc_user_id: user.id, name: pName.slice(0, 120), email: null, phone: p.phone ? String(p.phone).slice(0, 40) : null, role: role || null, tags: cleanTags(categoryForRole(role) ? [categoryForRole(role)] : []), newsletter: false, source: 'deals' });
+          }
+          continue;
+        }
+        consider(p.email, { name: pName.slice(0, 120), phone: p.phone ? String(p.phone).slice(0, 40) : null, role: role || null, tags: cleanTags(categoryForRole(role) ? [categoryForRole(role)] : []) });
       }
     }
 

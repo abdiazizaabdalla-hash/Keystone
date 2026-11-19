@@ -1,9 +1,15 @@
 'use client';
 
+import LogoSettingsCard from '@/components/LogoSettingsCard';
 import MoneyInput from '@/components/MoneyInput';
+import { readPersona } from '@/lib/persona';
+import { useBrokerageOwner, useTeamOwner } from '@/lib/useBrokerageOwner';
+import { isFeatureOnClient } from '@/lib/features';
+import { useAgentAccess } from '@/lib/useAgentAccess';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import AutomationSettingsCard from '@/components/AutomationSettingsCard';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { DueDateSpec, normalizeDueDateSpec } from '@/lib/dueDates';
 import { TASK_TEMPLATE } from '@/lib/transactionStages';
@@ -20,7 +26,7 @@ function SettingsContent() {
   const [message, setMessage] = useState('');
   const [fullName, setFullName] = useState('');
   const [defaultFlatFee, setDefaultFlatFee] = useState('400');
-  const [defaultPercentFee, setDefaultPercentFee] = useState('0');
+  const [defaultListingFee, setDefaultListingFee] = useState('');
   const [invoiceDueDays, setInvoiceDueDays] = useState('30');
 
   // Due-date workflow: whether new transactions get auto-calculated
@@ -33,6 +39,33 @@ function SettingsContent() {
   const [isSavingDueDateWorkflow, setIsSavingDueDateWorkflow] = useState(false);
   const [dueDateWorkflowMessage, setDueDateWorkflowMessage] = useState('');
   const [paymentPreference, setPaymentPreference] = useState<'stripe' | 'manual' | null>(null);
+  // An agent with their own workspace gets paid by their clients, brokerage and coordinator, not by agents.
+  const [isAgentAcct, setIsAgentAcct] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setIsAgentAcct(readPersona().workspace === true), 0);
+    return () => clearTimeout(t);
+  }, []);
+  // These blocks are for coordinators who bill agents. A broker, or an agent working under a brokerage, has no use for them.
+  const brokerOwner = useBrokerageOwner();
+  const teamOwner = useTeamOwner();
+  // A brokerage or team owner is paid through Relay (Stripe) only, with no do-it-yourself option.
+  const payThroughRelay = brokerOwner === true || teamOwner === true;
+  const [inBrokerage, setInBrokerage] = useState(false);
+  useEffect(() => {
+    if (!isAgentAcct || !isFeatureOnClient('brokerage')) return;
+    let live = true;
+    authFetch('/api/brokerage')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => live && setInBrokerage(!!j?.current))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [isAgentAcct]);
+  const hideFeeBlocks = brokerOwner === true || isAgentAcct;
+  // Automation is a Pro capability (tiers.ts): a Basic agent's server refuses these settings, so do not show them.
+  const { level: agentLevel } = useAgentAccess();
+  const hideDueWorkflow = brokerOwner === true || (isAgentAcct && inBrokerage) || agentLevel === 'basic';
   const [stripeConnectStatus, setStripeConnectStatus] = useState<{ connected: boolean; status: string | null } | null>(null);
   const [isStartingStripeConnect, setIsStartingStripeConnect] = useState(false);
   const [isSavingPaymentPreference, setIsSavingPaymentPreference] = useState(false);
@@ -89,8 +122,10 @@ function SettingsContent() {
   // fetchSettings/fetchTemplates resolve.
   useEffect(() => {
     if (loading) return;
-    if (typeof window === 'undefined' || window.location.hash !== '#checklist-templates') return;
-    const el = document.getElementById('checklist-templates');
+    if (typeof window === 'undefined') return;
+    const hash = window.location.hash;
+    if (hash !== '#checklist-templates' && hash !== '#getting-paid') return;
+    const el = document.getElementById(hash.slice(1));
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [loading]);
 
@@ -312,7 +347,7 @@ function SettingsContent() {
       const data = await response.json();
       setFullName(data.fullName ?? '');
       setDefaultFlatFee(String(data.defaultFlatFee ?? 400));
-      setDefaultPercentFee(String(data.defaultPercentFee ?? 0));
+      setDefaultListingFee(typeof data.defaultListingFee === 'number' ? String(data.defaultListingFee) : '');
       setInvoiceDueDays(String(data.invoiceDueDays ?? 30));
       setDueDateWorkflowEnabled(data.dueDateWorkflowEnabled === true);
       if (Array.isArray(data.dueDateWorkflowSteps)) {
@@ -383,7 +418,8 @@ function SettingsContent() {
         body: JSON.stringify({
           fullName,
           defaultFlatFee: parseFloat(defaultFlatFee) || 0,
-          defaultPercentFee: parseFloat(defaultPercentFee) || 0,
+          defaultListingFee: defaultListingFee.trim() === '' ? null : parseFloat(defaultListingFee) || 0,
+          defaultPercentFee: 0,
           invoiceDueDays: parseInt(invoiceDueDays, 10) || 30,
         }),
       });
@@ -393,7 +429,7 @@ function SettingsContent() {
 
       setFullName(data.fullName ?? '');
       setDefaultFlatFee(String(data.defaultFlatFee));
-      setDefaultPercentFee(String(data.defaultPercentFee));
+      setDefaultListingFee(typeof data.defaultListingFee === 'number' ? String(data.defaultListingFee) : '');
       setInvoiceDueDays(String(data.invoiceDueDays));
       setMessage('Settings saved.');
     } catch (error) {
@@ -466,15 +502,19 @@ function SettingsContent() {
           </div>
         </div>
 
+        <LogoSettingsCard />
+
+        {!hideFeeBlocks && (
+          <>
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
           <h2 className="text-lg font-bold text-slate-100 mb-1">Agent Defaults</h2>
           <p className="text-sm text-slate-400 mb-6">
             Pre-fills the fee fields whenever you add a new agent. You can still change these per agent.
           </p>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid gap-6">
             <div>
-              <label className="text-sm text-slate-400 block mb-2">Default Flat Fee per Deal ($)</label>
+              <label className="text-sm text-slate-400 block mb-2">Default transaction coordination fee</label>
               <MoneyInput
                 value={defaultFlatFee}
                 onValueChange={setDefaultFlatFee}
@@ -483,21 +523,17 @@ function SettingsContent() {
                 className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
-
             <div>
-              <label className="text-sm text-slate-400 block mb-2">Default Percentage Fee (%)</label>
-              <input
-                type="number"
-                value={defaultPercentFee}
-                onChange={handleNumberChange(setDefaultPercentFee)}
-                onWheel={blurOnWheel}
-                placeholder="0"
-                step="0.01"
-                min="0"
-                max="100"
+              <label className="text-sm text-slate-400 block mb-2">Default listing fee (optional)</label>
+              <MoneyInput
+                value={defaultListingFee}
+                onValueChange={setDefaultListingFee}
+                placeholder="250"
+                aria-label="Default listing fee"
                 className="w-full bg-slate-800/70 border border-white/10 rounded-xl px-4 py-2 text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
               />
             </div>
+
           </div>
         </div>
 
@@ -522,7 +558,10 @@ function SettingsContent() {
             />
           </div>
         </div>
+          </>
+        )}
 
+        {!hideDueWorkflow && (
         <div id="due-date-workflow" className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 scroll-mt-6">
           <h2 className="text-lg font-bold text-slate-100 mb-1">Due-Date Workflow</h2>
           <p className="text-sm text-slate-400 mb-6">
@@ -568,6 +607,9 @@ function SettingsContent() {
             {isSavingDueDateWorkflow ? 'Saving...' : 'Save'}
           </button>
         </div>
+        )}
+
+        {!isAgentAcct && <AutomationSettingsCard />}
 
         <div id="checklist-templates" className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 scroll-mt-6">
           <div className="flex items-start justify-between gap-4 mb-1">
@@ -762,21 +804,38 @@ function SettingsContent() {
           )}
         </div>
 
-        <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
-          <h2 className="text-lg font-bold text-slate-100 mb-1">Getting Paid by Agents</h2>
+        <div id="getting-paid" className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8 scroll-mt-6">
+          <h2 className="text-lg font-bold text-slate-100 mb-1">{isAgentAcct || payThroughRelay ? 'Get paid through Relay' : 'Getting Paid by Agents'}</h2>
           <p className="text-sm text-slate-400 mb-6">
-            Choose how agents pay your transaction coordination invoices. Connect Stripe for a real
-            &quot;Pay Online&quot; link &mdash; agents pay by card or bank transfer without creating an account, and
-            the money lands directly in your own Stripe account (Relay never touches the funds). Or handle it
-            yourself outside the platform (Zelle, PayPal, a check, etc.) and mark invoices paid yourself as the
-            money comes in.
+            {payThroughRelay ? (
+              <>
+                Connect Stripe and Relay handles your payments. Every invoice gets a &quot;Pay Online&quot; link, agents pay by card or bank
+                transfer without creating an account, and the money lands directly in your own Stripe account (Relay never touches the funds).
+                {brokerOwner === true && ' You can also pay your agents their commissions through Relay.'}
+                {paymentPreference === 'manual' && ' You are currently collecting payment yourself; connect Stripe to switch.'}
+              </>
+            ) : isAgentAcct ? (
+              <>
+                Connect Stripe so the money you are owed, such as your commission from your brokerage and invoices you send, can be paid to you
+                online. It lands directly in your own Stripe account (Relay never touches the funds). Until payments through Relay are switched
+                on, your brokerage pays you the usual way and records it in Relay, so connecting now just gets you ready.
+              </>
+            ) : (
+              <>
+                Choose how agents pay your transaction coordination invoices. Connect Stripe for a real
+                &quot;Pay Online&quot; link &mdash; agents pay by card or bank transfer without creating an account, and
+                the money lands directly in your own Stripe account (Relay never touches the funds). Or handle it
+                yourself outside the platform (Zelle, PayPal, a check, etc.) and mark invoices paid yourself as the
+                money comes in.
+              </>
+            )}
           </p>
 
           {paymentMessage && (
             <div className="mb-4 text-sm text-slate-300">{paymentMessage}</div>
           )}
 
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className={`grid gap-4 ${payThroughRelay ? 'max-w-xl' : 'md:grid-cols-2'}`}>
             <div
               className={`rounded-lg border p-5 ${
                 paymentPreference === 'stripe' ? 'border-blue-500 bg-slate-800/50' : 'border-slate-600'
@@ -826,14 +885,14 @@ function SettingsContent() {
               )}
             </div>
 
-            <div
+            {!payThroughRelay && <div
               className={`rounded-lg border p-5 ${
                 paymentPreference === 'manual' ? 'border-blue-500 bg-slate-800/50' : 'border-slate-600'
               }`}
             >
               <h3 className="font-semibold text-slate-100 text-sm mb-3">Handle it yourself</h3>
               <p className="text-xs text-slate-500 mb-4">
-                Agents pay you directly (Zelle, Venmo, PayPal, a check, etc.). Mark invoices paid yourself once
+                {isAgentAcct ? 'You are paid directly (Zelle, Venmo, PayPal, a check, etc.).' : 'Agents pay you directly (Zelle, Venmo, PayPal, a check, etc.).'} Mark invoices paid yourself once
                 you&apos;ve received the money.
               </p>
               {paymentPreference === 'manual' ? (
@@ -848,12 +907,12 @@ function SettingsContent() {
                   Use manual payments
                 </button>
               )}
-            </div>
+            </div>}
           </div>
         </div>
 
 
-        <QuickBooksConnectCard />
+        <QuickBooksConnectCard audience={brokerOwner === true ? 'brokerage' : 'tc'} />
 
         <CalendarConnectCard audience="tc" />
 

@@ -1,11 +1,15 @@
 'use client';
 
+import { useAgentHasPortalAccess } from '@/lib/useAgentPortalAccess';
 import { useState, useEffect } from 'react';
 import { suggestFileNumber } from '@/lib/fileNumber';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { DueDateSpec } from '@/lib/dueDates';
+import { readPersona } from '@/lib/persona';
+import InvitePersonModal, { type PickedPerson } from '@/components/InvitePersonModal';
+import ApplyAutomations, { applyAutomations } from '@/components/ApplyAutomations';
 
 interface Agent {
   id: string;
@@ -27,6 +31,14 @@ const BASELINE_TEMPLATE_ID = 'baseline';
 export default function NewTransactionPage() {
   const router = useRouter();
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [pickingAgent, setPickingAgent] = useState(false);
+  // An agent running their own deals is the agent on every deal: nothing to choose.
+  const [isAgentAcct, setIsAgentAcct] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setIsAgentAcct(readPersona().workspace === true), 0);
+    return () => clearTimeout(t);
+  }, []);
+  const soloAgentId = isAgentAcct && agents.length > 0 ? agents[0].id : null;
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [canUseCustomTemplates, setCanUseCustomTemplates] = useState(false);
   const [formData, setFormData] = useState({
@@ -41,7 +53,10 @@ export default function NewTransactionPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   // Whether the agent is emailed a portal invite when the deal is created (turn off to invite them yourself later).
-  const [inviteAgent, setInviteAgent] = useState(true);
+  const [inviteAgent, setInviteAgent] = useState(false);
+  const [skipPortal, setSkipPortal] = useState(false);
+  const agentHasPortal = useAgentHasPortalAccess(formData.agentId || null);
+  const giveAccess = agentHasPortal ? !skipPortal : inviteAgent;
   // The team/brokerage's default checklist template (set from
   // /dashboard/collaborate's settings panel, Brokerage-only to change but
   // read here for any team member) -- pre-selected below once both this
@@ -60,6 +75,7 @@ export default function NewTransactionPage() {
   const [aiAvailable, setAiAvailable] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
+  const [automationIds, setAutomationIds] = useState<string[]>([]);
   const [extractNotes, setExtractNotes] = useState<string | null>(null);
   const [extractedFileName, setExtractedFileName] = useState<string | null>(null);
   const [contractFile, setContractFile] = useState<File | null>(null);
@@ -138,6 +154,18 @@ export default function NewTransactionPage() {
     } catch {
       // Silently unavailable -- the manual form still works fine.
     }
+  };
+
+  const addPickedAgent = async (p: PickedPerson) => {
+    let id = p.agentId;
+    if (!id) {
+      const res = await authFetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: p.name || p.email, email: p.email }) });
+      const made = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(made.error || 'Could not add the agent');
+      id = made.id as string;
+    }
+    await fetchAgents();
+    setFormData((prev) => ({ ...prev, agentId: id as string }));
   };
 
   const fetchAgents = async () => {
@@ -297,7 +325,7 @@ export default function NewTransactionPage() {
     setSubmitting(true);
 
     try {
-      if (!formData.agentId) throw new Error('Please select an agent');
+      if (!soloAgentId && !formData.agentId) throw new Error('Please select an agent');
       if (!formData.fileNumber) throw new Error('Please enter a file number');
       if (!formData.propertyAddress) throw new Error('Please enter a property address');
       if (!formData.purchasePrice) throw new Error('Please enter a purchase price');
@@ -306,14 +334,14 @@ export default function NewTransactionPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agentId: formData.agentId,
+          agentId: soloAgentId ?? formData.agentId,
           fileNumber: formData.fileNumber,
           propertyAddress: formData.propertyAddress,
           purchasePrice: parseFloat(formData.purchasePrice.replace(/,/g, '')),
           acceptanceDate: formData.acceptanceDate || null,
           closingDate: formData.closingDate || null,
           templateId: formData.templateId,
-          inviteAgent,
+          inviteAgent: soloAgentId ? false : giveAccess,
           allowDuplicate,
         }),
       });
@@ -402,6 +430,14 @@ export default function NewTransactionPage() {
           });
         } catch {
           // Dates can be added by hand from the transaction page.
+        }
+      }
+
+      // Apply the chosen saved automations (each becomes this deal's own copy). If it fails, say so on the next page.
+      if (created?.id && automationIds.length) {
+        const problem = await applyAutomations({ transactionId: created.id }, automationIds);
+        if (problem) {
+          try { sessionStorage.setItem('relay-automation-apply-error', problem); } catch { /* the Automation tab still shows what is applied */ }
         }
       }
 
@@ -595,8 +631,8 @@ export default function NewTransactionPage() {
 
         {/* Form */}
         <form onSubmit={(e) => handleSubmit(e)} className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-8">
-          {/* Agent Selection */}
-          <div>
+          {/* Agent Selection (not shown to an agent running their own deals) */}
+          {!soloAgentId && <div>
             <label className="block text-sm font-semibold text-slate-200 mb-3">
               <span className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
@@ -625,24 +661,34 @@ export default function NewTransactionPage() {
                 <option disabled>No agents available</option>
               )}
             </select>
+            <button type="button" onClick={() => setPickingAgent(true)} className="mt-2 text-xs text-blue-300 hover:text-blue-200">＋ Add an agent from your contacts or recent deals</button>
             <p className="text-xs text-slate-400 mt-2">Choose which agent this transaction belongs to</p>
             {(() => {
               const picked = agents.find((a) => a.id === formData.agentId);
               if (!picked) return null;
               return picked.email ? (
                 <label data-tour="tx-invite" className="mt-3 flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
-                  <input type="checkbox" checked={inviteAgent} onChange={(e) => setInviteAgent(e.target.checked)} className="mt-1 accent-blue-500" />
-                  <span>
-                    Email {picked.name} ({picked.email}) a free portal invite for this deal. Uncheck to hold off and invite them yourself from the deal later.
-                  </span>
+                  {agentHasPortal ? (
+                    <>
+                      <input type="checkbox" checked={skipPortal} onChange={(e) => setSkipPortal(e.target.checked)} className="mt-1 accent-blue-500" />
+                      <span>{picked.name} already has portal access, so this deal is added to it. Tick to keep this deal off their portal.</span>
+                    </>
+                  ) : (
+                    <>
+                      <input type="checkbox" checked={inviteAgent} onChange={(e) => setInviteAgent(e.target.checked)} className="mt-1 accent-blue-500" />
+                      <span>
+                        Give {picked.name} ({picked.email}) free portal access to this deal and email them. Leave unticked to decide later (Agents page → Portal access).
+                      </span>
+                    </>
+                  )}
                 </label>
               ) : (
                 <p data-tour="tx-invite" className="mt-3 text-xs text-slate-500">
-                  {picked.name} has no email on file, so no portal invite goes out. Add one on the Agents page and they are added automatically.
+                  {picked.name} has no email on file, so no portal invite goes out. Add one on the Agents page, then choose their access there.
                 </p>
               );
             })()}
-          </div>
+          </div>}
 
           {/* File Number */}
           <div>
@@ -796,6 +842,9 @@ export default function NewTransactionPage() {
             </div>
           )}
 
+          {/* Saved automations to run on this deal (skippable) */}
+          <div className="mt-6"><ApplyAutomations category="transaction" value={automationIds} onChange={setAutomationIds} /></div>
+
           {/* Form Actions */}
           <div className="flex gap-4 pt-6 border-t border-slate-600">
             <button
@@ -838,6 +887,7 @@ export default function NewTransactionPage() {
           </div>
         </div>
       </div>
+      {pickingAgent && <InvitePersonModal role="agent" pickOnly onClose={() => setPickingAgent(false)} onPick={addPickedAgent} />}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import { isFeatureOnClient } from './features';
 
 import { supabaseBrowser as supabase } from './supabaseClient';
 
@@ -47,10 +48,54 @@ export function decodeStoredRole(): string | null {
   }
 }
 
+/**
+ * True when the stored token belongs to an agent the admin has given a workspace of their own
+ * (and the agent_workspace feature is switched on for this environment). Used only to pick
+ * where to send them after sign-in; the server decides what they may actually do.
+ */
+export function decodeStoredWorkspace(): boolean {
+  if (!isFeatureOnClient('agent_workspace')) return false;
+  try {
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (!token) return false;
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(base64));
+    return payload?.app_metadata?.role === 'agent' && payload?.app_metadata?.agent_workspace === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Like decodeStoredWorkspace, but asks the server, so it also sees a workspace that comes from a brokerage (Agent Basic), which is
+ * worked out per request and is never in the token. Used only to pick where to send an agent; the server decides what they may do.
+ */
+export async function fetchHasWorkspace(): Promise<boolean> {
+  if (!isFeatureOnClient('agent_workspace')) return false;
+  if (decodeStoredWorkspace()) return true;
+  if (decodeStoredRole() !== 'agent') return false;
+  try {
+    const res = await authFetch('/api/auth/me');
+    if (!res.ok) return false;
+    return ((await res.json()) as { agentWorkspace?: boolean }).agentWorkspace === true;
+  } catch {
+    return false;
+  }
+}
+
 export function saveSession(accessToken: string, refreshToken: string, userId: string) {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
   localStorage.setItem(USER_ID_KEY, userId);
+}
+
+/** The signed-in person's id, as stored at sign-in (presentation caches key on it so one person's answers never show for the next). */
+export function storedUserId(): string | null {
+  try {
+    return localStorage.getItem(USER_ID_KEY);
+  } catch {
+    return null;
+  }
 }
 
 export function clearSession() {

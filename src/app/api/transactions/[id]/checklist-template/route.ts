@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { isFullParticipant } from '@/lib/authorize';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { getPlanLimits } from '@/lib/plans';
@@ -53,7 +54,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .eq('tc_user_id', user.id)
         .single();
 
-      if (!agent) {
+      if (!agent && !(await isFullParticipant(user.id, transactionId))) {
         return NextResponse.json({ error: 'You do not have permission to update this transaction' }, { status: 403 });
       }
     }

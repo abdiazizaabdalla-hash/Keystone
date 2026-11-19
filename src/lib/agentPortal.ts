@@ -1,6 +1,7 @@
 import { supabaseServer } from './supabase';
 import { AuthError } from './auth';
 import { hasAgentRole } from './privileged';
+import { getEntitlements } from './entitlements';
 
 // Shape getUserFromRequest's `user` already has -- kept minimal here so
 // this file doesn't need to import the full Supabase User type.
@@ -17,6 +18,15 @@ export interface MinimalUser {
 // TC's own commission/contact record for someone, not a login.
 export function isAgentUser(user: MinimalUser): boolean {
   return hasAgentRole(user);
+}
+
+// A free agent portal login with no workspace of their own. Use this on routes that are
+// "coordinator tools" (contacts, QuickBooks, listings, templates): a free collaborator is
+// refused, an agent who has been given a workspace is let through like a coordinator.
+// Use isAgentUser only where the route branches on "is this person acting as an agent on
+// a deal they were added to".
+export function isCollaboratorOnly(user: MinimalUser): boolean {
+  return getEntitlements(user).isCollaborator;
 }
 
 // Confirms `userId` (an agent) has accepted access to `transactionId`.
@@ -50,4 +60,25 @@ export async function getAgentTransactionIds(userId: string): Promise<string[]> 
     .eq('agent_user_id', userId);
   if (error) throw error;
   return (data || []).map((row) => row.transaction_id as string);
+}
+
+/**
+ * Deals this agent owns (a workspace agent's own deals). When a coordinator is added to one, the coordinator's invoices on it
+ * are the agent's to see, pay and download, same as on a deal they were invited onto.
+ */
+export async function getOwnedTransactionIds(userId: string): Promise<string[]> {
+  const { data: records } = await supabaseServer.from('agents').select('id').eq('tc_user_id', userId);
+  const recordIds = (records || []).map((r) => r.id as string);
+  if (recordIds.length === 0) return [];
+  const { data, error } = await supabaseServer.from('transactions').select('id').in('agent_id', recordIds);
+  if (error) throw error;
+  return (data || []).map((t) => t.id as string);
+}
+
+/** Like assertAgentOnTransaction, but a deal the agent owns counts too. */
+export async function assertAgentOnOrOwnsTransaction(transactionId: string, userId: string): Promise<void> {
+  const { data } = await supabaseServer.from('transaction_agents').select('transaction_id').eq('transaction_id', transactionId).eq('agent_user_id', userId).maybeSingle();
+  if (data) return;
+  if ((await getOwnedTransactionIds(userId)).includes(transactionId)) return;
+  throw new AuthError('You do not have access to this transaction', 403);
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { canAccessTransactionDates, cleanLabel, isValidIsoDate } from '@/lib/keyDates';
 import { queueDealNotification } from '@/lib/notifications';
 import { queueCalendarSync, removeKeyDateCalendarEvents } from '@/lib/calendarSync';
@@ -12,7 +12,7 @@ import { queueCalendarSync, removeKeyDateCalendarEvents } from '@/lib/calendarSy
 
 async function loadAndAuthorize(request: NextRequest, id: string) {
   const { user, isAdmin } = await getUserFromRequest(request);
-  if (isAgentUser(user)) return { error: NextResponse.json({ error: 'Not available' }, { status: 403 }) };
+  if (isCollaboratorOnly(user)) return { error: NextResponse.json({ error: 'Not available' }, { status: 403 }) };
   await assertTrialActive(user);
 
   const { data: row } = await supabaseServer

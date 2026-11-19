@@ -234,3 +234,8 @@ export function relayInvoiceNumber(qbNumber: string): string {
   const n = qbNumber.trim().replace(/\s+/g, ' ').slice(0, 90);
   return /^(RELAY|QB)-/i.test(n) ? n : `QB-${n}`;
 }
+
+// What a coordinator pays: invoices agents sent them, as QuickBooks Online bills (Import data -> Bills) and vendors.
+export const DEFAULT_BILL_ACCOUNT = 'Commissions and fees';
+export const QB_BILL_HEADERS = ['Bill No.', 'Vendor', 'Bill Date', 'Due Date', 'Terms', 'Memo', 'Account', 'Line Description', 'Line Amount'];
+export const QB_VENDOR_HEADERS = ['Vendor', 'Email'];

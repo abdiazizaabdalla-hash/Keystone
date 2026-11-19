@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isFullParticipant } from '@/lib/authorize';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { sendClientProgressEmail } from '@/lib/agentPortalEmails';
+import { autoAddContact } from '@/lib/contactsAuto';
+import { dealOwnerUserId, syncDealPartyToCoordinators } from '@/lib/coordinatorOnboarding';
 import { generateExternalAccessToken, EXTERNAL_LINK_EXPIRY_DAYS, PROGRESS_LINK_EXPIRY_DAYS } from '@/lib/externalAccess';
 
 // Confirms the caller may manage external-access links on this
@@ -34,7 +37,8 @@ async function loadTransactionForAccess(
     .eq('id', transaction.agent_id)
     .in('tc_user_id', ownerIds)
     .single();
-  return agent ? transaction : null;
+  if (agent) return transaction;
+  return (await isFullParticipant(userId, transactionId)) ? transaction : null;
 }
 
 // GET /api/transactions/[id]/external-links -- every external-access
@@ -46,7 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { user, isAdmin } = await getUserFromRequest(request);
     const { id: transactionId } = await params;
 
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Not available on the agent portal' }, { status: 403 });
     }
 
@@ -94,7 +98,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await assertTrialActive(user);
     const { id: transactionId } = await params;
 
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Not available on the agent portal' }, { status: 403 });
     }
 
@@ -167,6 +171,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .single();
 
     if (error) throw error;
+
+    // A client you share progress with by email belongs in the Contacts of the owner and of any coordinator on the deal.
+    if (cleanClientEmail) {
+      const person = { name: cleanClientName || null, email: cleanClientEmail, role: 'Client' };
+      const ownerId = (await dealOwnerUserId(transactionId)) || user.id;
+      await autoAddContact(ownerId, person);
+      await syncDealPartyToCoordinators(transactionId, person);
+    }
 
     // A progress link with an email is also emailed to the client, same as when an agent shares one.
     let emailSent = false;

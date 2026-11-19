@@ -1,6 +1,6 @@
 import { supabaseServer } from './supabase';
 
-export type AiFeature = 'contract' | 'listing_agreement' | 'offer';
+export type AiFeature = 'contract' | 'listing_agreement' | 'offer' | 'automation';
 
 /**
  * Records one AI document read in ai_usage (see add-ai-usage.sql): who, which

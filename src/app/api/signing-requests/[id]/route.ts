@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
+import { isFullParticipant } from '@/lib/authorize';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { logListingActivity, requireListingAccess } from '@/lib/listings';
 
@@ -57,7 +58,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           .eq('id', transaction.agent_id)
           .eq('tc_user_id', user.id)
           .single();
-        if (!agent) {
+        if (!agent && !(await isFullParticipant(user.id, signingRequest.transaction_id as string))) {
           return NextResponse.json({ error: 'You do not have permission to void this request' }, { status: 403 });
         }
       }

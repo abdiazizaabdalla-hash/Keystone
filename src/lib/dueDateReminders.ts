@@ -1,4 +1,4 @@
-import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { getResendClient, INVOICE_FROM_EMAIL, throwIfSendFailed } from '@/lib/resendClient';
 import { escapeHtml } from '@/lib/escapeHtml';
 
 export interface ReminderTransactionGroup {
@@ -108,12 +108,12 @@ export async function sendDueDateReminderDigest(params: {
   );
 
   const resend = getResendClient();
-  return resend.emails.send({
+  return throwIfSendFailed(await resend.emails.send({
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject,
     html,
-  });
+  }));;
 }
 
 
@@ -150,11 +150,11 @@ export async function sendAgentKeyDateReminder(params: {
   );
 
   const resend = getResendClient();
-  return resend.emails.send({
+  return throwIfSendFailed(await resend.emails.send({
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     replyTo,
     subject: `${label} ${when} — ${propertyAddress}`,
     html,
-  });
+  }));;
 }

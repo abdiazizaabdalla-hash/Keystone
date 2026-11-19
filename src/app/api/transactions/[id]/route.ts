@@ -1,4 +1,7 @@
+import { notifyDealClosed } from '@/lib/dealClosed';
+import { announceDealClosed } from '@/lib/dealClosedAnnounce';
 import { NextRequest, NextResponse } from 'next/server';
+import { isFullParticipant } from '@/lib/authorize';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
@@ -6,6 +9,13 @@ import { syncTasksToStatus } from '@/lib/closeTransaction';
 import { computeDueDates, normalizeDueDateSpec, dueDaysToSpec } from '@/lib/dueDates';
 import { getVisibleTcUserIds, getTeamForUser } from '@/lib/team';
 import { queueCalendarSync } from '@/lib/calendarSync';
+import { isFeatureOn } from '@/lib/features';
+import { evaluateTemplateRulesQuietly } from '@/lib/templateRules';
+import { isStateCode } from '@/lib/usStates';
+import { brokerageOn, brokerageOwnersForDeal } from '@/lib/oversight';
+import { notifyDeal } from '@/lib/notifications';
+import { emitDealEvent } from '@/lib/automation/events';
+import { recomputeTaskDueDates } from '@/lib/dealActions';
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
@@ -13,7 +23,7 @@ export async function PATCH(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const transactionId = searchParams.get('id');
     const body = await request.json();
-    const { status, acceptanceDate, closingDate } = body;
+    const { status, acceptanceDate, closingDate, propertyState } = body;
 
     if (!transactionId) {
       return NextResponse.json({ error: 'Transaction ID is required' }, { status: 400 });
@@ -29,13 +39,14 @@ export async function PATCH(request: NextRequest) {
       if (existingTx) {
         // The transaction's own assigned TC can always edit it. A team
         // owner (the brokerage admin) can additionally edit any
-        // transaction belonging to their team -- oversight means more
-        // than read-only visibility -- but a regular teammate still
-        // can't touch someone else's deal.
+        // transaction belonging to their team, but a regular teammate still
+        // can't touch someone else's deal. A brokerage owner with an agent's
+        // deal in their read-only view is NOT on this list: only the agent
+        // (and whoever they added to the deal) can change it.
         const membership = await getTeamForUser(user.id);
         const isOwnerOfVisibleTeam = membership?.role === 'owner';
         const visibleIds = isOwnerOfVisibleTeam ? await getVisibleTcUserIds(user.id) : [user.id];
-        const allowed = visibleIds.includes(existingTx.tc_user_id);
+        const allowed = visibleIds.includes(existingTx.tc_user_id) || (await isFullParticipant(user.id, transactionId));
 
         if (!allowed) {
           return NextResponse.json({ error: 'You do not have permission to update this transaction' }, { status: 403 });
@@ -51,6 +62,28 @@ export async function PATCH(request: NextRequest) {
     if (status !== undefined) updateFields.status = status;
     if (acceptanceDate !== undefined) updateFields.acceptance_date = acceptanceDate || null;
     if (closingDate !== undefined) updateFields.closing_date = closingDate || null;
+    if (propertyState !== undefined && isFeatureOn('templates')) {
+      if (propertyState !== null && propertyState !== '' && !isStateCode(propertyState)) {
+        return NextResponse.json({ error: 'That is not a US state code' }, { status: 400 });
+      }
+      updateFields.property_state = propertyState || null;
+    }
+
+    // Whether this request actually changes the stage (and is the one that closes the deal), so the brokerage is told once and
+    // saving the same stage again is silent.
+    let stageChanged = status !== undefined;
+    let closingNow = false;
+    // Automation (flag off = nothing happens): remember the stage before this save so a close is recorded once.
+    let wasClosedBefore = false;
+    if (status !== undefined && isFeatureOn('automation')) {
+      const { data: prev } = await supabaseServer.from('transactions').select('status').eq('id', transactionId).maybeSingle();
+      wasClosedBefore = prev?.status === 'Closed';
+    }
+    if (status !== undefined && brokerageOn()) {
+      const { data: before } = await supabaseServer.from('transactions').select('status').eq('id', transactionId).maybeSingle();
+      stageChanged = !before || before.status !== status;
+      closingNow = status === 'Closed' && stageChanged;
+    }
 
     const { data: transaction, error: updateError } = await supabaseServer
       .from('transactions')
@@ -60,6 +93,11 @@ export async function PATCH(request: NextRequest) {
       .single();
 
     if (updateError) throw updateError;
+
+    // A deal that just closed, or whose dates moved, may have template drafts coming due (drafts only, nothing is sent).
+    if (isFeatureOn('templates') && (status !== undefined || acceptanceDate !== undefined || closingDate !== undefined) && transaction.tc_user_id) {
+      await evaluateTemplateRulesQuietly(transaction.tc_user_id as string, transactionId);
+    }
 
     // Hand back whichever rows changed so the frontend can update state
     // directly instead of re-fetching everything. Both branches can run
@@ -78,50 +116,28 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (acceptanceDate !== undefined || closingDate !== undefined) {
-      // Either anchor date changed -- rewrite the computed due_date
-      // snapshot on every task for this transaction. computeDueDates
-      // returns all-null for a custom (non-baseline) checklist template
-      // or when no acceptance date is set, which is a harmless no-op
-      // write in either case.
-      const { data: existingTasks, error: tasksFetchError } = await supabaseServer
-        .from('tasks')
-        .select('id, name, due_date_spec, due_days_after_acceptance')
-        .eq('transaction_id', transactionId)
-        .order('sort_order', { ascending: true });
+      // Either anchor date changed -- rewrite the computed due_date snapshot on every task for this transaction (shared with the
+      // assistant: src/lib/dealActions.ts). A custom checklist or a missing acceptance date makes this a harmless no-op write.
+      const updatedTasks = await recomputeTaskDueDates(transactionId, transaction.acceptance_date, transaction.closing_date);
+      if (updatedTasks) responseTasks = updatedTasks;
+    }
 
-      if (tasksFetchError) throw tasksFetchError;
-
-      if (existingTasks && existingTasks.length > 0) {
-        // due_date_spec is the current source of truth; a row saved before
-        // it existed only has the legacy due_days_after_acceptance column,
-        // which dueDaysToSpec() converts to the same shape.
-        const dueDates = computeDueDates(
-          existingTasks.map((t) => ({
-            name: t.name as string,
-            dueDate: t.due_date_spec
-              ? normalizeDueDateSpec(t.due_date_spec)
-              : dueDaysToSpec(t.due_days_after_acceptance as number | null),
-          })),
-          transaction.acceptance_date,
-          transaction.closing_date
-        );
-
-        const updatedTasks = await Promise.all(
-          existingTasks.map(async (t, index) => {
-            const { data: updatedTask, error: taskUpdateError } = await supabaseServer
-              .from('tasks')
-              .update({ due_date: dueDates[index] })
-              .eq('id', t.id as string)
-              .select()
-              .single();
-            if (taskUpdateError) throw taskUpdateError;
-            return updatedTask;
-          })
-        );
-
-        responseTasks = updatedTasks;
+    // Brokerage oversight: when the agent changes the stage or dates of a deal their brokerage oversees, the owner hears. Deals outside a brokerage are unchanged.
+    if (brokerageOn() && (status !== undefined || acceptanceDate !== undefined || closingDate !== undefined)) {
+      if ((await brokerageOwnersForDeal(transactionId)).length > 0) {
+        // (A close gets its own, more useful notification below.)
+        if (status !== undefined && stageChanged && !closingNow) await notifyDeal({ transactionId, actorUserId: user.id, type: 'stage_changed', title: `Stage moved to ${status}` });
+        if (acceptanceDate !== undefined || closingDate !== undefined) await notifyDeal({ transactionId, actorUserId: user.id, type: 'date_changed', title: 'Key dates changed' });
       }
     }
+
+    // Automation events (inert unless the `automation` flag is on; never fail this request).
+    if (status === 'Closed' && !wasClosedBefore) await emitDealEvent(transactionId, 'deal_closed', {}, `deal_closed:${transactionId}`);
+    if (acceptanceDate !== undefined || closingDate !== undefined) {
+      await emitDealEvent(transactionId, 'date_changed', { acceptanceDate: transaction.acceptance_date ?? null, closingDate: transaction.closing_date ?? null }, `date_changed:${transactionId}:${transaction.acceptance_date ?? ''}:${transaction.closing_date ?? ''}`);
+    }
+    if (closingNow) await notifyDealClosed(transactionId, user.id);
+    if (closingNow) await announceDealClosed(transactionId, user, request.nextUrl.origin);
 
     // Status or date changes can add, move, or remove calendar events
     // (no-op if nobody on the deal has connected a calendar).

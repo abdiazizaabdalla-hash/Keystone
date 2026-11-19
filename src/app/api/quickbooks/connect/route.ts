@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getQbAuthUrl, quickbooksAvailableFor } from '@/lib/quickbooksApi';
 import { signOAuthState } from '@/lib/oauthState';
 
@@ -8,7 +8,7 @@ import { signOAuthState } from '@/lib/oauthState';
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     if (!quickbooksAvailableFor(user.email)) {
       return NextResponse.json({ error: 'The QuickBooks connection is not open yet. You can still move invoices with the import and export files.' }, { status: 403 });
     }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authFetch } from '@/lib/authClient';
+import { NOTIFICATIONS_EVENT } from '@/lib/toast';
 
 interface NotificationItem {
   id: string;
@@ -24,6 +25,11 @@ const SETTINGS: { type: string; label: string }[] = [
   { type: 'date_changed', label: 'Deadline changes' },
   { type: 'document_added', label: 'New documents' },
   { type: 'client_viewed', label: 'Client opened their progress link' },
+  { type: 'deal_started', label: 'New deals and listings in your brokerage' },
+  { type: 'deal_closed', label: 'Deals that close (yours, shared with you, or in your brokerage)' },
+  { type: 'commission', label: 'Commission invoices and reminders' },
+  { type: 'invite', label: 'Invitations to coordinate a deal' },
+  { type: 'invoice', label: 'Invoices from your coordinator' },
 ];
 
 const POLL_MS = 30_000;
@@ -61,7 +67,7 @@ export default function NotificationBell({
   collapsed = false,
   sidebarRem = 16,
 }: {
-  variant: 'sidebar' | 'topbar';
+  variant: 'sidebar' | 'topbar' | 'banner';
   collapsed?: boolean;
   /** Width of the sidebar in rem, so the panel opens just to its right. */
   sidebarRem?: number;
@@ -81,6 +87,8 @@ export default function NotificationBell({
       if (!res.ok) return;
       const data = await res.json();
       setItems(Array.isArray(data.notifications) ? data.notifications : []);
+      // Lets the banner host show a big event (an invoice paid, a deal closed) the moment it arrives.
+      window.dispatchEvent(new CustomEvent(NOTIFICATIONS_EVENT, { detail: Array.isArray(data.notifications) ? data.notifications : [] }));
       setUnread(typeof data.unreadCount === 'number' ? data.unreadCount : 0);
       setMuted(Array.isArray(data.muted) ? data.muted : []);
       setLoaded(true);
@@ -177,12 +185,14 @@ export default function NotificationBell({
 
   const panelStyle =
     variant === 'sidebar'
-      ? { left: `${(collapsed ? 5 : sidebarRem) + 0.75}rem` }
+      ? { left: `${(collapsed ? 3.5 : sidebarRem) + 0.75}rem` }
       : undefined;
   const panelClass =
     variant === 'sidebar'
       ? 'fixed bottom-4 z-[60] w-[22rem] max-w-[calc(100vw-2rem)]'
-      : 'fixed left-2 right-2 top-14 z-[60]';
+      : variant === 'banner'
+        ? 'fixed right-4 top-14 z-[60] w-[22rem] max-w-[calc(100vw-2rem)]'
+        : 'fixed left-2 right-2 top-14 z-[60]';
 
   return (
     <div ref={rootRef} className={variant === 'sidebar' ? 'w-full' : 'relative'}>
@@ -215,9 +225,9 @@ export default function NotificationBell({
           onClick={toggleOpen}
           aria-label={badge ? `Notifications, ${unread} unread` : 'Notifications'}
           aria-expanded={open}
-          className="relative p-2.5 text-slate-300 hover:text-slate-100 hover:bg-slate-700 rounded-lg transition"
+          className={`relative text-slate-300 hover:text-slate-100 rounded-lg transition ${variant === 'banner' ? 'p-2' : 'p-2.5 hover:bg-slate-700'}`}
         >
-          <BellIcon className="w-6 h-6" />
+          <BellIcon className={variant === 'banner' ? 'w-5 h-5' : 'w-6 h-6'} />
           {badge && (
             <span className="absolute top-1 right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-blue-500 text-white text-[10px] font-semibold flex items-center justify-center">
               {badge}

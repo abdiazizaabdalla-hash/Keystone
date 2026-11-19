@@ -1,3 +1,4 @@
+import { runInstancesFor } from '@/lib/automation/instances';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
@@ -84,6 +85,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const price = cleaned.value.offer_price ? ` for $${Number(cleaned.value.offer_price).toLocaleString('en-US')}` : '';
     await logListingActivity(id, user, `Offer received${cleaned.value.buyer_name ? ` from ${cleaned.value.buyer_name}` : ''}${price}${files.length ? ` (${files.length} document${files.length === 1 ? '' : 's'} attached)` : ''}`);
+    await runInstancesFor({ listingId: id }); // an automation that starts from "offer received" runs now
     queueAgentNotice({ listingId: id, what: 'offer', appUrl: request.nextUrl.origin });
     return NextResponse.json(offer, { status: 201 });
   } catch (error) {

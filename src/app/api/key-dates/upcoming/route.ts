@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getVisibleTcUserIds } from '@/lib/team';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { daysUntil } from '@/lib/keyDates';
 
 // GET /api/key-dates/upcoming?days=14
@@ -13,7 +13,7 @@ import { daysUntil } from '@/lib/keyDates';
 export async function GET(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ items: [] });
     }
 
@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
       .from('transactions')
       .select('id, file_number, property_address')
       .in('tc_user_id', tcUserIds)
-      .neq('status', 'Closed');
+      .neq('status', 'Closed')
+      .is('archived_at', null);
     if (txError) throw txError;
     if (!transactions || transactions.length === 0) return NextResponse.json({ items: [] });
 

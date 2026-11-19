@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getQbConnection, syncInvoiceToQuickBooks, syncPendingForUser } from '@/lib/quickbooksSync';
 import { supabaseServer } from '@/lib/supabase';
 
@@ -13,7 +13,7 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     const conn = await getQbConnection(user.id);
     if (!conn) return NextResponse.json({ error: 'QuickBooks is not connected' }, { status: 400 });
     if (conn.status === 'needs_reconnect') return NextResponse.json({ error: 'QuickBooks needs to be reconnected first' }, { status: 400 });

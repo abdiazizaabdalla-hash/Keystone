@@ -27,11 +27,15 @@ function formatTime(value: string) {
 export default function MessagePreview({
   messages,
   agentName,
+  selfRole = 'tc',
   limit = 4,
   onAttachmentDragStart,
 }: {
   messages: PreviewMessage[];
+  /** The other party's name. */
   agentName: string;
+  /** Which side you speak for; your own bubbles sit on the right. */
+  selfRole?: 'tc' | 'agent';
   limit?: number;
   onAttachmentDragStart?: (e: DragEvent, documentId: string) => void;
 }) {
@@ -43,7 +47,7 @@ export default function MessagePreview({
     <div className="space-y-0.5" aria-label="Latest messages">
       {earlier > 0 && <p className="text-[11px] text-slate-500 text-center pb-2">{earlier} earlier {earlier === 1 ? 'message' : 'messages'}</p>}
       {shown.map((m, i) => {
-        const isSelf = m.sender_role === 'tc';
+        const isSelf = m.sender_role === selfRole;
         const label = isSelf ? 'You' : agentLabel;
         const initial = (isSelf ? 'Y' : agentLabel[0] || 'A').toUpperCase();
         const prev = i > 0 ? shown[i - 1] : null;
@@ -97,7 +101,7 @@ export default function MessagePreview({
                     )}
                   </span>
                 )}
-                {!m.body && !m.attachment && <p className="italic opacity-70">Attachment</p>}
+                {!m.body && !m.attachment && <p className="opacity-70">Attachment</p>}
               </div>
               {isSelf && (
                 <span className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0" aria-hidden>

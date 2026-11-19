@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { tidyTags } from '@/lib/contactCategories';
 
 // Groups role-style tags ("seller's preferred inspector", "title contact (escrow officer)") into
@@ -11,7 +11,7 @@ import { tidyTags } from '@/lib/contactCategories';
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     await assertTrialActive(user);
 
     const { data, error } = await supabaseServer.from('contacts').select('id, role, tags').eq('tc_user_id', user.id).limit(5000);

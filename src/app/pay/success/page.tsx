@@ -1,19 +1,19 @@
-import { confirmInvoicePaymentFromSession } from '@/lib/stripeConnect';
+import { confirmInvoicePaymentFromSession, confirmWorkspaceInvoicePaymentFromSession } from '@/lib/stripeConnect';
 
 export const dynamic = 'force-dynamic';
 
 export default async function PaySuccessPage({
   searchParams,
 }: {
-  searchParams: Promise<{ invoice?: string; session_id?: string }>;
+  searchParams: Promise<{ invoice?: string; wsinvoice?: string; session_id?: string }>;
 }) {
-  const { invoice, session_id: sessionId } = await searchParams;
+  const { invoice, wsinvoice, session_id: sessionId } = await searchParams;
 
   // Confirm with Stripe directly so the invoice is marked paid immediately,
   // even if the webhook is delayed. 'unknown' (no params, or Stripe couldn't
   // confirm yet) falls back to the generic message -- the webhook still
   // handles it.
-  const state = invoice && sessionId ? await confirmInvoicePaymentFromSession(invoice, sessionId) : 'unknown';
+  const state = wsinvoice && sessionId ? await confirmWorkspaceInvoicePaymentFromSession(wsinvoice, sessionId) : invoice && sessionId ? await confirmInvoicePaymentFromSession(invoice, sessionId) : 'unknown';
   const processing = state === 'processing';
 
   return (
@@ -30,7 +30,7 @@ export default async function PaySuccessPage({
         <p className="text-slate-400">
           {processing
             ? 'Your bank transfer was submitted and is still clearing, which can take a few business days. The invoice will be marked paid automatically once it does. You can close this page.'
-            : 'Thanks — your payment went through and the transaction coordinator has been notified. You can close this page.'}
+            : 'Thanks — your payment went through and the sender has been notified. You can close this page.'}
         </p>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { queueCalendarSync } from '@/lib/calendarSync';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { hasAgentRole, mergeAppMetadata } from '@/lib/privileged';
+import { addInvitingAgentForCoordinator, addInvitingAgentForListing } from '@/lib/coordinatorOnboarding';
 
 // POST: called from /agent/accept right after the agent's Supabase
 // session is established from their emailed link. Trusts the caller's
@@ -15,6 +16,22 @@ export async function POST(request: NextRequest) {
     const { user } = await getUserFromRequest(request);
     const body = await request.json().catch(() => ({}));
     const transactionId = typeof body.transactionId === 'string' ? body.transactionId : '';
+    const listingId = typeof body.listingId === 'string' ? body.listingId : '';
+
+    // A coordinator accepting an agent's invitation onto a listing: they get access, the listing stays the agent's.
+    if (listingId) {
+      if (!user.email) return NextResponse.json({ error: 'This account has no email on file' }, { status: 400 });
+      if (hasAgentRole(user)) throw new AuthError('This invitation is for a coordinator account', 403);
+      const { data: invite } = await supabaseServer.from('listing_coordinators').select('id, status, invited_by').eq('listing_id', listingId).ilike('email', user.email.trim().toLowerCase()).maybeSingle();
+      if (!invite) throw new AuthError('No invite found for this listing and email', 403);
+      if (invite.status !== 'accepted') {
+        const { error: upErr } = await supabaseServer.from('listing_coordinators').update({ status: 'accepted', coordinator_user_id: user.id, accepted_at: new Date().toISOString() }).eq('id', invite.id);
+        if (upErr) throw upErr;
+      }
+      const { data: inviter } = await supabaseServer.auth.admin.getUserById(invite.invited_by as string);
+      const agentProfile = inviter.user ? await addInvitingAgentForListing({ coordinator: user, agent: inviter.user, listingId }) : null;
+      return NextResponse.json({ status: 'accepted', listingId, agentProfile });
+    }
 
     if (!transactionId) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
@@ -41,7 +58,15 @@ export async function POST(request: NextRequest) {
     // otherwise silently let a TC's own login end up with agent access
     // too. Self-heals by setting the flag rather than erroring, since the
     // invite itself already proves they were meant to get access.
-    if (!hasAgentRole(user)) {
+    // An invite from an agent with a workspace is a coordinator invite: it must never turn the coordinator into an agent
+    // login, and an agent login cannot take it. (Coordinator invites to agents are the other case, below.)
+    const { data: inviter } = await supabaseServer.auth.admin.getUserById(invite.invited_by as string);
+    const fromAgent = Boolean(inviter.user && hasAgentRole(inviter.user));
+    if (fromAgent) {
+      if (hasAgentRole(user)) {
+        throw new AuthError('This invitation is for a coordinator account', 403);
+      }
+    } else if (!hasAgentRole(user)) {
       await mergeAppMetadata(user.id, { role: 'agent' });
     }
 
@@ -63,7 +88,12 @@ export async function POST(request: NextRequest) {
         .eq('id', invite.id);
     }
 
-    return NextResponse.json({ status: 'accepted', transactionId });
+    // A coordinator accepting an agent's invitation: the agent lands on their Agents list and Contacts.
+    const agentProfile = fromAgent && inviter.user
+      ? await addInvitingAgentForCoordinator({ coordinator: user, agent: inviter.user, transactionId })
+      : null;
+
+    return NextResponse.json({ status: 'accepted', transactionId, agentProfile });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

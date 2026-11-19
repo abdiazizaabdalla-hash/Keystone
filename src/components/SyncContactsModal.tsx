@@ -18,8 +18,11 @@ export default function SyncContactsModal({
   onClose,
   onDone,
   onAuthError,
+  teamWord = 'team',
 }: {
   tags: string[];
+  /** what the shared list is called: 'team', or 'brokerage' for an agent who joined one */
+  teamWord?: string;
   onClose: () => void;
   onDone: () => void | Promise<void>;
   onAuthError?: (err: unknown) => boolean;
@@ -60,7 +63,7 @@ export default function SyncContactsModal({
 
   const run = async () => {
     if (!doShare && !doCopy) return;
-    if (doShare && !confirm(`Share ${tag ? `your "${tag}" contacts` : 'all your personal contacts'} with your team? Everyone on the team will be able to see and edit their details.`)) return;
+    if (doShare && !confirm(`Share ${tag ? `your "${tag}" contacts` : 'all your personal contacts'} with your ${teamWord}? Everyone in the ${teamWord} will be able to see and edit their details.`)) return;
     setBusy(true);
     setError('');
     setResult('');
@@ -74,7 +77,7 @@ export default function SyncContactsModal({
       if (!res.ok) throw new Error(data.error || 'Sync failed');
       const parts: string[] = [];
       if (doCopy) parts.push(`Copied ${data.copied} to your list${data.copiedSkipped ? ` (${data.copiedSkipped} already there)` : ''}.`);
-      if (doShare) parts.push(`Shared ${data.shared} with your team${data.sharedSkipped ? ` (${data.sharedSkipped} already on the team list)` : ''}.`);
+      if (doShare) parts.push(`Shared ${data.shared} with your ${teamWord}${data.sharedSkipped ? ` (${data.sharedSkipped} already on the shared list)` : ''}.`);
       setResult(parts.join(' '));
       await loadStatus();
       await onDone();
@@ -103,16 +106,16 @@ export default function SyncContactsModal({
         {!status ? (
           !error && <p className="text-sm text-slate-400">Checking…</p>
         ) : !status.hasTeam ? (
-          <p className="text-sm text-slate-300">You are not on a team yet, so there is no shared list to sync with.</p>
+          <p className="text-sm text-slate-300">You are not on a team or in a brokerage yet, so there is no shared list to sync with.</p>
         ) : (
           <div className="space-y-3">
             <label className="block border border-slate-600 rounded-lg p-3 cursor-pointer">
               <span className="flex items-start gap-2">
                 <input type="checkbox" checked={doShare} onChange={(e) => setDoShare(e.target.checked)} disabled={status.canShare === 0} className="mt-1 accent-blue-500" />
                 <span className="text-sm">
-                  <span className="text-slate-100 font-medium">Share my contacts with the team</span>
+                  <span className="text-slate-100 font-medium">Share my contacts with the {teamWord}</span>
                   <span className="block text-xs text-slate-400">
-                    {status.canShare} of your contacts can be shared. Teammates see and edit their details; your notes and follow-ups stay private. They stay on your account.
+                    {status.canShare} of your contacts can be shared. Everyone in the {teamWord} sees and edits their details; your notes and follow-ups stay private. They stay on your account.
                   </span>
                 </span>
               </span>
@@ -136,9 +139,9 @@ export default function SyncContactsModal({
               <span className="flex items-start gap-2">
                 <input type="checkbox" checked={doCopy} onChange={(e) => setDoCopy(e.target.checked)} disabled={status.canCopy === 0} className="mt-1 accent-blue-500" />
                 <span className="text-sm">
-                  <span className="text-slate-100 font-medium">Copy team contacts to my list</span>
+                  <span className="text-slate-100 font-medium">Copy {teamWord} contacts to my list</span>
                   <span className="block text-xs text-slate-400">
-                    {status.canCopy} teammate-shared contacts are not in your list yet. The copies are yours alone, and they are never added to your newsletter.
+                    {status.canCopy} contacts shared by others are not in your list yet. The copies are yours alone, and they are never added to your newsletter.
                   </span>
                 </span>
               </span>

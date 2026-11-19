@@ -43,6 +43,9 @@ export async function GET(request: NextRequest) {
         plannedListDate: l.planned_list_date,
         expirationDate: l.expiration_date,
         listedOn: l.listed_on ?? null,
+        // New = not seen yet. Before add-listing-agent-notice.sql is run there is no flag, so a listing from the last 2 weeks counts
+        // (the browser then hides it after the first view).
+        isNew: typeof l.agent_notice_seen === 'boolean' ? l.agent_notice_seen === false : Date.now() - new Date(l.created_at as string).getTime() < 14 * 86400000,
         openOffers: openOffers.get(l.id as string) || 0,
         showings: showingCount.get(l.id as string) || 0,
         tcLabel: tcLabels.get(l.tc_user_id as string) || 'Transaction coordinator',

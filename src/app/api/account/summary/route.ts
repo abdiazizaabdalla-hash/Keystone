@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getPlan, getPlanLimits, isTeamPlan, DEFAULT_PLAN } from '@/lib/plans';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
@@ -7,6 +6,12 @@ import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
 import { getTeamForUser, getVisibleTcUserIds } from '@/lib/team';
 import { getUserPlan } from '@/lib/privileged';
+import { activeLinkForAgent, brokerageOn } from '@/lib/oversight';
+import { hasBrokerageAccess } from '@/lib/brokerageAccessMeta';
+import { getAccount } from '@/lib/brokerageAccount';
+import { accessFor } from '@/lib/brokeragePilot';
+import { supabaseServer } from '@/lib/supabase';
+import { hasAgentRole } from '@/lib/appMetadata';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -38,7 +43,8 @@ export async function GET(request: NextRequest) {
         .from('transactions')
         .select('id', { count: 'exact', head: true })
         .in('tc_user_id', visibleIds)
-        .neq('status', CLOSED_STATUS);
+        .neq('status', CLOSED_STATUS)
+        .is('archived_at', null);
       if (activeError) throw activeError;
       const activeTransactions = activeCount || 0;
 
@@ -60,6 +66,16 @@ export async function GET(request: NextRequest) {
 
     const billing = await getStripeCustomerByUserId(user.id);
 
+    // An agent inside a brokerage has no plan or billing of their own; the Account page shows that instead.
+    let inBrokerage = hasBrokerageAccess(user);
+    if (!inBrokerage && brokerageOn() && hasAgentRole(user)) {
+      try {
+        inBrokerage = (await activeLinkForAgent(user.id)) !== null;
+      } catch {
+        inBrokerage = false;
+      }
+    }
+
     // A Team plan member (not the owner) never has their own Stripe
     // subscription row -- the owner's does the billing. Surfaced so the
     // Billing section can say that instead of wrongly implying they're
@@ -79,7 +95,7 @@ export async function GET(request: NextRequest) {
       billing?.plan === 'starter' &&
       !!billing.stripe_subscription_id &&
       ['active', 'trialing'].includes(billing.subscription_status || '');
-    if (plan.id === 'starter' && !hasActivePaidStarter) {
+    if (plan.id === 'starter' && !hasActivePaidStarter && !inBrokerage) {
       const status = await getTrialStatus(user.id, user.created_at, user.app_metadata as Record<string, unknown> | null);
       trial = {
         applies: status.applies,
@@ -93,8 +109,26 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    // A brokerage owner's own plan: Brokerage or Brokerage Pro, and how many agents they can have. Null for everyone else.
+    let brokerage: { tier: 'basic' | 'pro'; label: string; status: string; seats: { active: number; pending: number; limit: number } } | null = null;
+    if (brokerageOn() && !inBrokerage) {
+      try {
+        const acct = await getAccount(user.id);
+        if (acct) {
+          const access = accessFor(acct, new Date().toISOString().slice(0, 10));
+          const { data: links } = await supabaseServer.from('brokerage_links').select('status').eq('owner_user_id', user.id).in('status', ['active', 'pending']);
+          const active = (links ?? []).filter((l) => l.status === 'active').length;
+          brokerage = { tier: acct.tier, label: acct.tier === 'pro' ? 'Brokerage Pro' : 'Brokerage', status: access.status, seats: { active, pending: (links ?? []).length - active, limit: access.seatLimit } };
+        }
+      } catch {
+        brokerage = null;
+      }
+    }
+
     return NextResponse.json({
       email: user.email,
+      inBrokerage,
+      brokerage,
       createdAt: user.created_at,
       deletionRequestedAt: (user.app_metadata as { deletion_requested_at?: string } | null)?.deletion_requested_at ?? null,
       plan: {

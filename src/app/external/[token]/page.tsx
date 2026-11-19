@@ -332,7 +332,7 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
             <section className="lg:order-1 bg-white/5 border border-white/10 rounded-2xl p-8 min-w-0">
               <h2 className="text-2xl font-bold text-slate-100 mb-2">Documents</h2>
               {info.documents.length === 0 ? (
-                <p className="text-sm text-slate-500 italic">Your agent has not shared any documents yet. They will appear here when they do.</p>
+                <p className="text-sm text-slate-500">Your agent has not shared any documents yet. They will appear here when they do.</p>
               ) : (
                 <>
                   <p className="text-sm text-slate-400 mb-4">Documents your agent has shared with you.</p>
@@ -345,7 +345,7 @@ export default function ExternalAccessPage({ params }: { params: Promise<{ token
                     className="w-full mb-4 bg-slate-800/70 border border-white/10 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
                   />
                   <div className="space-y-3">
-                    {visibleDocs.length === 0 && <p className="text-sm text-slate-500 italic">No documents match &quot;{docSearch}&quot;.</p>}
+                    {visibleDocs.length === 0 && <p className="text-sm text-slate-500">No documents match &quot;{docSearch}&quot;.</p>}
                     {docGroups.map((cat) => {
                       const docs = visibleDocs.filter((d) => (knownCategories.has(d.category) ? d.category : '__other') === cat.key);
                       if (docs.length === 0) return null;

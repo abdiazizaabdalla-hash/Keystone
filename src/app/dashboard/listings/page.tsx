@@ -1,5 +1,6 @@
 'use client';
 
+import { useAgentHasPortalAccess } from '@/lib/useAgentPortalAccess';
 import MoneyInput from '@/components/MoneyInput';
 import PhoneInput from '@/components/PhoneInput';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -10,6 +11,12 @@ import { uploadIncoming, type UploadedFile } from '@/lib/incomingUploadClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { LISTING_STATUS_LABEL, daysOnMarket, type ListingStatus } from '@/lib/listingsShared';
 import { useListingsImport } from '@/components/useListingsImport';
+import { useBrokerageOwner } from '@/lib/useBrokerageOwner';
+import { useAgentAccess } from '@/lib/useAgentAccess';
+import { readPersona } from '@/lib/persona';
+import InvitePersonModal, { type PickedPerson } from '@/components/InvitePersonModal';
+import AgentListingsList from '@/components/AgentListingsList';
+import ApplyAutomations, { applyAutomations } from '@/components/ApplyAutomations';
 
 interface ListingRow {
   id: string;
@@ -18,7 +25,13 @@ interface ListingRow {
   list_price: number | null;
   planned_list_date: string | null;
   status: ListingStatus;
+  archived_at?: string | null;
+  archive_reason?: string | null;
   agent_name: string | null;
+  /** Added by the agent's coordinator and shared with them. */
+  shared?: boolean;
+  /** An agent invited this coordinator onto their listing. */
+  coordinated?: boolean;
   tasks_total: number;
   tasks_done: number;
   overdue_count: number;
@@ -57,17 +70,28 @@ const STATUS_STYLE: Record<ListingStatus, string> = {
 
 const money = (n: number | null) => (n ? `$${Number(n).toLocaleString('en-US')}` : '—');
 
-export default function ListingsPage() {
+function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
+  const { readOnly } = useAgentAccess();
   const router = useRouter();
   const [listings, setListings] = useState<ListingRow[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [pickingAgent, setPickingAgent] = useState(false);
+  // An agent listing their own property is the listing agent: nothing to choose.
+  const [isAgentAcct, setIsAgentAcct] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setIsAgentAcct(readPersona().workspace === true), 0);
+    return () => clearTimeout(t);
+  }, []);
+  const soloAgentId = isAgentAcct && agents.length > 0 ? agents[0].id : null;
   // Whether the listing agent is emailed a portal invite on create (turn off to invite them yourself later).
-  const [inviteAgent, setInviteAgent] = useState(true);
+  const [inviteAgent, setInviteAgent] = useState(false);
+  const [skipPortal, setSkipPortal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState<'open' | 'all'>('open');
+  const [filter, setFilter] = useState<'open' | 'all' | 'archived'>('open');
   const [showNew, setShowNew] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [automationIds, setAutomationIds] = useState<string[]>([]);
   const [formError, setFormError] = useState('');
   // The same property is already being listed: offer to open it, or add this one anyway.
   const [dupListing, setDupListing] = useState<{ id: string; message: string } | null>(null);
@@ -83,6 +107,8 @@ export default function ListingsPage() {
     templateName: 'Standard',
   });
   const [templateNames, setTemplateNames] = useState<string[]>(['Standard']);
+  const agentHasPortal = useAgentHasPortalAccess(form.agentId || null);
+  const giveAccess = agentHasPortal ? !skipPortal : inviteAgent;
   // Starting from an uploaded listing agreement
   const [aiAvailable, setAiAvailable] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -102,6 +128,17 @@ export default function ListingsPage() {
     [router]
   );
 
+  const addPickedAgent = async (p: PickedPerson) => {
+    let id = p.agentId;
+    if (!id) {
+      const res = await authFetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: p.name || p.email, email: p.email }) });
+      const made = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(made.error || 'Could not add the agent');
+      id = made.id as string;
+      setAgents((prev) => [...prev, { id: id as string, name: p.name || p.email, email: p.email }]);
+    }
+    setForm((prev) => ({ ...prev, agentId: id as string }));
+  };
   const load = useCallback(async () => {
     try {
       const [lRes, aRes, xRes, tRes] = await Promise.all([
@@ -137,7 +174,7 @@ export default function ListingsPage() {
   const importer = useListingsImport(load);
 
   const visible = useMemo(
-    () => (filter === 'all' ? listings : listings.filter((l) => l.status === 'preparing' || l.status === 'active' || l.status === 'under_offer')),
+    () => (filter === 'all' ? listings : filter === 'archived' ? listings.filter((l) => l.archived_at) : listings.filter((l) => !l.archived_at && (l.status === 'preparing' || l.status === 'active' || l.status === 'under_offer'))),
     [listings, filter]
   );
 
@@ -148,6 +185,7 @@ export default function ListingsPage() {
     setFound([]);
     setReadMsg('');
     setFormError('');
+    setAutomationIds([]);
   };
 
   const readAgreement = async (file: File) => {
@@ -206,7 +244,7 @@ export default function ListingsPage() {
       setFound(people.filter((p) => p !== firstSeller));
       setReadMsg(
         `Read the agreement. Check everything below before creating — ${people.length} ${people.length === 1 ? 'person' : 'people'} found.` +
-          (agentPerson && !matchedAgent ? ` The listing agent (${agentPerson.name}) isn't set up in Relay yet, so pick one below.` : '')
+          (agentPerson && !matchedAgent && !soloAgentId ? ` The listing agent (${agentPerson.name}) isn't set up in Relay yet, so pick one below.` : '')
       );
     } catch (err) {
       if (handleAuth(err)) return;
@@ -228,8 +266,8 @@ export default function ListingsPage() {
         body: JSON.stringify({
           ...form,
           allowDuplicate,
-          inviteAgent,
-          agentId: form.agentId || null,
+          inviteAgent: soloAgentId ? false : giveAccess,
+          agentId: soloAgentId ?? (form.agentId || null),
           contacts: found.filter((p) => p.include).map((p) => ({ role: p.role, name: p.name, email: p.email, phone: p.phone })),
         }),
       });
@@ -253,6 +291,12 @@ export default function ListingsPage() {
           /* the listing page lets them upload it again */
         }
       }
+      if (automationIds.length) {
+        const problem = await applyAutomations({ listingId: data.id }, automationIds);
+        if (problem) {
+          try { sessionStorage.setItem('relay-automation-apply-error', problem); } catch { /* the listing page still shows what is applied */ }
+        }
+      }
       router.push(`/dashboard/listings/${data.id}`);
     } catch (err) {
       if (handleAuth(err)) return;
@@ -272,14 +316,17 @@ export default function ListingsPage() {
   return (
     <div className="p-4 md:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Listings</h1>
-          <p className="text-slate-400">Everything before the contract: prep, go-live, showings and offers. An accepted offer becomes a deal.</p>
-        </div>
+        {hideTitle ? <div /> : (
+          <div>
+            <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Listings</h1>
+            <p className="text-slate-400">Everything before the contract: prep, go-live, showings and offers. An accepted offer becomes a deal.</p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <Link href="/dashboard/listings/template" className="text-sm text-slate-400 hover:text-slate-200">
             Edit default checklist
           </Link>
+          {!readOnly && (
           <button
             type="button"
             onClick={importer.openPicker}
@@ -288,6 +335,8 @@ export default function ListingsPage() {
           >
             {importer.working ? 'Importing…' : 'Import CSV'}
           </button>
+          )}
+          {!readOnly && (
           <button
             type="button"
             data-tour="new-listing-btn"
@@ -299,6 +348,7 @@ export default function ListingsPage() {
           >
             + New listing
           </button>
+          )}
         </div>
       </div>
 
@@ -307,14 +357,14 @@ export default function ListingsPage() {
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 
       <div className="mb-4 flex items-center gap-2 text-sm">
-        {(['open', 'all'] as const).map((f) => (
+        {(['open', 'all', ...(listings.some((l) => l.archived_at) ? ['archived' as const] : [])] as const).map((f) => (
           <button
             key={f}
             type="button"
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-full border ${filter === f ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-slate-600 text-slate-400 hover:text-slate-200'}`}
           >
-            {f === 'open' ? 'Open listings' : 'All'}
+            {f === 'open' ? 'Open listings' : f === 'archived' ? 'Archived' : 'All'}
           </button>
         ))}
       </div>
@@ -336,7 +386,11 @@ export default function ListingsPage() {
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-slate-100 font-semibold break-words">{l.property_address}</p>
+                    <p className="text-slate-100 font-semibold break-words">
+                      {l.property_address}
+                      {l.shared && <span className="ml-2 align-middle text-[10px] uppercase tracking-wider rounded-full bg-blue-500/15 text-blue-300 px-2 py-0.5">From your coordinator</span>}
+                      {l.coordinated && <span className="ml-2 align-middle text-[10px] uppercase tracking-wider rounded-full bg-blue-500/15 text-blue-300 px-2 py-0.5">Agent’s listing</span>}
+                    </p>
                     <p className="text-xs text-slate-500">
                       {[l.seller_name && `Seller: ${l.seller_name}`, l.agent_name && `Agent: ${l.agent_name}`, money(l.list_price)].filter(Boolean).join(' · ')}
                     </p>
@@ -395,7 +449,7 @@ export default function ListingsPage() {
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Property address *</label>
               <input data-tour="listing-address" className={inputCls} placeholder="123 Main St, Austin, TX 78701" value={form.propertyAddress} onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })} required autoFocus />
             </div>
-            <div data-tour="listing-agent-field">
+            {!soloAgentId && <div data-tour="listing-agent-field">
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Listing agent *</label>
               <select className={inputCls} value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })}>
                 <option value="">Choose the agent who holds this listing</option>
@@ -405,22 +459,32 @@ export default function ListingsPage() {
                   </option>
                 ))}
               </select>
+              <button type="button" onClick={() => setPickingAgent(true)} className="mt-1 text-xs text-blue-300 hover:text-blue-200">＋ Add an agent from your contacts or recent deals</button>
               <p className="text-xs text-slate-500 mt-1">The agent the listing belongs to. They are also the agent on the deal if you convert it.</p>
               {(() => {
                 const picked = agents.find((a) => a.id === form.agentId);
                 if (!picked) return null;
                 return picked.email ? (
                   <label data-tour="listing-invite" className="mt-2 flex items-start gap-2 text-xs text-slate-300 cursor-pointer">
-                    <input type="checkbox" checked={inviteAgent} onChange={(e) => setInviteAgent(e.target.checked)} className="mt-0.5 accent-blue-500" />
-                    <span>Email {picked.name} ({picked.email}) a portal invite so this listing shows in their portal. Uncheck to invite them yourself later.</span>
+                    {agentHasPortal ? (
+                      <>
+                        <input type="checkbox" checked={skipPortal} onChange={(e) => setSkipPortal(e.target.checked)} className="mt-0.5 accent-blue-500" />
+                        <span>{picked.name} already has portal access, so this listing is added to it. Tick to keep this listing off their portal.</span>
+                      </>
+                    ) : (
+                      <>
+                        <input type="checkbox" checked={inviteAgent} onChange={(e) => setInviteAgent(e.target.checked)} className="mt-0.5 accent-blue-500" />
+                        <span>Give {picked.name} ({picked.email}) portal access to this listing and email them. Leave unticked to decide later (Agents page → Portal access).</span>
+                      </>
+                    )}
                   </label>
                 ) : (
                   <p data-tour="listing-invite" className="mt-2 text-xs text-slate-500">
-                    {picked.name} has no email on file, so no portal invite goes out. Add one on the Agents page and they are added automatically.
+                    {picked.name} has no email on file, so no portal invite goes out. Add one on the Agents page, then choose their access there.
                   </p>
                 );
               })()}
-            </div>
+            </div>}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Seller name</label>
@@ -501,6 +565,7 @@ export default function ListingsPage() {
                 </div>
               </div>
             )}
+            <ApplyAutomations category="listing" value={automationIds} onChange={setAutomationIds} />
             <div className="flex items-center gap-3 pt-1">
               <button type="submit" data-tour="listing-submit" disabled={saving} className="px-5 py-2.5 bg-blue-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50">
                 {saving ? 'Creating…' : 'Create listing'}
@@ -512,6 +577,30 @@ export default function ListingsPage() {
           </form>
         </div>
       )}
+      {pickingAgent && <InvitePersonModal role="agent" pickOnly onClose={() => setPickingAgent(false)} onPick={addPickedAgent} />}
+    </div>
+  );
+}
+
+// A brokerage owner opens on their agents' listings (read-only, with the next step on each); their own listings are one tab away.
+export default function ListingsPage() {
+  const owner = useBrokerageOwner();
+  const [tab, setTab] = useState<'agents' | 'mine'>('agents');
+  if (!owner) return <OwnListings />;
+  return (
+    <div>
+      <div className="px-4 md:px-8 pt-4 md:pt-8">
+        <h1 className="text-2xl md:text-3xl font-display font-semibold text-slate-100 mb-1">Listings</h1>
+        <p className="text-slate-400 mb-4">Everything before the contract, with the next step.</p>
+        <div className="flex gap-2 text-sm" role="tablist" aria-label="Whose listings">
+          {([['agents', 'Your agents’ listings'], ['mine', 'Your own listings']] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full border transition ${tab === id ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {tab === 'agents' ? <div className="p-4 md:p-8"><AgentListingsList /></div> : <OwnListings hideTitle />}
     </div>
   );
 }

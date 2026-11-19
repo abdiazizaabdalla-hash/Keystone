@@ -1,12 +1,17 @@
+import { applyRequiredStepsToNewFile } from '@/lib/brokerageRequiredSteps';
+import { coordinatedListingIds } from '@/lib/listingCoordinators';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { logAudit } from '@/lib/audit';
+import { queueBrokerageNewFile } from '@/lib/notifications';
 import { autoAddContact } from '@/lib/contactsAuto';
 import { queueListingCalendarSync } from '@/lib/calendarSync';
+import { getAgentListingRows } from '@/lib/agentListings';
+import { hasAgentRole } from '@/lib/privileged';
 import { sendListingPortalInvite } from '@/lib/agentInvite';
 import { findOpenListingDuplicate } from '@/lib/duplicates';
 import { logListingActivity, cleanMoney, cleanTemplateName, cleanText, dueFromOffset, isIsoDate, loadTemplateSteps } from '@/lib/listings';
@@ -22,12 +27,37 @@ function fail(error: unknown, what: string) {
 export async function GET(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
-    if (isAgentUser(user)) throw new AuthError('Not available', 403);
+    if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
     const visible = await getVisibleTcUserIds(user.id);
     let q = supabaseServer.from('listings').select('*').order('created_at', { ascending: false }).limit(500);
     if (!isAdmin) q = q.in('tc_user_id', visible);
-    const { data: listings, error } = await q;
+    const { data: own, error } = await q;
     if (error) throw error;
+    // An agent with a workspace also sees the listings their coordinator shared with them, in the same list.
+    let listings = own || [];
+    const sharedIds = new Set<string>();
+    if (!isAdmin && hasAgentRole(user)) {
+      const have = new Set(listings.map((l) => l.id as string));
+      for (const l of await getAgentListingRows(user.email)) {
+        if (!have.has(l.id as string)) {
+          listings = [...listings, l];
+          sharedIds.add(l.id as string);
+        }
+      }
+    }
+    // A coordinator also sees the listings agents invited them onto.
+    const coordinatedSet = new Set<string>();
+    if (!isAdmin && !hasAgentRole(user)) {
+      const have = new Set(listings.map((l) => l.id as string));
+      const wanted = (await coordinatedListingIds(user.id)).filter((x) => !have.has(x));
+      if (wanted.length) {
+        const { data: extra } = await supabaseServer.from('listings').select('*').in('id', wanted);
+        for (const l of extra || []) {
+          listings = [...listings, l];
+          coordinatedSet.add(l.id as string);
+        }
+      }
+    }
     const ids = (listings || []).map((l) => l.id as string);
     const agentIds = [...new Set((listings || []).map((l) => l.agent_id as string | null).filter(Boolean) as string[])];
 
@@ -45,6 +75,8 @@ export async function GET(request: NextRequest) {
       const dueDates = open.map((t) => t.due_date as string | null).filter(Boolean) as string[];
       return {
         ...l,
+        shared: sharedIds.has(l.id as string),
+        coordinated: coordinatedSet.has(l.id as string),
         agent_name: l.agent_id ? agentName.get(l.agent_id as string) || null : null,
         tasks_total: mine.length,
         tasks_done: mine.length - open.length,
@@ -63,7 +95,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
-    if (isAgentUser(user)) throw new AuthError('Not available', 403);
+    if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
     await assertTrialActive(user);
     const body = await request.json().catch(() => ({}));
 
@@ -113,6 +145,8 @@ export async function POST(request: NextRequest) {
       .select('*')
       .single();
     if (error) throw error;
+    // The agent's dashboard announces a listing they were added to once (add-listing-agent-notice.sql; ignored until it is run).
+    if (agentId) await supabaseServer.from('listings').update({ agent_notice_seen: false }).eq('id', listing.id);
 
     const steps = await loadTemplateSteps(user.id, cleanTemplateName(body.templateName));
     const rows = steps.map((s, i) => ({
@@ -126,6 +160,8 @@ export async function POST(request: NextRequest) {
       const { error: tErr } = await supabaseServer.from('listing_tasks').insert(rows);
       if (tErr) throw tErr;
     }
+    // A brokerage's required steps are added to its agents' new listings (a no-op for everyone else).
+    await applyRequiredStepsToNewFile('listing', listing.id as string, user.id, planned);
 
     // Everyone on the listing: the seller first, then anyone else (e.g. found by reading the agreement).
     const people: { role: string | null; name: string | null; email: string | null; phone: string | null }[] = [];
@@ -154,10 +190,11 @@ export async function POST(request: NextRequest) {
     await logListingActivity(listing.id as string, user, 'Listing created');
     queueListingCalendarSync(listing.id as string);
     await logAudit(request, user, 'listing.create', { entityType: 'listing', entityId: listing.id });
+    queueBrokerageNewFile({ kind: 'listing', id: listing.id as string, agentUserId: user.id, address, actorUserId: user.id });
 
-    // The agent gets a portal login right away so the listing shows up under Listings in their portal.
+    // The agent gets a portal login only when the coordinator ticks it (inviteAgent: true); otherwise access is chosen on the Agents page.
     // Skipped quietly when there is no agent, no email or sharing is off; the listing page shows the state.
-    const agentInvite = body.inviteAgent === false ? 'skipped' : agentId ? await sendListingPortalInvite({ listing, user, appUrl: request.nextUrl.origin }) : 'no_agent';
+    const agentInvite = body.inviteAgent !== true ? 'skipped' : agentId ? await sendListingPortalInvite({ listing, user, appUrl: request.nextUrl.origin }) : 'no_agent';
     return NextResponse.json({ ...listing, agentInvite }, { status: 201 });
   } catch (error) {
     return fail(error, 'create');

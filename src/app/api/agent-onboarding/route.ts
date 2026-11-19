@@ -4,9 +4,12 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { mergeUserMetadata } from '@/lib/userMetadata';
 import { mergeAppMetadata } from '@/lib/privileged';
-import { isCoordinationMode } from '@/lib/accountType';
-import { isAgentUser } from '@/lib/agentPortal';
+import { cleanAgentProfile, isCoordinationMode } from '@/lib/accountType';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
+import { getEntitlements } from '@/lib/entitlements';
 import { logAudit } from '@/lib/audit';
+import { isFeatureOn } from '@/lib/features';
+import { isStateCode } from '@/lib/usStates';
 import { agentSelfServeEnabled, AGENT_SELF_SERVE_OFF_MESSAGE } from '@/lib/agentSelfServe';
 
 // Finishes the short setup an agent who signed up for Relay goes through:
@@ -20,11 +23,12 @@ import { agentSelfServeEnabled, AGENT_SELF_SERVE_OFF_MESSAGE } from '@/lib/agent
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (!agentSelfServeEnabled()) {
+    // Public agent signup is off; an agent the admin gave a workspace still finishes setup.
+    if (!agentSelfServeEnabled() && getEntitlements(user).kind !== 'agent_workspace') {
       return NextResponse.json({ error: AGENT_SELF_SERVE_OFF_MESSAGE }, { status: 403 });
     }
     // Free portal logins have no workspace to set up.
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'This account is a portal login, not a workspace account.' }, { status: 403 });
     }
     await assertTrialActive(user);
@@ -76,9 +80,22 @@ export async function POST(request: NextRequest) {
     await mergeAppMetadata(user.id, { account_type: 'agent' });
     await mergeUserMetadata(user.id, {
       coordination_mode: mode,
+      agent_profile: cleanAgentProfile(body),
       full_name: name,
       onboarding_completed: true,
     });
+
+    // The states they work in become their "My states" on the Templates screen. Nothing is assumed: only what they tick.
+    // This never fails the setup, and does nothing until the templates feature is released.
+    if (isFeatureOn('templates') && Array.isArray(body.states)) {
+      const codes = [...new Set((body.states as unknown[]).filter((c): c is string => typeof c === 'string' && isStateCode(c)))].slice(0, 51);
+      if (codes.length > 0) {
+        const { error: pinError } = await supabaseServer
+          .from('template_pins')
+          .upsert(codes.map((ref) => ({ owner_user_id: user.id, kind: 'folder', ref })), { onConflict: 'owner_user_id,kind,ref', ignoreDuplicates: true });
+        if (pinError) console.error('Could not save onboarding states:', pinError);
+      }
+    }
 
     await logAudit(request, user, 'agent.onboarding_completed', { entityType: 'user', entityId: user.id, metadata: { mode } });
 

@@ -4,7 +4,10 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { DEFAULT_PLAN } from '@/lib/plans';
 import { TRANSACTION_STAGES } from '@/lib/transactionStages';
 import { getTrialStatus } from '@/lib/trial';
+import { compStatus } from '@/lib/compPeriod';
 import { getUserPlan, isPlatformAdmin, hasAgentRole } from '@/lib/privileged';
+import { hasAgentWorkspace } from '@/lib/entitlements';
+import { loadActivity } from '@/lib/adminActivity';
 
 const CLOSED_STATUS = TRANSACTION_STAGES[TRANSACTION_STAGES.length - 1]; // 'Closed'
 
@@ -167,6 +170,8 @@ export async function GET(request: NextRequest) {
         last_sign_in_at: u.last_sign_in_at || null,
         suspended: !!bannedUntil && new Date(bannedUntil) > new Date(),
         deals,
+        workspace: hasAgentWorkspace(u),
+        workspace_trial_ends_at: (u.app_metadata as { trial_ends_at?: string } | null)?.trial_ends_at || null,
       };
     };
     const agentAccountById = new Map(agentAccounts.map((u) => [u.id, u]));
@@ -190,6 +195,17 @@ export async function GET(request: NextRequest) {
     );
     const trialByUser = new Map(trialEntries);
 
+    // "Last active" is the latest real action (a deal, a step, an upload, a message...), not the last fresh sign-in: people stay logged in for weeks.
+    const activity = await loadActivity(new Map(tcAuthUsers.map((u) => [u.id, u.last_sign_in_at || null]))).catch((err) => {
+      console.error('admin users: activity failed:', err);
+      return new Map<string, { lastActiveAt: string | null; lastActiveWhat: string | null }>();
+    });
+    // Brokerage accounts (Brokerage / Brokerage Pro), by owner. A missing table just means none.
+    const brokerageByOwner = new Map<string, { tier: string; status: string }>();
+    {
+      const { data: bRows } = await supabaseServer.from('brokerage_accounts').select('owner_user_id, tier, status').limit(2000);
+      for (const b of bRows ?? []) brokerageByOwner.set(b.owner_user_id as string, { tier: b.tier as string, status: b.status as string });
+    }
     const users = tcAuthUsers.map((u) => {
       const stats = statsByTcUser.get(u.id);
       const plan = (getUserPlan(u) as string | undefined) || DEFAULT_PLAN;
@@ -206,12 +222,21 @@ export async function GET(request: NextRequest) {
         email: u.email,
         is_admin: isPlatformAdmin(u),
         plan,
+        brokerage_tier: brokerageByOwner.get(u.id)?.tier ?? null,
+        brokerage_status: brokerageByOwner.get(u.id)?.status ?? null,
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at || null,
+        last_active_at: activity.get(u.id)?.lastActiveAt || u.last_sign_in_at || null,
+        last_active_what: activity.get(u.id)?.lastActiveWhat || null,
         suspended,
         trial: trial
           ? { applies: trial.applies, expired: trial.expired, trialEndsAt: trial.trialEndsAt }
           : null,
+        comp: (() => {
+          if (plan === 'starter') return null;
+          const c = compStatus(u.app_metadata as Record<string, unknown> | null);
+          return c.applies ? { expired: c.expired, endsAt: c.endsAt ? c.endsAt.toISOString() : null } : null;
+        })(),
         subscription_status: stripeRow?.subscription_status || null,
         stripe_customer_id: stripeRow?.stripe_customer_id || null,
         stripe_subscription_id: stripeRow?.stripe_subscription_id || null,

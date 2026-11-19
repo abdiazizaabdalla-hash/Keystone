@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { queueCalendarSync, removeKeyDateCalendarEvents } from '@/lib/calendarSync';
 import {
   canAccessTransactionDates,
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id: transactionId } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Not available' }, { status: 403 });
     }
     if (!(await canAccessTransactionDates(transactionId, user.id, isAdmin))) {
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { id: transactionId } = await params;
     const { user, isAdmin } = await getUserFromRequest(request);
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Not available' }, { status: 403 });
     }
     await assertTrialActive(user);

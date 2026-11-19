@@ -1,4 +1,4 @@
-import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { getResendClient, INVOICE_FROM_EMAIL, throwIfSendFailed } from '@/lib/resendClient';
 import { escapeHtml } from '@/lib/escapeHtml';
 
 const wrapper = (title: string, bodyHtml: string) => `
@@ -28,12 +28,12 @@ export async function sendTeamAddedEmail(params: {
   );
 
   const resend = getResendClient();
-  return resend.emails.send({
+  return throwIfSendFailed(await resend.emails.send({
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject: `${ownerLabel} added you to their team on Relay TC`,
     html,
-  });
+  }));;
 }
 
 /**
@@ -58,12 +58,12 @@ export async function sendTeamRemovedEmail(params: {
   );
 
   const resend = getResendClient();
-  return resend.emails.send({
+  return throwIfSendFailed(await resend.emails.send({
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject: `${ownerLabel} removed you from their team on Relay TC`,
     html,
-  });
+  }));;
 }
 
 /**
@@ -87,10 +87,10 @@ export async function sendTeamInviteEmail(params: {
   );
 
   const resend = getResendClient();
-  return resend.emails.send({
+  return throwIfSendFailed(await resend.emails.send({
     from: INVOICE_FROM_EMAIL,
     to: toEmail,
     subject: `${ownerLabel} invited you to their team on Relay TC`,
     html,
-  });
+  }));;
 }

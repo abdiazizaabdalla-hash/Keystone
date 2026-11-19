@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import { supabase } from './supabase';
 import { isPlatformAdmin } from './privileged';
+import { applyBrokerageAccess } from './agentAccess';
+import { isBrokerageReadOnly, readOnlyAllows, READ_ONLY_MESSAGE } from './brokerageAccessMeta';
 
 export class AuthError extends Error {
   status: number;
@@ -78,6 +80,13 @@ export async function getUserFromRequest(request: NextRequest, options: { allowA
   // export, search and messages show just their own (and their team's) data -- never other
   // customers' records. (Previously the flag removed the ownership filter on ~30 routes.)
   const isAdmin = isPlatformAdmin(user) && request.nextUrl.pathname.startsWith('/api/admin/');
+
+  // An agent on a brokerage's roster gets a Basic workspace for this request (nothing is stored; see agentAccess.ts).
+  await applyBrokerageAccess(user);
+  // ...and when their brokerage has lapsed it is read-only: one rule here covers every route.
+  if (isBrokerageReadOnly(user) && !readOnlyAllows(request.method, request.nextUrl.pathname)) {
+    throw new AuthError(READ_ONLY_MESSAGE, 403);
+  }
 
   return { user, isAdmin };
 }

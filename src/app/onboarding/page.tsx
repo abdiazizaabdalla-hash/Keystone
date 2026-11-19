@@ -1,5 +1,6 @@
 'use client';
 
+import LogoSettingsCard from '@/components/LogoSettingsCard';
 import MoneyInput from '@/components/MoneyInput';
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -7,7 +8,7 @@ import { authFetch, AuthRequiredError, clearSession } from '@/lib/authClient';
 import { DueDateSpec, normalizeDueDateSpec } from '@/lib/dueDates';
 import DueDateControl from '@/components/DueDateControl';
 
-import { PLANS, PUBLIC_PLANS, type PlanId } from '@/lib/plans';
+import { PLANS, PUBLIC_PLANS, isTeamPlan, type PlanId } from '@/lib/plans';
 
 // Onboarding walks a new account through the settings that matter before
 // dropping them at the dashboard:
@@ -157,7 +158,12 @@ function OnboardingContent() {
   // Steps 2, 3, 4: account settings — same fields/defaults as the
   // Settings page (src/app/dashboard/settings/page.tsx).
   const [fullName, setFullName] = useState('');
+  // A Team or Brokerage owner also names their team or brokerage, which is what their dashboard is headed with.
+  const [orgPlan, setOrgPlan] = useState<PlanId | null>(null);
+  const [orgName, setOrgName] = useState('');
+  const [orgIsBrokerage, setOrgIsBrokerage] = useState(false);
   const [defaultFlatFee, setDefaultFlatFee] = useState('400');
+  const [defaultListingFee, setDefaultListingFee] = useState('');
   const [defaultPercentFee, setDefaultPercentFee] = useState('0');
   const [invoiceDueDays, setInvoiceDueDays] = useState('30');
   const [isSavingStep, setIsSavingStep] = useState(false);
@@ -231,8 +237,21 @@ function OnboardingContent() {
       if (data.accountType === 'agent' && (!preselected || preselected === 'starter') && !checkoutStatus) {
         router.replace('/onboarding/agent');
       }
+      // A brokerage owner has their own setup: no coordination fees, invoices or Stripe.
+      if (data.accountType !== 'agent' && !checkoutStatus) {
+        try {
+          const owner = await authFetch('/api/oversight?check=1');
+          if (owner.ok) {
+            router.replace('/onboarding/brokerage');
+            return null;
+          }
+        } catch {
+          /* not a brokerage owner: carry on with the coordinator setup */
+        }
+      }
       setFullName(data.fullName ?? '');
       setDefaultFlatFee(String(data.defaultFlatFee ?? 400));
+      setDefaultListingFee(typeof data.defaultListingFee === 'number' ? String(data.defaultListingFee) : '');
       setDefaultPercentFee(String(data.defaultPercentFee ?? 0));
       setInvoiceDueDays(String(data.invoiceDueDays ?? 30));
       setDueDateWorkflowEnabled(data.dueDateWorkflowEnabled === true);
@@ -244,7 +263,21 @@ function OnboardingContent() {
           }))
         );
       }
-      return PLANS.some((p) => p.id === data.plan) ? (data.plan as PlanId) : null;
+      const known = PLANS.some((p) => p.id === data.plan) ? (data.plan as PlanId) : null;
+      setOrgPlan(known);
+      if (known && isTeamPlan(known)) {
+        try {
+          const t = await authFetch('/api/team');
+          if (t.ok) {
+            const team = await t.json();
+            setOrgName(team.team?.name ?? '');
+            setOrgIsBrokerage(known === 'brokerage' || team.ownerKind === 'brokerage');
+          }
+        } catch {
+          // Non-fatal: the name field just starts empty.
+        }
+      }
+      return known;
     } catch {
       // Non-fatal — steps just start from their defaults.
       return null;
@@ -417,25 +450,43 @@ function OnboardingContent() {
     }
   };
 
-  const handleSaveProfile = () => savePatch({ fullName }, 3);
+  const orgLabel = orgIsBrokerage || orgPlan === 'brokerage' ? 'Brokerage name' : 'Team name';
+  const needsOrgName = orgPlan !== null && isTeamPlan(orgPlan);
+  const handleSaveProfile = async () => {
+    if (needsOrgName) {
+      if (!orgName.trim()) {
+        setStepError(`Enter your ${orgLabel.toLowerCase()}.`);
+        return;
+      }
+      try {
+        await authFetch('/api/team'); // creates the team the first time, so there is something to name
+        const res = await authFetch('/api/team', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: orgName }) });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Could not save your ${orgLabel.toLowerCase()}`);
+      } catch (error) {
+        setStepError(error instanceof Error ? error.message : 'Failed to save');
+        return;
+      }
+    }
+    await savePatch({ fullName }, 3);
+  };
 
   const handleSaveFeesAndInvoicing = () => {
     const flat = parseFloat(defaultFlatFee);
-    const pct = parseFloat(defaultPercentFee);
     const days = parseInt(invoiceDueDays, 10);
     if (defaultFlatFee.trim() !== '' && (Number.isNaN(flat) || flat < 0)) {
       setStepError('Flat fee must be 0 or more.');
-      return;
-    }
-    if (defaultPercentFee.trim() !== '' && (Number.isNaN(pct) || pct < 0 || pct > 100)) {
-      setStepError('Percentage fee must be between 0 and 100.');
       return;
     }
     if (!Number.isInteger(days) || days < 1 || days > 365) {
       setStepError('Enter a number of days between 1 and 365.');
       return;
     }
-    savePatch({ defaultFlatFee: flat || 0, defaultPercentFee: pct || 0, invoiceDueDays: days }, 4);
+    const listing = parseFloat(defaultListingFee);
+    if (defaultListingFee.trim() !== '' && (Number.isNaN(listing) || listing < 0)) {
+      setStepError('Listing fee must be 0 or more.');
+      return;
+    }
+    savePatch({ defaultFlatFee: flat || 0, defaultListingFee: defaultListingFee.trim() === '' ? null : listing, defaultPercentFee: 0, invoiceDueDays: days }, 4);
   };
 
   const handleSaveDueDateWorkflow = () => savePatch({ dueDateWorkflowEnabled, dueDateWorkflowSteps }, 5);
@@ -636,6 +687,7 @@ function OnboardingContent() {
           </div>
         )}
 
+        <p className="max-w-3xl mx-auto text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3">Coordinator setup</p>
         <ProgressHeader current={currentStep} />
 
         {currentStep === 1 && (
@@ -643,7 +695,7 @@ function OnboardingContent() {
             <div className="text-center mb-10">
               <h1 className="text-3xl sm:text-4xl font-display font-semibold text-slate-100 mb-3">Choose your plan</h1>
               <p className="text-lg text-slate-400">
-                Starter is free for 30 days. Upgrade to Pro or Team any time from your Account page.
+                Starter is free for 14 days. Upgrade to Pro or Team any time from your Account page.
               </p>
             </div>
 
@@ -720,22 +772,37 @@ function OnboardingContent() {
               placeholder="Jane Smith"
               className={inputClass}
             />
+            {needsOrgName && (
+              <div className="mt-5">
+                <label htmlFor="ob-org" className="text-sm text-slate-400 block mb-2">{orgLabel}</label>
+                <input
+                  id="ob-org"
+                  type="text"
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                  placeholder={orgLabel === 'Brokerage name' ? 'Smith & Co. Realty' : 'Smith Closing Team'}
+                  className={inputClass}
+                />
+                <p className="text-xs text-slate-500 mt-2">{orgLabel === 'Brokerage name' ? 'Your agents see this, and it heads your dashboard.' : 'Your teammates see this, and it heads your dashboard.'}</p>
+              </div>
+            )}
+            <div className="mt-5"><LogoSettingsCard compact pdfs="your invoices and compliance reports" /></div>
           </StepShell>
         )}
 
         {currentStep === 3 && (
           <StepShell
-            title="Fees and invoicing"
+            title="Your coordination fees and invoicing"
             description="These pre-fill every new agent and invoice. You can change them for any individual agent or invoice later."
             saving={isSavingStep}
             error={stepError}
             onBack={() => goTo(2)}
             onContinue={handleSaveFeesAndInvoicing}
           >
-            <div className="grid sm:grid-cols-2 gap-5">
+            <div className="grid gap-5">
               <div>
                 <label htmlFor="ob-flat" className="text-sm text-slate-400 block mb-2">
-                  Flat fee per deal ($)
+                  Transaction coordination fee
                 </label>
                 <MoneyInput
                   id="ob-flat"
@@ -747,24 +814,21 @@ function OnboardingContent() {
                 />
               </div>
               <div>
-                <label htmlFor="ob-pct" className="text-sm text-slate-400 block mb-2">
-                  Percentage fee (%)
+                <label htmlFor="ob-listing" className="text-sm text-slate-400 block mb-2">
+                  Listing fee <span className="text-slate-500">(optional)</span>
                 </label>
-                <input
-                  id="ob-pct"
-                  type="number"
-                  value={defaultPercentFee}
-                  onChange={handleNumberChange(setDefaultPercentFee)}
-                  onWheel={blurOnWheel}
-                  placeholder="0"
-                  step="0.01"
-                  min="0"
-                  max="100"
+                <MoneyInput
+                  id="ob-listing"
+                  value={defaultListingFee}
+                  onValueChange={setDefaultListingFee}
+                  placeholder="250"
+                  aria-label="Default listing fee"
                   className={inputClass}
                 />
+                <p className="text-xs text-slate-500 mt-2">What you charge when you coordinate a listing. Leave it blank if you do not charge one.</p>
               </div>
             </div>
-            <p className="text-xs text-slate-500 mt-2">Leave the percentage at 0 if you only charge a flat fee.</p>
+            <p className="text-xs text-slate-500 mt-2">You can add other charges for each agent later.</p>
 
             <div className="border-t border-white/10 mt-6 pt-6">
               <label htmlFor="ob-due" className="text-sm text-slate-400 block mb-2">
@@ -788,7 +852,7 @@ function OnboardingContent() {
 
         {currentStep === 4 && (
           <StepShell
-            title="Your deal checklist"
+            title="Your coordinator deal checklist"
             description="Every deal starts from a checklist. Choose whether Relay should set due dates for you."
             badge={canUseCustomTemplates ? 'Pro / Team' : undefined}
             saving={isSavingStep}
@@ -864,7 +928,7 @@ function OnboardingContent() {
         {currentStep === 5 && (
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-display font-semibold text-slate-100 mb-2">How do agents pay you?</h1>
+              <h1 className="text-3xl font-display font-semibold text-slate-100 mb-2">{needsOrgName ? 'Get paid through Relay' : 'How do agents pay you?'}</h1>
               <p className="text-slate-400">You can change this any time in Settings.</p>
             </div>
 
@@ -874,7 +938,7 @@ function OnboardingContent() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className={`grid grid-cols-1 gap-6 mb-6 ${needsOrgName ? 'max-w-xl mx-auto' : 'md:grid-cols-2'}`}>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 flex flex-col">
                 <h2 className="text-xl font-display font-semibold text-slate-100 mb-2">Get paid through Relay</h2>
                 <p className="text-slate-400 text-sm mb-6 flex-1">
@@ -922,7 +986,7 @@ function OnboardingContent() {
                 )}
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 flex flex-col">
+              {!needsOrgName && <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 flex flex-col">
                 <h2 className="text-xl font-display font-semibold text-slate-100 mb-2">I&apos;ll collect payment myself</h2>
                 <p className="text-slate-400 text-sm mb-6 flex-1">
                   Agents pay you by Zelle, Venmo, PayPal, check, or however you already work. Relay still builds the
@@ -937,7 +1001,7 @@ function OnboardingContent() {
                 >
                   {isSavingPaymentPreference ? 'Saving…' : 'Collect it myself'}
                 </button>
-              </div>
+              </div>}
             </div>
 
             <div className="flex items-center justify-center gap-6">

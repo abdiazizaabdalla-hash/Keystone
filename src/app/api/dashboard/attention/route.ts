@@ -3,6 +3,7 @@ import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { getVisibleTcUserIds, getTeamForUser } from '@/lib/team';
 import { computeAttentionSummary } from '@/lib/attentionSummary';
+import { sharedDealIdsFor } from '@/lib/authorize';
 
 /**
  * Powers the "Needs Attention Today" panel at the top of the dashboard
@@ -32,13 +33,16 @@ export async function GET(request: NextRequest) {
         .from('transactions')
         .select('tc_user_id')
         .neq('status', 'Closed')
+        .is('archived_at', null)
         .not('tc_user_id', 'is', null);
       tcUserIds = Array.from(new Set((allOpenTx || []).map((t) => t.tc_user_id as string)));
     } else {
       tcUserIds = await getVisibleTcUserIds(user.id);
     }
 
-    const rawSummary = await computeAttentionSummary(tcUserIds);
+    // Deals other people added this person to (a paid agent or coordinator working a shared file).
+    const sharedIds = isAdmin ? [] : await sharedDealIdsFor(user);
+    const rawSummary = await computeAttentionSummary(tcUserIds, sharedIds);
 
     // Items this person dismissed are hidden from their own panel (the tasks themselves are untouched).
     // If the dismissals table doesn't exist yet this quietly shows everything.
@@ -68,11 +72,14 @@ export async function GET(request: NextRequest) {
     // common case) skips the extra admin API round-trips entirely.
     const membership = await getTeamForUser(user.id);
     const isOwner = membership?.role === 'owner' && !isAdmin;
+    const ownIds = new Set(tcUserIds);
     const tcLabels = new Map<string, string>();
-    if (isOwner) {
+    const allItems = [...summary.overdue, ...summary.dueToday, ...summary.dueSoon, ...summary.waitingOn, ...summary.closingsSoon];
+    const hasShared = !isAdmin && allItems.some((i) => !ownIds.has(i.tcUserId));
+    if (isOwner || hasShared) {
       const distinctIds = new Set<string>();
-      for (const item of [...summary.overdue, ...summary.dueToday, ...summary.dueSoon, ...summary.waitingOn, ...summary.closingsSoon]) {
-        distinctIds.add(item.tcUserId);
+      for (const item of allItems) {
+        if (isOwner || !ownIds.has(item.tcUserId)) distinctIds.add(item.tcUserId);
       }
       await Promise.all(
         Array.from(distinctIds).map(async (id) => {
@@ -85,7 +92,9 @@ export async function GET(request: NextRequest) {
 
     const withLabel = <T extends { tcUserId: string }>(item: T) => ({
       ...item,
-      tcLabel: isOwner ? tcLabels.get(item.tcUserId) || null : null,
+      // A team owner sees whose deal each item is; anyone sees who shared a deal with them.
+      tcLabel: isOwner || !ownIds.has(item.tcUserId) ? tcLabels.get(item.tcUserId) || null : null,
+      shared: !ownIds.has(item.tcUserId),
     });
 
     return NextResponse.json({

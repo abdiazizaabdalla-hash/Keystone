@@ -166,7 +166,7 @@ export default function DirectMessages({ self, loginPath }: { self: 'tc' | 'agen
                         {c.lastMessage.body}
                       </p>
                     ) : (
-                      <p className="text-xs text-slate-500 italic truncate">{c.subLabel || 'No messages yet'}</p>
+                      <p className="text-xs text-slate-500 truncate">{c.subLabel || 'No messages yet'}</p>
                     )}
                   </div>
                 </button>
@@ -185,7 +185,7 @@ export default function DirectMessages({ self, loginPath }: { self: 'tc' | 'agen
                     <p className="text-slate-100 font-semibold truncate">{threadLabel}</p>
                   </div>
                   <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 max-h-[28rem]">
-                    {messages.length === 0 && <p className="text-sm text-slate-500 italic">No messages yet. Say hello.</p>}
+                    {messages.length === 0 && <p className="text-sm text-slate-500">No messages yet. Say hello.</p>}
                     {messages.map((m) => {
                       const mine = m.sender_role === self;
                       return (

@@ -8,8 +8,8 @@ const FAQS: { category: string; q: string; a: string }[] = [
   // Getting started
   {
     category: 'Getting started',
-    q: 'Who is Relay TC for?',
-    a: 'Transaction coordinators who manage the paperwork and checklist between an accepted contract and closing day — solo TCs and small teams. The agents you work with get a free portal login for the deals you add them to.',
+    q: 'Who is Relay for?',
+    a: 'Relay is built for the whole transaction: agents who manage their own deals and listings, transaction coordinators and coordinator teams, and brokerages that want every agent’s files in one place. Each has its own plans and pricing, and they can collaborate directly when both have an account.',
   },
   {
     category: 'Getting started',
@@ -18,8 +18,8 @@ const FAQS: { category: string; q: string; a: string }[] = [
   },
   {
     category: 'Getting started',
-    q: 'Can Relay fill in a new transaction from the contract itself?',
-    a: 'Yes. Upload the signed purchase contract when creating a transaction and Relay reads it: property address, purchase price, acceptance and closing dates, buyers, sellers, the lender, and the title/escrow contact all come back pre-filled, and matching parties get added to the transaction as contacts automatically. Everything lands in an editable form first, so you review and adjust before it’s actually saved. Available on every plan, including Starter.',
+    q: 'Can Relay create a transaction or listing from the contract, with no retyping?',
+    a: 'Yes. Upload the purchase contract when creating a transaction, or the listing agreement when creating a listing, as a PDF. AI reads it and pre-fills the property address, price, key dates, buyers, sellers, lender and title or escrow contact. For a transaction, the people it finds are added as contacts (with email and phone when the contract lists them) and the reviewed dates become critical dates. Listings pull in the price, MLS details, sellers and agents with their roles. Everything appears in an editable form first, so you review and correct it before saving, and anything unclear is flagged. AI can misread a contract, so always check the details. Available on every plan, including Starter.',
   },
   {
     category: 'Getting started',
@@ -34,28 +34,28 @@ const FAQS: { category: string; q: string; a: string }[] = [
   // Pricing & billing
   {
     category: 'Pricing & billing',
-    q: 'What’s included on the free Starter plan?',
-    a: 'Starter includes unlimited transactions and listings, up to 3 agent profiles, the baseline checklist, document storage, e-signature requests, invoicing, calendar links, CSV deal import, and the free agent portal — enough to run your whole pipeline through Relay with no credit card required to start.',
+    q: 'What’s included in Starter for coordinators?',
+    a: 'Starter includes unlimited transactions and listings, up to 3 agent profiles, the baseline checklist, document and email templates, document storage, e-signature requests, invoicing, calendar links and CSV deal import — enough to run your whole pipeline through Relay. You can start the 14-day trial without a card.',
   },
   {
     category: 'Pricing & billing',
     q: 'What happens when my trial ends?',
-    a: 'Starter includes a free trial that lasts 30 days. Once the trial ends, Starter continues at $19/month — you’ll need to add a payment method to keep creating and editing transactions, agents, documents, and invoices. Nothing is deleted if you don’t upgrade right away; you just can’t make new changes until you do.',
+    a: 'Starter includes a free trial that lasts 14 days. Once the trial ends, Starter continues at $19/month — you’ll need to add a payment method to keep creating and editing transactions, agents, documents, and invoices. Nothing is deleted if you don’t upgrade right away; you just can’t make new changes until you do.',
   },
   {
     category: 'Pricing & billing',
     q: 'Does Starter have a transaction limit?',
-    a: 'No. Every plan, including Starter, supports unlimited transactions. The only caps on Starter are 3 agent profiles and no custom checklist templates.',
+    a: 'No. Every plan, including Starter, supports unlimited transactions. For coordinators, the caps on Starter are 3 agent profiles, no custom checklist templates and no automations.',
   },
   {
     category: 'Pricing & billing',
-    q: 'What’s the difference between Starter and Pro?',
-    a: 'Pro removes the agent-profile limit entirely, unlocks custom checklist templates, and adds the admin usage dashboard. Everything else — the checklist, documents, e-signatures, invoicing, and the agent portal — works the same on both.',
+    q: 'What’s the difference between Starter and Pro for coordinators?',
+    a: 'For coordinators, Pro removes the agent-profile limit, unlocks custom checklist templates and automations, and adds the admin usage dashboard. Everything else, including templates, works the same on both.',
   },
   {
     category: 'Pricing & billing',
     q: 'How does Team billing work?',
-    a: 'Team is $89/month and includes three seats. Each extra seat is $30/month, charged prorated right away when you add a teammate beyond your paid seats; removing one credits your next invoice. Seats are for the people coordinating transactions — agents you invite through the agent portal do not use a seat.',
+    a: 'Team is $89/month and includes three seats. Each extra seat is $30/month, charged prorated right away when you add a teammate beyond your paid seats; removing one credits your next invoice. Seats are for the people coordinating transactions — agents you give a login to do not use a seat.',
   },
   {
     category: 'Pricing & billing',
@@ -67,55 +67,88 @@ const FAQS: { category: string; q: string; a: string }[] = [
     q: 'What happens to my data if I stop paying?',
     a: 'Your account and data stay in place. Features tied to a paid plan apply again if you upgrade later — nothing is deleted for downgrading.',
   },
+  // Templates and automations
+  {
+    category: 'Templates and automations',
+    q: 'Are templates on every plan?',
+    a: 'Yes. Ready-made document and email templates are on every plan for agents and coordinators, Starter included. You can organize them in folders and edit them.',
+  },
+  {
+    category: 'Templates and automations',
+    q: 'Which plans have automations?',
+    a: 'Pro and Team. Automations send reminders and follow-ups for you, such as an earnest money reminder or a post-closing thank-you. You switch on the ones you want from the Library and apply them to a deal. Starter does not include them, and a single switch in Settings pauses all of them.',
+  },
+  // Agents
+  {
+    category: 'Agents',
+    q: 'What plans are there for agents?',
+    a: 'Two: Starter at $19 a month and Pro at $39 a month, both with the same features as on the pricing page. Both start with a 14-day trial, no card needed. Your brokerage can also invite you if it uses Relay.',
+  },
+  {
+    category: 'Agents',
+    q: 'What does Pro add for agents?',
+    a: 'On top of running your own deals and listings, Pro adds custom checklist templates, automations that send reminders and follow-ups for you, and priority support.',
+  },
+  // Brokerages
+  {
+    category: 'Brokerages',
+    q: 'What does a brokerage pay?',
+    a: 'Brokerage Basic is $99 a month for up to 10 agents and Brokerage Pro is $199 a month for up to 25. Extra agents are $15 a month each on Basic and $20 on Pro. Prices shown are the recurring price; during the pilot nothing is charged. Agents you include are covered by the brokerage plan.',
+  },
+  {
+    category: 'Brokerages',
+    q: 'How does the pilot work?',
+    a: 'You get 30 days of Brokerage Pro, free, with no card needed. Nothing renews by itself. If you decide not to continue, your agents keep read access to what they already have.',
+  },
   // Agent portal
   {
-    category: 'Agent portal',
+    category: 'Portal logins (for TCs)',
     q: 'Do the agents I work with need their own Relay account?',
     a: 'Not to be billed — you create an agent profile with their fee structure and contact details for invoicing, and that never requires a login. But you can separately invite an agent to a specific transaction for free, which gives them their own portal login scoped to just that deal. These are two different things that happen to share the word “agent”: an agent profile is a billing contact, while an invited agent is an actual login with access to one transaction.',
   },
   {
-    category: 'Agent portal',
+    category: 'Portal logins (for TCs)',
     q: 'How do I give an agent access?',
     a: 'Just add the agent to a transaction or listing with their email. If they do not have a login yet, Relay sends them an email to set up their account, and if they already do, they get access straight away with no extra step. Each transaction and listing also shows whether the agent can see it in their portal, so you always know. New agents need no password the first time and choose one on their very first login. Their sign-in links work for 30 minutes and can be opened more than once, so a mail app that previews the link will not break it; you can always ask for a new one.',
   },
   {
-    category: 'Agent portal',
+    category: 'Portal logins (for TCs)',
     q: 'Can one agent work with multiple TCs?',
     a: 'Yes. An agent’s portal login is their own — if several different TCs invite the same agent to their own deals, that agent sees every one of them grouped by TC in a single dashboard.',
   },
   {
-    category: 'Agent portal',
+    category: 'Portal logins (for TCs)',
     q: 'What can agents see and change?',
     a: 'On a deal, an invited agent can see the checklist, dates, and status, check off steps, move a step’s due date and note who it is waiting on, upload documents and mark them signed or unsigned, add a new contact, and message you with file attachments. They can also share a live progress page with their own clients (see the Client portal questions below). On a listing you share with them, they can view the key dates, checklist, offers, showings, price history, documents and contacts, and add their own contacts. Your private notes are never shared. They cannot add, remove or rename checklist steps, delete a document, or send or void a signature request.',
   },
   {
-    category: 'Agent portal',
+    category: 'Portal logins (for TCs)',
     q: 'Can agents access other clients’ transactions?',
     a: 'No. An agent only ever sees the specific transactions and listings you’ve shared with them — never your other clients, your invoices, or your billing.',
   },
   {
-    category: 'Agent portal',
+    category: 'Portal logins (for TCs)',
     q: 'Can agents sign documents through Relay?',
     a: 'Agents can mark a document as signed or unsigned, the same toggle you have. Actually sending a document out for signature — or canceling a pending request — stays with the TC.',
   },
   // Client portal
   {
-    category: 'Client portal',
+    category: 'Client pages (for TCs)',
     q: 'What is the client portal?',
-    a: 'A live progress page for an agent’s buyer or seller. Clients often feel out of the loop between an accepted contract and closing day; the page shows where the deal stands, the checklist steps and documents the agent chooses to share, and the important dates ahead, so they stop texting for updates.',
+    a: 'A live progress page for an agent’s buyer or seller. The page shows where the deal stands, the checklist steps and documents the agent chooses to share, and the important dates ahead without having to ask.',
   },
   {
-    category: 'Client portal',
+    category: 'Client pages (for TCs)',
     q: 'Who invites clients, and what do they see?',
     a: 'The agent does, from their agent portal: add a client by name and email (or pick one of the deal’s contacts) and they get an email with their page. The agent ticks which checklist steps and documents that client can see, and can share new documents automatically. Nothing is shared until the agent chooses it. Your internal notes, invoices and other deals are never part of it.',
   },
   {
-    category: 'Client portal',
+    category: 'Client pages (for TCs)',
     q: 'Can clients message us?',
     a: 'Yes. Each client has a shared board that the client, the agent and the TC can all read, plus a private thread with the agent and a private thread with the TC. The agent never sees the TC’s private thread and the TC never sees the agent’s, and your TC-to-agent messages are separate from all of it. Everyone is notified by email and in the in-app bell.',
   },
   {
-    category: 'Client portal',
+    category: 'Client pages (for TCs)',
     q: 'Does the client portal cost extra?',
     a: 'No. It is included on every plan and with every free agent login. A TC can also see and turn off any client link on a deal from the External Access card.',
   },
@@ -170,7 +203,7 @@ const FAQS: { category: string; q: string; a: string }[] = [
   {
     category: 'Invoicing & payments',
     q: 'Does Relay work with QuickBooks?',
-    a: 'Yes, by file. Under Invoices, QuickBooks import / export lets you download your invoices, a payments report and your agents as CSV files that QuickBooks Online can import, and upload an Excel or CSV export from QuickBooks to bring invoices into Relay. You check every match before anything is saved. It does not connect to your QuickBooks account or sync on its own.',
+    a: 'Yes. Coordinators and brokerages can connect QuickBooks Online in Settings. For coordinators, new invoices are created in QuickBooks for you, and when an invoice is paid in Relay, including by Stripe, a payment is recorded against it. For brokerages, each commission an agent has agreed to is created as a bill from that agent, and a payment is recorded when you mark the commission paid. Relay only sends to QuickBooks and never edits or deletes anything there. You can also work by file: under Invoices, QuickBooks import / export lets you download your invoices, a payments report and your agents as CSV files that QuickBooks Online can import, and upload an Excel or CSV export from QuickBooks to bring invoices into Relay. You check every match before anything is saved. Brokerage commission ledgers also export as CSV or as QuickBooks bills and vendors.',
   },
   {
     category: 'Invoicing & payments',
@@ -223,7 +256,7 @@ export default function FAQPage() {
   return (
     <div className="min-h-screen bg-slate-900">
       {/* Nav */}
-      <header className="border-b border-slate-700">
+      <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-900/90 backdrop-blur">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <PublicMobileMenu />
@@ -239,7 +272,7 @@ export default function FAQPage() {
             <Link href="/faq" className="text-slate-100">FAQ</Link>
             <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
-            <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-100 transition">For Brokerages</Link>
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
@@ -249,14 +282,14 @@ export default function FAQPage() {
               <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>
-              Agent Login
+              Portal Login
             </Link>
             <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
             <Link
-              href="/auth?mode=signup&plan=starter"
+              href="/get-started"
               className="px-3 sm:px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
             >
-              Start free
+              Start a 14-day trial
             </Link>
           </div>
         </div>
@@ -308,10 +341,10 @@ export default function FAQPage() {
         <p className="text-slate-400 mb-6">Still have questions?</p>
         <div className="flex items-center justify-center gap-4 flex-wrap">
           <Link
-            href="/auth?mode=signup&plan=starter"
+            href="/get-started"
             className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
           >
-            Start free
+            Start a 14-day trial
           </Link>
           <Link href="/pricing" className="px-6 py-3 border border-slate-600 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">
             See pricing
@@ -331,7 +364,7 @@ export default function FAQPage() {
             <Link href="/pricing" className="hover:text-slate-200 transition">Pricing</Link>
             <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
             <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
-            <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
+            <Link href="/for-brokerages" className="hover:text-slate-200 transition">For Brokerages</Link>
             <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
             <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
             <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>

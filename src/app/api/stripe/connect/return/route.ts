@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
-import { getConnectedAccountStatus, statusFromConnectedAccount } from '@/lib/stripeConnect';
+import { getConnectedAccountStatus, statusFromConnectedAccount, safeNextPath } from '@/lib/stripeConnect';
 
 // Where Stripe's hosted onboarding sends the TC back to. This is a plain
 // browser redirect (no Authorization header, no Relay session), so the
@@ -17,10 +17,12 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const accountId = searchParams.get('account');
   const from = searchParams.get('from') === 'onboarding' ? 'onboarding' : 'settings';
-  const finalPage = from === 'onboarding' ? '/onboarding' : '/dashboard/settings';
+  const next = safeNextPath(searchParams.get('next'));
+  const basePage = next ?? (from === 'onboarding' ? '/onboarding' : '/dashboard/settings');
+  const sep = basePage.includes('?') ? '&' : '?';
 
   if (!accountId) {
-    return NextResponse.redirect(`${origin}${finalPage}?stripe=error`);
+    return NextResponse.redirect(`${origin}${basePage}${sep}stripe=error`);
   }
 
   try {
@@ -32,7 +34,7 @@ export async function GET(request: NextRequest) {
       .maybeSingle();
 
     if (!account) {
-      return NextResponse.redirect(`${origin}${finalPage}?stripe=error`);
+      return NextResponse.redirect(`${origin}${basePage}${sep}stripe=error`);
     }
 
     const liveStatus = await getConnectedAccountStatus(accountId);
@@ -42,9 +44,9 @@ export async function GET(request: NextRequest) {
       .eq('connected_account_id', accountId)
       .eq('provider', 'stripe_connect');
 
-    return NextResponse.redirect(`${origin}${finalPage}?stripe=connected`);
+    return NextResponse.redirect(`${origin}${basePage}${sep}stripe=connected`);
   } catch (error) {
     console.error('Error handling Stripe Connect return:', error);
-    return NextResponse.redirect(`${origin}${finalPage}?stripe=error`);
+    return NextResponse.redirect(`${origin}${basePage}${sep}stripe=error`);
   }
 }

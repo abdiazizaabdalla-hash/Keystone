@@ -146,7 +146,7 @@ function AuthContent() {
               <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>
-              Agent Login
+              Portal Login
             </Link>
           </div>
         </div>
@@ -159,7 +159,7 @@ function AuthContent() {
             <span className="inline-block bg-white rounded-xl p-3 shadow-md mb-4">
               <img src="/relay-logo.png" alt="Relay TC" className="h-10 w-auto object-contain" />
             </span>
-            <p className="text-slate-400 text-sm">Transaction Coordinator</p>
+            <p className="text-slate-400 text-sm">Transaction coordination</p>
           </div>
 
           {/* Card */}
@@ -191,7 +191,8 @@ function AuthContent() {
                 {isSignUp && plan && (
                   <p className="text-sm text-blue-400 mb-5">Signing up for the {planLabel(plan)} plan</p>
                 )}
-                {!(isSignUp && plan) && <div className="mb-6" />}
+                {!isSignUp && <p className="text-sm text-slate-400 mb-6">One sign-in for TCs, agents and brokerages. Invited to a deal by a TC or agent? Use Portal Login above.</p>}
+                {isSignUp && !plan && <div className="mb-6" />}
 
                 {error && (
                   <div className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-200 text-sm">

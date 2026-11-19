@@ -27,17 +27,23 @@ import {
 import { isTeamPlan } from '@/lib/plans';
 import { getUserPlan } from '@/lib/privileged';
 import { logAudit } from '@/lib/audit';
+import { hasAgentRole } from '@/lib/appMetadata';
+import { brokerageOn, listOwnerLinks, agentLabels } from '@/lib/oversight';
+import { ownerKind } from '@/lib/oversightRoster';
+import { resolveTeamAccess } from '@/lib/teamMessaging';
 
 interface UserInfo {
   email: string;
   name: string;
+  /** Agents and coordinators can both belong to a brokerage; the roster tags each. */
+  kind: 'agent' | 'tc';
 }
 
 async function getUserInfo(userId: string): Promise<UserInfo> {
   const { data } = await supabaseServer.auth.admin.getUserById(userId);
   const email = data.user?.email || 'unknown';
   const name = typeof data.user?.user_metadata?.full_name === 'string' ? data.user.user_metadata.full_name : '';
-  return { email, name };
+  return { email, name, kind: data.user && hasAgentRole(data.user) ? ('agent' as const) : ('tc' as const) };
 }
 
 // GET: the caller's team roster. Every member sees who else is on the
@@ -60,6 +66,39 @@ export async function GET(request: NextRequest) {
     }
 
     if (!membership) {
+      // An agent who joined a brokerage sees that brokerage's roster, read-only (nothing to manage, no seats).
+      const access = await resolveTeamAccess(user.id);
+      if (access?.viaBrokerage) {
+        const [{ data: teamRow }, teamMemberIds, links] = await Promise.all([
+          supabaseServer.from('teams').select('id, name').eq('id', access.teamId).single(),
+          getTeamMemberUserIds(access.teamId),
+          listOwnerLinks(access.ownerId),
+        ]);
+        const agentIds = links.filter((l) => l.status === 'active' && l.agent_user_id).map((l) => l.agent_user_id as string);
+        const [infos, labels] = await Promise.all([Promise.all(teamMemberIds.map((id) => getUserInfo(id))), agentLabels(agentIds)]);
+        const members = [
+          ...teamMemberIds.map((id, i) => ({
+            userId: id,
+            email: infos[i].email,
+            name: infos[i].name,
+            kind: id === access.ownerId ? ('broker' as const) : infos[i].kind,
+            role: id === access.ownerId ? ('owner' as const) : ('member' as const),
+            isYou: false,
+          })),
+          ...agentIds
+            .filter((id) => !teamMemberIds.includes(id))
+            .map((id) => ({ userId: id, email: labels.get(id)?.email ?? 'unknown', name: labels.get(id)?.name ?? '', kind: 'agent' as const, role: 'member' as const, isYou: id === user.id })),
+        ];
+        return NextResponse.json({
+          team: { id: access.teamId, name: teamRow?.name ?? null },
+          role: 'member',
+          viaBrokerage: true,
+          planId: null,
+          seatLimit: 0,
+          members,
+          pendingInvites: [],
+        });
+      }
       return NextResponse.json({ team: null, role: null, members: [], pendingInvites: [], seatLimit: TEAM_SEAT_LIMIT });
     }
 
@@ -68,11 +107,13 @@ export async function GET(request: NextRequest) {
 
     const members = await Promise.all(
       memberIds.map(async (memberId) => {
-        const { email, name } = await getUserInfo(memberId);
+        const { email, name, kind } = await getUserInfo(memberId);
         const base = {
           userId: memberId,
           email,
           name,
+          // 'broker' is the owner; everyone else is tagged by the kind of account they have.
+          kind: memberId === membership!.team.owner_id ? ('broker' as const) : kind,
           role: memberId === membership!.team.owner_id ? 'owner' : 'member',
           isYou: memberId === user.id,
         };
@@ -83,6 +124,20 @@ export async function GET(request: NextRequest) {
 
     const pendingInvites = isOwner ? await getTeamInvites(membership.team.id) : [];
 
+    // Agents who joined the brokerage (or were invited) with their own workspace are part of the organization too.
+    let brokerageAgents: { linkId: string; userId: string | null; name: string; email: string; status: string }[] = [];
+    if (isOwner && brokerageOn()) {
+      const links = await listOwnerLinks(user.id);
+      const labels = await agentLabels(links.filter((l) => l.agent_user_id && l.status === 'active').map((l) => l.agent_user_id as string));
+      brokerageAgents = links.map((l) => ({
+        linkId: l.id,
+        userId: l.status === 'active' ? l.agent_user_id : null,
+        name: (l.agent_user_id && labels.get(l.agent_user_id)?.name) || l.invited_email,
+        email: l.invited_email,
+        status: l.status,
+      }));
+    }
+
     const seatLimit = await getPaidSeatCount(membership.team.owner_id);
     // Every member on a team is granted the SAME plan id as its owner
     // (see getTeamOwnerPlan / the invite-acceptance flows) -- 'team' or
@@ -91,7 +146,10 @@ export async function GET(request: NextRequest) {
     // lookup of the owner's row.
     const seatInfo = getSeatInfo(getUserPlan(user));
 
+    // Which screens an owner gets: a brokerage (agents who joined) or a TC team (members, status only).
+    const kind = isOwner && isTeamPlan(getUserPlan(user)) ? await ownerKind(user.id).catch(() => 'team' as const) : null;
     return NextResponse.json({
+      ownerKind: kind,
       team: {
         id: membership.team.id,
         name: membership.team.name,
@@ -107,6 +165,7 @@ export async function GET(request: NextRequest) {
       seatPriceLabel: seatInfo.pricePerSeatLabel,
       members,
       pendingInvites: pendingInvites.map((inv) => ({ id: inv.id, email: inv.email, createdAt: inv.created_at })),
+      brokerageAgents,
     });
   } catch (error) {
     if (error instanceof AuthError) {

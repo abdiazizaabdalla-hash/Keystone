@@ -1,5 +1,6 @@
 import { AuthError } from './auth';
-import { getTeamForUser, getTeamMemberUserIds } from './team';
+import { ensureTeamForOwner, getTeamForUser, getTeamMemberUserIds } from './team';
+import { activeLinkForAgent, brokerageOn, overseesAgent } from './oversight';
 
 export const MAX_TEAM_MESSAGE_LENGTH = 2000;
 export const BOARD_THREAD = 'board';
@@ -11,26 +12,49 @@ export interface MessagingContext {
   ownerId: string;
   isOwner: boolean;
   memberIds: string[];
+  /** True for an agent reaching the brokerage's team board through their brokerage link (not a team member). */
+  viaBrokerage: boolean;
+}
+
+export interface TeamAccess {
+  teamId: string;
+  ownerId: string;
+  isOwner: boolean;
+  viaBrokerage: boolean;
+}
+
+/**
+ * Which team's board and member list this person may use, and how. Two ways in:
+ *   1. They are on the team (owner or member).
+ *   2. They are an agent with an active brokerage link to an owner whose plan is still active: they get the
+ *      brokerage's board and member list (read access to who is in it, post and read on the board), nothing more.
+ * Re-read on every request, so leaving a team or brokerage cuts access immediately.
+ */
+export async function resolveTeamAccess(userId: string): Promise<TeamAccess | null> {
+  const membership = await getTeamForUser(userId);
+  if (membership) return { teamId: membership.team.id, ownerId: membership.team.owner_id, isOwner: membership.role === 'owner', viaBrokerage: false };
+  if (!brokerageOn()) return null;
+  const link = await activeLinkForAgent(userId);
+  if (!link || !(await overseesAgent(link.owner_user_id, userId))) return null;
+  const ownerTeam = await getTeamForUser(link.owner_user_id);
+  const team = ownerTeam ? ownerTeam.team : await ensureTeamForOwner(link.owner_user_id);
+  return { teamId: team.id, ownerId: team.owner_id, isOwner: false, viaBrokerage: true };
 }
 
 /**
  * Everything a messaging request needs to know about the caller's team.
  * Throws 403 if they aren't on one. Team membership (not the plan flag
  * alone) is what grants access, and it's re-read on every request, so a
- * removed member loses access immediately.
+ * removed member loses access immediately. A brokerage agent reaches the
+ * board only: private threads with them go through /api/brokerage-messages.
  */
 export async function getMessagingContext(userId: string): Promise<MessagingContext> {
-  const membership = await getTeamForUser(userId);
-  if (!membership) {
+  const access = await resolveTeamAccess(userId);
+  if (!access) {
     throw new AuthError('Team messaging is only available to members of a Team or Brokerage plan.', 403);
   }
-  const memberIds = await getTeamMemberUserIds(membership.team.id);
-  return {
-    teamId: membership.team.id,
-    ownerId: membership.team.owner_id,
-    isOwner: membership.role === 'owner',
-    memberIds,
-  };
+  const memberIds = access.viaBrokerage ? [] : await getTeamMemberUserIds(access.teamId);
+  return { ...access, memberIds };
 }
 
 export type ParsedThread = { kind: 'board' } | { kind: 'dm'; otherId: string };

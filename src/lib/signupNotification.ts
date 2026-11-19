@@ -1,4 +1,4 @@
-import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { getResendClient, INVOICE_FROM_EMAIL, throwIfSendFailed } from '@/lib/resendClient';
 import { escapeHtml } from '@/lib/escapeHtml';
 import { SUPPORT_EMAIL } from '@/lib/site';
 
@@ -15,7 +15,7 @@ export async function notifyNewSignup(params: {
   try {
     const { email, fullName, emailConfirmed } = params;
     const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' });
-    await getResendClient().emails.send({
+    throwIfSendFailed(await getResendClient().emails.send({
       from: INVOICE_FROM_EMAIL,
       to: SUPPORT_EMAIL,
       subject: `New Relay TC signup: ${email}`,
@@ -26,7 +26,7 @@ export async function notifyNewSignup(params: {
         <p style="margin: 0 0 4px;"><strong>When:</strong> ${escapeHtml(when)} (ET)</p>
         <p style="margin: 0;"><strong>Email confirmed:</strong> ${emailConfirmed ? 'yes (signed in right away)' : 'no (waiting on their confirmation link)'}</p>
       </div>`,
-    });
+    }));
   } catch (error) {
     console.error('Failed to send new-signup notification (non-fatal):', error);
   }

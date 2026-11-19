@@ -15,6 +15,7 @@ export interface AgentListingSummary {
   openOffers: number;
   showings: number;
   tcLabel: string;
+  isNew?: boolean;
 }
 
 const STATUS_STYLE: Record<string, string> = {

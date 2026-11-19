@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 
 const MAX_KEY = 200;
 const MAX_DISMISSED = 2000;
@@ -23,7 +23,7 @@ const cleanKey = (v: unknown) => (typeof v === 'string' && v.trim().length > 0 &
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     const body = await request.json().catch(() => ({}));
     const key = cleanKey(body.key);
     if (!key) return NextResponse.json({ error: 'Nothing to dismiss' }, { status: 400 });
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     const body = await request.json().catch(() => ({}));
     let q = supabaseServer.from('attention_dismissals').delete().eq('tc_user_id', user.id);
     if (body.all === true) {

@@ -3,6 +3,7 @@ import { supabaseServer } from './supabase';
 import { getUserFromRequest, AuthError } from './auth';
 import { isAgentUser, assertAgentOnTransaction } from './agentPortal';
 import { sendClientProgressEmail } from './agentPortalEmails';
+import { authorizeDeal } from './authorize';
 
 // Shared by the agent portal's client-sharing routes
 // (api/agent/transactions/[id]/clients and .../[linkId]). Lives here
@@ -14,7 +15,13 @@ export async function loadAgentContext(request: NextRequest, transactionId: stri
   if (!isAgentUser(user)) {
     throw new AuthError('This endpoint is for agent accounts only', 403);
   }
-  await assertAgentOnTransaction(transactionId, user.id);
+  // An agent added to a coordinator's deal, or an agent with a workspace on their own deal.
+  try {
+    await assertAgentOnTransaction(transactionId, user.id);
+  } catch (error) {
+    if (!(error instanceof AuthError)) throw error;
+    await authorizeDeal(user, false, transactionId, { scope: 'owner', participants: 'none', collaborators: false, deniedMessage: 'You do not have access to this transaction' });
+  }
   return user;
 }
 

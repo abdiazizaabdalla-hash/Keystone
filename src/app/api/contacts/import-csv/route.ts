@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { cleanContactInput, cleanTags } from '@/lib/contactsCrm';
 import { CONTACT_CATEGORIES, tidyTags } from '@/lib/contactCategories';
 
@@ -40,7 +40,7 @@ function autoTags(role: string | null | undefined, company: string | null | unde
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user)) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     await assertTrialActive(user);
 
     const body = await request.json().catch(() => ({}));

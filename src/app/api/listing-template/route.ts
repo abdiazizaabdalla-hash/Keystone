@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
+import { assertAgentHas } from '@/lib/agentGates';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { DEFAULT_LISTING_STEPS, DEFAULT_TEMPLATE_NAME, MAX_TEMPLATES, MAX_TEMPLATE_STEPS, cleanTemplateName, cleanText, listTemplateNames, loadTemplateSteps } from '@/lib/listings';
 
 // A TC's listing checklists. They can keep several by name (e.g. "Standard", "Luxury", "Short sale"):
@@ -11,7 +12,7 @@ import { DEFAULT_LISTING_STEPS, DEFAULT_TEMPLATE_NAME, MAX_TEMPLATES, MAX_TEMPLA
 // they pick; existing listings are never changed.
 async function requireTc(request: NextRequest) {
   const { user } = await getUserFromRequest(request);
-  if (isAgentUser(user)) throw new AuthError('Not available', 403);
+  if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
   return user;
 }
 
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const user = await requireTc(request);
+    assertAgentHas(user, 'custom_templates');
     await assertTrialActive(user);
     const body = await request.json().catch(() => ({}));
     const name = cleanTemplateName(body.name);
@@ -81,6 +83,7 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const user = await requireTc(request);
+    assertAgentHas(user, 'custom_templates');
     const name = cleanTemplateName(request.nextUrl.searchParams.get('name'));
     const del = await supabaseServer.from('listing_template_steps').delete().eq('tc_user_id', user.id).eq('template_name', name);
     if (del.error && name === DEFAULT_TEMPLATE_NAME) await supabaseServer.from('listing_template_steps').delete().eq('tc_user_id', user.id);

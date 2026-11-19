@@ -2,15 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getTeamIdForUser } from '@/lib/team';
+import { activeLinkForAgent, brokerageOn } from '@/lib/oversight';
 
 // Shared guard for the Contacts CRM routes: only a TC (never an agent), and writes need
 // an active trial/plan. Every query is then scoped by tc_user_id so nobody can see or
 // touch another TC's contacts.
 export async function requireContactsUser(request: NextRequest, opts: { write?: boolean } = {}) {
   const { user } = await getUserFromRequest(request);
-  if (isAgentUser(user)) throw new AuthError('Not available', 403);
+  if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
   if (opts.write) await assertTrialActive(user);
   return user;
 }
@@ -31,13 +32,29 @@ export function contactsFail(error: unknown, what: string) {
   return NextResponse.json({ error: `Failed to ${what}` }, { status: 500 });
 }
 
-/** The team this TC belongs to, or null. A lookup failure counts as "no team" so nothing extra is ever shared. */
-export async function getUserTeamId(userId: string): Promise<string | null> {
+/**
+ * The list this person shares contacts into: their team (a coordinator on a team, or a brokerage owner), or, for an agent who
+ * joined a brokerage, the brokerage owner's team. Same mechanism either way: a shared contact carries the team id, stays on
+ * its owner's account and is visible to, and editable by, everyone who shares that list. `kind` only changes the wording.
+ * A lookup failure counts as "no team" so nothing extra is ever shared.
+ */
+export async function getContactsTeam(userId: string): Promise<{ teamId: string; kind: 'team' | 'brokerage' } | null> {
   try {
-    return await getTeamIdForUser(userId);
+    const own = await getTeamIdForUser(userId);
+    if (own) return { teamId: own, kind: 'team' };
+    if (!brokerageOn()) return null;
+    const link = await activeLinkForAgent(userId);
+    if (!link) return null;
+    const brokerageTeam = await getTeamIdForUser(link.owner_user_id);
+    return brokerageTeam ? { teamId: brokerageTeam, kind: 'brokerage' } : null;
   } catch {
     return null;
   }
+}
+
+/** The team id contacts are shared into for this person, or null. */
+export async function getUserTeamId(userId: string): Promise<string | null> {
+  return (await getContactsTeam(userId))?.teamId ?? null;
 }
 
 /** Is this contact visible to the TC: their own, or one a teammate shared with the TC's current team. */

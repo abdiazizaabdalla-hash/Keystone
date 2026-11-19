@@ -1,0 +1,68 @@
+-- RELAY TC release: which new tables/columns exist in this database?
+-- READ-ONLY. Reports whether each table / column the new code needs exists. Run in the Supabase SQL editor.
+-- Before the migration: expect many present = false. After 01-migrations-all.sql: expect NO rows with present = false.
+with wanted(kind, name) as (values
+  ('table', 'automation_account_controls'),
+  ('table', 'automation_actions'),
+  ('table', 'automation_approvals'),
+  ('table', 'automation_instances'),
+  ('table', 'automation_settings'),
+  ('table', 'automation_templates'),
+  ('table', 'brokerage_account_events'),
+  ('table', 'brokerage_accounts'),
+  ('table', 'brokerage_admins'),
+  ('table', 'brokerage_automation_alerts'),
+  ('table', 'brokerage_automation_runs'),
+  ('table', 'brokerage_automations'),
+  ('table', 'brokerage_document_lists'),
+  ('table', 'brokerage_required_steps'),
+  ('table', 'brokerage_workflows'),
+  ('table', 'brokerage_file_requirements'),
+  ('table', 'brokerage_file_reviews'),
+  ('table', 'brokerage_links'),
+  ('table', 'brokerage_messages'),
+  ('table', 'deal_commissions'),
+  ('table', 'deal_email_log'),
+  ('table', 'doc_templates'),
+  ('table', 'email_outbox'),
+  ('table', 'listing_coordinators'),
+  ('table', 'team_report_settings'),
+  ('table', 'team_reports'),
+  ('table', 'template_folder_items'),
+  ('table', 'template_folders'),
+  ('table', 'template_pins'),
+  ('table', 'template_rules'),
+  ('table', 'template_runs'),
+  ('table', 'template_state_links'),
+  ('table', 'transaction_events'),
+  ('table', 'trec_catalog_status'),
+  ('table', 'trec_forms'),
+  ('table', 'workspace_invoice_lines'),
+  ('table', 'workspace_invoices'),
+  ('column', 'agents.listing_fee'),
+  ('column', 'agents.services'),
+  ('column', 'invoices.adjustment'),
+  ('column', 'invoices.adjustment_note'),
+  ('column', 'invoices.description'),
+  ('column', 'invoices.flat_fee'),
+  ('column', 'invoices.kind'),
+  ('column', 'invoices.listing_id'),
+  ('column', 'invoices.percent_fee'),
+  ('column', 'listings.agent_notice_seen'),
+  ('column', 'tasks.completed_at'),
+  ('column', 'tasks.needs_review'),
+  ('column', 'tasks.received_at'),
+  ('column', 'tasks.received_document_id'),
+  ('column', 'transactions.archive_note'),
+  ('column', 'transactions.archive_reason'),
+  ('column', 'transactions.archived_at'),
+  ('column', 'transactions.archived_by'),
+  ('column', 'transactions.property_state')
+)
+select kind, name,
+  case kind
+    when 'table'  then exists (select 1 from information_schema.tables  where table_schema = 'public' and table_name = name)
+    else               exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = split_part(name, '.', 1) and column_name = split_part(name, '.', 2))
+  end as present
+from wanted
+order by present, kind, name;

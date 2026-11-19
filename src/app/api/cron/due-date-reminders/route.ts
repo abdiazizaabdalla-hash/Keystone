@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isFeatureOn } from '@/lib/features';
+import { evaluateAllTemplateRules } from '@/lib/templateRules';
+import { syncTrecCatalog } from '@/lib/trecCatalog';
 import { supabaseServer } from '@/lib/supabase';
 import { collectListingReminders } from '@/lib/listingReminders';
 import { sendDueDateReminderDigest, sendAgentKeyDateReminder, ReminderTransactionGroup } from '@/lib/dueDateReminders';
@@ -100,7 +103,8 @@ export async function GET(request: NextRequest) {
     .from('transactions')
     .select('id, file_number, property_address, status, agent_id')
     .in('id', transactionIds)
-    .neq('status', 'Closed');
+    .neq('status', 'Closed')
+    .is('archived_at', null);
 
   if (txError) {
     console.error('due-date-reminders: failed to load transactions', txError);
@@ -245,9 +249,21 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Drafts for automatic template rules (only when the templates feature is on; sends nothing, just makes drafts).
+  let templateDrafts: { owners: number; drafts: number; failed: number } | undefined;
+  if (isFeatureOn('templates')) {
+    await syncTrecCatalog(); // re-read TREC's list of forms (never throws)
+    try {
+      templateDrafts = await evaluateAllTemplateRules();
+    } catch (err) {
+      errors.push(`template rules: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   return NextResponse.json({
     notified,
     agentNotified,
+    templateDrafts,
     tcCount: groupsByTcUser.size,
     errors: errors.length ? errors : undefined,
   });

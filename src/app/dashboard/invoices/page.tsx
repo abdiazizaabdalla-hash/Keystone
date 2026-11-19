@@ -6,6 +6,12 @@ import { useRouter } from 'next/navigation';
 import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { formatDisplayDate } from '@/lib/dueDates';
 import { netReceived, paidInMonth } from '@/lib/invoiceMath';
+import { readPersona } from '@/lib/persona';
+import AgentInvoices from '@/components/AgentInvoices';
+import AgentBilledInvoices from '@/components/AgentBilledInvoices';
+import BrokerageInvoices from '@/components/BrokerageInvoices';
+import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
+import { isFeatureOnClient } from '@/lib/features';
 
 interface Agent {
   name: string;
@@ -60,7 +66,7 @@ function QbNote({ invoice }: { invoice: Invoice }) {
   return null;
 }
 
-export default function InvoicesPage() {
+function CoordinatorInvoicesPage() {
   const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
@@ -240,6 +246,8 @@ export default function InvoicesPage() {
             </Link>
           </div>
         </div>
+
+        <AgentBilledInvoices />
 
         {/* Stats Cards */}
         <div className="grid md:grid-cols-3 gap-6 mb-10">
@@ -488,6 +496,71 @@ export default function InvoicesPage() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// A coordinator's everyday invoices (agent fees on deals and listings), plus a tab to invoice anyone for anything:
+// a vendor, a client, an agent for something not tied to a deal. Same engine and screens as an agent's own invoices.
+function CoordinatorWithOtherInvoices() {
+  const [tab, setTab] = useState<'agents' | 'other'>('agents');
+  return (
+    <div>
+      <div className="px-4 pt-6 md:px-6 md:pt-12 max-w-7xl mx-auto">
+        <div className="flex flex-wrap gap-2 text-sm" role="tablist" aria-label="Invoices">
+          {([['agents', 'Agent invoices'], ['other', 'Other invoices']] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full border transition ${tab === id ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {tab === 'other' && <p className="text-xs text-slate-500 mt-3 max-w-3xl">Invoice anyone, for anything and any amount: a client, a vendor, an agent, a one-off job. Not tied to a deal. Send by email with an online pay link, or download the PDF.</p>}
+      </div>
+      {tab === 'agents' ? <CoordinatorInvoicesPage /> : <AgentInvoices />}
+    </div>
+  );
+}
+
+// An agent with their own workspace gets their own invoices (templates, contacts); everyone else sees the coordinator's.
+// A brokerage owner gets three tabs: commissions by agent, the agent fee invoices, and free-form invoices to anyone.
+export default function InvoicesPage() {
+  const [mode, setMode] = useState<'unknown' | 'agent' | 'coordinator'>('unknown');
+  const [dealId, setDealId] = useState<string | undefined>(undefined);
+  const [startNew, setStartNew] = useState(false);
+  const [commissionDeal, setCommissionDeal] = useState<string | undefined>(undefined);
+  const owner = useBrokerageOperator();
+  const [tab, setTab] = useState<'commissions' | 'fees' | 'custom'>('commissions');
+  useEffect(() => {
+    setMode(readPersona().workspace ? 'agent' : 'coordinator');
+    const qs = new URLSearchParams(window.location.search);
+    setDealId(qs.get('transactionId') || undefined);
+    setStartNew(qs.get('new') === '1');
+    setCommissionDeal(qs.get('commissionFor') || undefined);
+  }, []);
+  if (mode === 'unknown') return null;
+  if (mode === 'agent') return <AgentInvoices initialTransactionId={dealId} startNew={startNew} commissionTransactionId={commissionDeal} />;
+  if (!owner) return (isFeatureOnClient('other_invoices') || isFeatureOnClient('agent_workspace')) ? <CoordinatorWithOtherInvoices /> : <CoordinatorInvoicesPage />;
+  return (
+    <div>
+      <div className="px-4 pt-6 md:px-6 md:pt-12 max-w-7xl mx-auto">
+        <h1 className="text-3xl md:text-4xl font-display font-semibold text-slate-100 mb-2">Invoices</h1>
+        <p className="text-slate-400 mb-4">Commissions by agent, agent fee invoices, and invoices to anyone.</p>
+        <div className="flex flex-wrap gap-2 text-sm" role="tablist" aria-label="Invoices">
+          {([['commissions', 'Agent commissions'], ['fees', 'Agent fee invoices'], ['custom', 'Invoices to anyone']] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full border transition ${tab === id ? 'border-blue-500 text-blue-300 bg-blue-900/20' : 'border-white/10 text-slate-400 hover:text-slate-200'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-slate-500 mt-3 max-w-3xl">
+          {tab === 'commissions' && 'Money you pay your agents: each closed deal’s commission statement. Mark them paid here, and add them to QuickBooks as bills.'}
+          {tab === 'fees' && 'Money your agents pay you: coordination invoices (transaction fee, listing fee, other charges) you bill an agent for work done on their deals and listings. Nothing shows until you create one from a deal or listing.'}
+          {tab === 'custom' && 'One-off invoices to anyone, not tied to a deal or an agent.'}
+        </p>
+      </div>
+      {tab === 'commissions' && <div className="px-4 py-6 md:px-6 max-w-7xl mx-auto"><BrokerageInvoices onCreateInvoice={() => setTab('custom')} /></div>}
+      {tab === 'fees' && <CoordinatorInvoicesPage />}
+      {tab === 'custom' && <AgentInvoices />}
     </div>
   );
 }

@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { userMayAutomate } from '@/lib/automation/plan';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
+import { getEntitlements } from '@/lib/entitlements';
+import { hasBrokerageAccess, isBrokerageReadOnly } from '@/lib/brokerageAccessMeta';
+import { assertAgentHas } from '@/lib/agentGates';
+import { activeLinkForAgent, brokerageOn } from '@/lib/oversight';
 import { mergeUserMetadata } from '@/lib/userMetadata';
-import { DEFAULT_PLAN } from '@/lib/plans';
+import { DEFAULT_PLAN, getPlan } from '@/lib/plans';
 import { getUserPlan, isPlatformAdmin } from '@/lib/privileged';
 import { getStripeCustomerByUserId } from '@/lib/stripeCustomers';
 import { getTrialStatus } from '@/lib/trial';
+import { compStatus } from '@/lib/compPeriod';
 import { needsOnboarding } from '@/lib/onboarding';
 import { getAccountType, getCoordinationMode } from '@/lib/accountType';
 import { normalizeDueDateSpec } from '@/lib/dueDates';
@@ -31,9 +37,17 @@ function shapeUser(user: {
     plan: getUserPlan(user) || DEFAULT_PLAN,
     fullName: typeof meta.full_name === 'string' ? meta.full_name : '',
     accountType: getAccountType(user.app_metadata),
+    // True for an agent the admin has given a workspace (and only while the feature is switched on).
+    agentWorkspace: getEntitlements(user).kind === 'agent_workspace',
+    agentLevel: getEntitlements(user).agentLevel,
+    // Automation is part of Pro and Team (see lib/automation/plan.ts); the screens hide it for everyone else.
+    automationAllowed: userMayAutomate(user),
+    readOnly: isBrokerageReadOnly(user),
     coordinationMode: getCoordinationMode(meta),
     defaultFlatFee:
       typeof meta.default_flat_fee === 'number' ? meta.default_flat_fee : DEFAULT_FLAT_FEE,
+    // The listing fee that pre-fills each new agent; null when the coordinator has not set one.
+    defaultListingFee: typeof meta.default_listing_fee === 'number' ? meta.default_listing_fee : null,
     defaultPercentFee:
       typeof meta.default_percent_fee === 'number' ? meta.default_percent_fee : DEFAULT_PERCENT_FEE,
     invoiceDueDays:
@@ -77,7 +91,7 @@ export async function GET(request: NextRequest) {
     // auth_token) -- returning this early and distinctly lets the caller
     // redirect to /agent instead of silently routing them into the TC
     // onboarding wizard.
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       const meta = user.user_metadata || {};
       return NextResponse.json({
         isAgent: true,
@@ -88,18 +102,56 @@ export async function GET(request: NextRequest) {
 
     const shaped = shapeUser(user);
 
+    // An agent who belongs to a brokerage sees no plan of their own, whether the brokerage gave them the workspace or the
+    // admin did: there is one kind of agent inside a brokerage, and only the broker sees the plan.
+    let inBrokerage = false;
+    if (brokerageOn() && (shaped.accountType === 'agent' || shaped.agentWorkspace)) {
+      try {
+        inBrokerage = (await activeLinkForAgent(user.id)) !== null;
+      } catch {
+        inBrokerage = false;
+      }
+    }
+
     // Lightweight trial info for the dashboard-wide banner (see
     // DashboardLayout) -- null whenever it doesn't apply: not on Starter,
     // grandfathered in, or already paying for Starter post-trial. Mirrors
     // the same "already paying" check assertTrialActive uses server-side,
     // and the fuller version account/summary exposes for the Account page.
-    let trial = null;
-    if (shaped.plan === 'starter') {
+    let trial: Record<string, unknown> | null = null;
+    // True for a Starter account that has paid, so the sidebar stops showing "Free plan / Upgrade".
+    let starterPaid = false;
+    // A paid plan an admin gave for free until a date: show the same banner, with that plan's price, until they pay.
+    if (shaped.plan !== 'starter' && !hasBrokerageAccess(user) && !inBrokerage) {
+      const comp = compStatus(user.app_metadata as Record<string, unknown> | null);
+      if (comp.applies) {
+        const billing = await getStripeCustomerByUserId(user.id);
+        const paying =
+          billing?.plan === shaped.plan &&
+          !!billing.stripe_subscription_id &&
+          ['active', 'trialing'].includes(billing.subscription_status || '');
+        if (!paying) {
+          const plan = getPlan(shaped.plan);
+          trial = {
+            applies: true,
+            trialEndsAt: comp.endsAt ? comp.endsAt.toISOString() : null,
+            expired: comp.expired,
+            endedBy: 'time',
+            daysLeft: comp.daysLeft,
+            plan: shaped.plan,
+            planName: plan.name,
+            price: plan.price,
+          };
+        }
+      }
+    }
+    if (shaped.plan === 'starter' && !hasBrokerageAccess(user) && !inBrokerage) {
       const billing = await getStripeCustomerByUserId(user.id);
       const hasActivePaidStarter =
         billing?.plan === 'starter' &&
         !!billing.stripe_subscription_id &&
         ['active', 'trialing'].includes(billing.subscription_status || '');
+      starterPaid = hasActivePaidStarter;
       if (!hasActivePaidStarter) {
         const status = await getTrialStatus(user.id, user.created_at, user.app_metadata as Record<string, unknown> | null);
         trial = {
@@ -143,7 +195,7 @@ export async function GET(request: NextRequest) {
       : [];
     const hintsEligible = Date.now() - new Date(user.created_at).getTime() < 30 * 24 * 60 * 60 * 1000;
 
-    return NextResponse.json({ ...shaped, trial, needsOnboarding: needsOnboardingFlow, firstRunGuides: guides, seenHints, hintsEligible });
+    return NextResponse.json({ ...shaped, starterPaid, inBrokerage, trial, needsOnboarding: needsOnboardingFlow, firstRunGuides: guides, seenHints, hintsEligible });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -184,6 +236,7 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const {
       defaultFlatFee,
+      defaultListingFee,
       defaultPercentFee,
       invoiceDueDays,
       fullName,
@@ -196,6 +249,9 @@ export async function PATCH(request: NextRequest) {
       seenHint,
       password,
     } = body;
+
+    // Due-date workflows act on their own (automatic reminders), so they are not part of a brokerage-provided workspace.
+    if (dueDateWorkflowEnabled !== undefined || dueDateWorkflowSteps !== undefined) assertAgentHas(user, 'automation');
 
     // Password changes go straight through the admin API on this same
     // user id -- not mergeUserMetadata below, which only ever touches
@@ -219,6 +275,18 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: 'defaultFlatFee must be a non-negative number' }, { status: 400 });
       }
       changes.default_flat_fee = n;
+    }
+
+    if (defaultListingFee !== undefined) {
+      if (defaultListingFee === null || defaultListingFee === '') {
+        changes.default_listing_fee = null;
+      } else {
+        const n = Number(defaultListingFee);
+        if (Number.isNaN(n) || n < 0 || n > 10_000_000) {
+          return NextResponse.json({ error: 'defaultListingFee must be a non-negative number' }, { status: 400 });
+        }
+        changes.default_listing_fee = Math.round(n * 100) / 100;
+      }
     }
 
     if (defaultPercentFee !== undefined) {

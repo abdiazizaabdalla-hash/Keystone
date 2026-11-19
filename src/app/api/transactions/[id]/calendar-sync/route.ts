@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { syncTransactionCalendar } from '@/lib/calendarSync';
 import { getDealCalendarStatus } from '@/lib/dealCalendar';
@@ -11,7 +11,7 @@ export const maxDuration = 60;
 // Only the coordinator who owns the deal sees or triggers this.
 async function loadOwnedDeal(request: NextRequest, transactionId: string) {
   const { user } = await getUserFromRequest(request);
-  if (isAgentUser(user)) return { error: NextResponse.json({ error: 'Not available' }, { status: 403 }) } as const;
+  if (isCollaboratorOnly(user)) return { error: NextResponse.json({ error: 'Not available' }, { status: 403 }) } as const;
   const { data: tx } = await supabaseServer.from('transactions').select('id, tc_user_id').eq('id', transactionId).maybeSingle();
   if (!tx || tx.tc_user_id !== user.id) {
     return { error: NextResponse.json({ error: 'You do not have permission to manage this deal' }, { status: 403 }) } as const;

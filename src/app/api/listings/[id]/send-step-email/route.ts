@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { logListingActivity, requireListingAccess } from '@/lib/listings';
-import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { sendDealEmail } from '@/lib/dealEmail';
+import { logSentEmail } from '@/lib/emailLog';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { escapeHtml } from '@/lib/escapeHtml';
 import { logAudit } from '@/lib/audit';
 import { EMAIL_RE, LIMITS } from '@/lib/stepEmailTemplates';
 
@@ -12,17 +12,6 @@ import { EMAIL_RE, LIMITS } from '@/lib/stepEmailTemplates';
 // people they picked on a listing. It goes out from Relay's sending address with the
 // TC's name, replies go straight to the TC, and the TC is copied so the message
 // also lands in their own inbox.
-
-function plainToHtml(text: string, signature: string): string {
-  const paragraphs = text
-    .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 14px;">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
-    .join('');
-  return (
-    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1f;">${paragraphs}` +
-    `<p style="margin:22px 0 0;font-size:12px;color:#7a7a85;">${escapeHtml(signature)}</p></div>`
-  );
-}
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -63,22 +52,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const tcName = (meta.full_name || '').trim() || user.email || 'Your transaction coordinator';
     const tcEmail = user.email || null;
 
-    const fromAddress = INVOICE_FROM_EMAIL.match(/<([^>]+)>/)?.[1] ?? INVOICE_FROM_EMAIL;
-    const safeName = tcName.replace(/["<>\r\n,;]/g, '').slice(0, 60);
-    const from = `${safeName} via Relay TC <${fromAddress}>`;
-
-    const { error } = await getResendClient().emails.send({
-      from,
+    const result = await sendDealEmail({
+      ownerUserId: user.id,
+      ownerName: tcName,
+      ownerEmail: tcEmail,
+      transactionId: null,
       to,
-      ...(tcEmail ? { cc: [tcEmail], replyTo: tcEmail } : {}),
       subject,
-      html: plainToHtml(message, `Sent by ${tcName} using Relay TC. Reply to this email to reach them directly.`),
-      text: `${message}\n\n-- Sent by ${tcName} using Relay TC. Reply to this email to reach them directly.`,
+      message,
+      copySender: true,
+      replyToSender: true,
+      source: 'template',
+    }).catch((err) => {
+      console.error('Listing step email failed:', err);
+      return null;
     });
-    if (error) {
-      console.error('Resend rejected a step email:', error);
-      return NextResponse.json({ error: 'The email could not be sent. Please try again.' }, { status: 502 });
-    }
+    if (!result) return NextResponse.json({ error: 'The email could not be sent. Please try again.' }, { status: 502 });
+    await logSentEmail({ ownerUserId: user.id, listingId, taskId: typeof body.taskId === 'string' ? body.taskId : null, source: 'step_button', to, subject, mode: result.mode });
 
     await logAudit(request, { id: user.id, email: user.email }, 'listing.step_email_sent', {
       entityType: 'listing',

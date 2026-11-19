@@ -1,0 +1,70 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth';
+import { supabaseServer } from '@/lib/supabase';
+import { logAudit } from '@/lib/audit';
+import { assertBrokerageManageable } from '@/lib/brokerageAccount';
+import { resolveOversightActor } from '@/lib/brokerageAdminsServer';
+import { ownerKind } from '@/lib/oversightRoster';
+import { oversightError } from '@/lib/oversightServer';
+import { DEFAULT_REQUIRED_STEPS, applyRequiredStepsToOpenFiles, cleanRequiredSteps, isStepKind, loadRequiredSteps, seedDefaultRequiredSteps } from '@/lib/brokerageRequiredSteps';
+
+// The required steps for transactions and listings, added to every agent's files (a brokerage) or every coordinator's files (a TC team).
+//   GET                          -> { transaction: [{name, dueDays}], listing: [...] }
+//   PUT  { kind, steps }         -> replace one list
+//   POST { apply: true }         -> add the steps to files that are already open (never twice)
+export async function GET(request: NextRequest) {
+  try {
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner } = await resolveOversightActor(caller, 'view');
+    // The first visit saves Relay's baseline checklists as the default, so the owner starts from them and edits from there.
+    let saved = await loadRequiredSteps(owner.id);
+    if (saved.transaction.length === 0 && saved.listing.length === 0) {
+      await seedDefaultRequiredSteps(owner.id).catch(() => false);
+      saved = await loadRequiredSteps(owner.id);
+    }
+    // Where it could not be saved (the database update has not run), still show the baseline.
+    return NextResponse.json({
+      transaction: saved.transaction.length ? saved.transaction : DEFAULT_REQUIRED_STEPS.transaction,
+      listing: saved.listing.length ? saved.listing : DEFAULT_REQUIRED_STEPS.listing,
+      mode: await ownerKind(owner.id),
+    });
+  } catch (error) {
+    return oversightError(error, 'load the required steps');
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner } = await resolveOversightActor(caller, 'compliance');
+    await assertBrokerageManageable(owner.id);
+    const body = (await request.json().catch(() => ({}))) as { kind?: unknown; steps?: unknown };
+    if (!isStepKind(body.kind)) return NextResponse.json({ error: 'Choose transactions or listings.' }, { status: 400 });
+    const steps = cleanRequiredSteps(body.steps, body.kind);
+    const { error: delErr } = await supabaseServer.from('brokerage_required_steps').delete().eq('owner_user_id', owner.id).eq('kind', body.kind);
+    if (delErr) throw delErr;
+    if (steps.length) {
+      const { error } = await supabaseServer.from('brokerage_required_steps').insert(steps.map((s, i) => ({ owner_user_id: owner.id, kind: body.kind, name: s.name, due_days: s.dueDays, position: i })));
+      if (error) throw error;
+    }
+    await logAudit(request, owner, 'brokerage.required_steps', { entityType: 'brokerage', entityId: owner.id, metadata: { kind: body.kind, count: steps.length } });
+    return NextResponse.json({ steps });
+  } catch (error) {
+    return oversightError(error, 'save the required steps');
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { user: caller } = await getUserFromRequest(request);
+    const { owner } = await resolveOversightActor(caller, 'compliance');
+    await assertBrokerageManageable(owner.id);
+    const body = (await request.json().catch(() => ({}))) as { apply?: unknown };
+    if (body.apply !== true) return NextResponse.json({ error: 'Nothing to do.' }, { status: 400 });
+    const result = await applyRequiredStepsToOpenFiles(owner.id);
+    await logAudit(request, owner, 'brokerage.required_steps_apply', { entityType: 'brokerage', entityId: owner.id, metadata: result });
+    return NextResponse.json(result);
+  } catch (error) {
+    return oversightError(error, 'add the required steps to open files');
+  }
+}

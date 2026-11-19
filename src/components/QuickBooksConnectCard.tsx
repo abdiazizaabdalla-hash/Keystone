@@ -23,7 +23,8 @@ interface Status {
   needsAttention: number;
 }
 
-export default function QuickBooksConnectCard() {
+export default function QuickBooksConnectCard({ audience = 'tc' }: { audience?: 'tc' | 'brokerage' }) {
+  const bk = audience === 'brokerage';
   const router = useRouter();
   const [status, setStatus] = useState<Status | null>(null);
   const [message, setMessage] = useState('');
@@ -53,7 +54,7 @@ export default function QuickBooksConnectCard() {
   useEffect(() => {
     const result = new URLSearchParams(window.location.search).get('quickbooks');
     const t = setTimeout(() => {
-      if (result === 'connected') setMessage('QuickBooks connected. New invoices now go to QuickBooks. Use “Send my invoices” to send the ones you already have.');
+      if (result === 'connected') setMessage('QuickBooks connected. '+(bk ? 'Commissions your agents have agreed to now go to QuickBooks as bills. Use “Send my commissions” to send the ones you already have.' : 'New invoices now go to QuickBooks. Use “Send my invoices” to send the ones you already have.'));
       else if (result === 'error') setMessage('Something went wrong connecting QuickBooks. Please try again.');
     }, 0);
     let live = true;
@@ -86,7 +87,7 @@ export default function QuickBooksConnectCard() {
   };
 
   const disconnect = async () => {
-    if (!confirm('Disconnect QuickBooks? Relay stops sending invoices and payments. Everything already in QuickBooks stays there.')) return;
+    if (!confirm('Disconnect QuickBooks? Relay stops sending '+(bk ? 'commissions and payments' : 'invoices and payments')+'. Everything already in QuickBooks stays there.')) return;
     setBusy('disconnect');
     setMessage('');
     try {
@@ -165,7 +166,9 @@ export default function QuickBooksConnectCard() {
         )}
       </div>
       <p className="text-sm text-slate-400 mb-4">
-        Connect once and the invoices you create in Relay appear in QuickBooks, and payments are recorded on them automatically, so nothing is entered twice.
+        {bk
+          ? 'Connect once and the commissions your agents agree to appear in QuickBooks as bills from each agent, and a payment is recorded when you mark a commission paid, so nothing is entered twice.'
+          : 'Connect once and the invoices you create in Relay appear in QuickBooks, and payments are recorded on them automatically, so nothing is entered twice.'}
       </p>
 
       {message && <div className="mb-4 text-sm text-slate-300">{message}</div>}
@@ -176,7 +179,7 @@ export default function QuickBooksConnectCard() {
         <div className="space-y-4">
           <p className="text-xs text-slate-500">
             {status.needsReconnect
-              ? 'QuickBooks ended the connection (this happens when access is revoked or expires). Reconnect to keep invoices flowing.'
+              ? 'QuickBooks ended the connection (this happens when access is revoked or expires). Reconnect to keep '+(bk ? 'commissions' : 'invoices')+' flowing.'
               : `Connected to ${status.companyName || 'your QuickBooks company'}.${status.lastSyncedAt ? ` Last updated ${new Date(status.lastSyncedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.` : ''}`}
           </p>
 
@@ -190,37 +193,37 @@ export default function QuickBooksConnectCard() {
                 <label className="flex items-start gap-3 rounded-lg border border-slate-700 px-3 py-2.5 cursor-pointer hover:border-slate-500">
                   <input type="checkbox" checked={status.syncInvoices} onChange={() => toggle('syncInvoices')} className="mt-0.5 h-4 w-4 accent-blue-500" />
                   <span>
-                    <span className="block text-sm text-slate-200">Create invoices in QuickBooks</span>
-                    <span className="block text-xs text-slate-500">Each new Relay invoice, under the agent as a customer. An invoice with the same number already in QuickBooks is linked, not duplicated.</span>
+                    <span className="block text-sm text-slate-200">{bk ? 'Create bills in QuickBooks' : 'Create invoices in QuickBooks'}</span>
+                    <span className="block text-xs text-slate-500">{bk ? 'Each commission an agent has agreed to, under the agent as a vendor, filed under “Commissions and fees”. A bill with the same number already in QuickBooks is linked, not duplicated.' : 'Each new Relay invoice, under the agent as a customer. An invoice with the same number already in QuickBooks is linked, not duplicated.'}</span>
                   </span>
                 </label>
                 <label className="flex items-start gap-3 rounded-lg border border-slate-700 px-3 py-2.5 cursor-pointer hover:border-slate-500">
                   <input type="checkbox" checked={status.syncPayments} onChange={() => toggle('syncPayments')} className="mt-0.5 h-4 w-4 accent-blue-500" />
                   <span>
-                    <span className="block text-sm text-slate-200">Record payments in QuickBooks</span>
-                    <span className="block text-xs text-slate-500">When an invoice is paid in Relay (by Stripe or marked paid), the payment is recorded on its QuickBooks invoice.</span>
+                    <span className="block text-sm text-slate-200">{bk ? 'Record payments in QuickBooks' : 'Record payments in QuickBooks'}</span>
+                    <span className="block text-xs text-slate-500">{bk ? 'When you mark a commission paid in Relay, a payment is recorded on its QuickBooks bill, from your first bank account in QuickBooks.' : 'When an invoice is paid in Relay (by Stripe or marked paid), the payment is recorded on its QuickBooks invoice.'}</span>
                   </span>
                 </label>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={() => send(false)} disabled={busy !== null || status.pending === 0} className={primary}>
-                  {busy === 'send' ? progress || 'Sending…' : status.pending ? `Send my invoices (${status.pending} waiting)` : 'All invoices sent'}
+                  {busy === 'send' ? progress || 'Sending…' : status.pending ? `Send my ${bk ? 'commissions' : 'invoices'} (${status.pending} waiting)` : `All ${bk ? 'commissions' : 'invoices'} sent`}
                 </button>
                 {status.needsAttention > 0 && (
                   <button type="button" onClick={() => send(true)} disabled={busy !== null} className={ghost}>
                     Retry {status.needsAttention} that need attention
                   </button>
                 )}
-                <Link href="/dashboard/invoices" target="_blank" rel="noopener noreferrer" className={ghost}>
+                {!bk && <Link href="/dashboard/invoices" target="_blank" rel="noopener noreferrer" className={ghost}>
                   See invoices
-                </Link>
-                <Link href="/dashboard/invoices/quickbooks" target="_blank" rel="noopener noreferrer" className={ghost}>
+                </Link>}
+                {!bk && <Link href="/dashboard/invoices/quickbooks" target="_blank" rel="noopener noreferrer" className={ghost}>
                   Import / export files
-                </Link>
+                </Link>}
               </div>
               <p className="text-xs text-slate-500">
-                Payments are recorded for the amount the agent paid, before any Stripe fees, and go to QuickBooks’ default (Undeposited Funds) until you match the deposit. Refunds are not recorded automatically.
+                {bk ? 'Relay only sends to QuickBooks. It never edits or deletes anything there, so a commission you void or mark unpaid in Relay is not changed in QuickBooks.' : 'Payments are recorded for the amount the agent paid, before any Stripe fees, and go to QuickBooks’ default (Undeposited Funds) until you match the deposit. Refunds are not recorded automatically.'}
               </p>
             </>
           )}

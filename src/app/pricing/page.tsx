@@ -1,153 +1,121 @@
-'use client';
-
 import Link from 'next/link';
-import { PUBLIC_PLANS } from '@/lib/plans';
+import PublicHeader from '@/components/PublicHeader';
+import PublicFooter from '@/components/PublicFooter';
 import DemoRequestButton from '@/components/DemoRequestButton';
-import PublicMobileMenu from '@/components/PublicMobileMenu';
+import { PUBLIC_PLANS } from '@/lib/plans';
+import AgentPlanCards from '@/components/marketing/AgentPlanCards';
+import { BROKERAGE_TIERS, PILOT } from '@/lib/marketingPricing';
+import { BROKERAGE_PRICING, dollars } from '@/lib/brokeragePricing';
+import { WhoPaysIllustration } from '@/components/marketing/Illustrations';
 
-const CTA_LABELS: Record<string, string> = {
-  starter: 'Start free',
-  pro: 'Start Pro',
-  team: 'Start Team',
-};
+type Cell = boolean | string;
+type Row = { feature: string; cells: Cell[] };
 
-const UPGRADE_REASONS = [
-  'You want every deal to run through Relay instead of only your biggest closings.',
-  'You’re working with more than three agents at once and need more profiles.',
-  'You want to build your own checklist templates instead of using the baseline one.',
-  'You’re bringing on other coordinators or assistants who need to see the same deals.',
+const SHARED_ROWS: Row[] = [
+  { feature: 'Unlimited transactions', cells: [true, true] },
+  { feature: 'AI contract intake (creates the transaction or listing for you)', cells: [true, true] },
+  { feature: 'Checklists with configurable due dates', cells: [true, true] },
+  { feature: 'Document and email templates', cells: [true, true] },
+  { feature: 'Listings, offers and showings', cells: [true, true] },
+  { feature: 'Documents, e-signature and deal email', cells: [true, true] },
+  { feature: 'Invoicing, other invoices and archive', cells: [true, true] },
+  { feature: 'Custom checklist templates', cells: [false, true] },
+  { feature: 'Automations (reminders and follow-ups that run for you)', cells: [false, true] },
+  { feature: 'Admin dashboard', cells: [false, true] },
+];
+const AGENT_ROWS: Row[] = SHARED_ROWS;
+const COORDINATOR_ROWS: Row[] = [
+  ...SHARED_ROWS.slice(0, 7),
+  { feature: 'Agent profiles', cells: ['Up to 3', 'Unlimited'] },
+  ...SHARED_ROWS.slice(7),
+].map((r) => ({ ...r, cells: [...r.cells, r.feature === 'Agent profiles' ? 'Unlimited' : r.cells[1]] }));
+const COORDINATOR_TEAM_ONLY: Row[] = [
+  { feature: 'Team board, direct messages and shared contacts', cells: [false, false, true] },
+  { feature: 'Owner status report across the team', cells: [false, false, true] },
+  { feature: 'Team desk: workload, late steps and closings by coordinator', cells: [false, false, true] },
+  { feature: 'Default checklist for every new file on the team', cells: [false, false, true] },
+  { feature: 'Team automations (stalled files, deadlines, daily digest)', cells: [false, false, true] },
+  { feature: 'Seats', cells: ['1', '1', '3 included'] },
+];
+const BROKERAGE_ROWS: Row[] = [
+  { feature: 'Agents included', cells: [String(BROKERAGE_PRICING.basic.includedAgents), String(BROKERAGE_PRICING.pro.includedAgents)] },
+  { feature: 'Each additional agent, per month', cells: [dollars(BROKERAGE_PRICING.basic.extraAgent), dollars(BROKERAGE_PRICING.pro.extraAgent)] },
+  { feature: 'Workspace for every agent', cells: ['Agent Basic', 'Agent Pro'] },
+  { feature: 'Dashboard, read-only file view and compliance desk', cells: [true, true] },
+  { feature: 'Six built-in office automations', cells: [true, true] },
+  { feature: 'Team board and private messages', cells: [true, true] },
+  { feature: 'Commission statements, and paying agents through Stripe', cells: [true, true] },
+  { feature: 'Agent-by-month production export', cells: [true, true] },
+  { feature: 'Required-document lists', cells: ['One for every file', 'Up to 10, by deal type'] },
+  { feature: 'Trends and configurable deal-level reports', cells: [false, true] },
+  { feature: 'Custom brokerage workflow builder', cells: [false, true] },
+  { feature: 'Extra administrators', cells: ['One', 'Up to five, with scoped roles'] },
 ];
 
-type ComparisonValue = boolean | string;
-
-const COMPARISON_ROWS: {
-  feature: string;
-  starter: ComparisonValue;
-  pro: ComparisonValue;
-  team: ComparisonValue;
-}[] = [
-  { feature: 'Transaction management', starter: true, pro: true, team: true },
-  { feature: 'AI contract intake (auto-fills the deal)', starter: true, pro: true, team: true },
-  { feature: 'Baseline checklist', starter: true, pro: true, team: true },
-  { feature: 'Configurable per-step due dates', starter: true, pro: true, team: true },
-  { feature: 'Custom checklist templates', starter: false, pro: true, team: true },
-  { feature: 'Required-step flags on templates', starter: false, pro: true, team: true },
-  { feature: 'Agent profiles (for invoicing)', starter: 'Up to 3', pro: 'Unlimited', team: 'Unlimited' },
-  { feature: 'Automatic agent portal access', starter: true, pro: true, team: true },
-  { feature: 'Client portal (agents share live progress with clients)', starter: true, pro: true, team: true },
-  { feature: 'Document storage & organization', starter: true, pro: true, team: true },
-  { feature: 'E-signature requests', starter: true, pro: true, team: true },
-  { feature: 'Invoicing & payment tracking', starter: true, pro: true, team: true },
-  { feature: 'Daily deadline digest', starter: true, pro: true, team: true },
-  { feature: 'Admin dashboard', starter: false, pro: true, team: true },
-  { feature: 'Team roster, team board and direct messages', starter: false, pro: false, team: true },
-  { feature: 'Shared contacts and owner status report', starter: false, pro: false, team: true },
-  { feature: 'Seat minimum', starter: '—', pro: '—', team: '3 seats' },
-];
-
-function ComparisonCell({ value }: { value: ComparisonValue }) {
-  if (typeof value === 'string') {
-    return <span className="text-slate-200">{value}</span>;
-  }
-  if (value) {
-    return (
-      <svg className="w-5 h-5 text-blue-400 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-      </svg>
-    );
-  }
+function Mark({ value }: { value: Cell }) {
+  if (typeof value === 'string') return <span className="text-slate-200">{value}</span>;
+  if (value) return <svg className="w-5 h-5 text-blue-400 mx-auto" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>;
   return <span className="text-slate-600">—</span>;
 }
 
+function ComparisonTable({ columns, rows }: { columns: string[]; rows: Row[] }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-700 mt-12">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-slate-800/80 border-b border-slate-700">
+            <th className="text-left font-medium text-slate-300 px-5 py-4">Feature</th>
+            {columns.map((c) => <th key={c} className="font-medium text-slate-300 px-5 py-4">{c}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={row.feature} className={i % 2 === 0 ? 'bg-slate-800/30' : ''}>
+              <td className="text-left text-slate-300 px-5 py-3.5 border-t border-slate-700/60">{row.feature}</td>
+              {row.cells.map((c, j) => <td key={j} className="text-center px-5 py-3.5 border-t border-slate-700/60"><Mark value={c} /></td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function PricingPage() {
+  const { basic, pro, extraAgent } = BROKERAGE_TIERS;
   return (
     <div className="min-h-screen bg-slate-900">
-      {/* Nav */}
-      <header className="border-b border-slate-700">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <PublicMobileMenu />
-            <Link href="/" className="flex items-center gap-2">
-              <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-                <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
-              </span>
-            </Link>
-          </div>
-          <nav className="hidden sm:flex items-center gap-8 text-sm text-slate-300">
-            <Link href="/" className="hover:text-slate-100 transition">Home</Link>
-            <Link href="/pricing" className="text-slate-100">Pricing</Link>
-            <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
-            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
-            <Link href="/for-teams" className="hover:text-slate-100 transition">For Teams</Link>
-          </nav>
-          <div className="flex items-center gap-2 sm:gap-4">
-            <Link
-              href="/agent/login"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
-            >
-              <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-              Agent Login
-            </Link>
-            <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
-            <Link
-              href="/auth?mode=signup&plan=starter"
-              className="px-3 sm:px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
-            >
-              Start free
-            </Link>
-          </div>
-        </div>
-      </header>
+      <PublicHeader active="/pricing" />
 
-      {/* Header */}
-      <section className="max-w-4xl mx-auto px-6 pt-20 pb-16 text-center">
+      <section className="max-w-4xl mx-auto px-6 pt-20 pb-10 text-center">
         <p className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-4">Pricing</p>
-        <h1 className="font-display text-4xl sm:text-5xl font-semibold text-slate-100 mb-5">
-          Simple pricing for coordinators and teams.
-        </h1>
-        <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-          Start free for 30 days with the tools you need today. Upgrade for custom workflows or team collaboration as your business grows.
-        </p>
+        <h1 className="font-display text-4xl sm:text-5xl font-semibold text-slate-100 mb-5">One platform. Pricing that fits how you work.</h1>
+        <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-8">Agents run their own deals. Coordinators run deals for agents. Brokerages bring all of their agents onto one workspace. Pick the one that describes you and see only your own prices.</p>
+        <nav className="flex flex-wrap items-center justify-center gap-3 text-sm">
+          <a href="#agents" className="px-4 py-2 rounded-full border border-slate-700 text-slate-200 hover:border-slate-500 transition">I’m an agent</a>
+          <a href="#coordinators" className="px-4 py-2 rounded-full border border-slate-700 text-slate-200 hover:border-slate-500 transition">I’m a coordinator</a>
+          <a href="#brokerages" className="px-4 py-2 rounded-full border border-slate-700 text-slate-200 hover:border-slate-500 transition">I run a brokerage</a>
+        </nav>
       </section>
 
-      {/* Plans */}
-      <section className="max-w-6xl mx-auto px-6 pb-16">
+      <section className="max-w-7xl mx-auto px-6 pb-16"><WhoPaysIllustration /></section>
+
+      <section id="coordinators" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">TCs and teams</h2>
+        <p className="text-slate-400 mb-8">Free for 14 days, no card needed. Document and email templates are included on every plan. Custom checklist templates and automations are available on Pro and Team.</p>
         <div className="grid md:grid-cols-3 gap-6">
           {PUBLIC_PLANS.map((plan) => (
-            <div
-              key={plan.id}
-              className={`rounded-xl border p-8 flex flex-col ${
-                plan.popular ? 'border-blue-500 bg-slate-700 ring-2 ring-blue-500/20' : 'border-slate-700 bg-slate-800/60'
-              }`}
-            >
-              {plan.popular && (
-                <p className="text-xs font-semibold text-blue-400 uppercase tracking-wide mb-3">For everyday work</p>
-              )}
-              <h2 className="font-display text-2xl font-semibold text-slate-100 mb-2">{plan.name}</h2>
+            <div key={plan.id} className={`rounded-xl border p-8 flex flex-col ${plan.popular ? 'border-blue-500 bg-slate-700 ring-2 ring-blue-500/20' : 'border-slate-700 bg-slate-800/60'}`}>
+              <h3 className="font-display text-2xl font-semibold text-slate-100 mb-2">{plan.name}</h3>
               <p className="text-sm text-slate-400 mb-6 min-h-[2.5rem]">{plan.description}</p>
-              <div className="mb-6">
-                <span className="text-4xl font-display font-semibold text-slate-100">{plan.price}</span>
-                <span className="text-slate-400 ml-1">{plan.period}</span>
-              </div>
-              <Link
-                href={`/auth?mode=signup&plan=${plan.id}`}
-                className={`block text-center py-3 rounded-lg font-semibold transition mb-8 ${
-                  plan.popular
-                    ? 'bg-blue-500 hover:bg-blue-400 text-white'
-                    : 'border border-slate-600 text-slate-200 hover:border-slate-500'
-                }`}
-              >
-                {CTA_LABELS[plan.id] || `Start ${plan.name}`}
+              <p className="mb-6"><span className="text-4xl font-display font-semibold text-slate-100">{plan.price}</span><span className="text-slate-400 ml-1">{plan.period}</span></p>
+              <Link href={`/auth?mode=signup&plan=${plan.id}`} className={`block text-center py-3 rounded-lg font-semibold transition mb-8 ${plan.popular ? 'bg-blue-500 hover:bg-blue-400 text-white' : 'border border-slate-600 text-slate-200 hover:border-slate-500'}`}>
+                {plan.id === 'starter' ? 'Start free' : `Start ${plan.name}`}
               </Link>
               <ul className="space-y-3">
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
-                    <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
+                    <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                     {f}
                   </li>
                 ))}
@@ -156,117 +124,57 @@ export default function PricingPage() {
           ))}
         </div>
         <p className="text-center text-sm text-slate-500 mt-8">
-          Team is $89 per month and includes three TC seats. Each additional seat is $30 per month. Agents you invite to collaborate on transactions do not use a TC seat, and the agent portal is free on every plan.{' '}
-          <Link href="/for-teams" className="text-blue-400 hover:text-blue-300">See everything Team includes →</Link>
+          Team is $89 a month with three seats, then $30 a month for each extra seat. <Link href="/for-tcs#teams" className="text-blue-400 hover:text-blue-300">How teams work →</Link>
         </p>
+
+        <ComparisonTable columns={['Starter', 'Pro', 'Team']} rows={[...COORDINATOR_ROWS, ...COORDINATOR_TEAM_ONLY]} />
       </section>
 
-      {/* Comparison table */}
-      <section className="max-w-5xl mx-auto px-6 py-16 border-t border-slate-700">
-        <h2 className="font-display text-2xl font-semibold text-slate-100 mb-8 text-center">Compare plans</h2>
-        <div className="overflow-x-auto rounded-xl border border-slate-700">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-800/80 border-b border-slate-700">
-                <th className="text-left font-medium text-slate-300 px-5 py-4">Feature</th>
-                <th className="font-medium text-slate-300 px-5 py-4">Starter</th>
-                <th className="font-medium text-slate-300 px-5 py-4">Pro</th>
-                <th className="font-medium text-slate-300 px-5 py-4">Team</th>
-              </tr>
-            </thead>
-            <tbody>
-              {COMPARISON_ROWS.map((row, i) => (
-                <tr key={row.feature} className={i % 2 === 0 ? 'bg-slate-800/30' : 'bg-transparent'}>
-                  <td className="text-left text-slate-300 px-5 py-3.5 border-t border-slate-700/60">{row.feature}</td>
-                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><ComparisonCell value={row.starter} /></td>
-                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><ComparisonCell value={row.pro} /></td>
-                  <td className="text-center px-5 py-3.5 border-t border-slate-700/60"><ComparisonCell value={row.team} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section id="agents" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Agents</h2>
+        <p className="text-slate-400 mb-8 max-w-2xl">Free for 14 days, no card needed. Document and email templates are included on every plan. Custom checklist templates and automations are on Pro. If your brokerage uses Relay, ask them to invite you.</p>
+        <AgentPlanCards />
+        <ComparisonTable columns={['Starter', 'Pro']} rows={AGENT_ROWS} />
+      </section>
+
+      <section id="brokerages" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-2">Brokerages</h2>
+        <p className="text-slate-400 mb-8 max-w-2xl">Every agent gets a full individual Relay Pro account, paid for by the brokerage. Brokerage Pro is $199 a month for 25 agents. The same 25 Agent Pro accounts would cost $975 a month bought one by one. Your agents pay nothing. {PILOT}</p>
+        <div className="grid md:grid-cols-2 gap-6">
+          {[basic, pro].map((t, i) => (
+            <div key={t.name} className={`rounded-xl border p-8 ${i === 1 ? 'border-blue-500 bg-slate-700 ring-2 ring-blue-500/20' : 'border-slate-700 bg-slate-800/60'}`}>
+              <h3 className="font-display text-2xl font-semibold text-slate-100 mb-1">{t.name}</h3>
+              <p className="mb-1"><span className="text-4xl font-display font-semibold text-slate-100">{t.price}</span><span className="text-slate-400 ml-1">{t.period}</span></p>
+              <p className="text-sm text-slate-300 mb-4">Includes {t.agents} agents. Extra agents {i === 0 ? extraAgent.basic : extraAgent.pro} a month.</p>
+              <p className="text-sm text-slate-400">{t.blurb}</p>
+            </div>
+          ))}
         </div>
+        <ComparisonTable columns={['Brokerage Basic', 'Brokerage Pro']} rows={BROKERAGE_ROWS} />
+        <p className="mt-6 text-sm text-slate-500"><Link href="/for-brokerages#plans" className="text-blue-400 hover:text-blue-300">See what each brokerage plan includes →</Link></p>
       </section>
 
-      {/* Payments clarification */}
       <section className="max-w-4xl mx-auto px-6 py-16 border-t border-slate-700">
         <h2 className="font-display text-2xl font-semibold text-slate-100 mb-4">How getting paid works</h2>
-        <p className="text-slate-400 mb-3">
-          There are two separate money flows in Relay, and it&apos;s worth being clear about both:
-        </p>
+        <p className="text-slate-400 mb-3">There are two separate money flows in Relay, and they work the same way for agents, coordinators and brokerages:</p>
         <ul className="space-y-3 text-sm text-slate-300 mb-4">
-          <li className="flex items-start gap-2.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />
-            You pay Relay for your subscription — that&apos;s the plan you pick above.
-          </li>
-          <li className="flex items-start gap-2.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />
-            Your agents pay you for your invoices — Relay never touches that money.
-          </li>
+          <li className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />You pay Relay for your plan, the one you picked above. That is the only thing Relay charges you for.</li>
+          <li className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />Money between the people on a deal is theirs. Coordinators invoice agents, agents can invoice for other work, and brokerages issue commission statements to their agents.</li>
         </ul>
-        <p className="text-slate-400">
-          Accept invoice payments through your connected Stripe account, or record payments
-          received through your preferred payment method. Relay charges no platform fee on
-          invoice payments.
-        </p>
+        <p className="text-slate-400">Take payments through your own connected Stripe account, or record payments received another way, such as Zelle or a check. Relay charges no platform fee on invoice payments. Standard Stripe processing fees apply, and the money goes straight to your own Stripe account.</p>
       </section>
 
-      {/* Why upgrade */}
-      <section className="max-w-4xl mx-auto px-6 py-16 border-t border-slate-700">
-        <h2 className="font-display text-2xl font-semibold text-slate-100 mb-2">Common reasons TCs upgrade</h2>
-        <p className="text-slate-400 mb-10">Most upgrades happen once Relay becomes part of the regular closing process.</p>
-        <ul className="space-y-5">
-          {UPGRADE_REASONS.map((reason) => (
-            <li key={reason} className="flex items-start gap-3 text-slate-300">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />
-              {reason}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* CTA */}
       <section className="max-w-4xl mx-auto px-6 py-20 border-t border-slate-700 text-center">
-        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">
-          Start on Starter, upgrade when it sticks
-        </h2>
-        <p className="text-slate-400 mb-8">The easiest way to see if Relay saves your team the back-and-forth it&apos;s meant to save.</p>
+        <h2 className="font-display text-3xl font-semibold text-slate-100 mb-4">Get started with Relay</h2>
+        <p className="text-slate-400 mb-8">Coordinators and agents start with a free trial. Brokerages start with a pilot.</p>
         <div className="flex items-center justify-center gap-4 flex-wrap">
-          <Link
-            href="/auth?mode=signup&plan=starter"
-            className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition"
-          >
-            Start free
-          </Link>
-          <Link href="/faq" className="px-6 py-3 border border-slate-600 hover:border-slate-600 text-slate-200 font-semibold rounded-lg transition">
-            Read the FAQ
-          </Link>
-          <DemoRequestButton
-            className="px-6 py-3 text-slate-300 hover:text-slate-100 font-semibold transition"
-            label="Request a demo"
-          />
+          <Link href="/auth?mode=signup&plan=starter" className="px-6 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-lg transition">Start free as a coordinator</Link>
+          <DemoRequestButton className="px-6 py-3 border border-slate-600 text-slate-200 hover:border-slate-500 font-semibold rounded-lg transition" label="Request a demo" />
+          <Link href="/faq" className="px-6 py-3 text-slate-300 hover:text-slate-100 font-semibold transition">Read the FAQ</Link>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-700">
-        <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <img src="/relay-icon.png" alt="Relay TC" className="w-6 h-6 object-contain" />
-            <span className="text-sm text-slate-400">Relay TC</span>
-          </div>
-          <div className="flex items-center gap-6 text-sm text-slate-500">
-            <Link href="/" className="hover:text-slate-200 transition">Home</Link>
-            <Link href="/faq" className="hover:text-slate-200 transition">FAQ</Link>
-            <Link href="/for-agents" className="hover:text-slate-200 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-200 transition">For TCs</Link>
-            <Link href="/for-teams" className="hover:text-slate-200 transition">For Teams</Link>
-            <Link href="/auth" className="hover:text-slate-200 transition">Sign In</Link>
-            <Link href="/terms" className="hover:text-slate-200 transition">Terms</Link>
-            <Link href="/privacy" className="hover:text-slate-200 transition">Privacy</Link>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

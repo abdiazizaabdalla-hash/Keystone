@@ -6,8 +6,8 @@ import { getPlanLimits } from '@/lib/plans';
 import { getVisibleTcUserIds } from '@/lib/team';
 import { getUserPlan } from '@/lib/privileged';
 import { autoAddContact } from '@/lib/contactsAuto';
+import { cleanServices, type AgentService } from '@/lib/agentServices';
 import { logAudit } from '@/lib/audit';
-import { grantAgentPortalAccess, type GrantAccessResult } from '@/lib/agentInvite';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,12 +37,25 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// The optional listing fee is only written when the page sent one (a number, or an empty value to clear it), so saving an agent
+// never touches a column that does not exist yet.
+function listingFeeColumn(value: unknown): { listing_fee?: number | null } {
+  if (value === undefined) return {};
+  if (value === null || value === '') return { listing_fee: null };
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 && n <= 10_000_000 ? { listing_fee: Math.round(n * 100) / 100 } : {};
+}
+
+function servicesColumn(value: unknown): { services?: AgentService[] } {
+  return value === undefined ? {} : { services: cleanServices(value) };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { name, brokerage, email, phone, flatFee, percentFee } = body;
+    const { name, brokerage, email, phone, flatFee, percentFee, listingFee, services } = body;
 
     // Plan-gated: Starter is capped at 3 agent profiles. Admins creating
     // agents for themselves are still subject to their own plan's limit —
@@ -77,6 +90,8 @@ export async function POST(request: NextRequest) {
         phone: phone || null,
         flat_fee: flatFee !== undefined ? parseFloat(String(flatFee)) : 400,
         commission_percent: percentFee !== undefined ? parseFloat(String(percentFee)) : 0,
+        ...listingFeeColumn(listingFee),
+        ...servicesColumn(services),
       })
       .select()
       .single();
@@ -112,7 +127,7 @@ export async function PATCH(request: NextRequest) {
     const { user, isAdmin } = await getUserFromRequest(request);
     await assertTrialActive(user);
     const body = await request.json();
-    const { id, name, brokerage, email, phone, flatFee, percentFee } = body;
+    const { id, name, brokerage, email, phone, flatFee, percentFee, listingFee, services } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Agent ID is required' }, { status: 400 });
@@ -131,7 +146,6 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    const { data: before } = await supabaseServer.from('agents').select('email').eq('id', id).maybeSingle();
 
     const { data: agent, error } = await supabaseServer
       .from('agents')
@@ -142,6 +156,8 @@ export async function PATCH(request: NextRequest) {
         phone: phone || null,
         flat_fee: flatFee !== undefined ? parseFloat(String(flatFee)) : 400,
         commission_percent: percentFee !== undefined ? parseFloat(String(percentFee)) : 0,
+        ...listingFeeColumn(listingFee),
+        ...servicesColumn(services),
       })
       .eq('id', id)
       .select()
@@ -154,15 +170,8 @@ export async function PATCH(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // A new or changed email means this agent can now be given a login: put them on everything of theirs that is still open.
-    let portalAccess: GrantAccessResult | null = null;
-    const oldEmail = String(before?.email || '').trim().toLowerCase();
-    const newEmail = String(agent.email || '').trim().toLowerCase();
-    if (newEmail.includes('@') && newEmail !== oldEmail) {
-      portalAccess = await grantAgentPortalAccess({ agentId: agent.id as string, user, appUrl: request.nextUrl.origin });
-    }
-
-    return NextResponse.json({ ...agent, portalAccess });
+    // Adding or changing an email does not give anyone access: the coordinator ticks deals under Portal access on the Agents page.
+    return NextResponse.json({ ...agent, portalAccess: null });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

@@ -9,13 +9,18 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:int": "vitest run --config vitest.integration.config.ts"
+    "test:int": "vitest run --config vitest.integration.config.ts",
+    "dev:local": "node scripts/check-local-env.mjs && next dev",
+    "dev:test": "node scripts/check-local-env.mjs && next dev -p 3001",
+    "dev:prod-readonly": "node scripts/dev-prod-readonly.mjs",
+    "automation:tick": "node scripts/automation-tick.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
     "@sentry/nextjs": "^11.1.0",
     "@supabase/supabase-js": "^2.116.0",
     "@vercel/analytics": "^2.0.1",
+    "exceljs": "^4.4.0",
     "jszip": "^3.10.2",
     "next": "^16.3.6",
     "pdf-lib": "^1.17.1",

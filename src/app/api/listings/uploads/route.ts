@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isAgentUser, isCollaboratorOnly } from '@/lib/agentPortal';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { IncomingError, MAX_INCOMING_WAITING, countIncoming, createIncomingUpload } from '@/lib/incomingUploads';
 
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     // Invited agents may send deal documents (the Documents route checks their access to the deal); the listing tools stay coordinator-only.
     const forDocument = body.purpose === 'document';
-    if (isAgentUser(user) && !forDocument) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    if (isCollaboratorOnly(user) && !forDocument) return NextResponse.json({ error: 'Not available' }, { status: 403 });
     // Same rule as the Documents route: an agent's upload is not gated on a coordinator trial.
     if (!(forDocument && isAgentUser(user))) await assertTrialActive(user);
 

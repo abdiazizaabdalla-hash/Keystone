@@ -1,3 +1,5 @@
+import { acceptedCoordinator } from '@/lib/listingCoordinators';
+import { userMayAutomate } from '@/lib/automation/plan';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { AuthError } from '@/lib/auth';
@@ -8,7 +10,6 @@ import { offerDocPaths } from '@/lib/listingOfferFiles';
 import { queueListingCalendarSync, removeListingCalendarEvents } from '@/lib/calendarSync';
 import { isAgentUser } from '@/lib/agentPortal';
 import { removeInboundFiles } from '@/lib/listingInbound';
-import { sendListingPortalInvite } from '@/lib/agentInvite';
 import { REQUIRED_LISTING_DOCS } from '@/lib/listingReadiness';
 import {
   LISTING_STATUSES,
@@ -37,7 +38,7 @@ async function userLabel(userId: string): Promise<string> {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user, isAdmin, listing } = await requireListingAccess(request, id);
+    const { user, isAdmin, listing, shared, coordinated } = await requireListingAccess(request, id);
     const [tasks, offers, contacts, dates, agent, showings, priceChanges, activity] = await Promise.all([
       supabaseServer.from('listing_tasks').select('*').eq('listing_id', id).order('sort_order', { ascending: true }),
       supabaseServer.from('listing_offers').select('*').eq('listing_id', id).order('created_at', { ascending: false }),
@@ -54,8 +55,29 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const visible = await getVisibleTcUserIds(user.id);
       if (visible.length > 1) assignees = await Promise.all(visible.map(async (uid) => ({ id: uid, label: await userLabel(uid) })));
     }
+    // The listing fee the coordinator already invoiced (so the "Generate invoice" prompt can give way to it). Only the coordinator who runs it.
+    let invoice: Record<string, unknown> | null = null;
+    if (!shared && !coordinated && listing.agent_id && (isAdmin || listing.tc_user_id === user.id)) {
+      const inv = await supabaseServer
+        .from('invoices')
+        .select('id, invoice_number, amount_owed, paid, paid_at, due_date, refunded')
+        .eq('listing_id', id)
+        .eq('agent_id', listing.agent_id as string)
+        .maybeSingle();
+      // add-listing-invoices.sql not run yet: there is no listing invoice to show.
+      invoice = inv.error ? null : (inv.data as Record<string, unknown> | null);
+    }
+    // An agent opening a shared listing never gets the coordinator's private notes or internal history.
     return NextResponse.json({
-      listing,
+      invoice,
+      listing: shared ? { ...listing, notes: null } : listing,
+      shared,
+      coordinated,
+      // Automations belong to the account that owns the listing, not to an agent, a coordinator it is shared with, or an admin looking in.
+      canAutomate: !isAdmin && !shared && !coordinated && listing.tc_user_id === user.id && userMayAutomate(user),
+      // Who is on the other side: the coordinator (an agent's shared listing), the owning agent (a coordinator's view), or the coordinator an agent invited.
+      coordinator: shared || coordinated ? await userLabel(listing.tc_user_id as string) : null,
+      invitedCoordinator: !shared && !coordinated ? await acceptedCoordinator(id) : null,
       assignees,
       agent: agent.data,
       tasks: tasks.data || [],
@@ -65,7 +87,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // These come from add-listing-extras.sql; before it is run they are simply empty.
       showings: showings.data || [],
       priceChanges: priceChanges.data || [],
-      activity: activity.data || [],
+      activity: shared ? [] : activity.data || [],
     });
   } catch (error) {
     return fail(error, 'load');
@@ -75,9 +97,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { user, isAdmin, listing } = await requireListingAccess(request, id);
+    const { user, isAdmin, listing, shared, coordinated } = await requireListingAccess(request, id);
     await assertTrialActive(user);
     const body = await request.json().catch(() => ({}));
+    // A listing shared with an agent is edited like any other, except who owns it, who the agent is, who it is shared with,
+    // and the coordinator's private notes. Those stay with the coordinator.
+    if (coordinated && ['tcUserId', 'agentId', 'shareWithAgent', 'notifyAgent'].some((k) => k in body)) {
+      return NextResponse.json({ error: 'The agent who owns this listing manages who it belongs to.' }, { status: 403 });
+    }
+    if (shared) {
+      if (['tcUserId', 'agentId', 'shareWithAgent', 'notifyAgent'].some((k) => k in body)) {
+        return NextResponse.json({ error: 'Your coordinator manages who this listing belongs to and who it is shared with.' }, { status: 403 });
+      }
+      delete body.notes;
+    }
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     if ('propertyAddress' in body) {
@@ -208,13 +241,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     queueListingCalendarSync(id);
 
-    // A newly assigned agent, or sharing switched on, gets their portal login without anyone having to remember.
-    // Only while the listing is still open, and never twice for the same agent.
+    // A newly assigned agent, or sharing switched on, no longer sends an invite by itself: portal access is a deliberate choice
+    // (Agents page -> Portal access, or the invite button on the listing).
     const agentChanged = 'agent_id' in updates && updates.agent_id && updates.agent_id !== listing.agent_id;
     const sharingTurnedOn = updates.share_with_agent === true && listing.share_with_agent !== true;
-    if ((agentChanged || sharingTurnedOn) && data && ['preparing', 'active', 'under_offer'].includes(data.status as string)) {
-      await sendListingPortalInvite({ listing: data, user, appUrl: request.nextUrl.origin, onlyIfNew: true });
-    }
+    // Announce it on the agent's dashboard once (add-listing-agent-notice.sql; ignored until it is run).
+    if ((agentChanged || sharingTurnedOn) && data?.agent_id) await supabaseServer.from('listings').update({ agent_notice_seen: false }).eq('id', id);
     return NextResponse.json(data);
   } catch (error) {
     return fail(error, 'update');

@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { assertNotCollaborator } from '@/lib/workspaceGuard';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { inviteAgentToTransaction } from '@/lib/agentInvite';
+import { inviteAgentToTransaction, inviteTcToTransaction, resendTcInvite } from '@/lib/agentInvite';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { getEntitlements } from '@/lib/entitlements';
+import { hasAgentRole } from '@/lib/privileged';
+import { pendingListingInvites } from '@/lib/listingCoordinators';
 
 // Confirms the caller (a TC) owns `transactionId`, the same ownership
 // check src/app/api/documents/route.ts uses -- direct-owner only, not the
@@ -34,6 +38,33 @@ async function assertOwnsTransaction(transactionId: string, userId: string, isAd
   return transaction;
 }
 
+// Pending invitations addressed to this coordinator's email that an agent with a workspace sent.
+async function pendingInvitesFromAgents(user: { email?: string | null } & Parameters<typeof hasAgentRole>[0]) {
+  if (!user.email || hasAgentRole(user)) return [];
+  const { data: invites, error } = await supabaseServer
+    .from('agent_invites')
+    .select('id, transaction_id, invited_by, created_at')
+    .eq('email', user.email.toLowerCase())
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  const out: Array<{ inviteId: string; transactionId: string; propertyAddress: string | null; agentLabel: string; createdAt: string }> = [];
+  for (const invite of invites || []) {
+    const { data: inviter } = await supabaseServer.auth.admin.getUserById(invite.invited_by as string);
+    if (!inviter.user || !hasAgentRole(inviter.user)) continue; // an older coordinator-to-agent invite: not for this list
+    const { data: tx } = await supabaseServer.from('transactions').select('id, property_address').eq('id', invite.transaction_id).maybeSingle();
+    if (!tx) continue;
+    out.push({
+      inviteId: invite.id as string,
+      transactionId: tx.id as string,
+      propertyAddress: (tx.property_address as string | null) ?? null,
+      agentLabel: (inviter.user.user_metadata?.full_name as string | undefined) || inviter.user.email || 'An agent',
+      createdAt: invite.created_at as string,
+    });
+  }
+  return out;
+}
+
 // GET: invited/accepted agents for one transaction -- TC-only, used to
 // render the "who's on this deal" list on the transaction detail page.
 export async function GET(request: NextRequest) {
@@ -41,7 +72,10 @@ export async function GET(request: NextRequest) {
     const { user, isAdmin } = await getUserFromRequest(request);
     const transactionId = request.nextUrl.searchParams.get('transactionId');
     if (!transactionId) {
-      return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
+      // No deal named: the invitations waiting for this person. Only a coordinator account is invited by an agent
+      // (agents are invited by coordinators and answer on their own portal), so anyone else just gets an empty list.
+      const [dealInvites, listingInvites] = await Promise.all([pendingInvitesFromAgents(user), hasAgentRole(user) ? [] : pendingListingInvites(user)]);
+      return NextResponse.json([...dealInvites, ...listingInvites]);
     }
 
     await assertOwnsTransaction(transactionId, user.id, isAdmin);
@@ -111,6 +145,40 @@ export async function POST(request: NextRequest) {
 
     const transaction = await assertOwnsTransaction(transactionId, user.id, isAdmin);
 
+    // An agent with a workspace invites a coordinator, never another agent; a coordinator invites agents as before.
+    const callerIsWorkspaceAgent = getEntitlements(user).kind === 'agent_workspace';
+    if (callerIsWorkspaceAgent || body.inviteeRole === 'tc') {
+      if (!callerIsWorkspaceAgent) {
+        return NextResponse.json({ error: 'Only an agent with a workspace invites a coordinator' }, { status: 403 });
+      }
+      // "Resend invitation": the same email again for an invitation still waiting. Three a day per coordinator address, per deal.
+      if (body.resend === true) {
+        if (!(await checkRateLimit(`tc-invite-resend:${user.id}:${transactionId}:${email}`, 3, 86400))) {
+          return NextResponse.json({ error: 'That invitation was already sent again a few times today. Please wait and try tomorrow.' }, { status: 429 });
+        }
+        const resent = await resendTcInvite({ transaction, user, appUrl: request.nextUrl.origin, email, usesRelay: body.usesRelay !== false });
+        if (resent === 'not_pending') return NextResponse.json({ error: 'There is no waiting invitation for that address on this deal.' }, { status: 404 });
+        if (resent === 'email_failed') return NextResponse.json({ error: 'The email could not be sent. Please try again in a few minutes.' }, { status: 502 });
+        if (resent !== 'sent') return NextResponse.json({ error: 'Failed to send the invitation again' }, { status: 500 });
+        return NextResponse.json({ status: 'resent', email, inviteEmailSent: true });
+      }
+      const outcome = await inviteTcToTransaction({ transaction, user, appUrl: request.nextUrl.origin, email, usesRelay: body.usesRelay !== false });
+      if (outcome === 'already') {
+        return NextResponse.json({ error: 'This person has already been invited to this transaction.' }, { status: 400 });
+      }
+      if (outcome === 'agent_account') {
+        return NextResponse.json({ error: 'That email belongs to an agent account. Invite a coordinator here.' }, { status: 400 });
+      }
+      // The invitation is saved (it shows as waiting, and Resend invitation works) but the email did not go out.
+      if (outcome === 'email_failed') {
+        return NextResponse.json({ status: 'invited', email, inviteEmailSent: false });
+      }
+      if (outcome !== 'sent') {
+        return NextResponse.json({ error: 'Failed to send invite' }, { status: 500 });
+      }
+      return NextResponse.json({ status: 'invited', email, inviteEmailSent: true });
+    }
+
     // Block re-inviting the same email to the same transaction outright,
     // rather than silently refreshing the existing row -- an accepted
     // invite means they're already on the deal, and a still-pending one
@@ -133,7 +201,7 @@ export async function POST(request: NextRequest) {
     // The row, the agent's login and the email are handled together (see inviteAgentToTransaction); the email links to a
     // fixed page that never expires. An email that already belongs to a non-agent account (a TC, say) is still invited:
     // that account is only made an agent when its owner accepts (api/agent-invites/accept).
-    const outcome = await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, email });
+    const outcome = await inviteAgentToTransaction({ transaction, user, appUrl: request.nextUrl.origin, email, usesRelay: body.usesRelay === true });
     const inviteEmailSent = outcome === 'sent';
 
     return NextResponse.json({ status: 'invited', email, inviteEmailSent });

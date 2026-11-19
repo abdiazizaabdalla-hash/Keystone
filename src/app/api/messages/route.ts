@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser, assertAgentOnTransaction } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
+import { authorizeDeal } from '@/lib/authorize';
+import { getDealPeople, messageSide } from '@/lib/dealPeople';
 import { sendNewMessageEmail } from '@/lib/agentPortalEmails';
 import { queueDealNotification } from '@/lib/notifications';
 
@@ -11,30 +13,16 @@ import { queueDealNotification } from '@/lib/notifications';
 // direct conversation between the TC who owns the deal and the agent(s)
 // on it, not something every teammate should be dropped into. Agents are
 // scoped the normal way, via transaction_agents.
-async function assertCanMessage(transactionId: string, userId: string, isAdmin: boolean, isAgent: boolean) {
-  if (isAgent) {
-    await assertAgentOnTransaction(transactionId, userId);
-    return;
-  }
-  if (isAdmin) return;
-
-  const { data: transaction, error } = await supabaseServer
-    .from('transactions')
-    .select('agent_id')
-    .eq('id', transactionId)
-    .single();
-  if (error || !transaction) {
-    throw new AuthError('Transaction not found', 404);
-  }
-  const { data: agent } = await supabaseServer
-    .from('agents')
-    .select('id')
-    .eq('id', transaction.agent_id)
-    .eq('tc_user_id', userId)
-    .single();
-  if (!agent) {
-    throw new AuthError('You do not have permission to message on this transaction', 403);
-  }
+async function assertCanMessage(
+  transactionId: string,
+  user: { id: string; app_metadata?: Record<string, unknown> | null },
+  isAdmin: boolean
+) {
+  await authorizeDeal(user, isAdmin, transactionId, {
+    scope: 'owner',
+    collaborators: true,
+    deniedMessage: 'You do not have permission to message on this transaction',
+  });
 }
 
 const ATTACHMENT_BUCKET = 'transaction-documents';
@@ -48,8 +36,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'transactionId is required' }, { status: 400 });
     }
 
-    const callerIsAgent = isAgentUser(user);
-    await assertCanMessage(transactionId, user.id, isAdmin, callerIsAgent);
+    await assertCanMessage(transactionId, user, isAdmin);
 
     const { data: messages, error } = await supabaseServer
       .from('messages')
@@ -123,8 +110,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Message is too long (4000 characters max)' }, { status: 400 });
     }
 
-    const callerIsAgent = isAgentUser(user);
-    await assertCanMessage(transactionId, user.id, isAdmin, callerIsAgent);
+    const callerIsAgent = messageSide(user, isAdmin) === 'agent';
+    await assertCanMessage(transactionId, user, isAdmin);
 
     // Confirm the attached document is actually already on this same
     // transaction -- it was uploaded through POST /api/documents first
@@ -220,7 +207,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const { user, isAdmin } = await getUserFromRequest(request);
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Not permitted' }, { status: 403 });
     }
 
@@ -242,7 +229,7 @@ export async function PATCH(request: NextRequest) {
 
     // Same ownership check as assertCanMessage's TC branch -- the caller
     // must own the transaction (or be an admin), never just any TC.
-    await assertCanMessage(existing.transaction_id, user.id, isAdmin, false);
+    await assertCanMessage(existing.transaction_id, user, isAdmin);
 
     const { data: updated, error: updateError } = await supabaseServer
       .from('messages')
@@ -277,12 +264,8 @@ async function notifyOtherParty(
   appUrl: string,
   newMessageId: string
 ) {
-  const { data: transaction } = await supabaseServer
-    .from('transactions')
-    .select('agent_id, property_address')
-    .eq('id', transactionId)
-    .single();
-  if (!transaction) return;
+  const { people, address } = await getDealPeople(transactionId);
+  if (people.length === 0) return;
 
   const { data: priorMessage } = await supabaseServer
     .from('messages')
@@ -298,46 +281,17 @@ async function notifyOtherParty(
   }
 
   const senderLabel = sender.user_metadata?.full_name || sender.email || (senderIsAgent ? 'The agent' : 'Your TC');
-  const portalUrl = senderIsAgent
-    ? `${appUrl}/dashboard/transactions/${transactionId}`
-    : `${appUrl}/agent/transactions/${transactionId}`;
-
-  let recipients: string[] = [];
-  if (senderIsAgent) {
-    // Agent sent it -- notify the TC.
-    const { data: agentRecord } = await supabaseServer
-      .from('agents')
-      .select('tc_user_id')
-      .eq('id', transaction.agent_id)
-      .maybeSingle();
-    if (agentRecord?.tc_user_id) {
-      const { data } = await supabaseServer.auth.admin.getUserById(agentRecord.tc_user_id);
-      if (data.user?.email) recipients = [data.user.email];
-    }
-  } else {
-    // TC sent it -- notify every agent who's accepted access to this deal.
-    const { data: grants } = await supabaseServer
-      .from('transaction_agents')
-      .select('agent_user_id')
-      .eq('transaction_id', transactionId);
-    recipients = (
-      await Promise.all(
-        (grants || []).map(async (g) => {
-          const { data } = await supabaseServer.auth.admin.getUserById(g.agent_user_id);
-          return data.user?.email || null;
-        })
-      )
-    ).filter((email): email is string => Boolean(email));
-  }
+  // The other side hears about it: the coordinator side when an agent wrote, the agent side when a coordinator did.
+  const recipients = people.filter((p) => p.userId !== sender.id && p.email && p.side === (senderIsAgent ? 'tc' : 'agent'));
 
   await Promise.all(
-    recipients.map((toEmail) =>
+    recipients.map((p) =>
       sendNewMessageEmail({
-        toEmail,
+        toEmail: p.email as string,
         senderLabel,
-        propertyAddress: transaction.property_address || null,
+        propertyAddress: address,
         preview: text,
-        portalUrl,
+        portalUrl: p.portal === 'agent' ? `${appUrl}/agent/transactions/${transactionId}` : `${appUrl}/dashboard/transactions/${transactionId}`,
       })
     )
   );

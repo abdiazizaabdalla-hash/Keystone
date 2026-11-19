@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { clearSession } from '@/lib/authClient';
+import { clearSession, fetchHasWorkspace } from '@/lib/authClient';
 import NotificationBell from '@/components/NotificationBell';
+import ToastHost from '@/components/ToastHost';
 
 // Lightweight mirror of the TC sidebar (dashboard/layout.tsx) -- just
 // destinations an agent actually has (deals, messages, invoices, settings),
@@ -50,6 +51,33 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   const [collapsed, setCollapsed] = useState(false);
   // Phones only: the sidebar becomes a slide-down menu behind a top bar.
   const [mobileOpen, setMobileOpen] = useState(false);
+  // An agent the admin gave a workspace to gets a way back to it from the shared-deals portal.
+  const [hasWorkspace, setHasWorkspace] = useState(false);
+  // Logged-in screens run a little more zoomed out than the public site.
+  useEffect(() => {
+    const root = document.documentElement;
+    const before = root.style.fontSize;
+    root.style.fontSize = '80%';
+    return () => { root.style.fontSize = before; };
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    fetchHasWorkspace().then((has) => {
+      if (cancelled) return;
+      setHasWorkspace(has);
+      // /agent is the view for FREE agent logins. An agent with their own workspace (paid or granted) works in /dashboard,
+      // where deals they were added to sit in their normal list with a "Shared" badge. Send them there from any portal page
+      // (the login, accept and welcome steps are left alone), keeping the listing or deal when we can.
+      const path = window.location.pathname;
+      if (!has || BARE_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`))) return;
+      const listing = path.match(/^\/agent\/listings(?:\/([^/]+))?/);
+      const deal = path.match(/^\/agent\/transactions\/([^/]+)/);
+      router.replace(listing ? (listing[1] ? `/dashboard/listings/${listing[1]}` : '/dashboard/listings') : deal ? `/dashboard/transactions/${deal[1]}` : '/dashboard');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   useEffect(() => {
     const initCollapsed = async () => {
@@ -84,6 +112,9 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
   if (BARE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return <>{children}</>;
   }
+
+  // A paid/granted agent is being sent to their workspace: show nothing instead of the free portal.
+  if (hasWorkspace) return null;
 
   const isMessages = pathname === '/agent/messages';
   const isInvoices = pathname.startsWith('/agent/invoices');
@@ -128,6 +159,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
         {mobileOpen && (
           <div className="absolute left-0 right-0 top-full bg-slate-800 border-b border-slate-700 shadow-xl px-3 pb-3 space-y-1">
             {[
+              ...(hasWorkspace ? [{ href: '/dashboard', label: 'My workspace', active: false }] : []),
               { href: '/agent', label: 'Dashboard', active: isDeals },
               { href: '/agent/transactions', label: 'Transactions', active: isTransactions },
               { href: '/agent/listings', label: 'Listings', active: isListings },
@@ -160,7 +192,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
       {/* Sidebar (tablet and desktop) */}
       <div
         className={`${
-          collapsed ? 'w-20' : 'w-56'
+          collapsed ? 'w-14' : 'w-44'
         } shrink-0 h-full bg-gradient-to-b from-slate-800 to-slate-900 border-r border-slate-700 hidden md:flex flex-col transition-all duration-200`}
       >
         <div
@@ -201,6 +233,19 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
         )}
 
         <nav className={`flex-1 min-h-0 overflow-y-auto py-6 space-y-2 ${collapsed ? 'px-2' : 'px-3'}`}>
+          {hasWorkspace && (
+            <SideLink
+              href="/dashboard"
+              label="My workspace"
+              collapsed={collapsed}
+              active={false}
+              icon={
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10l9-7 9 7v10a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1V10z" />
+                </svg>
+              }
+            />
+          )}
           <SideLink
             href="/agent"
             label="Dashboard"
@@ -286,7 +331,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
         </nav>
 
         <div className={`border-t border-slate-700 ${collapsed ? 'p-2' : 'p-4'}`}>
-          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={14} />
+          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={11} />
           <button
             onClick={handleLogout}
             title={collapsed ? 'Logout' : undefined}
@@ -301,6 +346,7 @@ export default function AgentLayout({ children }: { children: React.ReactNode })
 
       {/* Main Content */}
       <div className="flex-1 min-w-0 overflow-auto">{children}</div>
+      <ToastHost />
     </div>
   );
 }

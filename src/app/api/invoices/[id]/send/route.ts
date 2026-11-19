@@ -1,3 +1,4 @@
+import { loadLogo } from '@/lib/brandLogo';
 import { NextRequest, NextResponse } from 'next/server';
 import JSZip from 'jszip';
 import { supabaseServer } from '@/lib/supabase';
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const tc = await loadTcInfo(agent.tc_user_id);
     const origin = new URL(request.url).origin;
     const payUrl = await getInvoicePayUrlForDocument({ invoice, tcUserId: agent.tc_user_id, origin });
-    const pdfBuffer = await generateInvoicePdf(invoice, agent, transaction, tc, payUrl);
+    const pdfBuffer = await generateInvoicePdf(invoice, agent, transaction, tc, payUrl, await loadLogo(agent.tc_user_id));
 
     // Build a zip of every document so far uploaded for this transaction.
     const zip = new JSZip();
@@ -143,17 +144,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const html = `
       <div style="font-family: Georgia, serif; color: #1a1a1a; max-width: 560px; margin: 0 auto;">
         <p>Hi ${escapeHtml(agent.name.split(' ')[0] || agent.name)},</p>
-        <p>${message ? escapeHtml(message).replace(/\n/g, '<br/>') : `Attached is your invoice for ${escapeHtml(transaction.property_address)}, along with the completed transaction documents.`}</p>
+        <p>${message ? escapeHtml(message).replace(/\n/g, '<br/>') : transaction.isListing ? `Attached is your invoice for listing ${escapeHtml(transaction.property_address)}.` : `Attached is your invoice for ${escapeHtml(transaction.property_address)}, along with the completed transaction documents.`}</p>
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
           <tr><td style="padding: 6px 0; color: #666;">Invoice</td><td style="padding: 6px 0; text-align: right;">${escapeHtml(invoice.invoice_number)}</td></tr>
           <tr><td style="padding: 6px 0; color: #666;">Property</td><td style="padding: 6px 0; text-align: right;">${escapeHtml(transaction.property_address)}</td></tr>
-          <tr><td style="padding: 6px 0; color: #666;">File #</td><td style="padding: 6px 0; text-align: right;">${escapeHtml(transaction.file_number)}</td></tr>
+          ${transaction.isListing ? '' : `<tr><td style="padding: 6px 0; color: #666;">File #</td><td style="padding: 6px 0; text-align: right;">${escapeHtml(transaction.file_number)}</td></tr>`}
           <tr><td style="padding: 6px 0; color: #666;">Due Date</td><td style="padding: 6px 0; text-align: right;">${formatDisplayDate(invoice.due_date)}</td></tr>
           <tr><td style="padding: 10px 0; color: #1a1a1a; font-weight: bold; border-top: 1px solid #ddd;">Total Due</td><td style="padding: 10px 0; text-align: right; font-weight: bold; border-top: 1px solid #ddd;">${money(invoice.amount_owed)}</td></tr>
         </table>
+        ${payUrl ? `<p style="margin: 20px 0;"><a href="${payUrl}" style="background: #2563eb; color: #fff; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-weight: bold;">Pay ${money(invoice.amount_owed)} online</a></p><p style="color: #666; font-size: 13px;">Pay by card or bank transfer. No account needed.</p>` : ''}
         <p>The invoice PDF is attached${zipBuffer && !zipDownloadUrl ? ', along with a zip of every document uploaded for this transaction.' : '.'}</p>
         ${zipDownloadUrl ? `<p>The document set was too large to attach directly — you can download it here (link expires in 7 days): <a href="${zipDownloadUrl}">${zipDownloadUrl}</a></p>` : ''}
-        ${!hasDocuments ? '<p>No documents have been uploaded for this transaction yet.</p>' : ''}
+        ${!hasDocuments && !transaction.isListing ? '<p>No documents have been uploaded for this transaction yet.</p>' : ''}
         ${failedDocs.length ? `<p style="color: #b45309;">Note: ${failedDocs.length} file(s) could not be attached (${escapeHtml(failedDocs.join(', '))}).</p>` : ''}
         <p>Thanks,<br/>${escapeHtml(tc.name)}</p>
       </div>

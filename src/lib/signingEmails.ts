@@ -1,4 +1,4 @@
-import { getResendClient, INVOICE_FROM_EMAIL } from '@/lib/resendClient';
+import { getResendClient, INVOICE_FROM_EMAIL, throwIfSendFailed } from '@/lib/resendClient';
 import { escapeHtml } from '@/lib/escapeHtml';
 
 // The "please sign this" email -- sent when a request is created (to the
@@ -23,7 +23,7 @@ export async function sendSigningRequestEmail(input: {
     input.position && input.position.total > 1
       ? `<p style="font-size: 13px; color: #666;">You are signer ${input.position.index} of ${input.position.total}.</p>`
       : '';
-  await resend.emails.send({
+  throwIfSendFailed(await resend.emails.send({
     from: INVOICE_FROM_EMAIL,
     to: input.to,
     subject: `Signature requested: ${input.fileName}`,
@@ -37,5 +37,5 @@ export async function sendSigningRequestEmail(input: {
         <p style="font-size: 13px; color: #666;">Or paste this link into your browser: ${input.signUrl}</p>
       </div>
     `,
-  });
+  }));
 }

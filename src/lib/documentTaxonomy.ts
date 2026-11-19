@@ -127,3 +127,10 @@ export function categoryLabel(key: string | null | undefined): string {
 export function typesForCategory(key: string): string[] {
   return DOCUMENT_CATEGORIES.find((c) => c.key === key)?.types || [];
 }
+
+/** A valid [category, type] pair for a stored (maybe missing or stale) category and type; falls back to General. */
+export function resolveDocumentPlacement(categoryKey: unknown, type: unknown): { category: string; documentType: string } {
+  const key = typeof categoryKey === 'string' && isValidCategory(categoryKey) ? categoryKey : DEFAULT_CATEGORY_KEY;
+  if (typeof type === 'string' && isValidDocumentType(key, type)) return { category: key, documentType: type };
+  return { category: key, documentType: typesForCategory(key)[0] ?? DEFAULT_DOCUMENT_TYPE };
+}

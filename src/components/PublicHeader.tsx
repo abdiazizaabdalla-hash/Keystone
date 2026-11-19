@@ -1,23 +1,24 @@
 import Link from 'next/link';
 import PublicMobileMenu from '@/components/PublicMobileMenu';
+import DemoRequestButton from '@/components/DemoRequestButton';
 
 export const PUBLIC_NAV = [
-  { href: '/pricing', label: 'Pricing' },
-  { href: '/faq', label: 'FAQ' },
   { href: '/for-agents', label: 'For Agents' },
   { href: '/for-tcs', label: 'For TCs' },
-  { href: '/for-teams', label: 'For Teams' },
+  { href: '/for-brokerages', label: 'For Brokerages' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: '/faq', label: 'FAQ' },
 ] as const;
 
 export default function PublicHeader({ active }: { active?: string }) {
   return (
-    <header className="border-b border-slate-700">
+    <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-900/90 backdrop-blur">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <PublicMobileMenu />
           <Link href="/" className="flex items-center gap-2">
             <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-              <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
+              <img src="/relay-icon.png" alt="Relay" className="w-full h-full object-contain" />
             </span>
           </Link>
         </div>
@@ -34,11 +35,12 @@ export default function PublicHeader({ active }: { active?: string }) {
             href="/agent/login"
             className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
           >
-            Agent Login
+            Portal Login
           </Link>
+          <DemoRequestButton className="hidden xl:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap" label="Book a demo" />
           <Link href="/auth" className="hidden sm:inline text-sm text-slate-300 hover:text-slate-100 transition whitespace-nowrap">Sign In</Link>
           <Link
-            href="/auth?mode=signup&plan=starter"
+            href="/get-started"
             className="px-3 sm:px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition whitespace-nowrap"
           >
             Get started

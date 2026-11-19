@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isFullParticipant } from '@/lib/authorize';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 
 // PATCH /api/transactions/[id]/client-steps -- body { visibleTaskIds: string[] }.
 // Sets which checklist steps the client sees on their progress link.
@@ -14,7 +15,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     await assertTrialActive(user);
     const { id: transactionId } = await params;
 
-    if (isAgentUser(user)) {
+    if (isCollaboratorOnly(user)) {
       return NextResponse.json({ error: 'Not available on the agent portal' }, { status: 403 });
     }
 
@@ -33,7 +34,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .eq('id', transaction.agent_id)
         .eq('tc_user_id', user.id)
         .single();
-      if (!agent) {
+      if (!agent && !(await isFullParticipant(user.id, transactionId))) {
         return NextResponse.json({ error: 'You do not have permission to edit this' }, { status: 403 });
       }
     }

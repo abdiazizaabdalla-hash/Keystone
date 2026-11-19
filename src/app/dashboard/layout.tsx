@@ -1,14 +1,22 @@
 'use client';
 
+import ApprovalPopup from '@/components/ApprovalPopup';
+import ListingAddedNotice from '@/components/ListingAddedNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getValidToken, clearSession, authFetch } from '@/lib/authClient';
 import NotificationBell from '@/components/NotificationBell';
+import ToastHost from '@/components/ToastHost';
+import BrokerageWelcome, { resetBrokerageTour } from '@/components/BrokerageWelcome';
 import FirstRunGuide, { saveFirstRunGuideDone, resetFirstRunGuideLocal, type GuideKind } from '@/components/FirstRunGuide';
 import PageHint from '@/components/PageHint';
 import { isTeamPlan } from '@/lib/plans';
+import { isFeatureOnClient } from '@/lib/features';
 import { savePersona } from '@/lib/persona';
+import { useBrokerageOwner, useTeamOwner } from '@/lib/useBrokerageOwner';
+import { useBrokerageOperator } from '@/lib/useBrokerageOperator';
+import { useBrokerageAdminAccess } from '@/lib/useBrokerageAdminAccess';
 
 // Collapsed sidebar is icon-only -- narrow enough to stay useful on small
 // screens without hiding navigation entirely. Expanded shows icon + label.
@@ -65,9 +73,29 @@ const NAV_ICONS: Record<string, React.ReactNode> = {
       <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
     </svg>
   ),
+  automations: (
+    <svg className={ICON_CLS} fill="currentColor" viewBox="0 0 20 20">
+      <path fillRule="evenodd" d="M11.3 1.05a1 1 0 01.64 1.1L11.3 8H16a1 1 0 01.78 1.63l-7 9a1 1 0 01-1.78-.85L8.7 12H4a1 1 0 01-.78-1.63l7-9a1 1 0 011.08-.32z" clipRule="evenodd" />
+    </svg>
+  ),
+  templates: (
+    <svg className={ICON_CLS} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M4 3a2 2 0 00-2 2v2h16V5a2 2 0 00-2-2H4zM2 9v6a2 2 0 002 2h4V9H2zm8 0v8h6a2 2 0 002-2V9h-8z" />
+    </svg>
+  ),
   settings: (
     <svg className={ICON_CLS} fill="currentColor" viewBox="0 0 20 20">
       <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+    </svg>
+  ),
+  compliance: (
+    <svg className={ICON_CLS} fill="currentColor" viewBox="0 0 20 20">
+      <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm6.707 7.707a1 1 0 00-1.414-1.414L9 10.586 8.207 9.793a1 1 0 00-1.414 1.414l1.5 1.5a1 1 0 001.414 0l3-3z" clipRule="evenodd" />
+    </svg>
+  ),
+  reports: (
+    <svg className={ICON_CLS} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
     </svg>
   ),
   collaborate: (
@@ -96,6 +124,7 @@ const PRIMARY_NAV = [
   { href: '/dashboard/calendar', label: 'Calendar', icon: 'calendar' },
   { href: '/dashboard/messages', label: 'Messages', icon: 'messages' },
   { href: '/dashboard/invoices', label: 'Invoices', icon: 'invoices' },
+  { href: '/dashboard/automations', label: 'Automations', icon: 'automations' },
 ] as const;
 
 function isActivePath(pathname: string | null, href: string) {
@@ -133,7 +162,7 @@ function NavLink({
       title={collapsed ? label : undefined}
       aria-current={active ? 'page' : undefined}
       className={`relative flex items-center rounded-xl transition font-medium ${
-        collapsed ? 'justify-center px-0 py-2.5 short:py-2 tiny:py-1' : 'gap-3 px-4 py-2.5 short:py-2 tiny:py-1'
+        collapsed ? 'justify-center px-0 py-2 short:py-1.5 tiny:py-1' : 'gap-2.5 px-3 py-2 short:py-1.5 tiny:py-1'
       } ${colors}`}
     >
       {icon}
@@ -158,22 +187,36 @@ export default function DashboardLayout({
   const [isLoading, setIsLoading] = useState(true);
   const [userName, setUserName] = useState('');
   const [plan, setPlan] = useState<string | null>(null);
+  const [automationAllowed, setAutomationAllowed] = useState(false);
   // Presentation only (see lib/accountType.ts): an agent running their own deals does not see coordinator-only items.
   const [isAgentAccount, setIsAgentAccount] = useState(false);
+  // An agent with their own workspace keeps the Invoices tab (their own invoices, not the coordinator's).
+  const [hasWorkspace, setHasWorkspace] = useState(false);
+  // An agent inside a brokerage has no plan of their own to show or upgrade; only the broker sees the plan.
+  const [fromBrokerage, setFromBrokerage] = useState(false);
+  // The brokerage's plan has ended: this workspace is read-only (the server enforces it; this only explains it).
+  const [readOnly, setReadOnly] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [starterPaid, setStarterPaid] = useState(false);
   const [trial, setTrial] = useState<{
     applies: boolean;
     trialEndsAt: string | null;
     expired: boolean;
     endedBy: 'time' | null;
     daysLeft: number | null;
+    // Set when an admin gave a paid plan free until a date (so the banner names that plan and its price).
+    plan?: string;
+    planName?: string;
+    price?: string;
   } | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   // Phones only: the sidebar is replaced by a top bar with a slide-down menu.
   const [mobileOpen, setMobileOpen] = useState(false);
-  // Unread team messages (Team/Brokerage plans) -- shown on the Collaborate link.
+  // Unread team messages (Team/Brokerage plans) -- shown on the Collaborate link, or on Messages for a broker and for brokerage agents.
   const [teamUnread, setTeamUnread] = useState(0);
+  // Unread private broker and agent messages (the brokerage feature only).
+  const [privateUnread, setPrivateUnread] = useState(0);
   // New-account first-run guide (see components/FirstRunGuide.tsx). restartKey
   // is bumped by the "Tutorial" menu entry to bring the welcome screen back.
   const [guides, setGuides] = useState<Record<GuideKind, boolean>>({ transaction: false, listing: false });
@@ -202,6 +245,7 @@ export default function DashboardLayout({
 
   const startGuide = (kind: GuideKind) => {
     resetFirstRunGuideLocal(kind);
+    resetBrokerageTour();
     setTutorialMenuOpen(false);
     setMobileOpen(false);
     setGuides((prev) => ({ ...prev, [kind]: true }));
@@ -218,7 +262,7 @@ export default function DashboardLayout({
   };
 
   useEffect(() => {
-    if (!isTeamPlan(plan)) return;
+    if (!isTeamPlan(plan) && !(isFeatureOnClient('brokerage') && isAgentAccount && hasWorkspace)) return;
     let cancelled = false;
     const load = async () => {
       if (document.visibilityState !== 'visible') return;
@@ -227,6 +271,13 @@ export default function DashboardLayout({
         if (!res.ok || cancelled) return;
         const json = await res.json();
         setTeamUnread(typeof json.total === 'number' ? json.total : 0);
+        if (isFeatureOnClient('brokerage')) {
+          const pm = await authFetch('/api/brokerage-messages');
+          if (pm.ok && !cancelled) {
+            const pj = await pm.json();
+            setPrivateUnread(typeof pj.unread === 'number' ? pj.unread : 0);
+          }
+        }
       } catch {
         // Non-critical -- the badge just doesn't update.
       }
@@ -239,7 +290,7 @@ export default function DashboardLayout({
       window.clearInterval(id);
       window.removeEventListener('team-chat-read', load);
     };
-  }, [plan]);
+  }, [plan, isAgentAccount, hasWorkspace]);
 
   // Default to collapsed on small screens (phones/narrow tablets) so the
   // nav doesn't eat most of the viewport, but respect an explicit choice
@@ -312,9 +363,19 @@ export default function DashboardLayout({
             return;
           }
           setPlan(data.plan || 'starter');
+          setAutomationAllowed(data.automationAllowed === true);
           setIsAgentAccount(data.accountType === 'agent');
-          savePersona({ accountType: data.accountType === 'agent' ? 'agent' : 'tc', coordinationMode: data.coordinationMode ?? null });
+          // An agent has no agents list or agent profiles to manage (they are the agent); send them back if they land there.
+          if ((data.accountType === 'agent' || data.agentWorkspace) && window.location.pathname.startsWith('/dashboard/agents')) {
+            router.replace('/dashboard');
+            return;
+          }
+          savePersona({ accountType: data.accountType === 'agent' ? 'agent' : 'tc', coordinationMode: data.coordinationMode ?? null, workspace: Boolean(data.agentWorkspace) });
+          setHasWorkspace(Boolean(data.agentWorkspace));
+          setFromBrokerage(data.agentLevel === 'basic' || data.inBrokerage === true);
+          setReadOnly(data.readOnly === true);
           setTrial(data.trial || null);
+          setStarterPaid(data.starterPaid === true);
           setUserName(data.fullName || data.email || '');
           setIsAdmin(Boolean(data.is_admin));
           const g = {
@@ -352,7 +413,7 @@ export default function DashboardLayout({
       const res = await authFetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: 'starter' }),
+        body: JSON.stringify({ plan: trial?.plan || 'starter' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to start checkout');
@@ -362,17 +423,69 @@ export default function DashboardLayout({
     }
   };
 
-  const primaryNav = isAgentAccount ? PRIMARY_NAV.filter((i) => i.href !== '/dashboard/invoices') : PRIMARY_NAV;
+  // Brokers manage their agents from Collaborate, so the separate Agents page is for coordinators and independent agents' coordinators only.
+  // While we are still finding out who owns a team plan, hide it for team-plan users rather than flash it.
+  const brokerOwner = useBrokerageOwner();
+  const brokerageAdmin = useBrokerageAdminAccess();
+  const brokerOperator = useBrokerageOperator();
+  const teamOwner = useTeamOwner();
+  const showAgentsNav = !isAgentAccount && brokerOwner !== true && !(brokerOwner === null && isFeatureOnClient('brokerage') && isTeamPlan(plan));
+  // Agents in a brokerage use the same Collaborate hub as their broker (no separate Brokerage page).
+  const agentCollaborate = isFeatureOnClient('brokerage') && isAgentAccount && hasWorkspace;
 
-  const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
+  // A broker and agents in a brokerage read everything under Messages, so the unread count sits there and not on Collaborate.
+  const messagesBadge = isFeatureOnClient('brokerage') && (brokerOwner === true || agentCollaborate);
+  const messagesUnread = messagesBadge ? teamUnread + privateUnread : 0;
+  const collaborateUnread = messagesBadge ? 0 : teamUnread;
+
+  // Automations is last, and only where the feature is on and the account can use it (not a free or Basic agent login).
+  // A broker (or an administrator they added) also gets Compliance and Reports, right after the everyday pages.
+  const brokerDesk = brokerOwner === true || brokerageAdmin?.delegated === true || teamOwner === true;
+  const baseNav: { href: string; label: string; icon: string }[] = PRIMARY_NAV.filter((i) => {
+    if (i.href === '/dashboard/invoices') return !(isAgentAccount && !hasWorkspace);
+    // A broker's Automations are the brokerage's own rules, so they do not depend on the agent automation feature.
+    if (i.href === '/dashboard/automations' && (brokerOperator === true || teamOwner === true)) return true;
+    if (i.href === '/dashboard/automations') return isFeatureOnClient('automation') && automationAllowed && !(isAgentAccount && !hasWorkspace);
+    return true;
+  });
+  // Layout: the sidebar holds the day-to-day work on a deal (Home to Invoices, plus Contacts). The top banner holds how the
+  // office is run (desk, reports, automations, templates, people) with search, notifications and the account menu at its right.
+  const sideItems: { href: string; label: string; icon: string }[] = [
+    ...baseNav.filter((i) => i.href !== '/dashboard/automations'),
     { href: '/dashboard/contacts', label: 'Contacts', icon: 'contacts' },
-    ...(isAgentAccount ? [] : [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }]),
+  ];
+  const bannerItems: { href: string; label: string; icon: string; badge?: number }[] = [
+    ...(brokerDesk
+      ? [
+          { href: '/dashboard/compliance', label: teamOwner === true ? 'Team desk' : 'Compliance', icon: 'compliance' },
+          { href: '/dashboard/reports', label: 'Reports', icon: 'reports' },
+        ]
+      : []),
+    ...baseNav.filter((i) => i.href === '/dashboard/automations'),
+    ...(isFeatureOnClient('templates') && !(isAgentAccount && !hasWorkspace) ? [{ href: '/dashboard/templates', label: 'Templates', icon: 'templates' }] : []),
+    ...(isTeamPlan(plan) || agentCollaborate ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: collaborateUnread }] : []),
+    ...(showAgentsNav ? [{ href: '/dashboard/agents', label: 'Agents', icon: 'agents' }] : []),
+    ...(brokerageAdmin?.delegated ? [{ href: '/dashboard/brokerage-admin', label: 'Brokerage agents', icon: 'collaborate' }] : []),
+  ];
+  const moreItems: { href: string; label: string; icon: string; badge?: number }[] = [
     { href: '/dashboard/search', label: 'Search', icon: 'search' },
-    ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: 'Collaborate', icon: 'collaborate', badge: teamUnread }] : []),
     { href: '/dashboard/settings', label: 'Settings', icon: 'settings' },
     { href: '/dashboard/account', label: 'Account', icon: 'account' },
     ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin', icon: 'admin' }] : []),
   ];
+
+  // Only a paid tier (Pro / Team) is ever named on screen, and never on an agent inside a brokerage.
+  const showPlanChip = Boolean(plan) && plan !== 'starter' && !fromBrokerage;
+  // A brokerage's own account (owner or managing account) is labelled Brokerage, never Team.
+  const chipLabel = brokerOwner === true || brokerageAdmin?.delegated === true || plan === 'brokerage' ? 'Brokerage' : plan ?? '';
+
+  // Logged-in screens run a little more zoomed out than the public site, so there is room for the work.
+  useEffect(() => {
+    const root = document.documentElement;
+    const before = root.style.fontSize;
+    root.style.fontSize = '80%';
+    return () => { root.style.fontSize = before; };
+  }, []);
 
   if (isLoading) {
     return (
@@ -394,15 +507,9 @@ export default function DashboardLayout({
             <span className="w-8 h-8 bg-white rounded-lg flex items-center justify-center p-1">
               <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
             </span>
-            <span className="text-white font-display font-semibold">Relay TC{plan && (
-              <span
-                className={`ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${
-                  plan === 'starter'
-                    ? 'bg-slate-700/60 text-slate-300 border-slate-600'
-                    : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
-                }`}
-              >
-                {plan}
+            <span className="text-white font-display font-semibold">Relay TC{showPlanChip && (
+              <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40">
+                {chipLabel}
               </span>
             )}</span>
           </Link>
@@ -428,11 +535,9 @@ export default function DashboardLayout({
         {mobileOpen && (
           <div className="absolute left-0 right-0 top-full max-h-[calc(100vh-56px)] overflow-y-auto bg-slate-900 border-b border-white/10 shadow-xl px-3 pb-3 space-y-1">
             {[
-              ...primaryNav.map((i) => ({ href: i.href, label: i.label })),
-              { href: '/dashboard/contacts', label: 'Contacts' },
-              ...(isAgentAccount ? [] : [{ href: '/dashboard/agents', label: 'Agents' }]),
+              ...sideItems.map((i) => ({ href: i.href, label: i.href === '/dashboard/messages' && messagesUnread > 0 ? `Messages (${messagesUnread})` : i.label })),
+              ...bannerItems.map((i) => ({ href: i.href, label: i.badge && i.badge > 0 ? `${i.label} (${i.badge})` : i.label })),
               { href: '/dashboard/search', label: 'Search' },
-              ...(isTeamPlan(plan) ? [{ href: '/dashboard/collaborate', label: teamUnread > 0 ? `Collaborate (${teamUnread})` : 'Collaborate' }] : []),
               { href: '/dashboard/settings', label: 'Settings' },
               { href: '/dashboard/account', label: plan ? `Account · ${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan` : 'Account' },
               ...(isAdmin ? [{ href: '/dashboard/admin', label: 'Admin' }] : []),
@@ -477,31 +582,25 @@ export default function DashboardLayout({
       {/* Sidebar (tablet and desktop) */}
       <div
         className={`${
-          collapsed ? 'w-20' : 'w-64'
+          collapsed ? 'w-14' : 'w-44'
         } shrink-0 h-full bg-slate-950/50 backdrop-blur border-r border-white/10 hidden md:flex flex-col transition-all duration-200`}
       >
         {/* Logo */}
         <div
           className={`border-b border-white/10 flex items-center ${
-            collapsed ? 'justify-center px-3 py-3' : 'justify-between px-4 py-3.5 tiny:py-2.5'
+            collapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-3 py-3 tiny:py-2'
           }`}
         >
           <Link href="/dashboard" className="flex items-center gap-3 min-w-0" title={collapsed ? 'Relay TC' : undefined}>
-            <span className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm shrink-0">
+            <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm shrink-0">
               <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
             </span>
             {!collapsed && (
               <div className="min-w-0">
-                <h1 className="text-white font-display font-semibold text-lg truncate">Relay TC</h1>
-                {plan && (
-                  <span
-                    className={`inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border ${
-                      plan === 'starter'
-                        ? 'bg-slate-700/60 text-slate-300 border-slate-600'
-                        : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
-                    }`}
-                  >
-                    {plan}
+                <h1 className="text-white font-display font-semibold text-base truncate">Relay TC</h1>
+                {showPlanChip && (
+                  <span className="inline-block mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/40">
+                    {chipLabel}
                   </span>
                 )}
               </div>
@@ -536,93 +635,97 @@ export default function DashboardLayout({
         )}
 
         {/* Navigation */}
-        <nav className={`flex-1 min-h-0 overflow-y-auto py-3 tiny:py-1.5 space-y-0.5 ${collapsed ? 'px-2' : 'px-3'}`}>
-          {primaryNav.map((item) => (
+        <nav className={`flex-1 min-h-0 overflow-y-auto py-2 tiny:py-1.5 space-y-0.5 ${collapsed ? 'px-1.5' : 'px-2'}`}>
+          {sideItems.map((item) => (
             <NavLink
               key={item.href}
               href={item.href}
               label={item.label}
               collapsed={collapsed}
               active={isActivePath(pathname, item.href)}
+              badge={item.href === '/dashboard/messages' ? messagesUnread : 0}
               icon={NAV_ICONS[item.icon]}
             />
           ))}
-
+          {bannerItems.length > 0 && (
+            <>
+              <div className="my-2 border-t border-white/10" />
+              {!collapsed && <p className="px-3 pt-1 pb-1 text-[10px] uppercase tracking-wider text-slate-500">Manage</p>}
+              {bannerItems.map((item) => (
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  label={item.label}
+                  collapsed={collapsed}
+                  active={isActivePath(pathname, item.href)}
+                  badge={item.badge ?? 0}
+                  icon={NAV_ICONS[item.icon]}
+                />
+              ))}
+            </>
+          )}
+          <div className="my-2 border-t border-white/10" />
           {moreItems.map((item) => (
-              <NavLink
-                key={item.href}
-                href={item.href}
-                label={item.label}
-                collapsed={collapsed}
-                active={isActivePath(pathname, item.href)}
-                tone={item.href === '/dashboard/admin' ? 'admin' : 'default'}
-                badge={'badge' in item ? item.badge : 0}
-                icon={NAV_ICONS[item.icon]}
-              />
-            ))}
+            <NavLink
+              key={item.href}
+              href={item.href}
+              label={item.label}
+              collapsed={collapsed}
+              active={isActivePath(pathname, item.href)}
+              tone={item.href === '/dashboard/admin' ? 'admin' : 'default'}
+              icon={NAV_ICONS[item.icon]}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => setTutorialMenuOpen(true)}
+            title={collapsed ? 'Tutorial' : 'Open a quick tutorial'}
+            className={`w-full flex items-center rounded-xl transition font-medium text-slate-300 hover:bg-white/5 hover:text-white ${collapsed ? 'justify-center px-0 py-2 short:py-1.5 tiny:py-1' : 'gap-2.5 px-3 py-2 short:py-1.5 tiny:py-1'}`}
+          >
+            <svg className={ICON_CLS} fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 20 20"><path strokeLinecap="round" strokeLinejoin="round" d="M10 5.5C8.6 4.4 6.5 4 3.5 4v11c3 0 5.1.4 6.5 1.5 1.4-1.1 3.5-1.5 6.5-1.5V4c-3 0-5.1.4-6.5 1.5zM10 5.5v11" /></svg>
+            {!collapsed && <span>Tutorial</span>}
+          </button>
         </nav>
 
-        {/* User Section */}
-        <div className={`border-t border-white/10 space-y-1.5 ${collapsed ? 'p-2' : 'p-3'}`}>
-          {userName && !collapsed && (
-            <div className="px-2 tiny:hidden">
-              <p className="text-sm font-semibold text-slate-100 truncate">{userName}</p>
-            </div>
+        <div className={`border-t border-white/10 space-y-1 ${collapsed ? 'p-1.5' : 'p-2.5'}`}>
+          {userName && !collapsed && <p className="px-2 text-xs font-semibold text-slate-200 truncate tiny:hidden">{userName}</p>}
+          {plan && !fromBrokerage && !collapsed && (
+            <p className="px-2 text-[11px] text-slate-400">
+              {showPlanChip ? <span className="text-slate-200 font-semibold capitalize">{chipLabel}</span> : starterPaid ? <span className="text-slate-200 font-semibold">Starter</span> : 'Free'} plan{' '}
+              <Link href="/dashboard/account" className="text-blue-400 hover:text-blue-300">{showPlanChip || starterPaid ? 'Manage' : 'Upgrade'}</Link>
+            </p>
           )}
-          {plan && !collapsed && (
-            <div className="flex items-center justify-between px-3 py-1.5 bg-slate-700/60 border border-slate-600 rounded-lg">
-              <span className="text-xs text-slate-400">
-                <span className="text-slate-200 font-semibold capitalize">{plan}</span> plan
-              </span>
-              <Link href="/dashboard/account" className="text-xs text-blue-400 hover:text-blue-300 font-medium">
-                {plan === 'starter' ? 'Upgrade' : 'Manage'}
-              </Link>
-            </div>
-          )}
-          {plan && collapsed && (
-            <Link
-              href="/dashboard/account"
-              title={`${plan} plan -- ${plan === 'starter' ? 'Upgrade' : 'Manage'}`}
-              className="flex items-center justify-center py-2 bg-slate-700/60 border border-slate-600 rounded-lg text-xs text-slate-200 font-semibold uppercase"
-            >
-              {plan.charAt(0)}
-            </Link>
-          )}
-          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={16} />
-          <button
-            onClick={() => setTutorialMenuOpen(true)}
-            title="Open a quick tutorial"
-            className={`w-full flex items-center justify-center text-slate-400 hover:bg-white/5 hover:text-slate-200 rounded-lg transition text-sm py-1.5 ${
-              collapsed ? 'px-0' : 'px-4'
-            }`}
-          >
-            {collapsed ? '?' : 'Tutorial'}
-          </button>
+          <NotificationBell variant="sidebar" collapsed={collapsed} sidebarRem={11} />
           <button
             onClick={handleLogout}
             title={collapsed ? 'Logout' : undefined}
-            className={`w-full flex items-center justify-center text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition text-sm py-1.5 ${
-              collapsed ? 'px-0' : 'px-4'
-            }`}
+            className={`w-full flex items-center justify-center text-slate-300 hover:bg-red-900/30 hover:text-red-300 rounded-lg transition text-sm py-1.5 ${collapsed ? 'px-0' : 'px-4'}`}
           >
-            Logout
+            {collapsed ? '⏻' : 'Logout'}
           </button>
         </div>
+
       </div>
 
       {/* Main Content */}
       <div className="flex-1 min-w-0 overflow-auto">
+        {readOnly && (
+          <div className="px-6 py-3 bg-amber-900/30 border-b border-amber-700/60" role="status">
+            <p className="text-sm text-amber-100 font-semibold">Your workspace is read-only for now</p>
+            <p className="text-sm text-amber-200/90">Your brokerage&apos;s Relay plan has ended. Your deals, listings and messages are all still here and you can keep messaging, but you cannot add or change anything until your broker upgrades to Brokerage Pro.</p>
+          </div>
+        )}
         {trial?.applies && trial.expired && (
           <div className="px-6 py-3 bg-red-900/40 border-b border-red-700 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-red-200">
-              Your free Starter trial has ended. Add payment to keep creating and editing on Relay.
+              {trial.planName ? `Your free ${trial.planName} period has ended.` : 'Your free trial has ended.'} Add payment to keep creating and editing on Relay.
             </p>
             <button
               onClick={startStarterCheckout}
               disabled={startingCheckout}
               className="px-4 py-2 bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 whitespace-nowrap"
             >
-              {startingCheckout ? 'Redirecting…' : 'Add payment — $19/month'}
+              {startingCheckout ? 'Redirecting…' : `Add payment — ${trial?.price || '$19'}/month`}
             </button>
           </div>
         )}
@@ -630,18 +733,33 @@ export default function DashboardLayout({
           <div className="px-6 py-2.5 bg-blue-900/30 border-b border-blue-700/60 flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-blue-200">
               {trial.daysLeft === 0
-                ? 'Your free Starter trial ends today.'
-                : `Your free Starter trial ends in ${trial.daysLeft} day${trial.daysLeft === 1 ? '' : 's'}.`}{' '}
-              Then it&apos;s $19/month to keep going.
+                ? `Your free ${trial.planName ? `${trial.planName} period` : 'trial'} ends today.`
+                : `Your free ${trial.planName ? `${trial.planName} period` : 'trial'} ends in ${trial.daysLeft} day${trial.daysLeft === 1 ? '' : 's'}.`}{' '}
+              Then it&apos;s {trial.price || '$19'}/month to keep going.
             </p>
             <Link href="/dashboard/account" className="text-xs text-blue-300 hover:text-blue-200 font-medium whitespace-nowrap">
               Manage billing
             </Link>
           </div>
         )}
+        {isAgentAccount && hasWorkspace && isFeatureOnClient('agent_workspace') && <ListingAddedNotice />}
         {children}
+      <ToastHost />
       </div>
-      {guideKind && <FirstRunGuide key={`${guideKind}-${guideRestartKey}`} kind={guideKind} restartKey={guideRestartKey} onFinished={handleGuideFinished} onHintSeen={markHintSeen} />}
+      {isFeatureOnClient('automation') && automationAllowed && brokerOperator !== true && !(isAgentAccount && !hasWorkspace) && <ApprovalPopup />}
+      {guideKind && brokerOwner === true && (
+        <BrokerageWelcome
+          onClose={(done) => {
+            if (done) {
+              saveFirstRunGuideDone('transaction', true);
+              saveFirstRunGuideDone('listing', true);
+              setGuides({ transaction: false, listing: false });
+            }
+            setGuideKind(null);
+          }}
+        />
+      )}
+      {guideKind && brokerOwner === false && <FirstRunGuide key={`${guideKind}-${guideRestartKey}`} kind={guideKind} restartKey={guideRestartKey} onFinished={handleGuideFinished} onHintSeen={markHintSeen} />}
       {hintsEligible && <PageHint seen={seenHints} suspended={guideKind !== null || tutorialMenuOpen} onSeen={markHintSeen} />}
       {tutorialMenuOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Tutorials" onClick={() => setTutorialMenuOpen(false)}>
@@ -649,6 +767,13 @@ export default function DashboardLayout({
             <h2 className="text-lg font-display font-semibold text-slate-100 mb-1">Tutorials</h2>
             <p className="text-sm text-slate-400 mb-4">Walk through the real screens again, as many times as you like.</p>
             <div className="space-y-2.5">
+              {brokerOwner === true ? (
+                <button type="button" onClick={() => startGuide('transaction')} className="w-full text-left px-4 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition">
+                  Brokerage welcome
+                  <span className="block text-xs font-normal text-blue-100">Invite agents, compliance, automations and reports</span>
+                </button>
+              ) : (
+                <>
               <button type="button" onClick={() => startGuide('transaction')} className="w-full text-left px-4 py-3 bg-blue-500 hover:bg-blue-400 text-white font-semibold rounded-xl transition">
                 Transactions tour
                 <span className="block text-xs font-normal text-blue-100">Add an agent, create a deal, explore it</span>
@@ -657,6 +782,8 @@ export default function DashboardLayout({
                 Listings tour
                 <span className="block text-xs font-normal text-slate-400">Create a listing, offers, showings, documents</span>
               </button>
+                </>
+              )}
             </div>
             <button type="button" onClick={() => setTutorialMenuOpen(false)} className="mt-4 text-sm text-slate-400 hover:text-slate-200 transition">
               Close

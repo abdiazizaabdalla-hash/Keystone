@@ -12,7 +12,7 @@
 // overrides — it is no longer just Pro with a different label.
 //
 // Starter is no longer free indefinitely: new signups (see
-// src/lib/trial.ts for the exact cutoff) get a 30-day
+// src/lib/trial.ts for the exact cutoff) get a 14-day
 // trial, then have to add payment to keep using it at $19/month, through
 // the same Stripe Checkout flow as Pro/Team (see src/lib/stripe.ts). The
 // `limits` below (unlimited transactions, up to 3 agents, no custom
@@ -65,7 +65,7 @@ export interface Plan {
    */
   hidden?: boolean;
   /**
-   * Starter-only: describes its free trial (30 days -- see src/lib/trial.ts
+   * Starter-only: describes its free trial (14 days -- see src/lib/trial.ts
    * for the actual enforcement logic). Undefined for Pro/Team, which have
    * no trial -- they're paid from checkout.
    */
@@ -93,12 +93,13 @@ export interface Plan {
 const PRO_FEATURES = [
   'Unlimited transactions',
   'Unlimited agent profiles',
-  'AI contract intake -- upload the contract, Relay fills in the deal',
+  'AI contract intake -- upload the contract and AI creates the transaction or listing for you',
   'Listings, offers and showings, converted to a deal in one click',
   'Document uploads per checklist step',
   'Calendar link for Google, Outlook and Apple, plus CSV deal import',
   'QuickBooks invoice import and export',
   'Custom checklist templates with required-step flags',
+  'Automations: reminders and follow-ups that run for you',
   'Admin dashboard access',
   'Priority support',
 ];
@@ -110,18 +111,19 @@ export const PLANS: Plan[] = [
     price: '$19',
     period: '/month',
     trial: {
-      days: 30,
-      description: 'Free for 30 days. Then $19/month.',
+      days: 14,
+      description: 'Free for 14 days. Then $19/month.',
     },
     description: 'Free to try, then $19/month. Unlimited transactions.',
     features: [
-      'Free for 30 days',
+      'Free for 14 days',
       'Then $19/month',
       'Unlimited transactions',
       'Up to 3 agent profiles',
-      'AI contract intake -- upload the contract, Relay fills in the deal',
+      'AI contract intake -- upload the contract and AI creates the transaction or listing for you',
       'Listings, offers and showings, converted to a deal in one click',
       'Auto-built checklist with configurable per-step deadlines',
+      'Document and email templates, ready-made and your own',
       'Document uploads per checklist step',
       'Calendar link for Google, Outlook and Apple, plus CSV deal import',
       'Manual invoicing, with QuickBooks import and export',
@@ -159,7 +161,10 @@ export const PLANS: Plan[] = [
       ...PRO_FEATURES,
       'Team board and direct messages',
       'Shared contacts for lenders, title companies and inspectors',
-      'Owner status report across the team (no client details)',
+      'Team desk: each coordinator’s open files, late steps and closings (status only)',
+      'A default checklist for every new transaction and listing on your team',
+      'Team automations: stalled files, closing deadlines, daily digest and monthly report',
+      'Team trends and scheduled team reports, with no client details or prices',
       '3 seats included, $30/month for each extra seat',
     ],
     limits: {

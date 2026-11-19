@@ -1,7 +1,7 @@
 import { after } from 'next/server';
 import { supabaseServer } from './supabase';
 import { decryptSecret } from './encryption';
-import { getResendClient, INVOICE_FROM_EMAIL } from './resendClient';
+import { getResendClient, INVOICE_FROM_EMAIL, throwIfSendFailed } from './resendClient';
 import { escapeHtml } from './escapeHtml';
 import {
   refreshAccessToken,
@@ -61,7 +61,7 @@ async function notifyCalendarDisconnected(userId: string): Promise<void> {
     const isAgent = data.user?.app_metadata?.role === 'agent';
     const link = `https://www.relaytc.com/${isAgent ? 'agent' : 'dashboard'}/settings`;
     const name = escapeHtml(String((data.user?.user_metadata as { full_name?: string } | undefined)?.full_name || '').split(' ')[0] || 'there');
-    await getResendClient().emails.send({
+    throwIfSendFailed(await getResendClient().emails.send({
       from: INVOICE_FROM_EMAIL,
       to: [email],
       subject: 'Reconnect your Google Calendar in Relay TC',
@@ -71,7 +71,7 @@ async function notifyCalendarDisconnected(userId: string): Promise<void> {
         `<p>Google ended the connection between your calendar and Relay TC (this happens when access is revoked or expires), so new dates are no longer being added. Nothing was lost: the events already on your calendar are still there.</p>` +
         `<p><a href="${link}">Open Settings to reconnect</a> — it takes a few seconds.</p></div>`,
       text: `Google ended the connection between your calendar and Relay TC, so new dates are no longer being added. Reconnect in Settings: ${link}`,
-    });
+    }));
   } catch (error) {
     console.error('Calendar disconnect notice failed (ignored):', error);
   }

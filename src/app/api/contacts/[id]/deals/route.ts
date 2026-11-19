@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
-import { isAgentUser } from '@/lib/agentPortal';
+import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { getVisibleTcUserIds } from '@/lib/team';
 
 // The deals a contact appears on: matched by email against the deal contact lists
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const { user } = await getUserFromRequest(request);
-    if (isAgentUser(user)) throw new AuthError('Not available', 403);
+    if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
 
     const { data: contact } = await supabaseServer.from('contacts').select('email').eq('id', id).eq('tc_user_id', user.id).maybeSingle();
     if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });

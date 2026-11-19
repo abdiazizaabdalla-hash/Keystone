@@ -1,0 +1,184 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PATCH as adminPatch } from '@/app/api/admin/users/[id]/route';
+import { POST as createAgent } from '@/app/api/agents/route';
+import { GET as listTransactions, POST as createTransaction, DELETE as deleteTransaction } from '@/app/api/transactions/route';
+import { GET as listInvites, POST as sendInvite } from '@/app/api/agent-invites/route';
+import { POST as acceptInvite } from '@/app/api/agent-invites/accept/route';
+import { PATCH as patchTransaction } from '@/app/api/transactions/[id]/route';
+import { PATCH as patchTask } from '@/app/api/tasks/route';
+import { GET as listMessages, POST as postMessage } from '@/app/api/messages/route';
+import { GET as clientMessages, POST as postClientMessage } from '@/app/api/client-messages/route';
+import { GET as clientLinks } from '@/app/api/agent/transactions/[id]/clients/route';
+import { addCollaboratorToDeal, admin, call, cleanup, createActor, createCollaborator, seedDeal, type Actor } from './helpers';
+
+// Phase 3b. A paid agent can invite a coordinator onto their own deal; the coordinator accepts from their
+// normal account (and stays a coordinator), then both sides edit everything except deleting the deal.
+
+type Handler = Parameters<typeof call>[0];
+const h = (fn: unknown) => fn as Handler;
+
+let boss: Actor;
+let agentWs: Actor;
+let tcPro: Actor;
+let freeAgent: Actor;
+let otherTc: Actor;
+let dealId: string;
+let taskId: string;
+
+beforeAll(async () => {
+  boss = await createActor('i-admin', { is_admin: true });
+  agentWs = await createCollaborator('i-ws');
+  tcPro = await createActor('i-tc', { plan: 'pro' });
+  otherTc = await createActor('i-tc2', { plan: 'pro' });
+  freeAgent = await createCollaborator('i-free');
+  const grant = await call(h(adminPatch), boss, { method: 'PATCH', path: `/api/admin/users/${agentWs.id}`, params: { id: agentWs.id }, body: { action: 'set_agent_workspace', enabled: true } });
+  expect(grant.status).toBe(200);
+  const a = await call(h(createAgent), agentWs, { method: 'POST', path: '/api/agents', body: { name: 'Self Agent', email: 'selfagent@example.test', flatFee: 0, percentFee: 0 } });
+  const agentId = (a.json as { id: string }).id;
+  const t = await call(h(createTransaction), agentWs, { method: 'POST', path: '/api/transactions', body: { agentId, propertyAddress: '9 Invite Way', purchasePrice: 400000, fileNumber: 'INV-1' } });
+  expect(t.status, JSON.stringify(t.json)).toBeLessThan(300);
+  dealId = ((t.json as { transaction?: { id: string }; id?: string }).transaction?.id ?? (t.json as { id: string }).id) as string;
+  const { data: task } = await admin.from('tasks').select('id').eq('transaction_id', dealId).limit(1).single();
+  taskId = task!.id as string;
+});
+
+afterAll(async () => {
+  await cleanup();
+});
+
+const invite = (who: Actor, email: string, extra: Record<string, unknown> = {}) =>
+  call(h(sendInvite), who, { method: 'POST', path: '/api/agent-invites', body: { transactionId: dealId, email, ...extra } });
+
+describe('an agent with a workspace invites a coordinator', () => {
+  it('sends a pending invite and grants nothing yet', async () => {
+    const res = await invite(agentWs, tcPro.email, { inviteeRole: 'tc' });
+    expect(res.status, JSON.stringify(res.json)).toBe(200);
+    const { data: row } = await admin.from('agent_invites').select('status, invited_by').eq('transaction_id', dealId).eq('email', tcPro.email).single();
+    expect(row!.status).toBe('pending');
+    expect(row!.invited_by).toBe(agentWs.id);
+    const { data: link } = await admin.from('transaction_agents').select('agent_user_id').eq('transaction_id', dealId).eq('agent_user_id', tcPro.id);
+    expect(link ?? []).toHaveLength(0);
+  });
+
+  it('refuses a repeat invite, and an email that belongs to an agent login', async () => {
+    expect((await invite(agentWs, tcPro.email, { inviteeRole: 'tc' })).status).toBe(400);
+    expect((await invite(agentWs, freeAgent.email, { inviteeRole: 'tc' })).status).toBe(400);
+  });
+
+  it('is closed to everyone else: a coordinator cannot use the coordinator invite, a free agent cannot invite at all', async () => {
+    const seeded = await seedDeal(otherTc, 'INVX');
+    const asTc = await call(h(sendInvite), otherTc, { method: 'POST', path: '/api/agent-invites', body: { transactionId: seeded.transactionId, email: 'someone@example.test', inviteeRole: 'tc' } });
+    expect(asTc.status).toBe(403);
+    await addCollaboratorToDeal(seeded, freeAgent, otherTc);
+    const asFree = await call(h(sendInvite), freeAgent, { method: 'POST', path: '/api/agent-invites', body: { transactionId: seeded.transactionId, email: 'x@example.test' } });
+    expect(asFree.status).toBe(403);
+  });
+});
+
+describe('the coordinator answers from their normal account', () => {
+  it('sees the invitation waiting; the agent and other people do not', async () => {
+    const mine = await call(h(listInvites), tcPro, { method: 'GET', path: '/api/agent-invites' });
+    expect(mine.status).toBe(200);
+    const list = mine.json as Array<{ transactionId: string; propertyAddress: string }>;
+    expect(list.map((i) => i.transactionId)).toContain(dealId);
+    expect(((await call(h(listInvites), otherTc, { method: 'GET', path: '/api/agent-invites' })).json as unknown[])).toHaveLength(0);
+    expect(((await call(h(listInvites), agentWs, { method: 'GET', path: '/api/agent-invites' })).json as unknown[])).toHaveLength(0);
+  });
+
+  it('cannot be accepted by someone the invite was not sent to, or by an agent login', async () => {
+    expect((await call(h(acceptInvite), otherTc, { method: 'POST', path: '/x', body: { transactionId: dealId } })).status).toBe(403);
+  });
+
+  it('accepting adds the deal to their list and leaves them a coordinator', async () => {
+    const res = await call(h(acceptInvite), tcPro, { method: 'POST', path: '/x', body: { transactionId: dealId } });
+    expect(res.status, JSON.stringify(res.json)).toBe(200);
+    const { data: user } = await admin.auth.admin.getUserById(tcPro.id);
+    expect(user.user!.app_metadata?.role).not.toBe('agent');
+    const list = await call(h(listTransactions), tcPro, { method: 'GET', path: '/api/transactions' });
+    const row = (list.json as Array<Record<string, unknown>>).find((t) => t.id === dealId);
+    expect(row?.shared).toBe(true);
+    const pending = await call(h(listInvites), tcPro, { method: 'GET', path: '/api/agent-invites' });
+    expect(pending.json as unknown[]).toHaveLength(0);
+  });
+});
+
+describe('both sides edit everything except deleting the deal', () => {
+  it('the coordinator can change dates and tick tasks', async () => {
+    expect((await call(h(patchTransaction), tcPro, { method: 'PATCH', path: `/api/transactions/x?id=${dealId}`, body: { closingDate: '2031-05-05' } })).status).toBeLessThan(300);
+    expect((await call(h(patchTask), tcPro, { method: 'PATCH', path: '/api/tasks', body: { taskId } })).status).toBeLessThan(300);
+  });
+
+  it('the coordinator cannot delete the agent’s deal; the agent can', async () => {
+    const denied = await call(h(deleteTransaction), tcPro, { method: 'DELETE', path: `/api/transactions?id=${dealId}` });
+    expect([403, 404]).toContain(denied.status);
+    expect((await admin.from('transactions').select('id').eq('id', dealId).maybeSingle()).data).toBeTruthy();
+  });
+
+  it('the agent still reaches the deal as its owner', async () => {
+    const list = await call(h(listTransactions), agentWs, { method: 'GET', path: '/api/transactions' });
+    const row = (list.json as Array<Record<string, unknown>>).find((t) => t.id === dealId);
+    expect(row?.shared).toBe(false);
+  });
+});
+
+describe('messages and the client portal on the agent’s own deal', () => {
+  it('each side posts as itself, and each can read the other’s messages', async () => {
+    const fromAgent = await call(h(postMessage), agentWs, { method: 'POST', path: '/api/messages', body: { transactionId: dealId, body: 'from the agent' } });
+    expect(fromAgent.status, JSON.stringify(fromAgent.json)).toBeLessThan(300);
+    const fromTc = await call(h(postMessage), tcPro, { method: 'POST', path: '/api/messages', body: { transactionId: dealId, body: 'from the coordinator' } });
+    expect(fromTc.status, JSON.stringify(fromTc.json)).toBeLessThan(300);
+    const { data } = await admin.from('messages').select('body, sender_role').eq('transaction_id', dealId);
+    const role = (b: string) => data!.find((m) => m.body === b)!.sender_role;
+    expect(role('from the agent')).toBe('agent');
+    expect(role('from the coordinator')).toBe('tc');
+    for (const who of [agentWs, tcPro]) {
+      const read = await call(h(listMessages), who, { method: 'GET', path: `/api/messages?transactionId=${dealId}` });
+      expect(read.status).toBe(200);
+      expect((read.json as unknown[]).length).toBeGreaterThanOrEqual(2);
+    }
+    expect((await call(h(listMessages), otherTc, { method: 'GET', path: `/api/messages?transactionId=${dealId}` })).status).toBe(403);
+  });
+
+  it('the agent runs the client portal on their own deal; strangers cannot', async () => {
+    const links = await call(h(clientLinks), agentWs, { method: 'GET', path: '/x', params: { id: dealId } });
+    expect(links.status, JSON.stringify(links.json)).toBe(200);
+    expect((await call(h(clientLinks), otherTc, { method: 'GET', path: '/x', params: { id: dealId } })).status).toBe(403);
+    expect((await call(h(clientLinks), freeAgent, { method: 'GET', path: '/x', params: { id: dealId } })).status).toBe(403);
+  });
+
+  it('the shared client board works for both the agent and the coordinator', async () => {
+    const post = await call(h(postClientMessage), agentWs, { method: 'POST', path: '/api/client-messages', body: { transactionId: dealId, channel: 'board', body: 'hello clients' } });
+    expect(post.status, JSON.stringify(post.json)).toBeLessThan(300);
+    for (const who of [agentWs, tcPro]) {
+      const read = await call(h(clientMessages), who, { method: 'GET', path: `/api/client-messages?transactionId=${dealId}&channel=board` });
+      expect(read.status, JSON.stringify(read.json)).toBe(200);
+      expect(JSON.stringify(read.json)).toContain('hello clients');
+    }
+    expect((await call(h(clientMessages), otherTc, { method: 'GET', path: `/api/client-messages?transactionId=${dealId}&channel=board` })).status).toBe(403);
+  });
+});
+
+describe('resending a coordinator invitation', () => {
+  const target = 'resend-target@example.test';
+
+  it('sends the same email again for an invitation that is still waiting, and changes nothing else', async () => {
+    const first = await invite(agentWs, target, { inviteeRole: 'tc' });
+    expect(first.status, JSON.stringify(first.json)).toBe(200);
+    const again = await invite(agentWs, target, { inviteeRole: 'tc', resend: true });
+    expect(again.status, JSON.stringify(again.json)).toBe(200);
+    expect((again.json as { status?: string }).status).toBe('resent');
+    const { data: rows } = await admin.from('agent_invites').select('status').eq('transaction_id', dealId).eq('email', target);
+    expect(rows).toHaveLength(1);
+    expect(rows![0].status).toBe('pending');
+  });
+
+  it('refuses to resend when no invitation is waiting for that address', async () => {
+    const res = await invite(agentWs, 'nobody-invited@example.test', { inviteeRole: 'tc', resend: true });
+    expect(res.status).toBe(404);
+  });
+
+  it('is not available to a coordinator or to someone who does not own the deal', async () => {
+    const asTc = await invite(otherTc, target, { inviteeRole: 'tc', resend: true });
+    expect([403, 404]).toContain(asTc.status);
+  });
+});

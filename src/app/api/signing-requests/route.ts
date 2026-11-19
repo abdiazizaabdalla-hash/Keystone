@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase';
+import { isFullParticipant } from '@/lib/authorize';
 import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { generateSigningToken, hashDocumentBytes } from '@/lib/signing';
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
         .eq('id', transaction.agent_id)
         .in('tc_user_id', visibleIds)
         .single();
-      if (!agent) {
+      if (!agent && !(await isFullParticipant(user.id, transactionId))) {
         return NextResponse.json({ error: 'You do not have permission to view this' }, { status: 403 });
       }
     }
@@ -238,7 +239,7 @@ export async function POST(request: NextRequest) {
           .eq('id', dealTx.agent_id)
           .eq('tc_user_id', user.id)
           .single();
-        if (!agent) {
+        if (!agent && !(await isFullParticipant(user.id, dealDoc.transaction_id as string))) {
           return NextResponse.json(
             { error: 'You do not have permission to request a signature for this document' },
             { status: 403 }

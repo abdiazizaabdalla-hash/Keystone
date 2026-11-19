@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-prod-readonly/
 /out/
 
 # production
@@ -39,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.local-accounts.txt
+
+# local scratch output, never committed
+/Claude outputs/
+seedmsg.tmp.mjs
