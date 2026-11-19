@@ -1950,7 +1950,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   if (loading) {
     return (
       <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
-        <div className="max-w-[110rem] mx-auto">
+        <div className="max-w-7xl mx-auto">
           <Link href="/dashboard/transactions" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
@@ -1971,7 +1971,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   if (error) {
     return (
       <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
-        <div className="max-w-[110rem] mx-auto">
+        <div className="max-w-7xl mx-auto">
           <Link href="/dashboard/transactions" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
@@ -1993,7 +1993,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
   if (!transaction) {
     return (
       <div className="min-h-screen px-4 py-6 md:px-6 md:py-12">
-        <div className="max-w-[110rem] mx-auto">
+        <div className="max-w-7xl mx-auto">
           <Link href="/dashboard/transactions" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
@@ -2860,7 +2860,7 @@ export default function TransactionDetail({ id, ownerView = false }: { id: strin
 
   return (
     <div className="min-h-screen px-4 py-6 md:px-8 md:py-12">
-      <div className="w-full max-w-[110rem] mx-auto">
+      <div className="w-full max-w-7xl mx-auto">
         {/* Back Button */}
         <Link href="/dashboard/transactions" className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-8 transition">
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
