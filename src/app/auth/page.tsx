@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { isValidPlan, planLabel } from '@/lib/plans';
 import { track } from '@vercel/analytics';
 import { AGENT_SELF_SERVE_PUBLIC } from '@/lib/agentSelfServe';
+import PublicHeader from '@/components/PublicHeader';
 
 function AuthContent() {
   const router = useRouter();
@@ -127,30 +128,8 @@ function AuthContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col">
-      {/* Minimal marketing nav */}
-      <div className="px-6 py-5">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-              <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
-            </span>
-          </Link>
-          <div className="flex items-center gap-3 sm:gap-6 text-sm text-slate-400">
-            <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
-            <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
-            <Link
-              href="/agent/login"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
-            >
-              <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-              Portal Login
-            </Link>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-900 flex flex-col">
+      <PublicHeader />
 
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
@@ -162,7 +141,7 @@ function AuthContent() {
           </div>
 
           {/* Card */}
-          <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl">
             {confirmationSentTo ? (
               <>
                 <h2 className="text-2xl font-display font-semibold text-slate-100 mb-3">Check your email</h2>

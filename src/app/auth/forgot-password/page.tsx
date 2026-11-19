@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import PublicHeader from '@/components/PublicHeader';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -36,16 +37,8 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col">
-      <div className="px-6 py-5">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-              <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
-            </span>
-          </Link>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-900 flex flex-col">
+      <PublicHeader />
 
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
@@ -55,7 +48,7 @@ export default function ForgotPasswordPage() {
             </span>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl">
             {sent ? (
               <>
                 <h2 className="text-2xl font-display font-semibold text-slate-100 mb-3">Check your email</h2>

@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { track } from '@vercel/analytics';
 
 // Self-serve booking page. Opens in a new tab so a visitor can pick a time without
@@ -68,13 +69,14 @@ export default function DemoRequestButton({ className, label = 'Request a Demo' 
         {label}
       </button>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          className="fixed inset-0 z-[100] overflow-y-auto bg-black/60"
           onClick={close}
         >
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
           <div
-            className="bg-slate-800 border border-slate-700 rounded-xl p-8 max-w-md w-full shadow-2xl"
+            className="bg-slate-800 border border-slate-700 rounded-xl p-6 sm:p-8 max-w-md w-full shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {submitted ? (
@@ -191,7 +193,9 @@ export default function DemoRequestButton({ className, label = 'Request a Demo' 
               </>
             )}
           </div>
-        </div>
+          </div>
+        </div>,
+        document.body
       )}
     </>
   );

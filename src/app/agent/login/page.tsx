@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { saveSession, fetchHasWorkspace } from '@/lib/authClient';
+import PublicHeader from '@/components/PublicHeader';
 
 // Returning-agent login. Password is the default now that every agent
 // sets one during /agent/welcome (their first-ever invite acceptance) --
@@ -99,34 +100,8 @@ function AgentLoginContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col">
-      {/* Same marketing nav as the coordinator sign-in page */}
-      <div className="px-6 py-5">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/relay-icon.png" alt="Relay TC" className="w-full h-full object-contain" />
-            </span>
-          </Link>
-          <div className="flex items-center gap-3 sm:gap-6 text-sm text-slate-400">
-            <Link href="/pricing" className="hover:text-slate-100 transition">Pricing</Link>
-            <Link href="/faq" className="hover:text-slate-100 transition">FAQ</Link>
-            <Link href="/for-agents" className="hover:text-slate-100 transition">For Agents</Link>
-            <Link href="/for-tcs" className="hover:text-slate-100 transition">For TCs</Link>
-            <Link href="/for-brokerages" className="hover:text-slate-100 transition">For Brokerages</Link>
-            <Link
-              href="/auth"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/40 bg-blue-500/10 text-sm text-blue-300 hover:bg-blue-500/20 hover:text-blue-200 transition whitespace-nowrap"
-            >
-              <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-              Sign In
-            </Link>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-900 flex flex-col">
+      <PublicHeader />
 
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
@@ -136,11 +111,10 @@ function AgentLoginContent() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/relay-logo.png" alt="Relay TC" className="h-10 w-auto object-contain" />
             </span>
-            <p className="text-slate-400 text-sm">Agent Portal</p>
           </div>
 
           {/* Card */}
-          <div className="bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-600 rounded-lg p-8">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 shadow-xl">
             <h2 className="text-2xl font-display font-semibold text-slate-100 mb-1">
               {invited && mode === 'link' ? 'Set up your portal login' : 'Portal Sign In'}
             </h2>
@@ -228,9 +202,9 @@ function AgentLoginContent() {
 
           <div className="mt-6 text-center">
             <p className="text-slate-500 text-sm">
-              Not an agent?{' '}
+              Have a Relay team account?{' '}
               <Link href="/auth" className="text-blue-400 hover:text-blue-300 font-medium">
-                Sign in to your TC account
+                Sign in here
               </Link>
             </p>
           </div>
