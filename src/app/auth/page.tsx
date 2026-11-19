@@ -159,7 +159,6 @@ function AuthContent() {
             <span className="inline-block bg-white rounded-xl p-3 shadow-md mb-4">
               <img src="/relay-logo.png" alt="Relay TC" className="h-10 w-auto object-contain" />
             </span>
-            <p className="text-slate-400 text-sm">Transaction coordination</p>
           </div>
 
           {/* Card */}
