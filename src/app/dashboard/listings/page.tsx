@@ -1,5 +1,6 @@
 'use client';
 
+import AiReadTips from '@/components/AiReadTips';
 import { useAgentHasPortalAccess } from '@/lib/useAgentPortalAccess';
 import MoneyInput from '@/components/MoneyInput';
 import PhoneInput from '@/components/PhoneInput';
@@ -429,6 +430,7 @@ function OwnListings({ hideTitle = false }: { hideTitle?: boolean }) {
                 <p className="text-xs text-slate-400 mt-0.5 mb-2">
                   Upload the signed PDF and Relay fills in the address, price, dates and everyone named on it. You review before anything is saved.
                 </p>
+                <AiReadTips className="mb-2" />
                 <input
                   type="file"
                   accept="application/pdf,.pdf"

@@ -1,5 +1,6 @@
 'use client';
 
+import AiReadTips from '@/components/AiReadTips';
 import { useAgentHasPortalAccess } from '@/lib/useAgentPortalAccess';
 import { useState, useEffect } from 'react';
 import { suggestFileNumber } from '@/lib/fileNumber';
@@ -509,6 +510,7 @@ export default function NewTransactionPage() {
                 <p className="text-sm text-slate-400 mb-3">
                   Upload the purchase contract PDF and Relay will read the address, price, and key dates for you. Review everything below before saving -- this is a starting point, not a substitute for checking the actual contract.
                 </p>
+                <AiReadTips className="mb-3" />
                 <label className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 hover:bg-slate-500 border border-slate-500 rounded-lg text-sm font-medium text-slate-100 cursor-pointer transition">
                   {extracting ? (
                     <>

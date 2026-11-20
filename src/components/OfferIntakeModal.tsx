@@ -1,5 +1,6 @@
 'use client';
 
+import AiReadTips from '@/components/AiReadTips';
 import MoneyInput from '@/components/MoneyInput';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
@@ -240,6 +241,7 @@ export default function OfferIntakeModal({ listingId, offer, initial, onClose, o
                 ? 'Upload the counteroffer, amendment or revised offer. Relay works out which terms changed, you check them, and the earlier terms stay in the offer’s history.'
                 : 'Upload the signed contract and any addenda (up to 8 files). Relay reads the terms and shows them next to the document so you can check each one before anything is saved.'}
             </p>
+            <AiReadTips multi />
             <input
               type="file"
               multiple

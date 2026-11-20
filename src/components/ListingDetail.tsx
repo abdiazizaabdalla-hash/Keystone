@@ -1,5 +1,6 @@
 'use client';
 
+import AiReadTips from '@/components/AiReadTips';
 import { useAgentHasPortalAccess } from '@/lib/useAgentPortalAccess';
 import MoneyInput from '@/components/MoneyInput';
 import InvoiceConfirmModal from '@/components/InvoiceConfirmModal';
@@ -2758,6 +2759,7 @@ export default function ListingDetail({ id, ownerView = false }: { id: string; o
                   />
                 </label>
               </div>
+              <AiReadTips />
               {dealRead && (
                 <div className="space-y-2 pt-1">
                   <p className="text-xs text-green-300">Filled in from {dealRead.fileName}. Check the details below.</p>
