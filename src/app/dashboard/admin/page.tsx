@@ -6,6 +6,7 @@ import { authFetch, AuthRequiredError } from '@/lib/authClient';
 import { getPlan } from '@/lib/plans';
 import AdminUserProfile from '@/components/AdminUserProfile';
 import AdminActivity from '@/components/AdminActivity';
+import AdminAiFailures from '@/components/AdminAiFailures';
 import AdminBrokeragePilots from '@/components/AdminBrokeragePilots';
 import { isFeatureOnClient } from '@/lib/features';
 
@@ -76,7 +77,7 @@ export default function AdminPage() {
   const [unlinkedAgents, setUnlinkedAgents] = useState<AgentAccount[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [profileOpen, setProfileOpen] = useState<string | null>(null);
-  const [tab, setTab] = useState<'users' | 'activity'>('users');
+  const [tab, setTab] = useState<'users' | 'activity' | 'ai'>('users');
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -432,14 +433,16 @@ export default function AdminPage() {
       </div>
 
       <div className="flex gap-2 mb-6 border-b border-slate-700">
-        {(['users', 'activity'] as const).map((t) => (
+        {(['users', 'activity', 'ai'] as const).map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-semibold -mb-px border-b-2 transition ${tab === t ? 'border-blue-400 text-blue-300' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-            {t === 'users' ? 'Users' : 'Activity'}
+            {t === 'users' ? 'Users' : t === 'activity' ? 'Activity' : 'AI reads'}
           </button>
         ))}
       </div>
 
-      {tab === 'activity' ? (
+      {tab === 'ai' ? (
+        <AdminAiFailures />
+      ) : tab === 'activity' ? (
         <AdminActivity />
       ) : (
         <>

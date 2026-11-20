@@ -16,6 +16,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/account/export': { kind: 'session', methods: ['GET'] },
   '/api/account/summary': { kind: 'session', methods: ['GET'] },
   '/api/admin/activity': { kind: 'admin', methods: ['GET'] },
+  '/api/admin/ai-failures': { kind: 'admin', methods: ['GET', 'PATCH'] },
   '/api/admin/users': { kind: 'admin', methods: ['GET'] },
   '/api/admin/users/[id]': { kind: 'admin', methods: ['DELETE', 'PATCH'] },
   '/api/brokerage': { kind: 'session', methods: ['GET'], why: 'An agent with a workspace sees the brokerage they joined and their invitations; off (404) unless the brokerage feature is on.' },
