@@ -3,7 +3,7 @@ import PublicHeader from '@/components/PublicHeader';
 import PublicFooter from '@/components/PublicFooter';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import { BROKERAGE_TIERS, PILOT } from '@/lib/marketingPricing';
-import { BrokerageDashboardMockup, MockupCaption } from '@/components/marketing/ProductMockups';
+import { BrokerageDashboardMockup } from '@/components/marketing/ProductMockups';
 import { TemplateSharingIllustration, BrokerageDashboardIllustration, FileReviewIllustration, BrokerageHubIllustration } from '@/components/marketing/Illustrations';
 
 const AGENT_GETS: { title: string; body: string }[] = [
@@ -57,14 +57,13 @@ export default function ForBrokeragesPage() {
         <p className="text-xs text-slate-500 mt-5">{PILOT}</p>
       </section>
 
-      <section className="max-w-6xl mx-auto px-6 pb-16"><BrokerageDashboardMockup /><MockupCaption>Illustration of the brokerage dashboard. Names and numbers are made up.</MockupCaption></section>
+      <section className="max-w-6xl mx-auto px-6 pb-16"><BrokerageDashboardMockup /></section>
 
       <section id="oversight" className="max-w-6xl mx-auto px-6 py-16 border-t border-slate-700 scroll-mt-4">
         <p className={eyebrow}>Oversight</p>
         <h2 className={h2}>Know where every file stands, without asking.</h2>
         <p className="text-slate-400 max-w-3xl mb-8">Your dashboard opens on what you check first thing in the morning. Click an agent to see their deals and listings.</p>
         <BrokerageDashboardIllustration />
-        <p className="text-xs text-slate-500 mt-3 mb-6 text-center">Illustration of the dashboard. Names and numbers are made up.</p>
         <ul className="grid md:grid-cols-2 gap-x-8 gap-y-3 text-sm text-slate-300">
           {[
             'Open deals, late items, closings this week and last activity, one row per agent',

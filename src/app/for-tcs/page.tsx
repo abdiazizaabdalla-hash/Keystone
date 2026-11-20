@@ -4,7 +4,7 @@ import PublicFooter from '@/components/PublicFooter';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import { PUBLIC_PLANS } from '@/lib/plans';
 import { PRESETS } from '@/lib/automation/presets';
-import { CoordinatorWorkspaceMockup, MockupCaption } from '@/components/marketing/ProductMockups';
+import { CoordinatorWorkspaceMockup } from '@/components/marketing/ProductMockups';
 import { DealFlowIllustration, PortalIllustration, TeamIllustration } from '@/components/marketing/Illustrations';
 
 const FEATURES: { title: string; body: string }[] = [
@@ -55,7 +55,7 @@ export default function ForTcsPage() {
         <p className="text-xs text-slate-500 mt-5">Free for 14 days. No credit card required.</p>
       </section>
 
-      <section className="max-w-5xl mx-auto px-6 pb-16"><CoordinatorWorkspaceMockup /><MockupCaption /></section>
+      <section className="max-w-5xl mx-auto px-6 pb-16"><CoordinatorWorkspaceMockup /></section>
 
       <section className="max-w-7xl mx-auto px-6 pb-16"><DealFlowIllustration /></section>
 

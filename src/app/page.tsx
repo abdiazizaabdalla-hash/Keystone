@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { decodeStoredRole } from '@/lib/authClient';
 import DemoRequestButton from '@/components/DemoRequestButton';
 import PublicHeader from '@/components/PublicHeader';
-import { HeroWorkspaceMockup, ProblemContrastMockup, ContractIntakeMockup, InvoiceMockup, CommissionStatementMockup, TransactionWorkspaceMockup, ListingDashboardMockup, WorkflowBuilderMockup, BrokerageDashboardMockup, ConnectedMockup, AgentMini, CoordinatorMini, BrokerageMini, MockupCaption } from '@/components/marketing/ProductMockups';
+import { HeroWorkspaceMockup, ProblemContrastMockup, ContractIntakeMockup, InvoiceMockup, CommissionStatementMockup, TransactionWorkspaceMockup, ListingDashboardMockup, WorkflowBuilderMockup, BrokerageDashboardMockup, ConnectedMockup, AgentMini, CoordinatorMini, BrokerageMini } from '@/components/marketing/ProductMockups';
 
 export default function Home() {
   const router = useRouter();
@@ -76,7 +76,6 @@ export default function Home() {
           <p className="text-slate-400">Skip the retyping. Upload a purchase contract or a listing agreement and Relay creates the transaction or listing for you: the property, the price, every key date, and the people on the deal, already added as contacts.</p>
         </div>
         <ContractIntakeMockup />
-        <MockupCaption>Illustration of contract intake. Names, addresses and numbers are made up.</MockupCaption>
         <div className="grid md:grid-cols-3 gap-5 mt-12">
           {[
             ['1', 'Upload', 'Add the executed purchase contract, or the signed listing agreement, from your computer.'],
@@ -135,7 +134,6 @@ export default function Home() {
           <p className="text-slate-400">Relay manages the work of a transaction, not just a list of them.</p>
         </div>
         <TransactionWorkspaceMockup />
-        <MockupCaption />
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-12">
           {[
             ['Contract intake', 'Upload a supported electronic contract and Relay reads the property, parties, price and key dates. You check and save.'],
@@ -163,7 +161,6 @@ export default function Home() {
           <p className="text-slate-400">Listings are a first-class part of Relay, with their own page, tools and templates. When an offer is accepted, one click turns the listing into a transaction.</p>
         </div>
         <ListingDashboardMockup />
-        <MockupCaption />
         <ul className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-3 text-sm text-slate-300 mt-10">
           {['Property details and pricing', 'Listing and expiration dates', 'Offers and showings', 'Listing contacts and documents'].map((x) => (
             <li key={x} className="flex items-start gap-2.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />{x}</li>
@@ -179,7 +176,6 @@ export default function Home() {
           <p className="text-slate-400">Choose what triggers a workflow, such as a new transaction or an approaching closing date, then the steps that follow. Start from ready-made workflows or build your own, and choose whether Relay asks you before it sends anything.</p>
         </div>
         <WorkflowBuilderMockup />
-        <MockupCaption>Illustration of the workflow builder. Names and steps are examples.</MockupCaption>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-10">
           {['Create tasks when a transaction starts', 'Send reminders as a deadline approaches', 'Start closing preparation', 'Create listing tasks when a listing is added', 'Send follow-ups after key events', 'Pause everything with one switch'].map((x) => (
             <div key={x} className="rounded-xl border border-slate-700 bg-slate-800/50 px-5 py-4 text-sm text-slate-300">{x}</div>
@@ -220,7 +216,6 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <MockupCaption>Illustration of an invoice and a commission statement. Names and numbers are made up.</MockupCaption>
         <p className="text-xs text-slate-500 mt-4">The QuickBooks connection sends one way, from Relay to QuickBooks: invoices and payments for coordinators, commission bills and payments for brokerages. Relay never edits or deletes anything in your QuickBooks.</p>
       </section>
 
@@ -232,7 +227,6 @@ export default function Home() {
           <p className="text-slate-400">Every agent gets the tools to manage their own transactions and listings. Leadership gets a view across the organization, without opening every agent’s workspace.</p>
         </div>
         <BrokerageDashboardMockup />
-        <MockupCaption>Illustration of the brokerage dashboard. Names and numbers are made up.</MockupCaption>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-12">
           {[
             ['Brokerage-wide oversight', 'Active deals, upcoming closings, late steps, listings and each agent’s progress in one place.'],
