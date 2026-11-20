@@ -74,9 +74,6 @@ function Task({ text, due, tone = 'slate' }: { text: string; due: string; tone?:
     </div>
   );
 }
-export function MockupCaption({ children = 'Illustration of the Relay workspace. Names, addresses and numbers are made up.' }: { children?: React.ReactNode }) {
-  return <p className="text-[11px] text-slate-500 mt-3 text-center">{children}</p>;
-}
 
 /** Hero: the unified workspace, with a quiet nod to brokerage visibility. */
 export function HeroWorkspaceMockup() {

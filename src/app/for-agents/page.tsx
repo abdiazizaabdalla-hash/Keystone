@@ -2,7 +2,7 @@ import Link from 'next/link';
 import PublicHeader from '@/components/PublicHeader';
 import PublicFooter from '@/components/PublicFooter';
 import AgentPlanCards from '@/components/marketing/AgentPlanCards';
-import { AgentDashboardMockup, MockupCaption } from '@/components/marketing/ProductMockups';
+import { AgentDashboardMockup } from '@/components/marketing/ProductMockups';
 import { DealFlowIllustration, AutomationFlowIllustration } from '@/components/marketing/Illustrations';
 
 const FEATURES: { title: string; body: string }[] = [
@@ -46,7 +46,6 @@ export default function ForAgentsPage() {
 
       <section className="max-w-5xl mx-auto px-6 pb-16">
         <AgentDashboardMockup />
-        <MockupCaption />
       </section>
 
       <section className="max-w-7xl mx-auto px-6 pb-16">
