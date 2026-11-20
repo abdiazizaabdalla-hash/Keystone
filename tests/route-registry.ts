@@ -64,6 +64,7 @@ export const ROUTES: Record<string, RouteEntry> = {
   '/api/agent/listings/[id]/contacts/[contactId]': { kind: 'agent', methods: ['DELETE'] },
   '/api/agent/listings/[id]/documents': { kind: 'agent', methods: ['POST'] },
   '/api/agent/listings/[id]/documents/[docId]': { kind: 'agent', methods: ['GET'] },
+  '/api/client/request-link': { kind: 'public', methods: ['POST'], why: "A client asks for their progress link again; always answers the same so it cannot reveal which emails are on a transaction; rate limited by address and email." },
   '/api/agent/login-link': { kind: 'public', methods: ['POST'], why: "Agent requests an emailed sign-in link; always answers the same so it cannot reveal which emails have accounts." },
   '/api/agent/messages/overview': { kind: 'agent', methods: ['GET'] },
   '/api/agent/session': { kind: 'public', methods: ['POST'], why: "Exchanges a signed, expiring emailed token for a session." },
