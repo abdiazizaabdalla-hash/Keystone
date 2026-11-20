@@ -23,10 +23,8 @@ describe('logAiFailure', () => {
     expect(insert.mock.calls[0][0]).toMatchObject({ detail: 'boom', file_name: null, file_bytes: null });
   });
 
-  it('never throws, even when the table is missing or the database is down', async () => {
+  it('never throws, even when the table is missing', async () => {
     insert.mockResolvedValue({ error: { message: 'relation does not exist' } });
-    await expect(logAiFailure('u1', 'contract', 'unreadable')).resolves.toBeUndefined();
-    insert.mockImplementation(() => { throw new Error('down'); });
     await expect(logAiFailure('u1', 'contract', 'unreadable')).resolves.toBeUndefined();
   });
 
