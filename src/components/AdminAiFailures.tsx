@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { authFetch } from '@/lib/authClient';
-import { AI_FAILURE_LABEL, AI_FEATURE_LABEL } from '@/lib/aiFailures';
+import { AI_FAILURE_LABEL, AI_FEATURE_LABEL } from '@/lib/aiFailureLabels';
 
 interface Failure {
   id: string; created_at: string; user_id: string; feature: string; reason: string; detail: string | null;
