@@ -1,3 +1,5 @@
+> **Update (Nov 21, 2026): Relay now has ONE database, the live Supabase project (`vjfttw…`).** The relay-test project (`bmuaxlcaqqifybgheqiq`) is retired. `npm run dev:local` now reads and writes LIVE data with Stripe, email and AI keys switched off (see `scripts/check-local-env.mjs`). `scripts/seed-local.mjs` and `npm run test:int` still refuse to run (they only ever accept relay-test) so they can never create or delete data in the live database. Schema changes are the `.sql` files at the repo root, run by hand in the Supabase SQL Editor after the PR is merged. Anything below that says "relay-test" or "never written to from a dev machine" is out of date.
+
 # Relay TC: handoff to the automation build
 
 Written 2026-11-09. Branch `preview/agent-invoices-and-stripe`. Nothing is pushed; Abdi pushes after all features are done.
