@@ -5,6 +5,7 @@ import { isCollaboratorOnly } from '@/lib/agentPortal';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getAnthropicClient, CONTRACT_EXTRACTION_MODEL } from '@/lib/anthropic';
 import { logAiUsage } from '@/lib/aiUsage';
+import { logAiFailure } from '@/lib/aiFailures';
 import { IncomingError, parseUploadRequest } from '@/lib/incomingUploads';
 
 export const maxDuration = 60;
@@ -60,19 +61,26 @@ const EXTRACTION_TOOL = {
 };
 
 export async function POST(request: NextRequest) {
+  let who: string | null = null;
+  let seen: { name?: string; size?: number } = {};
   try {
     const { user } = await getUserFromRequest(request);
+    who = user.id;
     if (isCollaboratorOnly(user)) throw new AuthError('Not available', 403);
     await assertTrialActive(user);
 
     const rateOk = await checkRateLimit(`extract-listing:${user.id}`, 20, 60 * 60);
-    if (!rateOk) return NextResponse.json({ error: 'Too many uploads in a short time. Please wait a bit and try again.' }, { status: 429 });
+    if (!rateOk) {
+      await logAiFailure(user.id, 'listing_agreement', 'rate_limited');
+      return NextResponse.json({ error: 'Too many uploads in a short time. Please wait a bit and try again.' }, { status: 429 });
+    }
 
     // The agreement arrives either as { uploads: [{ path, name }] } (already in private storage, any size up to
     // 25MB) or as a small multipart file. It is NOT deleted here: saving it as the listing's document uses it next.
     const { files } = await parseUploadRequest(request, user.id, PDF_ONLY, 1);
     const file = files[0];
     if (!file) return NextResponse.json({ error: 'file is required' }, { status: 400 });
+    seen = { name: file.name, size: file.size };
 
     const base64 = Buffer.from(await file.arrayBuffer()).toString('base64');
     const response = await getAnthropicClient().messages.create({
@@ -98,10 +106,14 @@ export async function POST(request: NextRequest) {
     await logAiUsage(user.id, 'listing_agreement', CONTRACT_EXTRACTION_MODEL, response.usage);
 
     const toolUse = response.content.find((b): b is Extract<typeof b, { type: 'tool_use' }> => b.type === 'tool_use');
-    if (!toolUse) return NextResponse.json({ error: 'Could not read the agreement. Please try again or enter the details yourself.' }, { status: 502 });
+    if (!toolUse) {
+      await logAiFailure(user.id, 'listing_agreement', 'unreadable', { detail: 'The AI returned no fields for this file.', fileName: file.name, fileBytes: file.size });
+      return NextResponse.json({ error: 'Could not read the agreement. Please try again or enter the details yourself.' }, { status: 502 });
+    }
 
     const fields = toolUse.input as Record<string, unknown>;
     if (fields.isListingAgreement !== true) {
+      await logAiFailure(user.id, 'listing_agreement', 'not_a_document', { detail: 'The AI judged this not to be a listing agreement.', fileName: file.name, fileBytes: file.size });
       return NextResponse.json(
         { error: "This doesn't look like a listing agreement, so nothing was read from it. You can still enter the details yourself.", notAnAgreement: true },
         { status: 422 }
@@ -110,11 +122,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ fields });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
-    if (error instanceof IncomingError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof IncomingError) {
+      if (who) await logAiFailure(who, 'listing_agreement', 'upload_error', { detail: error, fileName: seen.name, fileBytes: seen.size });
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
     if (error instanceof Error && error.message.includes('ANTHROPIC_API_KEY')) {
+      if (who) await logAiFailure(who, 'listing_agreement', 'not_configured', { fileName: seen.name, fileBytes: seen.size });
       return NextResponse.json({ error: 'Reading agreements is not set up yet. Enter the details yourself.' }, { status: 503 });
     }
+    if (who) await logAiFailure(who, 'listing_agreement', 'service_error', { detail: error, fileName: seen.name, fileBytes: seen.size });
     console.error('Error extracting listing agreement:', error);
     return NextResponse.json({ error: 'Failed to read the agreement' }, { status: 500 });
   }

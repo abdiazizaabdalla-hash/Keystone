@@ -5,6 +5,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { requireListingAccess } from '@/lib/listings';
 import { readContractPdf } from '@/lib/contractExtraction';
+import { logAiFailure } from '@/lib/aiFailures';
 
 const BUCKET = 'transaction-documents';
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -29,9 +30,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 // offers) and returns what the new deal can be filled in with: price, dates, the contract's deadlines and the people named.
 // Nothing is saved here. The coordinator reviews and edits the result in the convert step before a deal is created.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let who: string | null = null;
   try {
     const { id } = await params;
     const { user } = await requireListingAccess(request, id);
+    who = user.id;
     await assertTrialActive(user);
     if (!(await checkRateLimit(`extract-contract:${user.id}`, 20, 60 * 60))) {
       return NextResponse.json({ error: 'Too many contract reads in a short time. Please wait a bit and try again.' }, { status: 429 });
@@ -57,11 +60,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (Number(doc.file_size) > MAX_FILE_SIZE) return NextResponse.json({ error: 'File exceeds the 25MB limit' }, { status: 400 });
 
     const { data: blob, error: downloadError } = await supabaseServer.storage.from(BUCKET).download(doc.storage_path as string);
-    if (downloadError || !blob) return NextResponse.json({ error: 'Could not open that file' }, { status: 500 });
+    if (downloadError || !blob) {
+      await logAiFailure(user.id, 'listing_contract', 'upload_error', { detail: downloadError?.message ?? 'The stored file could not be opened.', fileName });
+      return NextResponse.json({ error: 'Could not open that file' }, { status: 500 });
+    }
     const bytes = Buffer.from(await blob.arrayBuffer());
     if (bytes.byteLength > MAX_FILE_SIZE) return NextResponse.json({ error: 'File exceeds the 25MB limit' }, { status: 400 });
 
-    const reading = await readContractPdf(bytes.toString('base64'), user.id);
+    const reading = await readContractPdf(bytes.toString('base64'), user.id, { feature: 'listing_contract', fileName, fileBytes: bytes.byteLength });
     if (reading.kind === 'unreadable') return NextResponse.json({ error: 'Could not read that contract. You can fill the details in by hand.' }, { status: 502 });
     if (reading.kind === 'not_contract') {
       return NextResponse.json({ error: "That document doesn't look like a purchase contract, so nothing was filled in.", notAContract: true }, { status: 422 });
@@ -102,8 +108,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
     if (error instanceof Error && error.message.includes('ANTHROPIC_API_KEY')) {
+      if (who) await logAiFailure(who, 'listing_contract', 'not_configured');
       return NextResponse.json({ error: 'Contract reading is not set up yet. Fill the details in by hand.' }, { status: 503 });
     }
+    if (who) await logAiFailure(who, 'listing_contract', 'service_error', { detail: error });
     console.error('Error reading the contract for a listing:', error);
     return NextResponse.json({ error: 'Could not read that contract' }, { status: 500 });
   }

@@ -4,6 +4,7 @@ import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { getAnthropicClient, CONTRACT_EXTRACTION_MODEL } from '@/lib/anthropic';
 import { logAiUsage } from '@/lib/aiUsage';
+import { logAiFailure } from '@/lib/aiFailures';
 import { requireListingAccess } from '@/lib/listings';
 import { MAX_OFFER_FILES, MAX_OFFER_FILE_SIZE } from '@/lib/listingOfferFiles';
 import { IncomingError, parseUploadRequest } from '@/lib/incomingUploads';
@@ -96,29 +97,43 @@ const TOOL = {
 };
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let who: string | null = null;
+  let seen: { name?: string; size?: number } = {};
   try {
     const { id } = await params;
     const { user } = await requireListingAccess(request, id);
+    who = user.id;
     await assertTrialActive(user);
 
     const ok = await checkRateLimit(`extract-offer:${user.id}`, 40, 60 * 60);
-    if (!ok) return NextResponse.json({ error: 'Too many uploads in a short time. Please wait a bit and try again.' }, { status: 429 });
+    if (!ok) {
+      await logAiFailure(user.id, 'offer', 'rate_limited');
+      return NextResponse.json({ error: 'Too many uploads in a short time. Please wait a bit and try again.' }, { status: 429 });
+    }
 
     // JSON { uploads: [{ path, name }], currentTerms } (files already in private storage; they stay there for the
     // save step that follows) or small multipart. Reading works on PDFs only.
     const parsed = await parseUploadRequest(request, user.id, { pdf: 'application/pdf' }, MAX_OFFER_FILES);
     const files = parsed.files;
+    if (files[0]) seen = { name: files.length > 1 ? `${files[0].name} (+${files.length - 1} more)` : files[0].name, size: files.reduce((n, f) => n + f.size, 0) };
     if (files.length === 0) return NextResponse.json({ error: 'Add at least one PDF' }, { status: 400 });
     if (files.length > MAX_OFFER_FILES) return NextResponse.json({ error: `Add up to ${MAX_OFFER_FILES} files at a time` }, { status: 400 });
     let total = 0;
     for (const f of files) {
       if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) {
+        await logAiFailure(user.id, 'offer', 'wrong_type', { fileName: f.name, fileBytes: f.size });
         return NextResponse.json({ error: `${f.name} is not a PDF. Reading works on PDFs; you can still attach other files after.` }, { status: 400 });
       }
-      if (f.size > MAX_OFFER_FILE_SIZE) return NextResponse.json({ error: `${f.name} is over the 25MB limit` }, { status: 400 });
+      if (f.size > MAX_OFFER_FILE_SIZE) {
+        await logAiFailure(user.id, 'offer', 'too_large', { fileName: f.name, fileBytes: f.size });
+        return NextResponse.json({ error: `${f.name} is over the 25MB limit` }, { status: 400 });
+      }
       total += f.size;
     }
-    if (total > 32 * 1024 * 1024) return NextResponse.json({ error: 'These files are too large to read together. Try fewer files at a time.' }, { status: 400 });
+    if (total > 32 * 1024 * 1024) {
+      await logAiFailure(user.id, 'offer', 'too_large', { detail: 'Combined size over 32MB.', fileName: seen.name, fileBytes: total });
+      return NextResponse.json({ error: 'These files are too large to read together. Try fewer files at a time.' }, { status: 400 });
+    }
 
     // Revision mode: the offer already on file (sent by the page as JSON of its current terms)
     let current: OfferTerms | null = null;
@@ -156,9 +171,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await logAiUsage(user.id, 'offer', CONTRACT_EXTRACTION_MODEL, response.usage);
 
     const toolUse = response.content.find((b): b is Extract<typeof b, { type: 'tool_use' }> => b.type === 'tool_use');
-    if (!toolUse) return NextResponse.json({ error: 'Could not read the offer. Please try again or enter the terms yourself.' }, { status: 502 });
+    if (!toolUse) {
+      await logAiFailure(user.id, 'offer', 'unreadable', { detail: 'The AI returned no fields for these files.', fileName: seen.name, fileBytes: seen.size });
+      return NextResponse.json({ error: 'Could not read the offer. Please try again or enter the terms yourself.' }, { status: 502 });
+    }
     const out = toolUse.input as Record<string, unknown>;
     if (out.isOffer !== true) {
+      await logAiFailure(user.id, 'offer', 'not_a_document', { detail: 'The AI judged this not to be an offer, counteroffer or amendment.', fileName: seen.name, fileBytes: seen.size });
       return NextResponse.json({ error: "This doesn't look like an offer, counteroffer or amendment, so nothing was read from it. You can still enter the terms yourself.", notAnOffer: true }, { status: 422 });
     }
 
@@ -204,11 +223,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
   } catch (error) {
     if (error instanceof AuthError) return NextResponse.json({ error: error.message }, { status: error.status });
-    if (error instanceof IncomingError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof IncomingError) {
+      if (who) await logAiFailure(who, 'offer', 'upload_error', { detail: error, fileName: seen.name, fileBytes: seen.size });
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     if (error instanceof TrialExpiredError) return NextResponse.json({ error: error.message, code: 'trial_expired' }, { status: error.status });
     if (error instanceof Error && error.message.includes('ANTHROPIC_API_KEY')) {
+      if (who) await logAiFailure(who, 'offer', 'not_configured', { fileName: seen.name, fileBytes: seen.size });
       return NextResponse.json({ error: 'Reading offers is not set up yet. Enter the terms yourself.' }, { status: 503 });
     }
+    if (who) await logAiFailure(who, 'offer', 'service_error', { detail: error, fileName: seen.name, fileBytes: seen.size });
     console.error('Error reading offer documents:', error);
     return NextResponse.json({ error: 'Failed to read the offer' }, { status: 500 });
   }

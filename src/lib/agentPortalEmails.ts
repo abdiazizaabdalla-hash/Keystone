@@ -402,3 +402,18 @@ export async function sendDealClosedEmail(params: { toEmail: string; closedBy: s
   );
   return deliverEmail({ source: 'sendDealClosedEmail', from: INVOICE_FROM_EMAIL, to: toEmail, subject: `${dealLabel} is closed`, html });
 }
+
+// A client who lost their progress link asks for it again: one email with a link for each of their active transactions.
+export async function sendClientAccessEmail(params: { toEmail: string; links: { propertyAddress: string | null; url: string }[] }) {
+  const { toEmail, links } = params;
+  const items = links
+    .map((l) => `<li style="margin: 6px 0;"><a href="${l.url}" style="color: #b45309;">${escapeHtml(l.propertyAddress || 'Your transaction')}</a></li>`)
+    .join('');
+  const html = wrapper(
+    'Your transaction progress links',
+    `<p>You asked for your progress page${links.length > 1 ? 's' : ''}. Open ${links.length > 1 ? 'the one you need' : 'it'} below:</p>
+     <ul style="padding-left: 18px;">${items}</ul>
+     <p style="font-size: 13px; color: #555;">No account or password needed. If you did not ask for this email, you can ignore it.</p>`
+  );
+  return deliverEmail({ source: 'sendClientAccessEmail', from: INVOICE_FROM_EMAIL, to: toEmail, subject: 'Your transaction progress links', html });
+}

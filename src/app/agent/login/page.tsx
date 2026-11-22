@@ -206,6 +206,12 @@ function AgentLoginContent() {
                 Sign in here
               </Link>
             </p>
+            <p className="text-slate-500 text-sm mt-2">
+              Buying or selling a home?{' '}
+              <Link href="/client" className="text-blue-400 hover:text-blue-300 font-medium">
+                Get your progress link
+              </Link>
+            </p>
           </div>
         </div>
       </div>

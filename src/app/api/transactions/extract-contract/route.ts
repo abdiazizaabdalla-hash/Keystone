@@ -3,6 +3,7 @@ import { getUserFromRequest, AuthError } from '@/lib/auth';
 import { assertTrialActive, TrialExpiredError } from '@/lib/trial';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { readContractPdf } from '@/lib/contractExtraction';
+import { logAiFailure } from '@/lib/aiFailures';
 import { IncomingError, parseUploadRequest, removeIncoming } from '@/lib/incomingUploads';
 
 // Matches the 25MB cap used for the regular document upload route
@@ -13,8 +14,11 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024;
 export async function POST(request: NextRequest) {
   // A PDF over the host's ~4.5 MB body limit arrives already in storage (see lib/incomingUploads.ts); clean it up when done.
   let incomingPaths: string[] = [];
+  let who: string | null = null;
+  let seen: { name?: string; size?: number } = {};
   try {
     const { user } = await getUserFromRequest(request);
+    who = user.id;
     await assertTrialActive(user);
 
     // Cheap but real abuse/cost control -- each call is a paid API
@@ -24,6 +28,7 @@ export async function POST(request: NextRequest) {
     // running up a bill unnoticed.
     const rateOk = await checkRateLimit(`extract-contract:${user.id}`, 20, 60 * 60);
     if (!rateOk) {
+      await logAiFailure(user.id, 'contract', 'rate_limited');
       return NextResponse.json(
         { error: 'Too many contract uploads in a short time. Please wait a bit and try again.' },
         { status: 429 }
@@ -33,21 +38,24 @@ export async function POST(request: NextRequest) {
     const parsed = await parseUploadRequest(request, user.id, { pdf: 'application/pdf' }, 1);
     incomingPaths = parsed.incomingPaths;
     const file = parsed.files[0];
+    if (file) seen = { name: file.name, size: file.size };
 
     if (!file) {
       return NextResponse.json({ error: 'file is required' }, { status: 400 });
     }
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      await logAiFailure(user.id, 'contract', 'wrong_type', { fileName: file.name, fileBytes: file.size });
       return NextResponse.json({ error: 'Please upload a PDF file' }, { status: 400 });
     }
     if (file.size > MAX_FILE_SIZE) {
+      await logAiFailure(user.id, 'contract', 'too_large', { fileName: file.name, fileBytes: file.size });
       return NextResponse.json({ error: 'File exceeds the 25MB limit' }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
     const base64 = Buffer.from(arrayBuffer).toString('base64');
 
-    const reading = await readContractPdf(base64, user.id);
+    const reading = await readContractPdf(base64, user.id, { feature: 'contract', fileName: file.name, fileBytes: file.size });
 
     if (reading.kind === 'unreadable') {
       return NextResponse.json({ error: 'Could not read the contract. Please try again or enter the details manually.' }, { status: 502 });
@@ -78,14 +86,17 @@ export async function POST(request: NextRequest) {
       );
     }
     if (error instanceof Error && error.message.includes('ANTHROPIC_API_KEY')) {
+      if (who) await logAiFailure(who, 'contract', 'not_configured', { fileName: seen.name, fileBytes: seen.size });
       return NextResponse.json(
         { error: 'AI contract intake is not configured yet. Enter the details manually below.' },
         { status: 503 }
       );
     }
     if (error instanceof IncomingError) {
+      if (who) await logAiFailure(who, 'contract', 'upload_error', { detail: error, fileName: seen.name, fileBytes: seen.size });
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
+    if (who) await logAiFailure(who, 'contract', 'service_error', { detail: error, fileName: seen.name, fileBytes: seen.size });
     console.error('Error extracting contract:', error);
     const msg = error instanceof Error ? error.message : 'Failed to read the contract';
     return NextResponse.json({ error: msg }, { status: 500 });

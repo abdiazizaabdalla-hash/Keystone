@@ -1,5 +1,6 @@
 import { getAnthropicClient, CONTRACT_EXTRACTION_MODEL } from '@/lib/anthropic';
 import { logAiUsage } from '@/lib/aiUsage';
+import { logAiFailure, type AiReadFeature } from '@/lib/aiFailures';
 
 // Reads a real estate purchase contract PDF with Claude and returns its key fields. Shared by the New Transaction
 // page (an uploaded file) and the listing "convert to a deal" step (a file already stored on the listing).
@@ -91,7 +92,7 @@ const EXTRACTION_TOOL = {
 
 export type ContractReading = { kind: 'fields'; fields: Record<string, unknown> } | { kind: 'not_contract' } | { kind: 'unreadable' };
 
-export async function readContractPdf(base64: string, userId?: string): Promise<ContractReading> {
+export async function readContractPdf(base64: string, userId?: string, meta: { feature?: AiReadFeature; fileName?: string | null; fileBytes?: number | null } = {}): Promise<ContractReading> {
   const anthropic = getAnthropicClient();
   const response = await anthropic.messages.create({
     model: CONTRACT_EXTRACTION_MODEL,
@@ -121,8 +122,15 @@ export async function readContractPdf(base64: string, userId?: string): Promise<
   const toolUse = response.content.find(
     (block): block is Extract<typeof block, { type: 'tool_use' }> => block.type === 'tool_use'
   );
-  if (!toolUse) return { kind: 'unreadable' };
+  const feature = meta.feature ?? 'contract';
+  if (!toolUse) {
+    if (userId) await logAiFailure(userId, feature, 'unreadable', { detail: 'The AI returned no fields for this file.', fileName: meta.fileName, fileBytes: meta.fileBytes });
+    return { kind: 'unreadable' };
+  }
   const fields = toolUse.input as Record<string, unknown>;
-  if (fields.isPurchaseContract !== true) return { kind: 'not_contract' };
+  if (fields.isPurchaseContract !== true) {
+    if (userId) await logAiFailure(userId, feature, 'not_a_document', { detail: 'The AI judged this not to be a purchase contract.', fileName: meta.fileName, fileBytes: meta.fileBytes });
+    return { kind: 'not_contract' };
+  }
   return { kind: 'fields', fields };
 }
